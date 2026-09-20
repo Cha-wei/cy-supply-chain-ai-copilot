@@ -277,11 +277,11 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 > **总数核对**：`0 + 3 + 16 + 0 = 19`（前一版本）→ 本次为 **`10 + 0 + 9 + 0 = 19`**。Entry Criteria 总数仍为 **19**，未增删任何条目。
 
-> **状态升级的依据**：`SATISFIED` 的 10 条全部基于 Human-approved `SIMULATED` 证据（`VR-001` / `VR-002` / `VR-003`），**仅代表本模拟项目的业务设定**，不得解释为云南 CY 集团真实业务事实。
+> **状态升级的依据**：`SATISFIED` 的 10 条全部基于 Human-approved `SIMULATED` 证据（`VR-001` / `VR-002` / `VR-003` / `VR-004`），**仅代表本模拟项目的业务设定**，不得解释为云南 CY 集团真实业务事实。
 >
-> **`S1–S3` 的升级说明**：前一版本保持 `PARTIALLY SATISFIED` 的原因是"Brief 已有定义不等于 Stakeholder 已认可"。本次 `VR-003`（SC-BIZ-001）已提供 Human-approved 的 Stakeholder 认可，**升级条件已满足**，故升为 `SATISFIED`。
+> **`S1–S3` 的升级说明**：前一版本保持 `PARTIALLY SATISFIED` 的原因是"Brief 已有定义不等于 Stakeholder 已认可"。`VR-003`（SC-BIZ-001）已提供 Human-approved 的 Stakeholder 认可，**升级条件已满足**，故升为 `SATISFIED`。
 >
-> **`D1–D6` 与 `I1–I3` 保持 `NOT SATISFIED`**：本次三份场景**不涉及** Data Readiness 与 Integration，不得据此推断这些条件已经满足。它们属 Phase 1B。
+> **`D1–D6` 与 `I1–I3` 保持 `NOT SATISFIED`**：`VR-004`（SC-GOV-001）确认的是**业务角色、业务 Data Scope 与业务 Permission Boundary** —— 这**不足以**满足 Integration 组的 `I1` / `I2` / `I3`。这三项需要 Phase 1B 确认实际 POC 数据访问路径、接入方式、技术身份 / Access mechanism、Read / Write boundary、数据安全边界与必要的环境与访问隔离。**不得在本阶段的证据中推断其已满足。**
 
 ---
 
@@ -293,16 +293,24 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 ### 7.1 Phase 1A — Problem Validation（优先）
 
-> **Phase 1A 进度**：`VR-001` / `VR-002` / `VR-003` 三份 Human-approved `SIMULATED` 记录已登记。
+> ## Phase 1A — Problem Validation：`COMPLETE`
 >
-> Phase 1A 的 **Blocking items 共 10 项**：
+> `VR-001` / `VR-002` / `VR-003` / `VR-004` 四份 Human-approved `SIMULATED` 记录已登记。
+>
+> Phase 1A 的 **Blocking items 共 10 项，现已全部 `VALIDATED / COMPLETED`**：
 >
 > | 状态 | 数量 | ID |
 > | --- | --- | --- |
-> | ✅ 已完成 Blocking | **8** | VB-01、VB-02、VB-03、VB-04、VB-05、VB-06、VB-07、VB-23 |
-> | ⛔ 仍未完成 Blocking | **2** | VB-21、VB-22 |
+> | ✅ 已完成 Blocking | **10** | VB-01、VB-02、VB-03、VB-04、VB-05、VB-06、VB-07、VB-21、VB-22、VB-23 |
+> | ⛔ 仍未完成 Blocking | **0** | — |
 >
 > `VB-24` / `VB-25` / `VB-26` 同样为 `VALIDATED / COMPLETED`，但它们属 **NON-BLOCKING** Validation Items，**不计入「已完成 Blocking items」数量**。
+>
+> > ### ⚠️ 关键边界：Phase 1A `COMPLETE` ≠ POC Design v0.2 Entry Gate `COMPLETE`
+> >
+> > Phase 1A 只覆盖 **Problem Validation** 与部分 **Baseline / Scope Validation**。进入 `POC Design v0.2` 仍需满足 **Phase 1B — Data & System Readiness**（Data Readiness 与 Integration 两组），该阶段**尚未开始**。
+> >
+> > 当前状态：`SATISFIED = 10` / `NOT SATISFIED = 9`（D1–D6、I1–I3）。
 
 | ID | Question | Current Evidence Status | Why It Matters | Evidence Needed | Suggested Validation Method | Owner | Status | Blocks? |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -314,8 +322,8 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 | **VB-06** | 现有缺料预警机制是什么？与 AI 层的增量差异在哪？ | **Human-approved**（`VR-002`） | 决定 P0 增量价值；避免重复建设 | 预警规则、触发方式、覆盖范围 | Simulated stakeholder interview input provided by Human | Human | **VALIDATED / COMPLETED**（`VR-002`） | **YES** |
 | **VB-07** | 客户是否认可 P0 闭环及其与 P1 的边界？ | **Human-approved**（`VR-003`，S1、S2、S3） | §19 S1–S3 | 对 Brief §11/§12 边界的确认 | Simulated Sponsor / Business Owner input provided by Human | Human | **VALIDATED / COMPLETED**（`VR-003`） | **YES** |
 | **VB-14** | 「缺料」在业务上如何定义？ | `UNKNOWN`（K-BR-1） | P0-1 判定起点；G-07 | 缺料判定条件 | Simulated business decision provided by Human | Human | NOT STARTED | NO |
-| **VB-21** | 谁有权查看采购价格 / 选择供应商 / 创建采购申请 / 修改数量 / 批准采购 / 正式下单？ | `UNKNOWN`（K-HITL-1） | §19 I3 直接 Gate（基础操作权限边界）；P0-3 HITL 边界 | 权限矩阵 | Simulated stakeholder interview input provided by Human | Human | **NOT STARTED**（尚未正式确认具体操作权限矩阵） | **YES** |
-| **VB-22** | Brief §6 的七类角色是否真实存在？各自数据范围与权限？ | **`PARTIALLY VALIDATED`**（`VR-001` 确认主要流程角色；完整角色集合 / Data Scope / Permission Boundary 未确认） | §19 B4、I3 直接 Gate（角色、数据范围及权限确认） | 真实角色清单与职责 | Simulated stakeholder interview input provided by Human | Human | **PARTIALLY VALIDATED**（仍属 Blocking，直到权限 / 数据范围部分被确认） | **YES** |
+| **VB-21** | 谁有权查看采购价格 / 选择供应商 / 创建采购申请 / 修改数量 / 批准采购 / 正式下单？ | **Human-approved**（`VR-004`） | §19 I3 直接 Gate（业务操作权限边界）；P0-3 HITL 边界 | 权限矩阵 | Simulated stakeholder interview input provided by Human | Human | **VALIDATED / COMPLETED**（`VR-004`：已确认关键采购操作的角色权限边界） | **YES** |
+| **VB-22** | Brief §6 的七类角色是否真实存在？各自数据范围与权限？ | **Human-approved**（`VR-004`） | §19 B4、I3 直接 Gate（角色、数据范围及权限确认） | 真实角色清单与职责 | Simulated stakeholder interview input provided by Human | Human | **VALIDATED / COMPLETED**（`VR-004`：已确认完整角色集合、Data Scope 原则、Permission Boundary） | **YES** |
 | **VB-23** | 当前模拟场景中的缺料分析流程是什么？ | **Human-approved**（`VR-001`；对应 Brief E08「当前真实缺料分析流程」） | §19 B1；H1/H2 验证载体 | 当前模拟场景中的流程步骤描述 | Process walkthrough（Simulated） | Human | **VALIDATED / COMPLETED**（`VR-001`） | **YES** |
 | **VB-24** | 当前模拟场景中流程的主要步骤数量？ | **Human-approved**（`VR-001`） | §19 B2 | 步骤计数 | Process walkthrough（Simulated） | Human | **VALIDATED / COMPLETED**（`VR-001`） | NO |
 | **VB-25** | 当前模拟场景中单次缺料分析的平均耗时（实测或可靠估算）？ | **Human-approved**（`VR-001`，**`SIMULATED ESTIMATE`** 60–120 分钟） | §19 B3；§16 要求 KPI 基于真实基线 | 耗时测量或估算 | Process walkthrough（Simulated） | Human | **VALIDATED / COMPLETED**（`VR-001`） | NO |
@@ -335,9 +343,24 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 | **VB-11** | 采购订单 / 在途数据的可得性？「有效在途」如何界定？ | `UNKNOWN`（K-DR-5） | §19 D4；P0-1「预计缺口」 | 订单数据结构、在途有效性判据 | Data readiness check + Simulated business decision provided by Human | Human | NOT STARTED | **YES** |
 | **VB-12** | 必要供应商信息（含 Lead Time、绩效）是否可得且结构化？ | `UNKNOWN`（E10、K-DR-6） | §19 D5；P0-2「供应周期」「风险证据」 | 供应商主数据、Lead Time 来源、绩效记录 | Data readiness check（Simulated） | Human | NOT STARTED | **YES** |
 | **VB-13** | 关键主数据能否建立基本关联（物料编码规则）？ | `UNKNOWN`（K-DR-3） | §19 D6（H6）；P0 全链连通性 | 物料编码规则及其与 BOM/库存/订单的对应 | Data readiness check + Mock dataset definition（Simulated） | Human | NOT STARTED | **YES** |
-| **VB-19** | 实际 ERP 品牌与版本？系统是否提供 API 或只读访问方式？ | `UNKNOWN`（E05、K-INT-1） | §19 I1、I2 | ERP 信息、接口能力清单、只读通道可行性 | Interface / system assumption confirmation（Simulated） | Human | NOT STARTED | **YES** |
-| **VB-20** | POC 数据接入路径采用 API / 数据库 / 导出文件 / 模拟接口中的哪种？ | 尚无决定 | §19 I2 | 明确的接入方式决定 | Simulated business decision provided by Human | Human | NOT STARTED | **YES** |
+| **VB-19** | 实际 ERP 品牌与版本？系统是否提供 API 或只读访问方式？ | `UNKNOWN`（E05、K-INT-1） | §19 **I1、I2、I3** —— 除 ERP / 接口能力外，还需确认**可用访问能力及基础安全边界** | ERP 信息、接口能力清单、只读通道可行性、**可用访问能力与基础安全边界** | Interface / system assumption confirmation（Simulated） | Human | NOT STARTED | **YES** |
+| **VB-20** | POC 数据接入路径采用 API / 数据库 / 导出文件 / 模拟接口中的哪种？ | 尚无决定 | §19 **I1、I2、I3** —— 除选择接入方式外，还需确认该接入路径的 **read / write 与 access boundary** | 明确的接入方式决定 + **该路径的 read / write 与 access boundary** | Simulated business decision provided by Human | Human | NOT STARTED | **YES** |
 | **VB-29** | POC 是否可以只读 + 草稿方式接入，无需写入业务系统？ | `HYPOTHESIS`（H7） | §19 I3；安全边界 | 接入边界确认 | Interface / system assumption confirmation（Simulated） | Human | NOT STARTED | NO |
+
+> **Integration Gate（I1 / I2 / I3）的 Validation Scope 归属（Phase 1B）**：
+>
+> `I1`（POC 数据接入路径已确认）、`I2`（已明确 API / 数据库 / 导出文件 / 模拟接口中的何种方式接入）、`I3`（基础访问权限和数据安全边界已确认）**均由 Phase 1B 的 `VB-19` 与 `VB-20` 支撑**，并由 `VB-08`～`VB-13` 提供数据可得性前提。
+>
+> 需在 Phase 1B 确认的内容（**属 Validation Scope，不属于本阶段设计**）：
+>
+> - 实际 POC 数据访问路径
+> - API / Database / Export / Mock interface 的选择
+> - 技术身份 / Access mechanism
+> - Read / Write boundary
+> - 数据安全边界
+> - 必要的环境与访问隔离
+>
+> > **边界声明**：本节只更新 Validation Scope / Mapping。**不得**在此设计 Auth implementation、RBAC implementation、Secret architecture、API Gateway 或 production deployment —— 这些属于后续 Design 阶段，不在 Discovery Validation 范围内。
 
 ### 7.3 其余 Business Rules 项（POC Design 内细化）
 
@@ -368,11 +391,13 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 | Status | 数量 | ID |
 | --- | --- | --- |
-| `VALIDATED / COMPLETED` | **11** | VB-01、VB-02、VB-03、VB-04、VB-05、VB-06、VB-07、VB-23、VB-24、VB-25、VB-26 |
-| `PARTIALLY VALIDATED` | **1** | VB-22 |
-| `NOT STARTED` | **17** | VB-08～VB-21（不含 VB-22）、VB-27、VB-28、VB-29、VB-14～VB-18 |
+| `VALIDATED / COMPLETED` | **13** | VB-01、VB-02、VB-03、VB-04、VB-05、VB-06、VB-07、VB-21、VB-22、VB-23、VB-24、VB-25、VB-26 |
+| `PARTIALLY VALIDATED` | **0** | — |
+| `NOT STARTED` | **16** | VB-08～VB-20、VB-27、VB-28、VB-29、VB-14～VB-18 |
 
-> **核对**：11 + 1 + 17 = **29**，与 Backlog 条目总数一致。
+> **核对**：13 + 0 + 16 = **29**，与 Backlog 条目总数一致。
+>
+> 本次新增完成：`VB-21`、`VB-22`（依据 `VR-004`）。`PARTIALLY VALIDATED` 归零。
 
 #### C. 剩余未解决的 Blocking（Remaining unresolved Blocking）
 
@@ -380,11 +405,11 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 | 分组 | 数量 | ID |
 | --- | --- | --- |
-| **Remaining unresolved Blocking** | **10** | — |
-| Phase 1A | **2** | VB-21（`NOT STARTED`）、VB-22（`PARTIALLY VALIDATED`，仍属未解决） |
+| **Remaining unresolved Blocking** | **8** | — |
+| Phase 1A | **0** | — （Phase 1A Blocking 10 项已全部完成） |
 | Phase 1B | **8** | VB-08、VB-09、VB-10、VB-11、VB-12、VB-13、VB-19、VB-20 |
 
-> **`Remaining = 10` 的推导**：Blocking 共 **18** 项；其中 Phase 1A 已完成的 Blocking 为 **8** 项（VB-01～VB-07、VB-23）。18 − 8 = **10**。
+> **`Remaining = 8` 的推导**：Blocking 共 **18** 项；其中已完成的 Blocking 为 **10** 项（Phase 1A 全部：VB-01～VB-07、VB-21、VB-22、VB-23）。18 − 10 = **8**，全部属 Phase 1B。
 
 ---
 
@@ -392,7 +417,7 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 按 Brief §19 的五组 Required Gate，**最少必须先解决下列 BLOCKING items** 才能进入 `POC Design v0.2`。
 
-### 8.1 Problem Validation（Phase 1A）
+### 8.1 Problem Validation（Phase 1A）—— `COMPLETE`
 
 | 项 | 要求 | 状态 |
 | --- | --- | --- |
@@ -403,35 +428,42 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 | VB-05、VB-06 | 确认现有 MRP 与预警机制的能力边界（H1 证伪防线） | ✅ `VALIDATED / COMPLETED`（`VR-002`） |
 | VB-07 | 获得对 P0 闭环与 P0/P1 边界（S1、S2、S3）的认可 | ✅ `VALIDATED / COMPLETED`（`VR-003`） |
 | VB-23 | 完成当前模拟场景中的缺料分析流程记录（同时承载 B1–B4） | ✅ `VALIDATED / COMPLETED`（`VR-001`） |
-| **VB-21、VB-22** | **确认基础操作权限边界与角色 / 数据范围 / 权限（共同支撑 §19 I3 的 Required Gate）** | ⛔ **仍为 Phase 1A 唯一剩余 Blocking 组**：VB-21 `NOT STARTED`；VB-22 `PARTIALLY VALIDATED`（主要流程角色已确认，完整角色集合 / Data Scope / Permission Boundary 未确认） |
+| VB-21、VB-22 | 确认业务操作权限边界与完整角色集合 / Data Scope / Permission Boundary | ✅ `VALIDATED / COMPLETED`（`VR-004`） |
 
-### 8.2 Data & System Readiness（Phase 1B）
+> **Phase 1A 全部 10 项 Blocking items 已完成。**
 
-> **Phase 1B 尚未开始**，本节条目全部仍为 Blocking。
+### 8.2 Data & System Readiness（Phase 1B）—— `NOT STARTED`
+
+> **Phase 1B 尚未开始**，本节 8 项条目**全部仍为 Blocking，且全部 `NOT STARTED`**。
 
 | 项 | 要求 |
 | --- | --- |
 | VB-08～VB-13 | 生产计划、BOM、库存、采购/在途、供应商信息、主数据关联（§19 D1–D6） |
-| VB-19 | 确认 ERP 及业务系统接口能力 |
-| VB-20 | 明确接入方式（API / 数据库 / 导出文件 / 模拟接口） |
+| VB-19 | 确认 ERP 及业务系统接口能力，**以及可用访问能力与基础安全边界**（支撑 I1 / I2 / I3） |
+| VB-20 | 明确接入方式（API / 数据库 / 导出文件 / 模拟接口），**以及该路径的 read / write 与 access boundary**（支撑 I1 / I2 / I3） |
 
 ### 8.3 结论
 
 > **Blocking 分类（静态）共 18 项**：Phase 1A 10 项 ＋ Phase 1B 8 项。**该分类不因条目完成而改变。**
 >
-> **剩余未解决的 Blocking = 10 项**，即进入 `POC Design v0.2` 前仍需解决的最小集合：
+> **Phase 1A — Problem Validation：`COMPLETE`**（10 项 Blocking 全部 `VALIDATED / COMPLETED`）。
 >
-> - **Phase 1A（2 项）**：`VB-21`（`NOT STARTED`）、`VB-22`（`PARTIALLY VALIDATED`，仍属未解决，直到权限 / 数据范围部分被确认）
+> **剩余未解决的 Blocking = 8 项**，即进入 `POC Design v0.2` 前仍需解决的最小集合：
+>
+> - **Phase 1A（0 项）**：—
 > - **Phase 1B（8 项）**：`VB-08`、`VB-09`、`VB-10`、`VB-11`、`VB-12`、`VB-13`、`VB-19`、`VB-20`
 >
-> **Phase 1A 已完成的 Blocking items = 8 项**：`VB-01`、`VB-02`、`VB-03`、`VB-04`、`VB-05`、`VB-06`、`VB-07`、`VB-23`。
-> 推导核对：Blocking 18 − Phase 1A 已完成 8 = **剩余 10**。
+> 推导核对：Blocking 18 − 已完成 Blocking 10 = **剩余 8**。
+>
+> > ### ⚠️ `Phase 1A COMPLETE` ≠ `POC Design v0.2 Entry Gate COMPLETE`
+> >
+> > Phase 1A 完成只代表 **Problem Validation、Scope Validation 与 Baseline** 已充分。进入 `POC Design v0.2` 还必须完成 **Phase 1B — Data & System Readiness**（Data Readiness 与 Integration 两组，共 8 项 Blocking）。
+> >
+> > 当前 Entry Criteria 仍为 `SATISFIED = 10` / `NOT SATISFIED = 9`（`D1–D6`、`I1–I3`）。
 >
 > **`VB-24` / `VB-25` / `VB-26` 虽为 `VALIDATED / COMPLETED`，但属 NON-BLOCKING，不计入「已完成 Blocking items」。** 它们作为 B2 / B3 / B4 的载体一并得出，属附带成果。
 >
-> **最高杠杆项 `VB-23`（流程走查）已完成** —— 它同时承载了 H1、H2、E08 与 B1–B4。
->
-> **I3（基础访问权限和数据安全边界已确认）的覆盖**：由 `VB-21`（操作权限边界）＋ `VB-22`（角色、数据范围及权限）共同支撑。
+> **`I3`（基础访问权限和数据安全边界已确认）保持 `NOT SATISFIED`**：`VR-004` 确认的是**业务**角色、Data Scope 与业务 Permission Boundary，**不等于**技术访问与数据安全边界。`I3` 的确认由 Phase 1B 的 `VB-19` / `VB-20` 承担（见 §7.2 的 Integration Validation Scope 说明）。
 >
 > **NON-BLOCKING 的 11 项** 可在 Phase 1A/1B 期间或 POC Design 内并行细化，但它们是 v0.2 的必填内容。
 
@@ -441,7 +473,7 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 本节登记**已获得的**验证输入。每条记录必须符合第 2 节的 Simulation Evidence Protocol。
 
-> **当前状态：已登记 3 条记录（`VR-001` / `VR-002` / `VR-003`），全部为 Human-approved `SIMULATED`。**
+> **当前状态：已登记 4 条记录（`VR-001` / `VR-002` / `VR-003` / `VR-004`），全部为 Human-approved `SIMULATED`。**
 > 除已登记的记录外，Agent 不得自行生成或补齐任何记录。
 >
 > **证据性质声明**：以下全部记录均为 `Evidence Type: SIMULATED`、`Evidence Source: Human-approved`。它们**只代表本模拟项目中的业务设定**，不得解释为云南 CY 集团真实业务事实，不得声称来源于真实客户访谈或真实企业内部系统。
@@ -466,6 +498,7 @@ Impact on Entry Criteria:
 | `VR-001` | `SIMULATED` | Simulated Procurement / Supply Chain User | **Human-approved** | VB-01、VB-02、VB-23、VB-24、VB-25、VB-26 | P1、B1–B4 |
 | `VR-002` | `SIMULATED` | Simulated Customer IT ＋ Simulated Business Owner | **Human-approved** | VB-05、VB-06 | S3 |
 | `VR-003` | `SIMULATED` | Simulated Business Owner / Sponsor | **Human-approved** | VB-03、VB-04、VB-07 | P2、P3、S1、S2、S3 |
+| `VR-004` | `SIMULATED` | Simulated Business Owner ＋ Simulated Customer IT | **Human-approved** | VB-21、VB-22 | （业务权限边界；不改变 Entry Criteria 计数） |
 
 #### `VR-001`
 
@@ -565,19 +598,117 @@ Business Owner 认可**存在值得验证的业务问题**：大量系统数据�
 
 认可 **P0 聚焦核心缺料分析与采购建议闭环**；RAG、高级自然语言查询、复杂供应商智能、扩展报告等继续属于 **P1 / Future**。
 
-### 9.3 待输入清单（Phase 1A 剩余）
+#### `VR-004`
 
-> Phase 1A 的多数条目已由 `VR-001` / `VR-002` / `VR-003` 覆盖。以下为**仍需 Human 提供或批准**的剩余项。
+| 字段 | 内容 |
+| --- | --- |
+| **Scenario** | `SC-GOV-001` —— Role / Permission / Data Scope Boundary |
+| **Evidence Type** | `SIMULATED` |
+| **Evidence Source** | **Human-approved** |
+| **Role** | Simulated Business Owner ＋ Simulated Customer IT |
+| **Related Backlog** | VB-21、VB-22 |
+
+> **声明**：本记录**只代表本模拟 FDE 项目**，**不得解释为云南 CY 集团真实权限体系**，不得声称来源于真实企业内部系统。
+
+**核心批准内容（Human-approved，仅代表本模拟项目）：**
+
+**完整业务角色集合沿用 Discovery Brief §6：**
+
+1. 生产计划员
+2. 采购员
+3. 仓库人员
+4. 供应商管理人员
+5. 供应链负责人
+6. 审批管理人员
+7. IT / 数字化团队
+
+**权限模型原则：**
+
+```
+Effective Permission =
+  Role
++ Organization / Plant Scope
++ Material / Supplier Scope
++ Workflow State
+```
+
+**业务权限边界：**
+
+| 角色 | 可做 | 不可做 |
+| --- | --- | --- |
+| **生产计划员** | 查看授权范围生产计划、BOM 需求、缺料结果；发起分析 | 不查看采购价格；不批准采购；不正式下单 |
+| **采购员** | 查看授权范围采购、在途、价格、Lead Time；提出候选供应商；创建采购申请草稿；在审批前修改采购数量 | 不拥有最终批准权 |
+| **仓库人员** | 查看和确认库存、冻结、待检、可用状态 | 无采购价格、供应商选择、审批或正式下单权限 |
+| **供应商管理人员** | 查看 / 维护授权供应商的交付、质量、绩效与风险信息 | 默认无正式采购审批或下单权限 |
+| **供应链负责人** | 在授权组织范围跨域查看、Review、风险排序 | 不因负责人身份自动获得正式下单或系统管理员权限 |
+| **审批管理人员** | 在自身审批范围 Approve / Reject | 不允许绕过审批流程 |
+| **IT / 数字化团队** | 管理接口、身份、日志、技术配置 | 技术管理员权限不自动等于业务采购决策权限；业务数据访问遵循最小权限 |
+
+**具体操作权限原则：**
+
+- **查看采购价格**：采购员、授权供应链负责人、相关审批人员
+- **提出 / 选择候选供应商**：采购员；供应商管理人员可提供建议
+- **创建采购申请草稿**：采购员
+- **审批前修改采购数量**：采购员
+- **Approve / Reject**：具有正式审批授权的审批角色
+- **正式采购订单**：只能在正式审批完成后由现有采购业务流程执行
+
+**关键控制：**
+
+若审批后发生对以下字段的重大变更：
+
+- Supplier
+- Quantity
+- Price
+- Delivery Date
+
+需要根据审批规则**重新进入 Review / Approval**，**不得利用已有批准绕过 HITL**。
+
+**AI Copilot 权限：**
+
+```
+AI Effective Permission =
+  User Permission
+∩ Data Scope
+∩ Tool Permission
+∩ Workflow State
+∩ POC Policy
+```
+
+AI **可以**：
+
+- 读取授权范围数据
+- 分析
+- 确定性计算
+- 风险解释
+- 建议
+- 推荐候选供应商
+- 生成采购申请 Draft
+
+AI **不可以**：
+
+- Approve
+- Formal Submit
+- Create Purchase Order
+- Override Approval
+- Expand Data Scope
+- 越权修改业务系统
+
+即使当前 Human User 自身拥有更高权限，**POC 中 Agent Capability 仍可以低于 Human Capability**。
+
+### 9.3 待输入清单（Phase 1A 已完成）
+
+> **Phase 1A 的 Blocking items 已全部完成**（`VR-001`～`VR-004`）。以下为非 Blocking 的剩余项，以及 Phase 1B 的待输入项。
 
 | Backlog ID | 需要的模拟输入 | 建议角色 |
 | --- | --- | --- |
-| **VB-21** | 具体操作权限矩阵（查看采购价格 / 选择供应商 / 创建采购申请 / 修改数量 / 批准采购 / 正式下单的权限归属） | Simulated Business Owner ＋ Simulated Customer IT |
-| **VB-22** | 完整角色集合、各角色 **Data Scope** 与 **Permission Boundary**（当前仅确认了主要流程角色） | Simulated Business Owner ＋ Simulated Customer IT |
 | VB-14 | 「缺料」业务定义 | Simulated Procurement / Supply Chain User |
 | VB-27 | 历史缺料案例与判断依据 | Simulated Procurement / Supply Chain User |
 | VB-28 | 高频问题清单 | Simulated Business Owner |
 
-> **Phase 1B 尚未开始**，其待输入清单（VB-08～VB-13、VB-19、VB-20、VB-29、VB-15～VB-18）待 Phase 1A 完成后另行登记。
+> **Phase 1B（Data & System Readiness）尚未开始**，其待输入清单待该阶段启动时另行登记：`VB-08`～`VB-13`、`VB-19`、`VB-20`、`VB-29`、`VB-15`～`VB-18`。
+>
+> 其中 `VB-19` / `VB-20` 需一并覆盖 Integration Gate 的 `I1` / `I2` / `I3`（见 §7.2 的 Validation Scope 说明）。
 
 ---
 
