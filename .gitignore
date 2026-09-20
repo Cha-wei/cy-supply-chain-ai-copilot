@@ -1,0 +1,41 @@
+# ---- 操作系统 ----
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---- 编辑器 / IDE ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- 环境变量与密钥 ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---- 日志与临时文件 ----
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# ---- 依赖目录（技术栈待定，先行通用忽略） ----
+node_modules/
+vendor/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# ---- 构建产物（技术栈待定，先行通用忽略） ----
+dist/
+build/
+out/
+target/
+*.egg-info/
