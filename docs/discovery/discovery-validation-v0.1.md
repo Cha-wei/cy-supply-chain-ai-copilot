@@ -97,16 +97,21 @@ Result:
 
 ## 3. Core Hypotheses
 
-Brief §7 提出 4 个假设，Brief §8 验证矩阵中**当前结论全部为 `TBD`**。
+Brief §7 提出 4 个假设。Brief §8 验证矩阵中的原始结论为 `TBD`；本文档根据 Human-approved `SIMULATED` 证据记录当前状态如下。
 
 ### 3.1 H1–H4 现状
 
-| ID | 假设 | Brief 状态 | 是否阻塞进入 POC Design | 阶段 |
-| --- | --- | --- | --- | --- |
-| **H1** | 跨系统查询成本较高 | `HYPOTHESIS` / `TBD` | **YES**（§19 Problem Validation） | **Phase 1A** |
-| **H2** | 缺料判断存在人工汇总 | `HYPOTHESIS` / `TBD`（对应 E09） | **YES**（§19 Problem Validation） | **Phase 1A** |
-| **H3** | 部分风险判断依赖业务经验 | `HYPOTHESIS` / `TBD` | **NO** | Phase 1A（次级） |
-| **H4** | 缺料处理存在较高的信息解释成本 | `HYPOTHESIS` / `TBD` | **NO** | Phase 1A（次级） |
+| ID | 假设 | Brief 状态 | 当前状态 | 依据 | 是否阻塞进入 POC Design | 阶段 |
+| --- | --- | --- | --- | --- | --- | --- |
+| **H1** | 跨系统查询成本较高 | `HYPOTHESIS` / `TBD` | **`PARTIALLY CONFIRMED`** | `VR-001`（SC-ASIS-001）：建立跨多个业务数据源查询、核对，以及 60–120 分钟模拟分析基线 | **YES**（§19 Problem Validation） | **Phase 1A** |
+| **H2** | 缺料判断存在人工汇总 | `HYPOTHESIS` / `TBD`（对应 E09） | **`PARTIALLY CONFIRMED`** | `VR-001`（SC-ASIS-001）：存在 Excel / 人工关联 / 二次计算 / 筛选过程 | **YES**（§19 Problem Validation） | **Phase 1A** |
+| **H3** | 部分风险判断依赖业务经验 | `HYPOTHESIS` / `TBD` | `TBD`（本 Task 未扩大验证范围） | — | **NO** | Phase 1A（次级） |
+| **H4** | 缺料处理存在较高的信息解释成本 | `HYPOTHESIS` / `TBD` | `TBD`（本 Task 未扩大验证范围） | — | **NO** | Phase 1A（次级） |
+
+> **为什么 H1 / H2 只到 `PARTIALLY CONFIRMED`，不升级为 `CONFIRMED`**：
+> 当前依据是 **Human-approved `SIMULATED` baseline**，尚未通过更完整的 Mock Case 或 POC measurement 进一步验证。因此本状态不代表已获独立核验的事实。
+>
+> **H3 / H4 保持 `TBD`**：即使现有场景中包含相关线索，本 Task 有意不扩大验证范围。它们仍须按"决策 5 的落实"进入 Validation Backlog（见 VB-27、VB-28）。
 
 **决策 5 的落实**：H3 / H4 允许暂时保持未确认，但**必须**进入 Validation Backlog，明确 `Validation Method` / `Owner` / `Status` / `Blocking`（见 VB-27、VB-28），**不得长期作为无人处理的 `TBD`**。
 
@@ -120,7 +125,16 @@ Brief §7 提出 4 个假设，Brief §8 验证矩阵中**当前结论全部为 
 | **H6** | 关键主数据可以建立基本关联 | Brief §19 Data Readiness 末项 | YES（Phase 1B） |
 | **H7** | POC 可以只读 + 草稿方式接入，无需写入生产业务系统 | Brief §10、§11 P0-3 | NO（但实现前必须确认） |
 
-> Brief §8 要求假设「不得长期停留在模糊状态」。当前 4/4 均为 `TBD`，该要求**尚未满足** —— 本文档的状态为 `DRAFT`，有待 Human 提供模拟输入后方可推进。
+> **关于 Brief §8「假设不得长期停留在模糊状态」的当前状态**：
+>
+> 需区分两个层面，不得混为一谈：
+>
+> | 层面 | H1 / H2 | H3 / H4 |
+> | --- | --- | --- |
+> | **FROZEN Discovery Brief 中的原始状态** | `HYPOTHESIS` / `TBD` —— **未被修改** | `HYPOTHESIS` / `TBD` —— **未被修改** |
+> | **本文档（Discovery Validation）记录的当前状态** | **`PARTIALLY CONFIRMED`**（依据 `VR-001`） | **`TBD`** |
+>
+> 即：Brief §8 矩阵中的原始 `TBD` 记录**保持不变**（FROZEN 文档不得修改）；假设的实际推进状态由本文档记录。当前 H1 / H2 已脱离模糊状态，**H3 / H4 仍为 `TBD`** —— 因此 Brief §8 的该要求**尚未完全满足**。本文档状态为 `DRAFT`。
 
 ---
 
@@ -230,40 +244,44 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 | # | Entry Criterion（Brief §19） | 状态 | 判断依据 |
 | --- | --- | --- | --- |
-| **P1** | H1 / H2 中至少一项为 `CONFIRMED` 或 `PARTIALLY CONFIRMED` | `NOT SATISFIED` | 两者均为 `TBD`；尚无验证记录 |
-| **P2** | 已识别至少一个具有明确业务价值的缺料分析问题 | `NOT SATISFIED` | Brief 定义了拟验证的问题，但业务价值与认可尚无记录 |
-| **P3** | 主要业务 Owner 认可该问题值得进入 POC | `NOT SATISFIED` | 尚无 Simulated Business Owner / Sponsor 输入 |
-| **S1** | 客户认可 P0 闭环：缺料分析 → 采购建议 → HITL | `PARTIALLY SATISFIED` | Brief §11 已单方定义，Stakeholder 认可记录缺失 |
-| **S2** | P0 与 P1 边界已确认 | `PARTIALLY SATISFIED` | Brief §11/§12 已定义边界，Stakeholder 确认记录缺失 |
-| **S3** | POC 不承担完整 ERP/MRP 替代职责 | `PARTIALLY SATISFIED` | Brief §10/§13/§19 已界定，Stakeholder 确认记录缺失 |
+| **P1** | H1 / H2 中至少一项为 `CONFIRMED` 或 `PARTIALLY CONFIRMED` | `SATISFIED` | `VR-001`：H1 / H2 均达 `PARTIALLY CONFIRMED`（两项均满足） |
+| **P2** | 已识别至少一个具有明确业务价值的缺料分析问题 | `SATISFIED` | `VR-003`（SC-BIZ-001）：已明确识别具有业务价值的缺料分析问题 |
+| **P3** | 主要业务 Owner 认可该问题值得进入 POC | `SATISFIED` | `VR-003`（SC-BIZ-001）：Simulated Business Owner / Sponsor 已 Human-approved |
+| **S1** | 客户认可 P0 闭环：缺料分析 → 采购建议 → HITL | `SATISFIED` | `VR-003`（SC-BIZ-001）：已 Human-approved P0 闭环 |
+| **S2** | P0 与 P1 边界已确认 | `SATISFIED` | `VR-003`（SC-BIZ-001）：已认可 P0 聚焦核心闭环，RAG / 高级查询 / 复杂供应商智能 / 扩展报告属 P1 / Future |
+| **S3** | POC 不承担完整 ERP/MRP 替代职责 | `SATISFIED` | `VR-002`（SC-ASIS-002）＋ `VR-003`：已认可 AI Copilot 不替代 ERP / MRP，仅形成受控决策协同层 |
 | **D1** | 生产计划数据可获取 | `NOT SATISFIED` | K-DR-1 未确认；E05–E07 为 `UNKNOWN` |
 | **D2** | BOM 数据可获取 | `NOT SATISFIED` | E07 `UNKNOWN`；K-DR-2 未确认 |
 | **D3** | 库存数据可获取 | `NOT SATISFIED` | E06 `UNKNOWN`；K-DR-4 未确认 |
 | **D4** | 采购订单 / 在途数据可获取 | `NOT SATISFIED` | K-DR-5 未确认 |
 | **D5** | 必要供应商信息可获取 | `NOT SATISFIED` | E10 `UNKNOWN`；K-DR-6 未确认 |
 | **D6** | 关键主数据可以建立基本关联 | `NOT SATISFIED` | K-DR-3 未确认 |
-| **B1** | 当前人工流程已经记录 | `NOT SATISFIED` | Brief §5 为通用流程假设，明确声明"不代表 CY 真实业务流程"；E08 `UNKNOWN` |
-| **B2** | 当前流程主要步骤数量已经确认 | `NOT SATISFIED` | 无记录 |
-| **B3** | 当前分析平均耗时已经测量或获得可靠估算 | `NOT SATISFIED` | 无测量或估算 |
-| **B4** | 当前涉及角色已经确认 | `NOT SATISFIED` | Brief §6 为角色假设清单 |
+| **B1** | 当前人工流程已经记录 | `SATISFIED` | `VR-001`（SC-ASIS-001）：已记录当前模拟场景 As-Is 流程 |
+| **B2** | 当前流程主要步骤数量已经确认 | `SATISFIED` | `VR-001`（SC-ASIS-001）：已形成明确流程步骤 |
+| **B3** | 当前分析平均耗时已经测量或获得可靠估算 | `SATISFIED` | `VR-001`：Human-approved simulated baseline，单次约 **60–120 分钟**（**`SIMULATED ESTIMATE`**，非真实测量数据） |
+| **B4** | 当前涉及角色已经确认 | `SATISFIED` | `VR-001`（SC-ASIS-001）：当前流程主要涉及角色为计划员、采购员、供应链负责人 |
 | **I1** | POC 数据接入路径已确认 | `NOT SATISFIED` | K-INT-1 未确认 |
 | **I2** | 已明确通过 API / 数据库 / 导出文件 / 模拟接口中的何种方式接入 | `NOT SATISFIED` | 尚无决定 |
 | **I3** | 基础访问权限和数据安全边界已确认 | `NOT SATISFIED` | K-HITL-1/2 未确认（VB-21、VB-22） |
+
+> **`B4 SATISFIED` ≠ `I3 SATISFIED`**：`B4` 由当前流程**主要角色**的确认而满足；`I3` 要求**基础访问权限与数据安全边界**确认，涉及完整角色集合、Data Scope 与 Permission Boundary —— 这是两个不同 Gate。`VR-001` 不足以满足 `I3`。
 
 ### 6.2 汇总
 
 | 状态 | 数量 | 条目 |
 | --- | --- | --- |
-| `SATISFIED` | **0** | — |
-| `PARTIALLY SATISFIED` | **3** | S1、S2、S3 |
-| `NOT SATISFIED` | **16** | P1–P3、D1–D6、B1–B4、I1–I3 |
+| `SATISFIED` | **10** | P1–P3、S1–S3、B1–B4 |
+| `PARTIALLY SATISFIED` | **0** | — |
+| `NOT SATISFIED` | **9** | D1–D6、I1–I3 |
 | `UNKNOWN` | **0** | — |
 
-> **总数核对**：Entry Criteria 共 **19** 条 —— `PARTIALLY SATISFIED` 3 条（S1、S2、S3）＋ `NOT SATISFIED` 16 条 ＝ 19。
+> **总数核对**：`0 + 3 + 16 + 0 = 19`（前一版本）→ 本次为 **`10 + 0 + 9 + 0 = 19`**。Entry Criteria 总数仍为 **19**，未增删任何条目。
 
-> **S1–S3 的处理（决策 4）**：继续保持 `PARTIALLY SATISFIED`。**Discovery Brief 中已有定义，不等于 Stakeholder 已认可。** 只有完成对应的模拟 Stakeholder Validation 后，才允许升级状态。
+> **状态升级的依据**：`SATISFIED` 的 10 条全部基于 Human-approved `SIMULATED` 证据（`VR-001` / `VR-002` / `VR-003`），**仅代表本模拟项目的业务设定**，不得解释为云南 CY 集团真实业务事实。
 >
-> `NOT SATISFIED` 的成因是**证据尚未采集**，而非"已知答案为否"。其中 `SATISFIED` 为 0 也属如实记录。
+> **`S1–S3` 的升级说明**：前一版本保持 `PARTIALLY SATISFIED` 的原因是"Brief 已有定义不等于 Stakeholder 已认可"。本次 `VR-003`（SC-BIZ-001）已提供 Human-approved 的 Stakeholder 认可，**升级条件已满足**，故升为 `SATISFIED`。
+>
+> **`D1–D6` 与 `I1–I3` 保持 `NOT SATISFIED`**：本次三份场景**不涉及** Data Readiness 与 Integration，不得据此推断这些条件已经满足。它们属 Phase 1B。
 
 ---
 
@@ -275,26 +293,39 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 ### 7.1 Phase 1A — Problem Validation（优先）
 
+> **Phase 1A 进度**：`VR-001` / `VR-002` / `VR-003` 三份 Human-approved `SIMULATED` 记录已登记。
+>
+> Phase 1A 的 **Blocking items 共 10 项**：
+>
+> | 状态 | 数量 | ID |
+> | --- | --- | --- |
+> | ✅ 已完成 Blocking | **8** | VB-01、VB-02、VB-03、VB-04、VB-05、VB-06、VB-07、VB-23 |
+> | ⛔ 仍未完成 Blocking | **2** | VB-21、VB-22 |
+>
+> `VB-24` / `VB-25` / `VB-26` 同样为 `VALIDATED / COMPLETED`，但它们属 **NON-BLOCKING** Validation Items，**不计入「已完成 Blocking items」数量**。
+
 | ID | Question | Current Evidence Status | Why It Matters | Evidence Needed | Suggested Validation Method | Owner | Status | Blocks? |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **VB-01** | 一次完整缺料分析是否需要跨多个系统/数据源查询？耗时多少？ | `HYPOTHESIS` / `TBD`（H1） | §19 P1 直接 Gate；不成立则 AI 价值需重估 | 操作流程、系统数量、单次耗时 | Process walkthrough（Simulated） | Human | NOT STARTED | **YES** |
-| **VB-02** | 取数后是否仍需 Excel / 人工二次计算与汇总？ | `HYPOTHESIS` / `TBD`（H2、E09） | §19 P1 直接 Gate；AI 的收益锚点 | Excel 过程、手工计算、导出环节 | Process walkthrough（Simulated） | Human | NOT STARTED | **YES** |
-| **VB-03** | 是否有一个具有明确业务价值的缺料分析问题？ | 无记录 | §19 P2 | 问题陈述 + 业务价值判断 | Simulated stakeholder interview input provided by Human | Human | NOT STARTED | **YES** |
-| **VB-04** | 主要业务 Owner 是否认可该问题值得进入 POC？ | 无记录 | §19 P3 | Owner 明确表态 | Simulated Sponsor / Business Owner input provided by Human | Human | NOT STARTED | **YES** |
-| **VB-05** | 现有 ERP / MRP 是否已能高效完成缺料分析？ | `UNKNOWN`（K-INT-2） | H1 的证伪风险；§17 失败条件 | 现有 MRP 能力说明 | Process walkthrough + Interface / system assumption confirmation（Simulated） | Human | NOT STARTED | **YES** |
-| **VB-06** | 现有缺料预警机制是什么？与 AI 层的增量差异在哪？ | `UNKNOWN`（K-INT-3） | 决定 P0 增量价值；避免重复建设 | 预警规则、触发方式、覆盖范围 | Simulated stakeholder interview input provided by Human | Human | NOT STARTED | **YES** |
-| **VB-07** | 客户是否认可 P0 闭环及其与 P1 的边界？ | Brief 已定义，Stakeholder 无记录（S1、S2、S3） | §19 S1–S3 | 对 Brief §11/§12 边界的确认 | Simulated Sponsor / Business Owner input provided by Human | Human | NOT STARTED | **YES** |
+| **VB-01** | 一次完整缺料分析是否需要跨多个系统/数据源查询？耗时多少？ | `HYPOTHESIS` / **`PARTIALLY CONFIRMED`**（H1） | §19 P1 直接 Gate；不成立则 AI 价值需重估 | 操作流程、系统数量、单次耗时 | Process walkthrough（Simulated） | Human | **VALIDATED / COMPLETED**（`VR-001`） | **YES** |
+| **VB-02** | 取数后是否仍需 Excel / 人工二次计算与汇总？ | `HYPOTHESIS` / **`PARTIALLY CONFIRMED`**（H2、E09） | §19 P1 直接 Gate；AI 的收益锚点 | Excel 过程、手工计算、导出环节 | Process walkthrough（Simulated） | Human | **VALIDATED / COMPLETED**（`VR-001`） | **YES** |
+| **VB-03** | 是否有一个具有明确业务价值的缺料分析问题？ | **Human-approved**（`VR-003`） | §19 P2 | 问题陈述 + 业务价值判断 | Simulated stakeholder interview input provided by Human | Human | **VALIDATED / COMPLETED**（`VR-003`） | **YES** |
+| **VB-04** | 主要业务 Owner 是否认可该问题值得进入 POC？ | **Human-approved**（`VR-003`） | §19 P3 | Owner 明确表态 | Simulated Sponsor / Business Owner input provided by Human | Human | **VALIDATED / COMPLETED**（`VR-003`） | **YES** |
+| **VB-05** | 现有 ERP / MRP 是否已能高效完成缺料分析？ | **Human-approved**（`VR-002`） | H1 的证伪风险；§17 失败条件 | 现有 MRP 能力说明 | Process walkthrough + Interface / system assumption confirmation（Simulated） | Human | **VALIDATED / COMPLETED**（`VR-002`） | **YES** |
+| **VB-06** | 现有缺料预警机制是什么？与 AI 层的增量差异在哪？ | **Human-approved**（`VR-002`） | 决定 P0 增量价值；避免重复建设 | 预警规则、触发方式、覆盖范围 | Simulated stakeholder interview input provided by Human | Human | **VALIDATED / COMPLETED**（`VR-002`） | **YES** |
+| **VB-07** | 客户是否认可 P0 闭环及其与 P1 的边界？ | **Human-approved**（`VR-003`，S1、S2、S3） | §19 S1–S3 | 对 Brief §11/§12 边界的确认 | Simulated Sponsor / Business Owner input provided by Human | Human | **VALIDATED / COMPLETED**（`VR-003`） | **YES** |
 | **VB-14** | 「缺料」在业务上如何定义？ | `UNKNOWN`（K-BR-1） | P0-1 判定起点；G-07 | 缺料判定条件 | Simulated business decision provided by Human | Human | NOT STARTED | NO |
-| **VB-21** | 谁有权查看采购价格 / 选择供应商 / 创建采购申请 / 修改数量 / 批准采购 / 正式下单？ | `UNKNOWN`（K-HITL-1） | §19 I3 直接 Gate（基础操作权限边界）；P0-3 HITL 边界 | 权限矩阵 | Simulated stakeholder interview input provided by Human | Human | NOT STARTED | **YES** |
-| **VB-22** | Brief §6 的七类角色是否真实存在？各自数据范围与权限？ | `HYPOTHESIS`（§6） | §19 B4、I3 直接 Gate（角色、数据范围及权限确认） | 真实角色清单与职责 | Simulated stakeholder interview input provided by Human | Human | NOT STARTED | **YES** |
-| **VB-23** | 当前模拟场景中的缺料分析流程是什么？ | `UNKNOWN`（对应 Brief E08「当前真实缺料分析流程」；§5 明示不代表 CY 真实业务流程） | §19 B1；H1/H2 验证载体 | 当前模拟场景中的流程步骤描述 | Process walkthrough（Simulated） | Human | NOT STARTED | **YES** |
-| **VB-24** | 当前模拟场景中流程的主要步骤数量？ | 无记录 | §19 B2 | 步骤计数 | Process walkthrough（Simulated） | Human | NOT STARTED | NO |
-| **VB-25** | 当前模拟场景中单次缺料分析的平均耗时（实测或可靠估算）？ | 无记录 | §19 B3；§16 要求 KPI 基于真实基线 | 耗时测量或估算 | Process walkthrough（Simulated） | Human | NOT STARTED | NO |
-| **VB-26** | 缺料分析多久发生一次？ | 无记录 | §17 失败条件「使用频率过低」 | 发生频率 | Simulated stakeholder interview input provided by Human | Human | NOT STARTED | NO |
+| **VB-21** | 谁有权查看采购价格 / 选择供应商 / 创建采购申请 / 修改数量 / 批准采购 / 正式下单？ | `UNKNOWN`（K-HITL-1） | §19 I3 直接 Gate（基础操作权限边界）；P0-3 HITL 边界 | 权限矩阵 | Simulated stakeholder interview input provided by Human | Human | **NOT STARTED**（尚未正式确认具体操作权限矩阵） | **YES** |
+| **VB-22** | Brief §6 的七类角色是否真实存在？各自数据范围与权限？ | **`PARTIALLY VALIDATED`**（`VR-001` 确认主要流程角色；完整角色集合 / Data Scope / Permission Boundary 未确认） | §19 B4、I3 直接 Gate（角色、数据范围及权限确认） | 真实角色清单与职责 | Simulated stakeholder interview input provided by Human | Human | **PARTIALLY VALIDATED**（仍属 Blocking，直到权限 / 数据范围部分被确认） | **YES** |
+| **VB-23** | 当前模拟场景中的缺料分析流程是什么？ | **Human-approved**（`VR-001`；对应 Brief E08「当前真实缺料分析流程」） | §19 B1；H1/H2 验证载体 | 当前模拟场景中的流程步骤描述 | Process walkthrough（Simulated） | Human | **VALIDATED / COMPLETED**（`VR-001`） | **YES** |
+| **VB-24** | 当前模拟场景中流程的主要步骤数量？ | **Human-approved**（`VR-001`） | §19 B2 | 步骤计数 | Process walkthrough（Simulated） | Human | **VALIDATED / COMPLETED**（`VR-001`） | NO |
+| **VB-25** | 当前模拟场景中单次缺料分析的平均耗时（实测或可靠估算）？ | **Human-approved**（`VR-001`，**`SIMULATED ESTIMATE`** 60–120 分钟） | §19 B3；§16 要求 KPI 基于真实基线 | 耗时测量或估算 | Process walkthrough（Simulated） | Human | **VALIDATED / COMPLETED**（`VR-001`） | NO |
+| **VB-26** | 缺料分析多久发生一次？ | **Human-approved**（`VR-001`：每个工作日至少一次，生产计划重大变更时追加） | §17 失败条件「使用频率过低」 | 发生频率 | Simulated stakeholder interview input provided by Human | Human | **VALIDATED / COMPLETED**（`VR-001`） | NO |
 | **VB-27** | 风险判断是否依赖个人经验？ | `HYPOTHESIS` / `TBD`（H3） | P0-1「基础风险」规则设计；G-06、G-11 | 历史缺料案例与判断依据 | 历史案例复盘（Simulated case provided by Human） | Human | NOT STARTED | NO |
 | **VB-28** | 缺料处理的信息解释成本是否较高？高频问题是什么？ | `HYPOTHESIS` / `TBD`（H4） | AI 在 P0 中角色的正当性 | 高频问题清单 | Simulated stakeholder interview input provided by Human | Human | NOT STARTED | NO |
 
 ### 7.2 Phase 1B — Data & System Readiness（后续）
+
+> **Phase 1B 尚未开始。** 本节全部条目状态为 `NOT STARTED`。
 
 | ID | Question | Current Evidence Status | Why It Matters | Evidence Needed | Suggested Validation Method | Owner | Status | Blocks? |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -321,16 +352,39 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 ### 7.4 Backlog 汇总
 
+#### A. 静态分类（`Blocks POC Design?`）
+
+`Blocks POC Design?` 是每个 Validation Item 的**静态属性**，由 Brief §19 是否为该条所必需决定。**该分类不因条目已完成而改变** —— 已完成的 Blocking item 仍是 Blocking item。
+
 | 分类 | 数量 | ID |
 | --- | --- | --- |
-| **BLOCKING** | **18** | Phase 1A（10）：VB-01～VB-07、VB-21、VB-22、VB-23<br>Phase 1B（8）：VB-08～VB-13、VB-19、VB-20 |
+| **BLOCKING** | **18** | **Phase 1A（10）**：VB-01、VB-02、VB-03、VB-04、VB-05、VB-06、VB-07、VB-21、VB-22、VB-23<br>**Phase 1B（8）**：VB-08、VB-09、VB-10、VB-11、VB-12、VB-13、VB-19、VB-20 |
 | **NON-BLOCKING** | **11** | VB-14～VB-18（5）、VB-24～VB-29（6） |
 | 合计 | 29 | — |
 
-| Status | 数量 |
-| --- | --- |
-| `NOT STARTED` | **29** |
-| 其他 | 0 |
+> **注意**：`VB-24` / `VB-25` / `VB-26` 属 **NON-BLOCKING**，它们**不计入** Blocking 数量。18 + 11 = **29**。
+
+#### B. 执行状态
+
+| Status | 数量 | ID |
+| --- | --- | --- |
+| `VALIDATED / COMPLETED` | **11** | VB-01、VB-02、VB-03、VB-04、VB-05、VB-06、VB-07、VB-23、VB-24、VB-25、VB-26 |
+| `PARTIALLY VALIDATED` | **1** | VB-22 |
+| `NOT STARTED` | **17** | VB-08～VB-21（不含 VB-22）、VB-27、VB-28、VB-29、VB-14～VB-18 |
+
+> **核对**：11 + 1 + 17 = **29**，与 Backlog 条目总数一致。
+
+#### C. 剩余未解决的 Blocking（Remaining unresolved Blocking）
+
+`Blocking` 与「已完成」是两个维度。**仍未解决**的 Blocking items 数量为：
+
+| 分组 | 数量 | ID |
+| --- | --- | --- |
+| **Remaining unresolved Blocking** | **10** | — |
+| Phase 1A | **2** | VB-21（`NOT STARTED`）、VB-22（`PARTIALLY VALIDATED`，仍属未解决） |
+| Phase 1B | **8** | VB-08、VB-09、VB-10、VB-11、VB-12、VB-13、VB-19、VB-20 |
+
+> **`Remaining = 10` 的推导**：Blocking 共 **18** 项；其中 Phase 1A 已完成的 Blocking 为 **8** 项（VB-01～VB-07、VB-23）。18 − 8 = **10**。
 
 ---
 
@@ -340,18 +394,20 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 ### 8.1 Problem Validation（Phase 1A）
 
-| 项 | 要求 |
-| --- | --- |
-| VB-01 | 确认 H1 —— 跨系统查询成本确实较高（附系统数量与耗时） |
-| VB-02 | 确认 H2 —— 确实存在人工二次汇总 |
-| — | 使 **H1 或 H2 至少一项** 达到 `PARTIALLY CONFIRMED` 或以上（§19 P1） |
-| VB-03、VB-04 | 识别具有明确业务价值的缺料分析问题，并获得 Owner 认可 |
-| VB-05、VB-06 | 确认现有 MRP 与预警机制的能力边界（H1 证伪防线） |
-| VB-07 | 获得对 P0 闭环与 P0/P1 边界（S1、S2、S3）的认可 |
-| **VB-21、VB-22** | **确认基础操作权限边界与角色 / 数据范围 / 权限（共同支撑 §19 B4、I3 的 Required Gate）** |
-| VB-23 | 完成当前模拟场景中的缺料分析流程记录（同时承载 B1–B4） |
+| 项 | 要求 | 状态 |
+| --- | --- | --- |
+| VB-01 | 确认 H1 —— 跨系统查询成本确实较高（附系统数量与耗时） | ✅ `VALIDATED / COMPLETED`（`VR-001`） |
+| VB-02 | 确认 H2 —— 确实存在人工二次汇总 | ✅ `VALIDATED / COMPLETED`（`VR-001`） |
+| — | 使 **H1 或 H2 至少一项** 达到 `PARTIALLY CONFIRMED` 或以上（§19 P1） | ✅ 达成（H1、H2 均为 `PARTIALLY CONFIRMED`） |
+| VB-03、VB-04 | 识别具有明确业务价值的缺料分析问题，并获得 Owner 认可 | ✅ `VALIDATED / COMPLETED`（`VR-003`） |
+| VB-05、VB-06 | 确认现有 MRP 与预警机制的能力边界（H1 证伪防线） | ✅ `VALIDATED / COMPLETED`（`VR-002`） |
+| VB-07 | 获得对 P0 闭环与 P0/P1 边界（S1、S2、S3）的认可 | ✅ `VALIDATED / COMPLETED`（`VR-003`） |
+| VB-23 | 完成当前模拟场景中的缺料分析流程记录（同时承载 B1–B4） | ✅ `VALIDATED / COMPLETED`（`VR-001`） |
+| **VB-21、VB-22** | **确认基础操作权限边界与角色 / 数据范围 / 权限（共同支撑 §19 I3 的 Required Gate）** | ⛔ **仍为 Phase 1A 唯一剩余 Blocking 组**：VB-21 `NOT STARTED`；VB-22 `PARTIALLY VALIDATED`（主要流程角色已确认，完整角色集合 / Data Scope / Permission Boundary 未确认） |
 
 ### 8.2 Data & System Readiness（Phase 1B）
+
+> **Phase 1B 尚未开始**，本节条目全部仍为 Blocking。
 
 | 项 | 要求 |
 | --- | --- |
@@ -361,12 +417,19 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 ### 8.3 结论
 
-> **进入 `POC Design v0.2` 前，最少必须先解决 18 项 BLOCKING items：**
+> **Blocking 分类（静态）共 18 项**：Phase 1A 10 项 ＋ Phase 1B 8 项。**该分类不因条目完成而改变。**
 >
-> **Phase 1A（10 项）**：`VB-01`、`VB-02`、`VB-03`、`VB-04`、`VB-05`、`VB-06`、`VB-07`、`VB-21`、`VB-22`、`VB-23`
-> **Phase 1B（8 项）**：`VB-08`、`VB-09`、`VB-10`、`VB-11`、`VB-12`、`VB-13`、`VB-19`、`VB-20`
+> **剩余未解决的 Blocking = 10 项**，即进入 `POC Design v0.2` 前仍需解决的最小集合：
 >
-> **最高杠杆项：`VB-23`（流程走查）** —— 一次执行可同时承载 H1、H2、E08 与 B1–B4。
+> - **Phase 1A（2 项）**：`VB-21`（`NOT STARTED`）、`VB-22`（`PARTIALLY VALIDATED`，仍属未解决，直到权限 / 数据范围部分被确认）
+> - **Phase 1B（8 项）**：`VB-08`、`VB-09`、`VB-10`、`VB-11`、`VB-12`、`VB-13`、`VB-19`、`VB-20`
+>
+> **Phase 1A 已完成的 Blocking items = 8 项**：`VB-01`、`VB-02`、`VB-03`、`VB-04`、`VB-05`、`VB-06`、`VB-07`、`VB-23`。
+> 推导核对：Blocking 18 − Phase 1A 已完成 8 = **剩余 10**。
+>
+> **`VB-24` / `VB-25` / `VB-26` 虽为 `VALIDATED / COMPLETED`，但属 NON-BLOCKING，不计入「已完成 Blocking items」。** 它们作为 B2 / B3 / B4 的载体一并得出，属附带成果。
+>
+> **最高杠杆项 `VB-23`（流程走查）已完成** —— 它同时承载了 H1、H2、E08 与 B1–B4。
 >
 > **I3（基础访问权限和数据安全边界已确认）的覆盖**：由 `VB-21`（操作权限边界）＋ `VB-22`（角色、数据范围及权限）共同支撑。
 >
@@ -378,8 +441,10 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 本节登记**已获得的**验证输入。每条记录必须符合第 2 节的 Simulation Evidence Protocol。
 
-> **当前状态：本节为空。**
-> 尚无任何经 Human 提供或批准的模拟输入。Agent 不得自行生成或补齐任何记录。
+> **当前状态：已登记 3 条记录（`VR-001` / `VR-002` / `VR-003`），全部为 Human-approved `SIMULATED`。**
+> 除已登记的记录外，Agent 不得自行生成或补齐任何记录。
+>
+> **证据性质声明**：以下全部记录均为 `Evidence Type: SIMULATED`、`Evidence Source: Human-approved`。它们**只代表本模拟项目中的业务设定**，不得解释为云南 CY 集团真实业务事实，不得声称来源于真实客户访谈或真实企业内部系统。
 
 ### 9.1 记录模板
 
@@ -396,21 +461,123 @@ Impact on Entry Criteria:
 
 ### 9.2 已登记记录
 
-| # | Evidence Type | Role | Date | Question / Decision | Human-provided / approved | Result | Backlog ID | Entry Criteria Impact |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| — | — | — | — | *（尚无记录）* | — | — | — | — |
+| # | Evidence Type | Role | Human-provided / approved | Backlog ID | Entry Criteria Impact |
+| --- | --- | --- | --- | --- | --- |
+| `VR-001` | `SIMULATED` | Simulated Procurement / Supply Chain User | **Human-approved** | VB-01、VB-02、VB-23、VB-24、VB-25、VB-26 | P1、B1–B4 |
+| `VR-002` | `SIMULATED` | Simulated Customer IT ＋ Simulated Business Owner | **Human-approved** | VB-05、VB-06 | S3 |
+| `VR-003` | `SIMULATED` | Simulated Business Owner / Sponsor | **Human-approved** | VB-03、VB-04、VB-07 | P2、P3、S1、S2、S3 |
 
-### 9.3 待输入清单（Phase 1A）
+#### `VR-001`
+
+| 字段 | 内容 |
+| --- | --- |
+| **Scenario** | `SC-ASIS-001` —— 当前模拟场景中的缺料分析 As-Is 流程 |
+| **Evidence Type** | `SIMULATED` |
+| **Evidence Source** | **Human-approved** |
+| **Role** | Simulated Procurement / Supply Chain User |
+| **Related Backlog** | VB-01、VB-02、VB-23、VB-24、VB-25、VB-26 |
+
+**核心批准内容（Human-approved，仅代表本模拟项目）：**
+
+- 模拟企业为**离散装备制造**场景；
+- 缺料分析涉及**生产计划、BOM、库存、采购 / 在途、仓库状态及供应商相关信息**；
+- 现有流程存在**跨系统 / 数据源查询与核对**；
+- 数据需要**导出或进入 Excel 进行人工关联、筛选与二次计算**；
+- 单次缺料分析模拟基线约 **60–120 分钟**（**`SIMULATED ESTIMATE`**，非真实测量数据）；
+- 单次涉及约 **100–500 个相关物料**；
+- **每个工作日至少进行一次分析**，生产计划重大变更时追加；
+- 主要参与角色包括**计划员、采购员、供应链负责人**；
+- **最终采购决策仍由 Human 完成**。
+
+> **数值性质警示**：上述 60–120 分钟、100–500 个物料、每日一次等数值均为 **`SIMULATED ESTIMATE`**，是 Human 批准的模拟基线，**不得描述为真实 CY 数据或实测结果**。
+>
+> **关于 `B3`（当前分析平均耗时已经测量或获得可靠估算）**：在本模拟项目的 Simulation Evidence Protocol 下，上述经 Human-approved 的 **`SIMULATED ESTIMATE`（60–120 分钟）**满足 Brief §19 的"已经测量**或获得可靠估算**"。因此 `B3 = SATISFIED`。该判定**继续明确**：证据性质为 `SIMULATED`、来源为 Human-approved、**非真实 CY 实测数据**。
+
+#### `VR-002`
+
+| 字段 | 内容 |
+| --- | --- |
+| **Scenario** | `SC-ASIS-002` —— 现有 ERP / MRP / 缺料预警能力边界 |
+| **Evidence Type** | `SIMULATED` |
+| **Evidence Source** | **Human-approved** |
+| **Role** | Simulated Customer IT ＋ Simulated Business Owner |
+| **Related Backlog** | VB-05、VB-06 |
+
+**核心批准内容（Human-approved，仅代表本模拟项目）：**
+
+现有 ERP / MRP 已具备**基础能力**，例如：
+
+- BOM 展开
+- 物料需求计算
+- 账面库存查询
+- 基础采购订单参与计算
+- 基础缺料清单
+- 基础异常 / 延期预警
+
+**但现有系统不能独立完成完整缺料决策闭环。** 仍需要人工完成或补充：
+
+- 跨数据源核对
+- 有效在途判断
+- 冻结 / 待检库存判断
+- 风险优先级判断
+- 缺料原因解释
+- 供应商 / Lead Time 等上下文核对
+- 采购行动建议
+
+**项目定位**：MRP / ERP 继续负责基础业务与确定性数据能力；AI Copilot **不替代** ERP / MRP，而是在其上形成**受控的决策协同层**。
+
+#### `VR-003`
+
+| 字段 | 内容 |
+| --- | --- |
+| **Scenario** | `SC-BIZ-001` —— Business Owner 对业务价值、POC 和 P0/P1 边界的批准 |
+| **Evidence Type** | `SIMULATED` |
+| **Evidence Source** | **Human-approved** |
+| **Role** | Simulated Business Owner / Sponsor |
+| **Related Backlog** | VB-03、VB-04、VB-07 |
+
+**核心批准内容（Human-approved，仅代表本模拟项目）：**
+
+Business Owner 认可**存在值得验证的业务问题**：大量系统数据和基础预警仍需要人工转化为：
+
+- 真正需要处理的**关键缺料**
+- **风险优先级**
+- **原因解释**
+- **采购行动建议**
+
+认可通过**受控 POC** 验证业务价值。
+
+认可当前 **P0**：
+
+```
+缺料分析
+→ 风险解释
+→ 采购建议
+→ 采购申请草稿
+→ Human Review / Modify
+→ Approve / Reject
+→ 正式业务系统执行
+```
+
+明确 AI **可以**：分析、计算、解释、建议、生成 Draft。
+
+明确 AI **不可以**：最终批准、正式下单、绕过审批、越权修改业务系统。
+
+认可 **P0 聚焦核心缺料分析与采购建议闭环**；RAG、高级自然语言查询、复杂供应商智能、扩展报告等继续属于 **P1 / Future**。
+
+### 9.3 待输入清单（Phase 1A 剩余）
+
+> Phase 1A 的多数条目已由 `VR-001` / `VR-002` / `VR-003` 覆盖。以下为**仍需 Human 提供或批准**的剩余项。
 
 | Backlog ID | 需要的模拟输入 | 建议角色 |
 | --- | --- | --- |
-| VB-01、VB-02、VB-23、VB-24、VB-25、VB-26 | 当前模拟场景中的缺料分析流程走查（含系统、步骤、耗时、频率） | Simulated Procurement / Supply Chain User |
-| VB-03、VB-04、VB-07 | 问题价值认可、P0 闭环与边界认可 | Simulated Sponsor / Business Owner |
-| VB-05、VB-06 | 现有 MRP 与预警机制能力 | Simulated Customer IT ＋ Simulated Business Owner |
+| **VB-21** | 具体操作权限矩阵（查看采购价格 / 选择供应商 / 创建采购申请 / 修改数量 / 批准采购 / 正式下单的权限归属） | Simulated Business Owner ＋ Simulated Customer IT |
+| **VB-22** | 完整角色集合、各角色 **Data Scope** 与 **Permission Boundary**（当前仅确认了主要流程角色） | Simulated Business Owner ＋ Simulated Customer IT |
 | VB-14 | 「缺料」业务定义 | Simulated Procurement / Supply Chain User |
-| VB-21、VB-22 | 权限与角色 | Simulated Business Owner ＋ Simulated Customer IT |
 | VB-27 | 历史缺料案例与判断依据 | Simulated Procurement / Supply Chain User |
 | VB-28 | 高频问题清单 | Simulated Business Owner |
+
+> **Phase 1B 尚未开始**，其待输入清单（VB-08～VB-13、VB-19、VB-20、VB-29、VB-15～VB-18）待 Phase 1A 完成后另行登记。
 
 ---
 
