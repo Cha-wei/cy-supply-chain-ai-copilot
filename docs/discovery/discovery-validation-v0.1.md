@@ -125,7 +125,16 @@ Brief §7 提出 4 个假设。Brief §8 验证矩阵中的原始结论为 `TBD`
 | **H6** | 关键主数据可以建立基本关联 | Brief §19 Data Readiness 末项 | YES（Phase 1B） |
 | **H7** | POC 可以只读 + 草稿方式接入，无需写入生产业务系统 | Brief §10、§11 P0-3 | NO（但实现前必须确认） |
 
-> Brief §8 要求假设「不得长期停留在模糊状态」。当前 4/4 均为 `TBD`，该要求**尚未满足** —— 本文档的状态为 `DRAFT`，有待 Human 提供模拟输入后方可推进。
+> **关于 Brief §8「假设不得长期停留在模糊状态」的当前状态**：
+>
+> 需区分两个层面，不得混为一谈：
+>
+> | 层面 | H1 / H2 | H3 / H4 |
+> | --- | --- | --- |
+> | **FROZEN Discovery Brief 中的原始状态** | `HYPOTHESIS` / `TBD` —— **未被修改** | `HYPOTHESIS` / `TBD` —— **未被修改** |
+> | **本文档（Discovery Validation）记录的当前状态** | **`PARTIALLY CONFIRMED`**（依据 `VR-001`） | **`TBD`** |
+>
+> 即：Brief §8 矩阵中的原始 `TBD` 记录**保持不变**（FROZEN 文档不得修改）；假设的实际推进状态由本文档记录。当前 H1 / H2 已脱离模糊状态，**H3 / H4 仍为 `TBD`** —— 因此 Brief §8 的该要求**尚未完全满足**。本文档状态为 `DRAFT`。
 
 ---
 
@@ -285,8 +294,15 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 ### 7.1 Phase 1A — Problem Validation（优先）
 
 > **Phase 1A 进度**：`VR-001` / `VR-002` / `VR-003` 三份 Human-approved `SIMULATED` 记录已登记。
-> 已完成：VB-01、VB-02、VB-03、VB-04、VB-05、VB-06、VB-07、VB-23
-> 仍 Blocking：**VB-21**（`NOT STARTED`）、**VB-22**（`PARTIALLY VALIDATED`）
+>
+> Phase 1A 的 **Blocking items 共 10 项**：
+>
+> | 状态 | 数量 | ID |
+> | --- | --- | --- |
+> | ✅ 已完成 Blocking | **8** | VB-01、VB-02、VB-03、VB-04、VB-05、VB-06、VB-07、VB-23 |
+> | ⛔ 仍未完成 Blocking | **2** | VB-21、VB-22 |
+>
+> `VB-24` / `VB-25` / `VB-26` 同样为 `VALIDATED / COMPLETED`，但它们属 **NON-BLOCKING** Validation Items，**不计入「已完成 Blocking items」数量**。
 
 | ID | Question | Current Evidence Status | Why It Matters | Evidence Needed | Suggested Validation Method | Owner | Status | Blocks? |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -336,11 +352,19 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 ### 7.4 Backlog 汇总
 
+#### A. 静态分类（`Blocks POC Design?`）
+
+`Blocks POC Design?` 是每个 Validation Item 的**静态属性**，由 Brief §19 是否为该条所必需决定。**该分类不因条目已完成而改变** —— 已完成的 Blocking item 仍是 Blocking item。
+
 | 分类 | 数量 | ID |
 | --- | --- | --- |
-| **BLOCKING** | **10** | Phase 1A（2）：VB-21、VB-22（VB-22 为 `PARTIALLY VALIDATED`，仍属 Blocking）<br>Phase 1B（8）：VB-08～VB-13、VB-19、VB-20 |
-| **NON-BLOCKING** | **19** | VB-14～VB-18（5）、VB-24～VB-29（6）、VB-01～VB-07（7）、VB-23（1） |
+| **BLOCKING** | **18** | **Phase 1A（10）**：VB-01、VB-02、VB-03、VB-04、VB-05、VB-06、VB-07、VB-21、VB-22、VB-23<br>**Phase 1B（8）**：VB-08、VB-09、VB-10、VB-11、VB-12、VB-13、VB-19、VB-20 |
+| **NON-BLOCKING** | **11** | VB-14～VB-18（5）、VB-24～VB-29（6） |
 | 合计 | 29 | — |
+
+> **注意**：`VB-24` / `VB-25` / `VB-26` 属 **NON-BLOCKING**，它们**不计入** Blocking 数量。18 + 11 = **29**。
+
+#### B. 执行状态
 
 | Status | 数量 | ID |
 | --- | --- | --- |
@@ -349,6 +373,18 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 | `NOT STARTED` | **17** | VB-08～VB-21（不含 VB-22）、VB-27、VB-28、VB-29、VB-14～VB-18 |
 
 > **核对**：11 + 1 + 17 = **29**，与 Backlog 条目总数一致。
+
+#### C. 剩余未解决的 Blocking（Remaining unresolved Blocking）
+
+`Blocking` 与「已完成」是两个维度。**仍未解决**的 Blocking items 数量为：
+
+| 分组 | 数量 | ID |
+| --- | --- | --- |
+| **Remaining unresolved Blocking** | **10** | — |
+| Phase 1A | **2** | VB-21（`NOT STARTED`）、VB-22（`PARTIALLY VALIDATED`，仍属未解决） |
+| Phase 1B | **8** | VB-08、VB-09、VB-10、VB-11、VB-12、VB-13、VB-19、VB-20 |
+
+> **`Remaining = 10` 的推导**：Blocking 共 **18** 项；其中 Phase 1A 已完成的 Blocking 为 **8** 项（VB-01～VB-07、VB-23）。18 − 8 = **10**。
 
 ---
 
@@ -381,12 +417,17 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 ### 8.3 结论
 
-> **进入 `POC Design v0.2` 前，最少必须先解决 10 项 BLOCKING items：**
+> **Blocking 分类（静态）共 18 项**：Phase 1A 10 项 ＋ Phase 1B 8 项。**该分类不因条目完成而改变。**
 >
-> **Phase 1A（2 项）**：`VB-21`、`VB-22`（其中 VB-22 为 `PARTIALLY VALIDATED`，仍属 Blocking，直到权限 / 数据范围部分被确认）
-> **Phase 1B（8 项）**：`VB-08`、`VB-09`、`VB-10`、`VB-11`、`VB-12`、`VB-13`、`VB-19`、`VB-20`
+> **剩余未解决的 Blocking = 10 项**，即进入 `POC Design v0.2` 前仍需解决的最小集合：
 >
-> **Phase 1A 已完成的 Blocking items（9 项）**：`VB-01`、`VB-02`、`VB-03`、`VB-04`、`VB-05`、`VB-06`、`VB-07`、`VB-23` 已完成（8 项）＋ `VB-24` / `VB-25` / `VB-26` 作为 B2 / B3 / B4 的载体一并得出。
+> - **Phase 1A（2 项）**：`VB-21`（`NOT STARTED`）、`VB-22`（`PARTIALLY VALIDATED`，仍属未解决，直到权限 / 数据范围部分被确认）
+> - **Phase 1B（8 项）**：`VB-08`、`VB-09`、`VB-10`、`VB-11`、`VB-12`、`VB-13`、`VB-19`、`VB-20`
+>
+> **Phase 1A 已完成的 Blocking items = 8 项**：`VB-01`、`VB-02`、`VB-03`、`VB-04`、`VB-05`、`VB-06`、`VB-07`、`VB-23`。
+> 推导核对：Blocking 18 − Phase 1A 已完成 8 = **剩余 10**。
+>
+> **`VB-24` / `VB-25` / `VB-26` 虽为 `VALIDATED / COMPLETED`，但属 NON-BLOCKING，不计入「已完成 Blocking items」。** 它们作为 B2 / B3 / B4 的载体一并得出，属附带成果。
 >
 > **最高杠杆项 `VB-23`（流程走查）已完成** —— 它同时承载了 H1、H2、E08 与 B1–B4。
 >
@@ -449,6 +490,8 @@ Impact on Entry Criteria:
 - **最终采购决策仍由 Human 完成**。
 
 > **数值性质警示**：上述 60–120 分钟、100–500 个物料、每日一次等数值均为 **`SIMULATED ESTIMATE`**，是 Human 批准的模拟基线，**不得描述为真实 CY 数据或实测结果**。
+>
+> **关于 `B3`（当前分析平均耗时已经测量或获得可靠估算）**：在本模拟项目的 Simulation Evidence Protocol 下，上述经 Human-approved 的 **`SIMULATED ESTIMATE`（60–120 分钟）**满足 Brief §19 的"已经测量**或获得可靠估算**"。因此 `B3 = SATISFIED`。该判定**继续明确**：证据性质为 `SIMULATED`、来源为 Human-approved、**非真实 CY 实测数据**。
 
 #### `VR-002`
 
