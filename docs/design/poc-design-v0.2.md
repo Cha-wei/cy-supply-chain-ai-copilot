@@ -15,7 +15,9 @@
 >
 > 它**继承**上述两个 `FROZEN` baseline，但**不得重新解释或覆盖** FROZEN Discovery 的任何内容。
 >
-> **当前状态**：`DRAFT`。本版本只建立设计骨架、继承已冻结的 Discovery Baseline、并登记待设计事项。**本轮不代表设计已完成**，也未获得 `APPROVED` / `FROZEN`。
+> **当前状态**：`DRAFT`。本文档继承已冻结的 Discovery Baseline，并已包含若干已经 Human-approved、状态为 `DESIGN RESOLVED` 的 P0 business rules；**尚未解决的设计项继续登记为 `DESIGN PENDING` / `NOT STARTED`**。
+>
+> **`DESIGN RESOLVED` 不代表 `IMPLEMENTED`，也不代表 `TESTED`**；本文档**未获得** `APPROVED` / `FROZEN`，也**仍未包含**任何 implementation code。
 
 ---
 
@@ -1621,7 +1623,7 @@ Options
 
 ## 11. Open Design Backlog
 
-> 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14`、`VB-15` 已获得 Human Approval。
+> 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14`、`VB-15`、`VB-17` 已获得 Human Approval。
 
 | Backlog ID | 归属 | Status |
 | --- | --- | --- |
@@ -1711,6 +1713,9 @@ Options
 
 - 本文档为 **POC Design 阶段的 Canonical Source**。
 - 本文档**不修改、不重新解释**任何 `FROZEN` Discovery 内容。
-- 本文档**不包含**任何技术栈选择、Architecture Decision 或 ADR。
-- 本文档**不包含**具体业务规则定义、Schema、Contract、Mock API、Mock Dataset 或任何实现代码。
-- 本轮只表示：**POC Design phase has formally started.**
+- 本文档**不包含**任何技术栈选择；**尚未形成**正式的 Architecture Decision 或 ADR。
+- 本文档当前**包含**已经 Human-approved、且状态为 `DESIGN RESOLVED` 的 P0 business rules。
+- `DESIGN RESOLVED` **不代表** `IMPLEMENTED`，**不代表** `TESTED`，也**不代表** `APPROVED` 或 `FROZEN`。
+- **尚未解决**的设计项继续保持 `DESIGN PENDING` / `NOT STARTED`，**不得视为已完成**。
+- 本文档**仍未包含**任何 implementation code、Schema、Contract、Mock API 或 Mock Dataset。
+- `POC Design v0.2` 当前**仍为 `DRAFT`**。
