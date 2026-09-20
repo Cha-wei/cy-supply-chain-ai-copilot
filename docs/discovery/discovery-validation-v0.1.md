@@ -164,7 +164,7 @@ Brief §7 提出 4 个假设。Brief §8 验证矩阵中的原始结论为 `TBD`
 
 | ID | Unknown | Brief 状态（原始分类，未修改） | 影响面 | 需确认方 | 阶段 | 当前 Discovery Validation |
 | --- | --- | --- | --- | --- | --- | --- |
-| **E05** | 当前实际 ERP 品牌及版本 | `UNKNOWN` | Data Readiness、Integration、H1 判定 | Simulated Customer IT | Phase 1B | **仍未解决（真实企业层面）**：ERP 品牌 / 版本仍未确认。**`VR-006`、`VR-007` 均不作为 `E05` 的证据。** 本项目已选择与具体 ERP vendor / version **解耦**的 POC Integration Path，故 `E05` **不阻塞**当前模拟 POC 的 Entry Gate。**不得标记为 resolved。** |
+| **E05** | 当前实际 ERP 品牌及版本 | `UNKNOWN` | Data Readiness、Integration、H1 判定 | Simulated Customer IT | Phase 1B | **`Entry Gate Blocking: NO`** ｜ **仍未解决（真实企业层面）**：ERP 品牌 / 版本仍未确认。**`VR-006`、`VR-007` 均不作为 `E05` 的证据。** 原因：当前模拟 POC 已选择与具体 ERP vendor / version **解耦**的 Integration Path，故 `E05` **不阻塞** Entry Gate。**不得标记为 resolved，不得编造 ERP 品牌或版本。** |
 | **E06** | 是否存在独立 WMS | `UNKNOWN` | Data Readiness（库存数据来源） | Simulated Customer IT | Phase 1B | 数据维度可得由 `VR-005` 支持；**真实企业 WMS 归属仍未解决**（模拟环境采用 logical source，不依赖真实 WMS 系统） |
 | **E07** | BOM 由哪个系统管理 | `UNKNOWN` | Data Readiness、P0-1 计算输入 | Simulated Customer IT | Phase 1B | BOM 数据可得由 `VR-005` 支持；**真实企业 BOM / PLM 系统归属仍未解决**（模拟环境采用 logical source） |
 | **E08** | 当前真实缺料分析流程 | `UNKNOWN` | Problem Validation（H1/H2）、Baseline、HITL | Simulated Procurement / Supply Chain User | **Phase 1A** | resolved / supported by `VR-001`（当前模拟场景 As-Is 流程） |
@@ -235,26 +235,39 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 | 三要求：受控 / 可解释 / 可追溯 | §10 | 要求已冻结 |
 | P0 目标流程 | §11 P0-3 | 流程已冻结 |
 
-### 5.2 仍依赖待验证事实的部分（Validation Gaps）
+### 5.2 Validation Baseline 与 Design Pending 的区分
 
-| ID | P0 部分 | 依赖的待验证事实 | 缺口性质 | 关联 Backlog |
+本节区分两类内容，**不得混为一谈**：
+
+| 类别 | 含义 | 是否仍为"未验证事实" |
+| --- | --- | --- |
+| **Validation baseline** | 该 P0 部分所依赖的**数据可得性 / 权限边界 / 接入路径**是否已验证 | 已由对应 `VR` 解决的，**不得**继续描述为未验证 |
+| **Design Pending** | 具体业务规则、数据契约、计算口径、RBAC implementation、Adapter Contract 等 | 仍待 `POC Design v0.2` 定义，**属正常状态，不是验证缺口** |
+
+**历史 Gap ID 全部保留，不删除。**
+
+| ID | P0 部分 | Validation baseline | Design Pending | 关联 Backlog |
 | --- | --- | --- | --- | --- |
-| **G-01** | P0-1 输入：生产计划结构 | K-DR-1 | 数据契约未定义 | VB-08 |
-| **G-02** | P0-1 输入：BOM 版本机制 | K-DR-2、E07 | 数据契约未定义 | VB-09 |
-| **G-03** | P0-1 计算：物料需求 | K-BR-4、K-DR-3 | 计算口径未定义 | VB-13、VB-17 |
-| **G-04** | P0-1 计算：预计可用量 | K-BR-2、K-DR-4 | 计算口径未定义 | VB-10、VB-15 |
-| **G-05** | P0-1 计算：预计缺口 | K-DR-5、K-BR-3 | 计算口径未定义 | VB-11、VB-16 |
-| **G-06** | P0-1 计算：基础风险 | H3、E10、K-DR-6 | 风险规则未定义 | VB-27、VB-12 |
-| **G-07** | P0-1 判定起点：「缺料」定义 | K-BR-1 | 判定标准未定义 | VB-14 |
-| **G-08** | P0-2 字段：需求日期 | K-DR-1 | 依赖未验证输入 | VB-08 |
-| **G-09** | P0-2 字段：供应周期 | K-DR-6 | 依赖未验证数据 | VB-12 |
-| **G-10** | P0-2 字段：建议采购数量 | K-BR-5 | 计算口径未定义 | VB-18 |
-| **G-11** | P0-2 字段：风险证据 | H3、E10 | 证据来源未确认 | VB-27、VB-12 |
-| **G-12** | P0-3 HITL 权限归属 | K-HITL-1、K-HITL-2 | 权限模型未定义 | VB-21、VB-22 |
-| **G-13** | P0 全部：数据从哪来 | K-INT-1、E05、E06 | 接入路径未确认 | VB-19、VB-20 |
-| **G-14** | P0 是否值得做 | H1、H2、K-INT-2、K-INT-3 | 问题价值未验证 | VB-01～VB-06 |
+| **G-01** | P0-1 输入：生产计划结构 | **RESOLVED**（`VR-005`，Data Readiness `D1`） | 详细字段契约 / 计划版本选择逻辑 | VB-08 |
+| **G-02** | P0-1 输入：BOM 版本机制 | **RESOLVED**（`VR-005`，`D2`：数据可得且含 Revision / Effectivity） | BOM Version Selection Rule / Engineering Change handling | VB-09 |
+| **G-03** | P0-1 计算：物料需求 | **RESOLVED**（`VR-005`＋`VR-006`：物料与主数据可得） | 损耗率规则、需求计算公式 | VB-13、VB-17 |
+| **G-04** | P0-1 计算：预计可用量 | **RESOLVED**（`VR-005`，`D3`：库存与状态可得） | 安全库存逻辑、可用量计算口径 | VB-10、VB-15 |
+| **G-05** | P0-1 计算：预计缺口 | **RESOLVED**（`VR-005`，`D4`：采购 / 在途数据可得） | 有效在途规则、替代料规则、缺口计算口径 | VB-11、VB-16 |
+| **G-06** | P0-1 计算：基础风险 | **部分 RESOLVED**（`VR-006` 提供 Supplier / Lead Time / Performance 数据基线；`VR-004` 提供业务权限边界） | 风险评分卡 / 风险规则（`H3` 对应 `VB-27` 仍 `NOT STARTED`） | VB-27、VB-12 |
+| **G-07** | P0-1 判定起点：「缺料」定义 | **PENDING**（`VB-14` 为 NON-BLOCKING，未完成；不阻塞 Entry Gate） | 「缺料」判定标准 | VB-14 |
+| **G-08** | P0-2 字段：需求日期 | **RESOLVED**（`VR-005`，`D1`：生产计划数据可得） | 需求日期取值规则 | VB-08 |
+| **G-09** | P0-2 字段：供应周期 | **RESOLVED**（`VR-006`：Standard Lead Time 可得） | 供应周期取值规则 / Dynamic Lead Time | VB-12 |
+| **G-10** | P0-2 字段：建议采购数量 | **RESOLVED**（`VR-005`＋`VR-006`：数量与供应商数据可得） | MOQ 规则、建议数量计算逻辑 | VB-18 |
+| **G-11** | P0-2 字段：风险证据 | **部分 RESOLVED**（`VR-006` 提供 Performance 数据基线） | 风险证据的构成与呈现规则 | VB-27、VB-12 |
+| **G-12** | P0-3 HITL 权限归属 | **RESOLVED**（`VR-004`：业务权限 baseline 已验证） | RBAC implementation、approval matrix、HITL state machine | VB-21、VB-22 |
+| **G-13** | P0 全部：数据从哪来 | **RESOLVED by `VR-007`**：Integration Pattern = **Controlled Export / Snapshot** | 具体文件格式（CSV / JSON / Parquet）、Adapter Contract、实现细节 | VB-19、VB-20 |
+| **G-14** | P0 是否值得做 | **RESOLVED**（依据 `VR-001` / `VR-002` / `VR-003`） | — | VB-01～VB-06 |
 
-> **边界声明**：本表只指出「哪些 P0 部分依赖未验证事实」。Brief §20 已将缺料计算完整口径、BOM 版本、损耗率、替代料、MOQ、库存状态、有效在途、风险评分卡、规则版本、数据字典、主数据编码、POC 测试集、RBAC 矩阵、HITL 状态机、审批矩阵、审计事件 Schema 等划归 `POC Design v0.2`。本文档**不得**代其定义。
+> **关于 `G-13` 的补充**：真实 ERP vendor / version 与真实 API capability **仍可能为 `UNKNOWN`**（见 §4.1 `E05`），但**不阻塞**模拟 POC 的 Integration baseline —— 因为本项目已选择**与具体 ERP vendor / version 解耦**的 Integration Path。
+>
+> **关于 `G-06` / `G-11` 的说明**：其 Validation baseline 由 `VR-006` 提供的供应商性能数据与 `VR-004` 的业务权限边界**部分解决**；剩余部分取决于 `H3`（对应 `VB-27`），该条为 **NON-BLOCKING**，不阻塞 Entry Gate，但**不得长期遗忘**。
+
+> **边界声明**：本表只区分「Validation baseline 是否已解决」与「Design 是否仍有待定义」。Brief §20 已将缺料计算完整口径、BOM 版本、损耗率、替代料、MOQ、库存状态、有效在途、风险评分卡、规则版本、数据字典、主数据编码、POC 测试集、RBAC 矩阵、HITL 状态机、审批矩阵、审计事件 Schema 等划归 `POC Design v0.2`。本文档**不得**代其定义，**也不得**把 Design Pending 描述为验证缺口。
 
 ---
 
@@ -491,7 +504,7 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 ### 7.3 其余 Business Rules 项（POC Design 内细化）
 
-以下均 `UNKNOWN`，状态 `NOT STARTED`，Owner `Human`，**Blocking = NO**（Brief §20 已将其划归 POC Design v0.2，不阻碍**进入** v0.2，但是 v0.2 的必填内容）。
+以下均 `UNKNOWN`，状态 `NOT STARTED`，Owner `Human`，**Blocking = NO**。Brief §20 已将其划归 `POC Design v0.2`，**不阻碍进入 v0.2**；它们是**后续 `POC Design` 需要继续处理的 Backlog**，而非进入前的必须完成项。
 
 | ID | Question | 关联 Gap | 建议方法 |
 | --- | --- | --- | --- |
@@ -526,7 +539,7 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 >
 > 本次新增完成：`VB-19`、`VB-20`（依据 `VR-007`）。`PARTIALLY VALIDATED` 保持为 0。
 >
-> > **注意**：仍有 **8 项 NON-BLOCKING items 未完成**。它们**不影响**进入 `POC Design`，**不得**为了凑成"29 / 29"而自行补齐。
+> > **注意**：仍有 **8 项 NON-BLOCKING items 未完成**。它们**不影响**进入 `POC Design`，**不得**为了凑成"29 / 29"而自行补齐；它们是**后续 `POC Design` / `POC Validation` 需要继续处理的 Backlog**。
 
 #### C. 剩余未解决的 Blocking（Remaining unresolved Blocking）
 
@@ -618,15 +631,26 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 >
 > **`VB-24` / `VB-25` / `VB-26` 虽为 `VALIDATED / COMPLETED`，但属 NON-BLOCKING，不计入「已完成 Blocking items」。** 它们作为 B2 / B3 / B4 的载体一并得出，属附带成果。
 >
-> **仍有 8 项 NON-BLOCKING items 未完成**（`VB-14`～`VB-18`、`VB-27`～`VB-29`）。它们**不影响**进入 `POC Design`，**不得**为凑满"29 / 29"而自行补齐。
+> **仍有 8 项 NON-BLOCKING items 未完成**（`VB-14`～`VB-18`、`VB-27`～`VB-29`）。它们**不影响**进入 `POC Design`，**不得**为凑满"29 / 29"而自行补齐；它们是**后续 `POC Design` / `POC Validation` 需要继续处理的 Backlog**，其中 `H3` / `H4` 对应的 `VB-27` / `VB-28` **应在后续阶段继续推进，不得长期遗忘**。
 >
 > **`D6` / `VB-13`（主数据关联）：`SATISFIED` / `VALIDATED / COMPLETED`（依据 `VR-006`）**。`VR-006` 确认存在 **canonical 标识基线**与**稳定、可追踪的基本映射关系**（允许 `Local ID → Canonical ID` mapping）。`D6` 所要求的是"关键主数据能够建立稳定、可追踪的基本映射关系"，**而不是**所有系统原始编码字符串完全一致。**仍不代表**企业主数据质量完美、不存在 Mapping Error、已设计 MDM 系统或已实现数据清洗流程。
 >
 > **`D5` / `VB-12`（供应商信息）：`SATISFIED` / `VALIDATED / COMPLETED`（依据 `VR-006`）**。**`D5 SATISFIED` 不等于 Supplier Risk / Ranking 规则已经设计** —— 供应商风险评分、排名与自动选择仍属后续 `POC Design`。
 >
-> **`I3`（基础访问权限和数据安全边界已确认）保持 `NOT SATISFIED`**：`VR-004` 确认的是**业务**角色、Data Scope 与业务 Permission Boundary，**不等于**技术访问与数据安全边界。`I3` 的确认由 Phase 1B 的 `VB-19` / `VB-20` 承担（见 §7.2 的 Integration Validation Scope 说明）。
+> **`I3`（基础访问权限和数据安全边界已确认）：`SATISFIED`**，由 **两条互补证据共同满足**：
 >
-> **NON-BLOCKING 的 11 项** 可在 Phase 1A/1B 期间或 POC Design 内并行细化，但它们是 v0.2 的必填内容。
+> | 证据 | 覆盖层面 | 确认内容 |
+> | --- | --- | --- |
+> | `VR-004`（SC-GOV-001） | **业务** | Role / Data Scope / Permission Boundary |
+> | `VR-007`（SC-INT-001） | **技术** | Access / Read-Write / Environment / Security Boundary |
+>
+> **两者缺一不可**：`VR-004` 单独不足以满足 `I3`（缺技术边界），`VR-007` 单独亦不足以满足 `I3`（缺业务权限主体）。二者合起来构成完整依据。
+>
+> **NON-BLOCKING 的 11 项** 中，`VB-24` / `VB-25` / `VB-26` 已完成；其余 **8 项仍为 `NOT STARTED`**（`VB-14`～`VB-18`、`VB-27`～`VB-29`）。
+>
+> 它们**不是**「进入 `POC Design` 前必须完成」的前置条件，而是**后续 `POC Design` / `POC Validation` 需要继续处理的 Backlog**。
+>
+> > 其中 `H3` / `H4` 对应的 **`VB-27`**（历史案例复盘）与 **`VB-28`**（高频问题清单）**应在后续阶段继续推进，不得长期遗忘**。
 
 ---
 
@@ -1352,7 +1376,7 @@ Production Database
 >
 > **`POC Design v0.2 Entry Gate`：`READY`**（Entry Criteria 19 / 19 `SATISFIED`）
 >
-> > **仍存在 8 项 NON-BLOCKING items 未完成**（`VB-14`～`VB-18`、`VB-27`～`VB-29`）。它们不影响进入 `POC Design`，**不得**为凑满"29 / 29"而自行补齐。
+> > **仍存在 8 项 NON-BLOCKING items 未完成**（`VB-14`～`VB-18`、`VB-27`～`VB-29`）。它们不影响进入 `POC Design`，**不得**为凑满"29 / 29"而自行补齐；它们是**后续 `POC Design` / `POC Validation` 需要继续处理的 Backlog**。
 
 ---
 
