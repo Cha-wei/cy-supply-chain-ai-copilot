@@ -326,9 +326,19 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 >
 > > ### ⚠️ 关键边界：Phase 1A `COMPLETE` ≠ POC Design v0.2 Entry Gate `COMPLETE`
 > >
-> > Phase 1A 只覆盖 **Problem Validation** 与部分 **Baseline / Scope Validation**。进入 `POC Design v0.2` 仍需满足 **Phase 1B — Data & System Readiness**（Data Readiness 与 Integration 两组），该阶段**尚未开始**。
+> > Phase 1A 只覆盖 **Problem Validation** 与部分 **Baseline / Scope Validation**。进入 `POC Design v0.2` 仍需完成 **Phase 1B — Data & System Readiness**（Data Readiness 与 Integration 两组）。
 > >
-> > 当前状态：`SATISFIED = 10` / `NOT SATISFIED = 9`（D1–D6、I1–I3）。
+> > **当前阶段状态**：
+> >
+> > | 阶段 | 状态 |
+> > | --- | --- |
+> > | Phase 1A — Problem Validation | `COMPLETE` |
+> > | Phase 1B — Data & System Readiness | `IN PROGRESS` |
+> > | `POC Design v0.2` | `NOT READY` |
+> >
+> > **当前 Entry Criteria**：`SATISFIED = 14` / `PARTIALLY SATISFIED = 0` / `NOT SATISFIED = 5` / `UNKNOWN = 0`。
+> >
+> > **剩余未满足项**：`D5`、`D6`、`I1`、`I2`、`I3`。
 
 | ID | Question | Current Evidence Status | Why It Matters | Evidence Needed | Suggested Validation Method | Owner | Status | Blocks? |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -401,7 +411,7 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 >
 > 同理，本阶段**不得**提前设计上述任何规则。
 
-> **Integration Gate（I1 / I2 / I3）的 Validation Scope 归属（Phase 1B）**：>
+> **Integration Gate（I1 / I2 / I3）的 Validation Scope 归属（Phase 1B）**：
 > `I1`（POC 数据接入路径已确认）、`I2`（已明确 API / 数据库 / 导出文件 / 模拟接口中的何种方式接入）、`I3`（基础访问权限和数据安全边界已确认）**均由 Phase 1B 的 `VB-19` 与 `VB-20` 支撑**，并由 `VB-08`～`VB-13` 提供数据可得性前提。
 >
 > 需在 Phase 1B 确认的内容（**属 Validation Scope，不属于本阶段设计**）：
@@ -485,7 +495,7 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 > **Phase 1A 全部 10 项 Blocking items 已完成。**
 
-### 8.2 Data & System Readiness（Phase 1B）—— `NOT STARTED`
+### 8.2 Data & System Readiness（Phase 1B）—— `IN PROGRESS`
 
 > **Phase 1B 状态：`IN PROGRESS`**（4 / 8 Blocking 已完成）。剩余 4 项仍为 Blocking，且全部 `NOT STARTED`。
 
