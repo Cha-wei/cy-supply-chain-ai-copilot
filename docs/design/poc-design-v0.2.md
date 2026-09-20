@@ -147,15 +147,302 @@ AI **不可以**：
 
 ## 2. P0 Business Rules
 
-> 本节各项均对应 `FROZEN` Discovery Validation v0.1 中的 Open Design Backlog。**本轮不定义任何规则内容。**
+> 本节各项均对应 `FROZEN` Discovery Validation v0.1 中的 Open Design Backlog。
+>
+> **当前状态**：`§2.1` 已由 `BR-SHORTAGE-001` 完成设计（`DESIGN RESOLVED`，Human-approved）；**§2.2 ～ §2.7 仍为 `DESIGN PENDING`**。
 
 ### 2.1 Shortage Definition
 
-**对应：** `VB-14`
+**Rule ID:** `BR-SHORTAGE-001`
 
-**Status:** `DESIGN PENDING`
+**Backlog:** `VB-14`
 
-> FROZEN source 中的原问题：「缺料」在业务上如何定义？（依据 `K-BR-1`；关联 `G-07`）
+**Design Status:** `DESIGN RESOLVED`
+
+**Approval:** Human-approved
+
+**Implementation Status:** `NOT STARTED`
+
+> **注意**：`DESIGN RESOLVED` **≠** `IMPLEMENTED` **≠** `TESTED`。
+
+#### 2.1.1 Business Definition
+
+**「缺料」不是判断当前账面库存是否小于需求。**
+
+缺料判断必须基于：
+
+```
+某 Plant
++ 某 Material
++ 某 Required Date
+```
+
+**截至该需求日期的累计可用供给，是否能够覆盖累计物料需求。**
+
+**Calculation Grain：**
+
+```
+plant_id
++ material_code
++ required_date
+```
+
+**默认：不得跨 Plant 自动共享或借用库存。**
+
+> Warehouse 在同一 Plant 内**是否以及如何汇总**，属于 `VB-15`，**本 Task 不定义**。
+
+#### 2.1.2 Deterministic Rule
+
+概念公式：
+
+```
+ProjectedAvailable(t)
+  = OpeningUsableInventory
+  + CumulativeEffectiveInbound(<= t)
+  + CumulativeApprovedSubstituteSupply(<= t)
+  - CumulativeGrossRequirement(<= t)
+```
+
+其中 `t = required_date`。
+
+该公式**必须**按照：
+
+```
+plant_id
+→ material_code
+→ required_date ascending
+```
+
+进行**累计**计算。
+
+**不得对每个需求日期独立重复使用同一份库存。**
+
+#### 2.1.3 Dependency Boundary
+
+以下输入的**含义**由本规则引用，但其**具体计算方式不在本 Task 定义**：
+
+| 输入 | 归属 | 状态 |
+| --- | --- | --- |
+| `OpeningUsableInventory` | `VB-15` | `DESIGN PENDING` |
+| `SafetyStock` | `VB-15` | `DESIGN PENDING` |
+| `CumulativeEffectiveInbound` | §2.6 Effective Inbound | `DESIGN PENDING` |
+| `CumulativeApprovedSubstituteSupply` | `VB-16` | `DESIGN PENDING` |
+| `CumulativeGrossRequirement` | Production Requirement + BOM，并受 `VB-17` Scrap / Loss 规则影响 | `DESIGN PENDING` |
+
+因此：
+
+> `BR-SHORTAGE-001` 的 **Shortage Classification 设计可以 `DESIGN RESOLVED`**，但**完整可执行的 shortage engine 仍依赖后续规则完成**。
+>
+> **不得把这些依赖标记为已解决。**
+
+#### 2.1.4 Classification States
+
+定义四个**确定性**状态：
+
+**A. `NORMAL`**
+
+- **条件：** `ProjectedAvailable >= SafetyStock`
+- **含义：** 供给覆盖需求，且并未跌破 Safety Stock。
+
+**B. `BUFFER_BREACH`**
+
+- **条件：** `0 <= ProjectedAvailable < SafetyStock`
+- **含义：** 当前仍能满足需求，但 Safety Stock buffer 已被侵蚀。
+
+> **注意：`BUFFER_BREACH` 不是 `SHORTAGE`。**
+
+**C. `SHORTAGE`**
+
+- **条件：** `ProjectedAvailable < 0`
+- **含义：** 截至该 Required Date，累计可用供给已经不足以覆盖累计需求。
+
+**D. `DATA_INCOMPLETE`**
+
+当完成分类所必需的**关键输入无法可靠取得**时：
+
+**不得**返回 `NORMAL` / `BUFFER_BREACH` / `SHORTAGE`，而返回 **`DATA_INCOMPLETE`**。
+
+该状态表示：**计算无法可靠完成** —— **不是业务风险等级**。
+
+#### 2.1.5 Quantity Definitions
+
+```
+ShortageQty = max(0, -ProjectedAvailable)
+```
+
+```
+BufferGap   = max(0, SafetyStock - ProjectedAvailable)
+```
+
+> **注意**：当 `ProjectedAvailable >= 0` 但 `ProjectedAvailable < SafetyStock` 时，则 `ShortageQty = 0`。
+>
+> 即：**Safety Stock breach 不得被错误解释为实际生产缺料。**
+
+#### 2.1.6 Time-based Results
+
+```
+FirstShortageDate
+  = 按 required_date ascending，最早满足 ProjectedAvailable < 0 的日期
+```
+
+```
+FirstBufferBreachDate
+  = 按 required_date ascending，最早满足 ProjectedAvailable < SafetyStock 的日期
+```
+
+如果从未满足对应条件：`result = null / not present`。
+
+> 具体代码表现形式留待 **implementation**。
+
+#### 2.1.7 `DATA_INCOMPLETE` Principle
+
+至少记录以下原则：
+
+如果关键输入存在无法解析的情况，例如：
+
+- material mapping missing
+- BOM unresolved
+- required_date missing
+- inventory snapshot unusable
+- dependent calculation cannot provide reliable value
+
+则：**不得由 LLM 或 deterministic engine 自行猜测或补值。**
+
+**必须返回 `DATA_INCOMPLETE`。**
+
+> **注意**：本 Task **不定义**完整 Data Quality error taxonomy，只定义该 **classification safety rule**。
+
+#### 2.1.8 Decision Table
+
+| Condition | Classification |
+| --- | --- |
+| Required critical data unavailable | `DATA_INCOMPLETE` |
+| `ProjectedAvailable < 0` | `SHORTAGE` |
+| `0 <= ProjectedAvailable < SafetyStock` | `BUFFER_BREACH` |
+| `ProjectedAvailable >= SafetyStock` | `NORMAL` |
+
+**优先级：`DATA_INCOMPLETE` 优先于所有业务分类。**
+
+#### 2.1.9 Acceptance Examples
+
+以下为 **deterministic examples**。
+
+**Example A — `NORMAL`**
+
+| 输入 | 值 |
+| --- | --- |
+| Usable Inventory | 100 |
+| Effective Inbound | 50 |
+| Gross Requirement | 100 |
+| Safety Stock | 30 |
+
+`ProjectedAvailable = 100 + 50 - 100 = 50`
+
+**Expected：** `NORMAL`，`ShortageQty = 0`，`BufferGap = 0`
+
+**Example B — `BUFFER_BREACH`**
+
+| 输入 | 值 |
+| --- | --- |
+| Usable Inventory | 100 |
+| Effective Inbound | 40 |
+| Gross Requirement | 120 |
+| Safety Stock | 30 |
+
+`ProjectedAvailable = 100 + 40 - 120 = 20`
+
+**Expected：** `BUFFER_BREACH`，`ShortageQty = 0`，`BufferGap = 10`
+
+**Example C — `SHORTAGE`**
+
+| 输入 | 值 |
+| --- | --- |
+| Usable Inventory | 100 |
+| Effective Inbound | 40 |
+| Gross Requirement | 160 |
+| Safety Stock | 30 |
+
+`ProjectedAvailable = 100 + 40 - 160 = -20`
+
+**Expected：** `SHORTAGE`，`ShortageQty = 20`
+
+**Example D — Cumulative calculation**
+
+| 输入 | 值 |
+| --- | --- |
+| Opening Inventory | 100 |
+| Effective Inbound | 0 |
+| Safety Stock | 0 |
+
+`2026-10-10`：Demand = 80 → Cumulative `ProjectedAvailable = 100 - 80 = 20`
+
+**Expected：** `NORMAL`
+
+`2026-10-15`：Additional Demand = 60 → Cumulative Demand = 140 → `ProjectedAvailable = 100 - 140 = -40`
+
+**Expected：** `SHORTAGE`
+
+**`FirstShortageDate`：`2026-10-15`**
+
+> **必须明确：不得错误计算为 `100 >= 80` 与 `100 >= 60`** —— 因为这样会**重复使用同一份库存**。
+
+**Example E — `DATA_INCOMPLETE`**
+
+场景：Material mapping cannot be resolved.
+
+**Expected：** `DATA_INCOMPLETE`
+
+**不得输出** `NORMAL` / `BUFFER_BREACH` / `SHORTAGE`。
+
+#### 2.1.10 AI Boundary
+
+**Shortage Classification 必须由 deterministic logic 产生。**
+
+正确链路：
+
+```
+Structured Data
+↓
+Deterministic Shortage Engine
+↓
+Classification + Quantities + Evidence
+↓
+LLM
+↓
+Explanation
+```
+
+LLM **可以**：
+
+- 解释为什么缺料
+- 解释缺多少
+- 解释什么时候开始缺
+- 总结主要 Supply / Demand evidence
+
+LLM **不可以**：
+
+- 自己决定是否 `SHORTAGE`
+- 自己修改 `ProjectedAvailable`
+- 猜测缺失数据
+- 自己产生 `SafetyStock`
+- 自己产生 `Effective Inbound`
+
+#### 2.1.11 Risk Boundary
+
+**`BR-SHORTAGE-001` 只定义 Shortage Classification。**
+
+**不得在本规则定义**：`HIGH RISK`、`MEDIUM RISK`、`LOW RISK`、Supplier Risk Score、Risk Severity。
+
+这些属于 **`VB-27`（Supplier Risk / Risk Evidence）**。
+
+因此：
+
+- **`SHORTAGE` ≠ `HIGH RISK`**
+- **`BUFFER_BREACH` ≠ `MEDIUM RISK`**
+
+**不得建立未经批准的映射。**
+
+> 关联的 FROZEN 原问题：「缺料」在业务上如何定义？（依据 `K-BR-1`；关联 `G-07`）
 
 ### 2.2 Available Inventory / Safety Stock
 
@@ -354,11 +641,11 @@ Options
 
 ## 11. Open Design Backlog
 
-> 本节登记并**保留**以下条目，**不得自行关闭**。
+> 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14` 本轮已获得 Human Approval。
 
 | Backlog ID | 归属 | Status |
 | --- | --- | --- |
-| `VB-14` | P0 Business Rules（见 §2.1 Shortage Definition） | `NOT STARTED` |
+| `VB-14` | P0 Business Rules（见 §2.1 Shortage Definition）<br>→ **`BR-SHORTAGE-001` / §2.1** | **`DESIGN RESOLVED`** |
 | `VB-15` | P0 Business Rules（见 §2.2 Available Inventory / Safety Stock） | `NOT STARTED` |
 | `VB-16` | P0 Business Rules（见 §2.3 Substitute Material） | `NOT STARTED` |
 | `VB-17` | P0 Business Rules（见 §2.4 Scrap / Loss） | `NOT STARTED` |
