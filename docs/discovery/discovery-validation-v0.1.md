@@ -262,9 +262,11 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 | **B4** | 当前涉及角色已经确认 | `SATISFIED` | `VR-001`（SC-ASIS-001）：当前流程主要涉及角色为计划员、采购员、供应链负责人 |
 | **I1** | POC 数据接入路径已确认 | `NOT SATISFIED` | K-INT-1 未确认 |
 | **I2** | 已明确通过 API / 数据库 / 导出文件 / 模拟接口中的何种方式接入 | `NOT SATISFIED` | 尚无决定 |
-| **I3** | 基础访问权限和数据安全边界已确认 | `NOT SATISFIED` | K-HITL-1/2 未确认（VB-21、VB-22） |
+| **I3** | 基础访问权限和数据安全边界已确认 | `NOT SATISFIED` | **业务**角色、Data Scope 与 Permission Boundary 已由 `VR-004` Human-approved `SIMULATED` evidence 确认；但 `I3` 仍未满足，因为以下**技术访问与数据安全**事项尚未确认：实际 POC 数据访问路径、Access mechanism、Read / Write boundary、数据安全边界、环境与访问隔离。这些由 **Phase 1B 的 `VB-19` / `VB-20`** 继续验证 |
 
-> **`B4 SATISFIED` ≠ `I3 SATISFIED`**：`B4` 由当前流程**主要角色**的确认而满足；`I3` 要求**基础访问权限与数据安全边界**确认，涉及完整角色集合、Data Scope 与 Permission Boundary —— 这是两个不同 Gate。`VR-001` 不足以满足 `I3`。
+> **`B4 SATISFIED` ≠ `I3 SATISFIED`**：`B4` 由当前流程**主要角色**的确认而满足；`I3` 要求**基础访问权限与数据安全边界**确认，这是两个不同 Gate。
+>
+> 需注意：`VR-004`（SC-GOV-001）已确认**完整业务角色集合、业务 Data Scope 与业务 Permission Boundary**（因此 `VB-21` / `VB-22` 已完成），但该证据属**业务治理层面**，**不等于** `I3` 所要求的技术访问与数据安全边界（实际 POC 数据访问路径、Access mechanism、Read / Write boundary、数据安全边界、环境与访问隔离）。因此 `I3` 保持 `NOT SATISFIED`，由 Phase 1B 的 `VB-19` / `VB-20` 继续验证。
 
 ### 6.2 汇总
 
