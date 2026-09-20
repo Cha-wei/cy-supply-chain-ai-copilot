@@ -149,7 +149,9 @@ AI **不可以**：
 
 > 本节各项均对应 `FROZEN` Discovery Validation v0.1 中的 Open Design Backlog。
 >
-> **当前状态**：`§2.1` 已由 `BR-SHORTAGE-001` 完成设计；`§2.2` 已由 `BR-INVENTORY-001` 完成设计；`§2.6` 已由 `BR-INBOUND-001` 完成设计（均 `DESIGN RESOLVED`，Human-approved）；**`§2.3`～`§2.5` 与 `§2.7` 仍为 `DESIGN PENDING`**。
+> **当前状态**（`DESIGN RESOLVED`）：`§2.1` `BR-SHORTAGE-001`；`§2.2` `BR-INVENTORY-001`；`§2.4` `BR-REQUIREMENT-001`；`§2.6` `BR-INBOUND-001`（均 Human-approved）。
+>
+> **仍为 `DESIGN PENDING`**：`§2.3` Substitute Material；`§2.5` MOQ / Purchase Recommendation Quantity；`§2.7` Supplier Risk / Evidence。
 
 ### 2.1 Shortage Definition
 
@@ -227,15 +229,19 @@ plant_id
 | `SafetyStock` | **`BR-INVENTORY-001` / §2.2** | **`DESIGN RESOLVED`** |
 | `CumulativeEffectiveInbound` | **`BR-INBOUND-001` / §2.6** | **`DESIGN RESOLVED`** |
 | `CumulativeApprovedSubstituteSupply` | `VB-16` | `DESIGN PENDING` |
-| `CumulativeGrossRequirement` | Production Requirement + BOM，并受 `VB-17` Scrap / Loss 规则影响 | `DESIGN PENDING` |
+| `CumulativeGrossRequirement` | **`BR-REQUIREMENT-001` / §2.4** | **`DESIGN RESOLVED`** |
 
 因此：
 
-> `BR-SHORTAGE-001` 的 **Shortage Classification 设计可以 `DESIGN RESOLVED`**，且 `OpeningUsableInventory` 与 `SafetyStock` 现已由 **`BR-INVENTORY-001`**、`CumulativeEffectiveInbound` 现已由 **`BR-INBOUND-001`** 提供**已解决的设计依赖**。
+> `BR-SHORTAGE-001` 的 **Shortage Classification 设计可以 `DESIGN RESOLVED`**，且其**五项依赖中已有四项解决**：
 >
-> 但 `CumulativeApprovedSubstituteSupply`、`CumulativeGrossRequirement` **仍为 `DESIGN PENDING`**。
+> - `OpeningUsableInventory`、`SafetyStock` ← **`BR-INVENTORY-001`**
+> - `CumulativeEffectiveInbound` ← **`BR-INBOUND-001`**
+> - `CumulativeGrossRequirement` ← **`BR-REQUIREMENT-001`**
 >
-> **不得声称完整 shortage engine 已经可执行。**
+> **完整 shortage engine 现在只剩 `CumulativeApprovedSubstituteSupply`（`VB-16`）一项 dependency 尚未解决**（仍为 `DESIGN PENDING`）。
+>
+> 但**仍不得声称**：`IMPLEMENTED`、`TESTED`、或**可运行**。
 
 #### 2.1.4 Classification States
 
@@ -767,11 +773,361 @@ LLM **可以**解释：
 
 ### 2.4 Scrap / Loss
 
-**对应：** `VB-17`
+**Rule ID:** `BR-REQUIREMENT-001`
 
-**Status:** `DESIGN PENDING`
+**Backlog:** `VB-17`
 
-> FROZEN source 中的原问题：损耗率规则？（关联 `G-03`）
+**Design Status:** `DESIGN RESOLVED`
+
+**Approval:** Human-approved
+
+**Implementation Status:** `NOT STARTED`
+
+> **注意**：`DESIGN RESOLVED` **≠** `IMPLEMENTED` **≠** `TESTED`。
+
+#### 2.4.1 Business Definition
+
+本规则回答：
+
+> 在某个 Production Requirement 下，某 Material 为满足生产**所需要准备的 Gross Material Requirement 是多少**。
+
+原则：
+
+先依据：
+
+```
+Production Requirement
+× BOM Component Quantity
+```
+
+计算**净物料需求**，再依据**明确配置的 `loss_rate`** 放大为 **Gross Requirement**。
+
+**不得让 LLM 自行估算需求或损耗率。**
+
+#### 2.4.2 Calculation Grain
+
+计算**至少对齐**：
+
+```
+plant_id
++ material_code
++ required_date
+```
+
+并能够**追溯到**：
+
+```
+Production Requirement
++ BOM relationship
+```
+
+**不得跨 Plant 合并需求。**
+
+#### 2.4.3 BaseRequirement
+
+定义：
+
+```
+BaseRequirement = ProductionQty × BOMComponentQty
+```
+
+其中：
+
+```
+ProductionQty    >= 0
+BOMComponentQty  >= 0
+```
+
+**示例：**
+
+```
+ProductionQty   = 100
+BOMComponentQty = 2
+→ BaseRequirement = 200
+```
+
+**注意**：本规则**只使用已经可靠解析的 BOM input**。
+
+**不得在本 Task 设计**：
+
+- BOM version selection
+- BOM validity selection
+- BOM explosion algorithm
+- ERP source-field mapping
+
+如果**无法可靠确定适用 BOM**：**`DATA_INCOMPLETE`**。
+
+#### 2.4.4 `loss_rate` Canonical Semantic
+
+正式定义 POC 中 `loss_rate` 表示：
+
+> **预计投入总量中会发生损耗的比例。**
+
+因此：
+
+```
+loss_rate = 0.05
+```
+
+表示：**预计投入量的 5% 会损耗**。
+
+**这是 POC 的 canonical business semantic。**
+
+**不得将其混淆为**"在净需求上额外加 5%"。
+
+如果未来真实系统中的字段语义是 `markup`、`allowance`、`scrap add-on` 或其他定义，**必须**在后续 **Data Mapping / Adapter 层**转换为本规则的 canonical semantic。
+
+**不得偷偷改变本公式。**
+
+#### 2.4.5 GrossRequirement Formula
+
+定义：
+
+```
+GrossRequirement = BaseRequirement / (1 - loss_rate)
+```
+
+前提：
+
+```
+0 <= loss_rate < 1
+```
+
+**示例：**
+
+```
+BaseRequirement = 200
+loss_rate       = 0.05
+→ GrossRequirement = 200 / 0.95 = 210.526315...
+```
+
+#### 2.4.6 `loss_rate` Validation
+
+**合法范围：**
+
+```
+0 <= loss_rate < 1
+```
+
+**合法示例：** `0`、`0.03`、`0.15`
+
+**非法示例：** `-0.05`、`1.0`、`1.2`
+
+**非法值处理：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**
+
+**不得**：
+
+- `clamp`
+- 自动改为 0
+- 自动改成最大值
+- 让 LLM 修正
+
+#### 2.4.7 Zero vs Missing
+
+**必须严格区分：`loss_rate = 0` 与 `loss_rate = missing`。**
+
+**`loss_rate = 0`**
+
+表示：业务**明确配置为无损耗**。
+
+**这是合法值。**
+
+**`loss_rate = missing`**
+
+表示：**必要业务配置缺失**。
+
+**处理：** `DATA_INCOMPLETE`
+
+**不得默认成 0。**
+
+**不得让 LLM 或 Rule Engine 猜测。**
+
+#### 2.4.8 Quantity Precision Boundary
+
+本规则产生 **canonical `GrossRequirement` quantity**。
+
+**本 Task 不定义**：
+
+- `ceil`
+- `floor`
+- `round`
+- integer packaging rule
+- UOM-specific precision
+- pack size rounding
+
+例如：
+
+```
+GrossRequirement = 210.526315...
+```
+
+本规则**保持该 canonical quantity**。
+
+**不得本轮自行变成 `210` 或 `211`。**
+
+> 具体 quantity precision / rounding 由**后续明确 Design Rule** 决定。
+
+#### 2.4.9 CumulativeGrossRequirement
+
+对同一 `plant_id` + `material_code`，按 `required_date ascending` 累计：
+
+```
+CumulativeGrossRequirement(<= t) = Σ GrossRequirement   where required_date <= t
+```
+
+**示例：**
+
+```
+2026-10-10  GrossRequirement = 100
+2026-10-15  GrossRequirement = 70
+```
+
+则：
+
+```
+CumulativeGrossRequirement(<= 2026-10-10) = 100
+CumulativeGrossRequirement(<= 2026-10-15) = 170
+```
+
+**不得把每个日期当成彼此独立需求。**
+
+#### 2.4.10 Substitute Boundary
+
+本规则**只负责原目标 Material 的需求侧计算**。
+
+**不得**因为存在 Substitute Material 而降低 `BaseRequirement` 或 `GrossRequirement`。
+
+替代料属于**供给侧** `CumulativeApprovedSubstituteSupply`，由 **`VB-16`** 单独设计。
+
+因此必须保持 **`GrossRequirement` 与 `Substitute Supply` 两个概念分离**。
+
+**不得 double counting。**
+
+#### 2.4.11 Data Quality / Fail-safe
+
+如果以下关键输入**无法可靠取得**：
+
+- ProductionQty missing / invalid
+- `ProductionQty < 0`
+- BOM unresolved
+- BOMComponentQty missing / invalid
+- `BOMComponentQty < 0`
+- `loss_rate` missing
+- `loss_rate` invalid
+- `plant_id` unresolved
+- `material_code` unresolved
+- `required_date` missing / invalid
+
+则：**`DATA_INCOMPLETE`**
+
+**不得**：
+
+- 猜测 BOM
+- 猜测 `loss_rate`
+- 猜测 `required_date`
+- 自动填默认值
+- 让 LLM 补业务事实
+
+> 本 Task **不设计**完整 Data Quality taxonomy，只定义**本规则的 fail-safe behavior**。
+
+#### 2.4.12 Acceptance Examples
+
+以下为 **deterministic examples**。
+
+**Example A — No loss**
+
+| 输入 | 值 |
+| --- | --- |
+| ProductionQty | 100 |
+| BOMComponentQty | 2 |
+| `loss_rate` | 0 |
+
+**Expected：**
+
+- `BaseRequirement = 200`
+- `GrossRequirement = 200`
+
+**Example B — 5% loss**
+
+| 输入 | 值 |
+| --- | --- |
+| ProductionQty | 100 |
+| BOMComponentQty | 2 |
+| `loss_rate` | 0.05 |
+
+**Expected：**
+
+- `BaseRequirement = 200`
+- `GrossRequirement = 200 / 0.95 = 210.526315...`
+
+**不得自动 round / ceil。**
+
+**Example C — Missing loss rate**
+
+`loss_rate = missing`
+
+**Expected：** `DATA_INCOMPLETE`
+
+**不得默认成 0。**
+
+**Example D — Invalid loss rate**
+
+`loss_rate = 1.0`
+
+**Expected：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**
+
+**Example E — BOM unresolved**
+
+`ProductionQty = 100`，BOM cannot be reliably resolved
+
+**Expected：** `DATA_INCOMPLETE`
+
+**不得让 LLM 猜 `BOMComponentQty`。**
+
+**Example F — Cumulative requirement**
+
+| required_date | GrossRequirement |
+| --- | --- |
+| `2026-10-10` | 100 |
+| `2026-10-15` | 70 |
+
+**Expected：**
+
+- `CumulativeGrossRequirement(<= 2026-10-10) = 100`
+- `CumulativeGrossRequirement(<= 2026-10-15) = 170`
+
+**Example G — Substitute must not reduce requirement**
+
+Original Material `GrossRequirement = 100`；存在 Substitute Supply = 30。
+
+**Expected：** `GrossRequirement` 仍然 **= 100**
+
+**不得自动改成 70。**
+
+> Substitute Supply 的影响由 `VB-16` / supply-side rule 单独处理。
+
+#### 2.4.13 AI Boundary
+
+`BaseRequirement`、`GrossRequirement`、`CumulativeGrossRequirement` **必须由 deterministic logic 产生**。
+
+LLM **不可以**：
+
+- 生成 `loss_rate`
+- 修改 `ProductionQty`
+- 修改 `BOMComponentQty`
+- 猜 BOM
+- 选择 BOM version
+- 对 `GrossRequirement` 自行 round
+- 用 Substitute Supply 修改需求端
+
+LLM **可以**解释：
+
+- `BaseRequirement` 如何得到
+- `loss_rate` 如何影响 `GrossRequirement`
+- 为什么返回 `DATA_INCOMPLETE`
+- 某日期累计需求如何形成
+
+> 关联的 FROZEN 原问题：损耗率规则？（关联 `G-03`）
 
 ### 2.5 MOQ / Purchase Recommendation Quantity
 
@@ -1272,7 +1628,7 @@ Options
 | `VB-14` | P0 Business Rules（见 §2.1 Shortage Definition）<br>→ **`BR-SHORTAGE-001` / §2.1** | **`DESIGN RESOLVED`** |
 | `VB-15` | P0 Business Rules（见 §2.2 Available Inventory / Safety Stock）<br>→ **`BR-INVENTORY-001` / §2.2** | **`DESIGN RESOLVED`** |
 | `VB-16` | P0 Business Rules（见 §2.3 Substitute Material） | `NOT STARTED` |
-| `VB-17` | P0 Business Rules（见 §2.4 Scrap / Loss） | `NOT STARTED` |
+| `VB-17` | P0 Business Rules（见 §2.4 Scrap / Loss）<br>→ **`BR-REQUIREMENT-001` / §2.4** | **`DESIGN RESOLVED`** |
 | `VB-18` | P0 Business Rules（见 §2.5 MOQ / Purchase Recommendation Quantity） | `NOT STARTED` |
 | `VB-27` | Supplier Risk / Risk Evidence（见 §2.7） | `NOT STARTED` |
 | `VB-28` | AI Explanation / User Questions | `NOT STARTED` |
