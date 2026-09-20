@@ -149,7 +149,7 @@ AI **不可以**：
 
 > 本节各项均对应 `FROZEN` Discovery Validation v0.1 中的 Open Design Backlog。
 >
-> **当前状态**：`§2.1` 已由 `BR-SHORTAGE-001` 完成设计（`DESIGN RESOLVED`，Human-approved）；**§2.2 ～ §2.7 仍为 `DESIGN PENDING`**。
+> **当前状态**：`§2.1` 已由 `BR-SHORTAGE-001` 完成设计；`§2.2` 已由 `BR-INVENTORY-001` 完成设计（均 `DESIGN RESOLVED`，Human-approved）；**`§2.3` ～ `§2.7` 仍为 `DESIGN PENDING`**。
 
 ### 2.1 Shortage Definition
 
@@ -223,17 +223,19 @@ plant_id
 
 | 输入 | 归属 | 状态 |
 | --- | --- | --- |
-| `OpeningUsableInventory` | `VB-15` | `DESIGN PENDING` |
-| `SafetyStock` | `VB-15` | `DESIGN PENDING` |
+| `OpeningUsableInventory` | **`BR-INVENTORY-001` / §2.2** | **`DESIGN RESOLVED`** |
+| `SafetyStock` | **`BR-INVENTORY-001` / §2.2** | **`DESIGN RESOLVED`** |
 | `CumulativeEffectiveInbound` | §2.6 Effective Inbound | `DESIGN PENDING` |
 | `CumulativeApprovedSubstituteSupply` | `VB-16` | `DESIGN PENDING` |
 | `CumulativeGrossRequirement` | Production Requirement + BOM，并受 `VB-17` Scrap / Loss 规则影响 | `DESIGN PENDING` |
 
 因此：
 
-> `BR-SHORTAGE-001` 的 **Shortage Classification 设计可以 `DESIGN RESOLVED`**，但**完整可执行的 shortage engine 仍依赖后续规则完成**。
+> `BR-SHORTAGE-001` 的 **Shortage Classification 设计可以 `DESIGN RESOLVED`**，且 `OpeningUsableInventory` 与 `SafetyStock` 现已由 **`BR-INVENTORY-001`** 提供**已解决的设计依赖**。
 >
-> **不得把这些依赖标记为已解决。**
+> 但 `CumulativeEffectiveInbound`、`CumulativeApprovedSubstituteSupply`、`CumulativeGrossRequirement` **仍为 `DESIGN PENDING`**。
+>
+> **不得声称完整 shortage engine 已经可执行。**
 
 #### 2.1.4 Classification States
 
@@ -446,11 +448,314 @@ LLM **不可以**：
 
 ### 2.2 Available Inventory / Safety Stock
 
-**对应：** `VB-15`
+**Rule ID:** `BR-INVENTORY-001`
 
-**Status:** `DESIGN PENDING`
+**Backlog:** `VB-15`
 
-> FROZEN source 中的原问题：安全库存如何计算？（关联 `G-04`）
+**Design Status:** `DESIGN RESOLVED`
+
+**Approval:** Human-approved
+
+**Implementation Status:** `NOT STARTED`
+
+> **注意**：`DESIGN RESOLVED` **≠** `IMPLEMENTED` **≠** `TESTED`。
+
+#### 2.2.1 Calculation Grain
+
+`OpeningUsableInventory` 的计算粒度：
+
+```
+plant_id
++ material_code
++ inventory_snapshot_time
+```
+
+**默认：不得跨 Plant 自动共享库存。**
+
+> 跨 Plant transfer / rebalancing **不属于本规则自动能力**。
+>
+> 如果未来需要，必须作为**独立 Supply Event / Design Rule** 处理。
+
+#### 2.2.2 OpeningUsableInventory
+
+定义：
+
+```
+OpeningUsableInventory
+  = 同一 Plant 内
+    所有符合 POC Inventory Scope
+    且状态允许使用的 On-hand Inventory 之和
+```
+
+概念公式：
+
+```
+OpeningUsableInventory = Σ EligibleOnHandQty
+```
+
+其中：`EligibleOnHandQty` **只来自允许的 Inventory Status**。
+
+> **不得直接使用 `Book Inventory Total` 作为 `OpeningUsableInventory`。**
+
+#### 2.2.3 Inventory Status Eligibility
+
+当前 POC 采用**保守规则**。
+
+**A. `AVAILABLE`**
+
+- **Eligibility:** **100%**
+- **处理：** 计入 `OpeningUsableInventory`。
+
+**B. `INSPECTION`**
+
+- **Eligibility:** **0%**
+- **处理：** **不计入** `OpeningUsableInventory`。
+- **原因：** 尚未完成质量放行，POC **不提前假定**其可用于生产。
+
+**C. `FROZEN`**
+
+- **Eligibility:** **0%**
+- **处理：** **不计入** `OpeningUsableInventory`。
+- **原因：** 冻结库存当前**不可用于缺料覆盖**。
+
+**D. Unknown / Invalid Status**
+
+**不得猜测其可用性。**
+
+结果：`DATA_INCOMPLETE` 或明确的 **Data Quality Issue**。
+
+**不得静默归类为 `AVAILABLE`。**
+
+#### 2.2.4 Warehouse Aggregation
+
+同一个 Plant 内：**只聚合被纳入 POC Inventory Scope 的 Warehouse。**
+
+例如 `Plant-A`：
+
+| Warehouse | 状态 | 数量 |
+| --- | --- | --- |
+| Warehouse-01 | `AVAILABLE` | 100 |
+| Warehouse-02 | `AVAILABLE` | 30 |
+| Warehouse-QA | `INSPECTION` | 40 |
+| Warehouse-FR | `FROZEN` | 20 |
+
+则：
+
+- **Book Inventory = 190**
+- **`OpeningUsableInventory` = 130**
+- **Excluded Inventory = 60**
+
+**注意：**
+
+- 当前规则**不因为 Warehouse 不同就禁止同 Plant 聚合**。
+- 但：Warehouse **必须属于同一 Plant**，且位于**当前 POC Inventory Scope** 中。
+- **不同 Plant 的库存：不得自动聚合。**
+
+#### 2.2.5 Safety Stock Baseline
+
+当前 POC 采用：**Configured Safety Stock**
+
+粒度：
+
+```
+plant_id
++ material_code
+```
+
+定义：
+
+```
+SafetyStock = 由业务配置提供的非负数量
+```
+
+**当前不设计**：
+
+- statistical safety stock
+- service-level calculation
+- demand variability model
+- lead-time variability model
+- dynamic safety stock
+- AI-generated safety stock
+
+> 这些**均不属于本 Task**。
+
+#### 2.2.6 Zero vs Missing
+
+**必须严格区分：`SafetyStock = 0` 与 `SafetyStock = missing`。**
+
+**`SafetyStock = 0`**
+
+表示业务**明确配置**为：无 Safety Stock buffer。
+
+**这是合法值。**
+
+**`SafetyStock = missing`**
+
+表示**必要配置缺失**。
+
+**不得默认成 0。**
+
+应导致：**`DATA_INCOMPLETE`**。
+
+**不得让 LLM 或 Rule Engine 猜测默认值。**
+
+#### 2.2.7 Safety Stock Must Not Be Double-counted
+
+**明确禁止：**
+
+```
+OpeningUsableInventory = Inventory - SafetyStock      ← 禁止
+```
+
+因为 `BR-SHORTAGE-001` 已经使用 `SafetyStock` 作为 **Classification Threshold**：
+
+```
+ProjectedAvailable >= SafetyStock        → NORMAL
+0 <= ProjectedAvailable < SafetyStock    → BUFFER_BREACH
+ProjectedAvailable < 0                   → SHORTAGE
+```
+
+因此**正确关系**：
+
+```
+Inventory
+↓
+OpeningUsableInventory
+↓
+ProjectedAvailable
+↓
+compare with SafetyStock
+```
+
+**`SafetyStock` 是 Classification Threshold，不是 Opening Inventory 的预先扣减项。**
+
+> 否则会导致 **Safety Stock double counting**。
+
+#### 2.2.8 Negative Inventory
+
+当前 POC 对 `on_hand_qty < 0` 采用**保守规则**。
+
+**不得自动** `clamp to 0`。
+
+**不得自行解释成**正常可用库存。
+
+**处理：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**。
+
+**原因**：负库存可能来源于：
+
+- posting delay
+- inventory discrepancy
+- data quality issue
+- unresolved business condition
+
+> 其具体业务含义**不在本 Task 定义**。
+
+#### 2.2.9 Data Quality Safety Rule
+
+如果以下关键数据**无法可靠取得**：
+
+- `material_code` unresolved
+- `plant_id` unresolved
+- warehouse ownership unresolved
+- `inventory_status` missing / invalid
+- `on_hand_qty` invalid
+- `inventory_snapshot_time` missing
+- `SafetyStock` missing
+
+则：**不得产生正常业务分类输入。**
+
+输出应进入：**`DATA_INCOMPLETE`**。
+
+> **注意**：本 Task **不设计**完整 Data Quality taxonomy，只定义**库存输入的 fail-safe behavior**。
+
+#### 2.2.10 Acceptance Examples
+
+以下为 **deterministic examples**。
+
+**Example A — Eligible warehouses**
+
+`Plant-A` / `MAT-001`：
+
+| Warehouse | 状态 | 数量 |
+| --- | --- | --- |
+| Warehouse-01 | `AVAILABLE` | 100 |
+| Warehouse-02 | `AVAILABLE` | 30 |
+| Warehouse-QA | `INSPECTION` | 40 |
+| Warehouse-FR | `FROZEN` | 20 |
+
+**Expected：**
+
+- **Book Inventory = 190**
+- **`OpeningUsableInventory` = 130**
+
+**Example B — `BUFFER_BREACH` interaction**
+
+| 输入 | 值 |
+| --- | --- |
+| `OpeningUsableInventory` | 130 |
+| Effective Inbound | 0 |
+| Gross Requirement | 105 |
+| `SafetyStock` | 30 |
+
+`ProjectedAvailable = 130 + 0 - 105 = 25`
+
+**Expected：** `BUFFER_BREACH`，`ShortageQty = 0`，`BufferGap = 5`
+
+**Example C — `SafetyStock = 0`**
+
+`OpeningUsableInventory = 100`，`SafetyStock = 0`
+
+该配置**合法**。
+
+**不得解释为 missing。**
+
+**Example D — `SafetyStock` missing**
+
+`SafetyStock = missing`
+
+**Expected：** `DATA_INCOMPLETE`
+
+**不得默认成 0。**
+
+**Example E — Negative Inventory**
+
+`Warehouse-01`：`AVAILABLE = -5`
+
+**Expected：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**
+
+**不得自动变成 0。**
+
+**Example F — Cross Plant**
+
+| Plant | `AVAILABLE` |
+| --- | --- |
+| `Plant-A` | 20 |
+| `Plant-B` | 100 |
+
+计算 `Plant-A` 时：**`OpeningUsableInventory` = 20**
+
+**不得自动得到 120。**
+
+#### 2.2.11 AI Boundary
+
+**库存可用性判断必须由 deterministic rules 决定。**
+
+LLM **不可以**：
+
+- 将 `INSPECTION` 猜成 `AVAILABLE`
+- 将 `FROZEN` 库存释放
+- 将 missing `SafetyStock` 默认成 0
+- 将负库存改成 0
+- 跨 Plant 自动借库存
+- 猜测 Warehouse 所属 Plant
+
+LLM **可以**解释：
+
+- 为什么某库存未被计入
+- 哪些 Warehouse 被排除
+- 为什么返回 `DATA_INCOMPLETE`
+
+> 关联的 FROZEN 原问题：安全库存如何计算？（关联 `G-04`）
 
 ### 2.3 Substitute Material
 
@@ -646,7 +951,7 @@ Options
 | Backlog ID | 归属 | Status |
 | --- | --- | --- |
 | `VB-14` | P0 Business Rules（见 §2.1 Shortage Definition）<br>→ **`BR-SHORTAGE-001` / §2.1** | **`DESIGN RESOLVED`** |
-| `VB-15` | P0 Business Rules（见 §2.2 Available Inventory / Safety Stock） | `NOT STARTED` |
+| `VB-15` | P0 Business Rules（见 §2.2 Available Inventory / Safety Stock）<br>→ **`BR-INVENTORY-001` / §2.2** | **`DESIGN RESOLVED`** |
 | `VB-16` | P0 Business Rules（见 §2.3 Substitute Material） | `NOT STARTED` |
 | `VB-17` | P0 Business Rules（见 §2.4 Scrap / Loss） | `NOT STARTED` |
 | `VB-18` | P0 Business Rules（见 §2.5 MOQ / Purchase Recommendation Quantity） | `NOT STARTED` |
