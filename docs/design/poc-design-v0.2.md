@@ -149,7 +149,7 @@ AI **不可以**：
 
 > 本节各项均对应 `FROZEN` Discovery Validation v0.1 中的 Open Design Backlog。
 >
-> **当前状态**：`§2.1` 已由 `BR-SHORTAGE-001` 完成设计；`§2.2` 已由 `BR-INVENTORY-001` 完成设计（均 `DESIGN RESOLVED`，Human-approved）；**`§2.3` ～ `§2.7` 仍为 `DESIGN PENDING`**。
+> **当前状态**：`§2.1` 已由 `BR-SHORTAGE-001` 完成设计；`§2.2` 已由 `BR-INVENTORY-001` 完成设计；`§2.6` 已由 `BR-INBOUND-001` 完成设计（均 `DESIGN RESOLVED`，Human-approved）；**`§2.3`～`§2.5` 与 `§2.7` 仍为 `DESIGN PENDING`**。
 
 ### 2.1 Shortage Definition
 
@@ -225,15 +225,15 @@ plant_id
 | --- | --- | --- |
 | `OpeningUsableInventory` | **`BR-INVENTORY-001` / §2.2** | **`DESIGN RESOLVED`** |
 | `SafetyStock` | **`BR-INVENTORY-001` / §2.2** | **`DESIGN RESOLVED`** |
-| `CumulativeEffectiveInbound` | §2.6 Effective Inbound | `DESIGN PENDING` |
+| `CumulativeEffectiveInbound` | **`BR-INBOUND-001` / §2.6** | **`DESIGN RESOLVED`** |
 | `CumulativeApprovedSubstituteSupply` | `VB-16` | `DESIGN PENDING` |
 | `CumulativeGrossRequirement` | Production Requirement + BOM，并受 `VB-17` Scrap / Loss 规则影响 | `DESIGN PENDING` |
 
 因此：
 
-> `BR-SHORTAGE-001` 的 **Shortage Classification 设计可以 `DESIGN RESOLVED`**，且 `OpeningUsableInventory` 与 `SafetyStock` 现已由 **`BR-INVENTORY-001`** 提供**已解决的设计依赖**。
+> `BR-SHORTAGE-001` 的 **Shortage Classification 设计可以 `DESIGN RESOLVED`**，且 `OpeningUsableInventory` 与 `SafetyStock` 现已由 **`BR-INVENTORY-001`**、`CumulativeEffectiveInbound` 现已由 **`BR-INBOUND-001`** 提供**已解决的设计依赖**。
 >
-> 但 `CumulativeEffectiveInbound`、`CumulativeApprovedSubstituteSupply`、`CumulativeGrossRequirement` **仍为 `DESIGN PENDING`**。
+> 但 `CumulativeApprovedSubstituteSupply`、`CumulativeGrossRequirement` **仍为 `DESIGN PENDING`**。
 >
 > **不得声称完整 shortage engine 已经可执行。**
 
@@ -783,11 +783,330 @@ LLM **可以**解释：
 
 ### 2.6 Effective Inbound
 
-**Status:** `DESIGN PENDING`
+**Rule ID:** `BR-INBOUND-001`
 
-记录：该规则**需要在本阶段正式定义**。
+**Design Status:** `DESIGN RESOLVED`
 
-本轮**不得**自行定义算法。
+**Approval:** Human-approved
+
+**Implementation Status:** `NOT STARTED`
+
+> **注意**：`DESIGN RESOLVED` **≠** `IMPLEMENTED` **≠** `TESTED`。
+>
+> **本规则没有独立 `VB` 编号。** 它是 `POC Design v0.2` 中已经明确登记的设计项。**不得为了方便自行创建新的 `VB` ID。**
+
+#### 2.6.1 Business Definition
+
+**不是所有"未收货采购订单"都可以计入 `ProjectedAvailable` 的未来 Supply。**
+
+某笔 inbound 只有**同时满足**以下四项：
+
+1. PO / inbound status eligible
+2. 存在正数 `RemainingInboundQty`
+3. `effective_arrival_date` 可可靠取得
+4. `effective_arrival_date <= required_date`
+
+才可以计入：`CumulativeEffectiveInbound(<= required_date)`
+
+#### 2.6.2 RemainingInboundQty
+
+定义：
+
+```
+RemainingInboundQty = ordered_qty - received_qty
+```
+
+要求：
+
+```
+ordered_qty  >= 0
+received_qty >= 0
+RemainingInboundQty >= 0
+```
+
+如果：
+
+```
+received_qty > ordered_qty
+```
+
+**不得**：
+
+- `clamp`
+- 自动改成 0
+- 猜测业务含义
+
+**处理：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**
+
+#### 2.6.3 PO / Inbound Status Eligibility
+
+当前 POC 使用以下**保守分类**：
+
+**A. `OPEN`**
+
+**Eligible: YES**
+
+前提：`RemainingInboundQty > 0` 且 arrival date 满足 `required_date` 边界。
+
+**B. `CONFIRMED`**
+
+**Eligible: YES**
+
+前提同上。
+
+**C. `PARTIALLY_RECEIVED`**
+
+**Eligible: YES**
+
+但**只计入** `RemainingInboundQty`。
+
+**不得再次计入已 received 的数量。**
+
+**D. `CANCELLED`**
+
+**Eligible: NO**
+
+不得计入未来供给。
+
+**E. `CLOSED` / `COMPLETED`**
+
+**Eligible: NO**
+
+作为未来 inbound **不再计入**。
+
+**原因：** 如果已收货，其结果应体现在 **Inventory**，而不是继续作为未来 Supply **重复计算**。
+
+**F. Unknown / Invalid Status**
+
+**不得猜测。**
+
+**处理：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**
+
+#### 2.6.4 `effective_arrival_date`
+
+定义：
+
+`effective_arrival_date` 是 POC 中用于判断：
+
+> "该 inbound 是否能够在某 Required Date 前成为有效供给"
+
+的**标准化业务日期**。
+
+**当前只定义其业务语义。**
+
+**不得在本 Task 决定**它具体来自：
+
+- `promised_date`
+- `confirmed_date`
+- `planned_delivery_date`
+- `ETA`
+- ERP proprietary field
+
+具体 **source-field mapping** 留给后续：**Data Dictionary ＋ Adapter Contract**。
+
+#### 2.6.5 Date Boundary
+
+对于 Required Date = `t`：
+
+只有 `effective_arrival_date <= t` 的 **eligible** inbound 可以进入 `CumulativeEffectiveInbound(<= t)`。
+
+如果 `effective_arrival_date > t`，则**不得计入该日期的 Supply**。
+
+> 它可以在**更晚的 required_date 重新参与累计计算**。
+
+如果 `effective_arrival_date` **missing / invalid**，则：**`DATA_INCOMPLETE`**。
+
+**不得假设为** `today`、`required_date`、`PO creation date` 或**任何默认日期**。
+
+#### 2.6.6 Deterministic Formula
+
+```
+EffectiveInboundQty(i, t) = RemainingInboundQty(i)
+  only if status(i) is eligible
+     AND effective_arrival_date(i) <= t
+```
+
+否则：
+
+```
+EffectiveInboundQty(i, t) = 0
+```
+
+随后：
+
+```
+CumulativeEffectiveInbound(<= t) = Σ EffectiveInboundQty(i, t)
+```
+
+**按以下粒度，与 `BR-SHORTAGE-001` 的计算粒度对齐：**
+
+```
+plant_id
++ material_code
++ required_date
+```
+
+#### 2.6.7 Plant / Material Boundary
+
+Inbound **必须**能够可靠映射到：
+
+```
+plant_id
++ material_code
+```
+
+**不得**：
+
+- 自动跨 Plant 使用 PO
+- 将无法映射的 PO 归入当前 material
+- 让 LLM 猜测 PO 对应哪个物料或 Plant
+
+如果映射失败：`DATA_INCOMPLETE` ＋ **Data Quality Issue**。
+
+#### 2.6.8 No Double Counting
+
+必须防止**两类** double counting：
+
+**A. Received quantity double counting**
+
+已收货数量**不得同时存在于** `Inventory` ＋ `Future Inbound`。
+
+因此：`PARTIALLY_RECEIVED` **只使用** `RemainingInboundQty`。
+
+**B. `CLOSED` / `COMPLETED` double counting**
+
+已完成 PO **不得继续作为未来 inbound 计入**。
+
+#### 2.6.9 Acceptance Examples
+
+以下为 **deterministic examples**。
+
+**Example A — Eligible `OPEN` PO**
+
+| 字段 | 值 |
+| --- | --- |
+| Required Date | `2026-10-15` |
+| status | `OPEN` |
+| ordered_qty | 100 |
+| received_qty | 0 |
+| effective_arrival_date | `2026-10-12` |
+
+**Expected：**
+
+- `RemainingInboundQty = 100`
+- `EffectiveInboundQty(<= 2026-10-15) = 100`
+
+**Example B — Arrival after requirement**
+
+| 字段 | 值 |
+| --- | --- |
+| Required Date | `2026-10-15` |
+| status | `CONFIRMED` |
+| ordered_qty | 80 |
+| received_qty | 0 |
+| effective_arrival_date | `2026-10-20` |
+
+**Expected：** `EffectiveInboundQty(<= 2026-10-15) = 0`
+
+> 该 PO **可在更晚 required_date 重新参与计算**。
+
+**Example C — Partial receipt**
+
+| 字段 | 值 |
+| --- | --- |
+| status | `PARTIALLY_RECEIVED` |
+| ordered_qty | 100 |
+| received_qty | 40 |
+| effective_arrival_date | `<= required_date` |
+
+**Expected：**
+
+- `RemainingInboundQty = 60`
+- `EffectiveInboundQty = 60`
+
+**不得计入 100。**
+
+**Example D — Cancelled**
+
+| 字段 | 值 |
+| --- | --- |
+| status | `CANCELLED` |
+| ordered_qty | 100 |
+| received_qty | 0 |
+| effective_arrival_date | `<= required_date` |
+
+**Expected：** `EffectiveInboundQty = 0`
+
+**Example E — Missing arrival date**
+
+| 字段 | 值 |
+| --- | --- |
+| status | `OPEN` |
+| ordered_qty | 100 |
+| received_qty | 0 |
+| effective_arrival_date | `missing` |
+
+**Expected：** `DATA_INCOMPLETE`
+
+**不得自行给默认日期。**
+
+**Example F — Invalid quantity**
+
+`ordered_qty = 100`，`received_qty = 120`
+
+**Expected：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**
+
+**不得**：`RemainingInboundQty = -20` 然后继续参与计算。
+
+**Example G — Cumulative inbound**
+
+Required dates：`2026-10-10`、`2026-10-20`
+
+| PO | Remaining | arrival |
+| --- | --- | --- |
+| PO-001 | 50 | `2026-10-08` |
+| PO-002 | 80 | `2026-10-15` |
+
+**Expected：**
+
+- `CumulativeEffectiveInbound(<= 2026-10-10) = 50`
+- `CumulativeEffectiveInbound(<= 2026-10-20) = 130`
+
+#### 2.6.10 AI Boundary
+
+**Inbound eligibility 与 quantity 必须由 deterministic logic 决定。**
+
+LLM **不可以**：
+
+- 把 `CANCELLED` PO 当供给
+- 猜 arrival date
+- 猜 PO status
+- 修改 `received_qty`
+- 修改 `ordered_qty`
+- 跨 Plant 借用 inbound
+- 决定 source ERP 字段映射
+
+LLM **可以**解释：
+
+- 哪些 inbound 被计入
+- 哪些被排除
+- 为什么某 PO 晚于 `required_date`
+- 为什么返回 `DATA_INCOMPLETE`
+
+#### 2.6.11 Source-field Boundary
+
+**本规则定义 business semantic，而不是 source schema。**
+
+因此**不得创建**：
+
+- ERP field mapping
+- API Contract
+- database column definition
+- adapter implementation
+
+例如 `effective_arrival_date` **只是 canonical business meaning**。
+
+其 **source mapping** 进入后续 **Data Dictionary / Adapter Design**。
 
 > 相关背景（属 FROZEN baseline，不重新解释）：`FROZEN` Discovery Brief §20 已将该口径划归 `POC Design v0.2`；`FROZEN` Discovery Validation v0.1 已在 `VR-005` 中确认 Purchase Order / Inbound 数据可得，但明确"**不得**在本阶段定义「有效在途」的最终业务算法"。
 
@@ -946,7 +1265,7 @@ Options
 
 ## 11. Open Design Backlog
 
-> 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14` 本轮已获得 Human Approval。
+> 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14`、`VB-15` 已获得 Human Approval。
 
 | Backlog ID | 归属 | Status |
 | --- | --- | --- |
@@ -958,6 +1277,16 @@ Options
 | `VB-27` | Supplier Risk / Risk Evidence（见 §2.7） | `NOT STARTED` |
 | `VB-28` | AI Explanation / User Questions | `NOT STARTED` |
 | `VB-29` | 见下方说明 | `NOT STARTED` |
+
+**已登记但不占用 `VB` 编号的设计项**（`POC Design v0.2` 内部的独立设计项）：
+
+| Design Item | 归属 | Status |
+| --- | --- | --- |
+| `BR-INBOUND-001` | P0 Business Rules（见 §2.6 Effective Inbound） | **`DESIGN RESOLVED`** |
+
+> **`§2.6 Effective Inbound` 没有独立 `VB` 编号** —— 它是 `POC Design v0.2` 中已经明确登记的设计项。
+>
+> **不得为了方便自行创建新的 `VB` ID。**
 
 **归属说明：**
 
