@@ -254,7 +254,7 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 | **G-04** | P0-1 计算：预计可用量 | **RESOLVED**（`VR-005`，`D3`：库存与状态可得） | 安全库存逻辑、可用量计算口径 | VB-10、VB-15 |
 | **G-05** | P0-1 计算：预计缺口 | **RESOLVED**（`VR-005`，`D4`：采购 / 在途数据可得） | 有效在途规则、替代料规则、缺口计算口径 | VB-11、VB-16 |
 | **G-06** | P0-1 计算：基础风险 | **部分 RESOLVED**（`VR-006` 提供 Supplier / Lead Time / Performance 数据基线；`VR-004` 提供业务权限边界） | 风险评分卡 / 风险规则（`H3` 对应 `VB-27` 仍 `NOT STARTED`） | VB-27、VB-12 |
-| **G-07** | P0-1 判定起点：「缺料」定义 | **PENDING**（`VB-14` 为 NON-BLOCKING，未完成；不阻塞 Entry Gate） | 「缺料」判定标准 | VB-14 |
+| **G-07** | P0-1 判定起点：「缺料」定义 | **`DESIGN PENDING (NON-BLOCKING)`**：`VB-14` 尚未开始，「缺料」的正式业务判定标准**尚未定义**；该项**属 NON-BLOCKING，不阻塞** `POC Design v0.2` Entry Gate | 「缺料」的正式业务判定标准 —— 其正式定义**进入 `POC Design v0.2`** | VB-14 |
 | **G-08** | P0-2 字段：需求日期 | **RESOLVED**（`VR-005`，`D1`：生产计划数据可得） | 需求日期取值规则 | VB-08 |
 | **G-09** | P0-2 字段：供应周期 | **RESOLVED**（`VR-006`：Standard Lead Time 可得） | 供应周期取值规则 / Dynamic Lead Time | VB-12 |
 | **G-10** | P0-2 字段：建议采购数量 | **RESOLVED**（`VR-005`＋`VR-006`：数量与供应商数据可得） | MOQ 规则、建议数量计算逻辑 | VB-18 |
@@ -265,7 +265,11 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 
 > **关于 `G-13` 的补充**：真实 ERP vendor / version 与真实 API capability **仍可能为 `UNKNOWN`**（见 §4.1 `E05`），但**不阻塞**模拟 POC 的 Integration baseline —— 因为本项目已选择**与具体 ERP vendor / version 解耦**的 Integration Path。
 >
-> **关于 `G-06` / `G-11` 的说明**：其 Validation baseline 由 `VR-006` 提供的供应商性能数据与 `VR-004` 的业务权限边界**部分解决**；剩余部分取决于 `H3`（对应 `VB-27`），该条为 **NON-BLOCKING**，不阻塞 Entry Gate，但**不得长期遗忘**。
+> **关于 `G-06` 的说明（保持「部分 RESOLVED」）**：`VR-006` 已提供 **Supplier / Lead Time / Performance 数据 baseline**，但 **`H3` / `VB-27` 仍为 `NOT STARTED`**，**风险评分卡 / 风险规则仍待后续设计与验证**。因此**不得升级为完全 `RESOLVED`**。
+>
+> **关于 `G-11` 的说明（保持「部分 RESOLVED」）**：`VR-006` 已提供**基础 Supplier Performance 数据**，但**风险证据的构成与呈现规则**以及 **`H3` / `VB-27`** 仍待后续推进。因此**不得升级为完全 `RESOLVED`**。
+>
+> **关于 `G-07` 的说明**：标记为 **`DESIGN PENDING (NON-BLOCKING)`** —— 不是验证缺口，而是**待设计项**；不阻塞 Entry Gate，其正式定义进入 `POC Design v0.2`。
 
 > **边界声明**：本表只区分「Validation baseline 是否已解决」与「Design 是否仍有待定义」。Brief §20 已将缺料计算完整口径、BOM 版本、损耗率、替代料、MOQ、库存状态、有效在途、风险评分卡、规则版本、数据字典、主数据编码、POC 测试集、RBAC 矩阵、HITL 状态机、审批矩阵、审计事件 Schema 等划归 `POC Design v0.2`。本文档**不得**代其定义，**也不得**把 Design Pending 描述为验证缺口。
 
@@ -526,6 +530,17 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 | 合计 | 29 | — |
 
 > **注意**：`VB-24` / `VB-25` / `VB-26` 属 **NON-BLOCKING**，它们**不计入** Blocking 数量。18 + 11 = **29**。
+>
+> **NON-BLOCKING 11 项的执行状态**（静态分类仍为 11，**不因完成而改变**）：
+>
+> | 状态 | 数量 | ID |
+> | --- | --- | --- |
+> | ✅ `VALIDATED / COMPLETED` | **3** | VB-24、VB-25、VB-26 |
+> | ⛔ `NOT STARTED` | **8** | VB-14、VB-15、VB-16、VB-17、VB-18、VB-27、VB-28、VB-29 |
+>
+> 这 **8 项不阻塞** `POC Design` Entry Gate，但**应作为后续 `POC Design` / `POC Validation` Backlog 继续处理**。
+>
+> **不得**笼统表述为"11 项都是 v0.2 必填内容" —— 静态分类（11）与执行状态（3 已完成 / 8 未开始）是两个不同维度。
 
 #### B. 执行状态
 
