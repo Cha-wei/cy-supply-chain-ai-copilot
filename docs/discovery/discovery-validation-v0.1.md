@@ -256,7 +256,7 @@ Brief §11 已给出 P0 的**业务定义**；但几乎所有计算口径与数�
 | --- | --- | --- |
 | `SATISFIED` | **0** | — |
 | `PARTIALLY SATISFIED` | **3** | S1、S2、S3 |
-| `NOT SATISFIED` | **16** | P1、D1–D6、B1–B4、I1–I3 |
+| `NOT SATISFIED` | **16** | P1–P3、D1–D6、B1–B4、I1–I3 |
 | `UNKNOWN` | **0** | — |
 
 > **总数核对**：Entry Criteria 共 **19** 条 —— `PARTIALLY SATISFIED` 3 条（S1、S2、S3）＋ `NOT SATISFIED` 16 条 ＝ 19。
