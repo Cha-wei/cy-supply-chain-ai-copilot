@@ -2,7 +2,7 @@
 
 **项目：** Yunnan CY Group Supply Chain AI Copilot
 **文档版本：** v0.1
-**文档状态：** `DRAFT`
+**文档状态：** `FROZEN`
 **文档性质：** Discovery Validation Phase 的 Canonical Source
 **依据基线：** `docs/discovery/discovery-brief-v0.1.1.md`（v0.1.1，`FROZEN`）
 
@@ -144,7 +144,7 @@ Brief §7 提出 4 个假设。Brief §8 验证矩阵中的原始结论为 `TBD`
 > | **FROZEN Discovery Brief 中的原始状态** | `HYPOTHESIS` / `TBD` —— **未被修改** | `HYPOTHESIS` / `TBD` —— **未被修改** |
 > | **本文档（Discovery Validation）记录的当前状态** | **`PARTIALLY CONFIRMED`**（依据 `VR-001`） | **`TBD`** |
 >
-> 即：Brief §8 矩阵中的原始 `TBD` 记录**保持不变**（FROZEN 文档不得修改）；假设的实际推进状态由本文档记录。当前 H1 / H2 已脱离模糊状态，**H3 / H4 仍为 `TBD`** —— 因此 Brief §8 的该要求**尚未完全满足**。本文档状态为 `DRAFT`。
+> 即：Brief §8 矩阵中的原始 `TBD` 记录**保持不变**（FROZEN 文档不得修改）；假设的实际推进状态由本文档记录。当前 H1 / H2 已脱离模糊状态，**H3 / H4 仍为 `TBD`** —— 因此 Brief §8 的该要求**尚未完全满足**。本文档状态为 **`FROZEN`**（v0.1，Human-approved）。
 
 ---
 
@@ -1399,10 +1399,40 @@ Production Database
 
 **Document:** Discovery Validation
 **Version:** v0.1
-**Status:** `DRAFT`
+**Status:** `FROZEN`
 
+**Approval:** Human-approved
+**Frozen Date:** 2026-09-21
+
+- 本文档已**完成 Discovery Validation**，获得 **Human Approval**，当前状态为 **`FROZEN`**。
+- 版本保持 **v0.1** —— 本次冻结**未改变** Discovery Validation baseline 的任何内容，仅完成经批准的**状态冻结**与 Document Control 同步。
 - 本文档为 Discovery Validation Phase 的 Canonical Source，但**不替代** `FROZEN` 的 Discovery Brief。
-- 本文档当前为 `DRAFT`，尚未进入 `REVIEW` / `APPROVED` / `FROZEN`。
-- 实质修改需通过明确授权的 Governance / Discovery Validation Task。
 - 本文档**不包含**：缺料计算口径、BOM 版本规则、损耗率、替代料、MOQ、库存状态、有效在途、风险评分卡、规则版本、数据字典、主数据编码方案、POC 测试集、RBAC 矩阵、HITL 状态机、审批矩阵、审计事件 Schema。以上均属 `POC Design v0.2`。
 - 本文档**不包含**任何技术栈选择、Architecture 决策或 ADR。
+
+### Freeze Boundary
+
+**`FROZEN` 后允许**（不构成实质变化）：
+
+- typo 修正
+- broken link 修复
+- formatting 修正
+- 不改变语义的引用 / cross-reference 修复
+
+**`FROZEN` 后禁止直接进行**：
+
+- Scope 变化
+- Evidence 重新解释
+- Entry Criteria 变化
+- Validation Status 变化
+- 新增或修改业务 baseline
+- 修改 Human-approved `SIMULATED` evidence
+- 修改 P0 / P1 边界
+- 修改 Integration baseline
+
+任何实质变化必须：
+
+- 创建**新的 Discovery Validation 版本**；或
+- 进入**后续正式文档**（例如 `POC Design v0.2`）
+
+> **Discovery Freeze ≠ 全部事项已完成。** 冻结**不影响**以下 8 项仍为 `NOT STARTED` / `NON-BLOCKING` 的 Backlog：`VB-14`、`VB-15`、`VB-16`、`VB-17`、`VB-18`、`VB-27`、`VB-28`、`VB-29`。它们继续作为**后续 `POC Design` / `POC Validation` Backlog** 处理。
