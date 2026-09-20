@@ -166,7 +166,7 @@ Brief §7 提出 4 个假设。Brief §8 验证矩阵中的原始结论为 `TBD`
 
 | ID | Unknown | Brief 状态（原始分类，未修改） | 影响面 | 需确认方 | 阶段 | 当前 Discovery Validation |
 | --- | --- | --- | --- | --- | --- | --- |
-| **E05** | 当前实际 ERP 品牌及版本 | `UNKNOWN` | Data Readiness、Integration、H1 判定 | Simulated Customer IT | Phase 1B | 部分由 `VR-006` 支持（canonical 标识与关联）；**完整技术接入能力仍待 `VB-19`** |
+| **E05** | 当前实际 ERP 品牌及版本 | `UNKNOWN` | Data Readiness、Integration、H1 判定 | Simulated Customer IT | Phase 1B | **仍未解决**：ERP 品牌 / 版本以及相关**接口与访问能力**待 Phase 1B 的 `VB-19` 验证。**`VR-006` 不作为 `E05` 的证据。** |
 | **E06** | 是否存在独立 WMS | `UNKNOWN` | Data Readiness（库存数据来源） | Simulated Customer IT | Phase 1B | 数据维度可得由 `VR-005` 支持；**系统归属未确认** |
 | **E07** | BOM 由哪个系统管理 | `UNKNOWN` | Data Readiness、P0-1 计算输入 | Simulated Customer IT | Phase 1B | BOM 数据可得由 `VR-005` 支持；**系统归属未确认** |
 | **E08** | 当前真实缺料分析流程 | `UNKNOWN` | Problem Validation（H1/H2）、Baseline、HITL | Simulated Procurement / Supply Chain User | **Phase 1A** | resolved / supported by `VR-001`（当前模拟场景 As-Is 流程） |
