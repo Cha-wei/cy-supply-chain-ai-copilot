@@ -1,0 +1,120 @@
+name: CI
+
+# CI Foundation v1
+# 目的：只验证当前 Project Foundation / Governance 基线的真实可验证事实。
+# 范围限制（有意为之）：
+#   - 不依赖任何应用技术栈（未选定）
+#   - 不安装第三方依赖、不下载外部工具、不引入 package manager
+#   - 不做 lint / unit / integration / eval（当前项目尚无可验证的对象）
+#   - 不使用 matrix / cache / artifact / service container / secret / AI 调用
+# 后续技术栈确定后，再以独立变更扩展本 workflow。
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+# 只读权限：本 workflow 不需要写入任何内容
+permissions:
+  contents: read
+
+jobs:
+  foundation-checks:
+    name: Foundation checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Required project files exist
+        run: |
+          set -euo pipefail
+          required_files=(
+            "README.md"
+            "AGENTS.md"
+            "CONTRIBUTING.md"
+            ".gitignore"
+            "docs/discovery/discovery-brief-v0.1.1.md"
+          )
+          missing=0
+          for f in "${required_files[@]}"; do
+            if [ -f "$f" ]; then
+              echo "OK      $f"
+            else
+              echo "::error title=Missing required file::$f"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+
+      - name: No sensitive files are tracked
+        run: |
+          set -euo pipefail
+          # 明确禁止进入版本控制的敏感文件模式（对 Git 已跟踪文件生效）。
+          # 注意：.env.example 属于允许的模板文件，不作为 Secret 处理。
+          sensitive_patterns=(
+            '(^|/)\.env$'
+            '(^|/)\.env\.'
+            '\.pem$'
+            '\.key$'
+            '\.p12$'
+            '\.pfx$'
+            '(^|/)id_rsa$'
+            '(^|/)id_ed25519$'
+            '(^|/)id_ecdsa$'
+            '\.ppk$'
+            '(^|/)\.npmrc$'
+            '(^|/)\.pypirc$'
+            '(^|/)\.netrc$'
+            '(^|/)credentials$'
+            '(^|/)\.aws/'
+          )
+          tracked="$(git ls-files)"
+          violations=""
+          for pattern in "${sensitive_patterns[@]}"; do
+            while IFS= read -r file; do
+              [ -n "$file" ] || continue
+              # .env.example 是允许的模板文件，明确放行，避免被误判为 Secret
+              case "$file" in
+                *.env.example|.env.example) continue ;;
+              esac
+              violations="${violations}${file}"$'\n'
+            done < <(printf '%s\n' "$tracked" | grep -E "$pattern" || true)
+          done
+          if [ -n "$violations" ]; then
+            while IFS= read -r line; do
+              [ -n "$line" ] || continue
+              echo "::error title=Sensitive file is tracked::$line"
+            done <<< "$violations"
+            exit 1
+          fi
+          echo "OK      no sensitive files tracked"
+
+      - name: Baseline is under version control
+        run: |
+          set -euo pipefail
+          for f in "CONTRIBUTING.md" "docs/discovery/discovery-brief-v0.1.1.md"; do
+            if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+              echo "OK      tracked: $f"
+            else
+              echo "::error title=Baseline file not tracked::$f"
+              exit 1
+            fi
+          done
+
+      - name: Sensitive file patterns remain gitignored
+        run: |
+          set -euo pipefail
+          # 防止后续误删 .gitignore 中的敏感文件规则。
+          for pattern in ".env" "*.pem" "*.key"; do
+            if grep -qF -- "$pattern" .gitignore; then
+              echo "OK      .gitignore covers: $pattern"
+            else
+              echo "::error title=gitignore rule missing::.gitignore no longer ignores: $pattern"
+              exit 1
+            fi
+          done
