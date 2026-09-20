@@ -12,6 +12,7 @@
 .
 ├── README.md          # 项目说明
 ├── AGENTS.md          # AI 协作约定
+├── CONTRIBUTING.md    # 工程协作规范
 ├── .gitignore         # Git 忽略规则
 └── docs/
     └── discovery/     # 需求调研与探索记录
