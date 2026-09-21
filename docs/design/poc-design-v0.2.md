@@ -151,9 +151,9 @@ AI **不可以**：
 
 > 本节各项均对应 `FROZEN` Discovery Validation v0.1 中的 Open Design Backlog。
 >
-> **当前状态**（`DESIGN RESOLVED`）：`§2.1` `BR-SHORTAGE-001`；`§2.2` `BR-INVENTORY-001`；`§2.4` `BR-REQUIREMENT-001`；`§2.6` `BR-INBOUND-001`（均 Human-approved）。
+> **当前状态**（`DESIGN RESOLVED`）：`§2.1` `BR-SHORTAGE-001`；`§2.2` `BR-INVENTORY-001`；`§2.3` `BR-SUBSTITUTE-001`；`§2.4` `BR-REQUIREMENT-001`；`§2.6` `BR-INBOUND-001`（均 Human-approved）。
 >
-> **仍为 `DESIGN PENDING`**：`§2.3` Substitute Material；`§2.5` MOQ / Purchase Recommendation Quantity；`§2.7` Supplier Risk / Evidence。
+> **仍为 `DESIGN PENDING`**：`§2.5` MOQ / Purchase Recommendation Quantity；`§2.7` Supplier Risk / Evidence。
 
 ### 2.1 Shortage Definition
 
@@ -230,20 +230,25 @@ plant_id
 | `OpeningUsableInventory` | **`BR-INVENTORY-001` / §2.2** | **`DESIGN RESOLVED`** |
 | `SafetyStock` | **`BR-INVENTORY-001` / §2.2** | **`DESIGN RESOLVED`** |
 | `CumulativeEffectiveInbound` | **`BR-INBOUND-001` / §2.6** | **`DESIGN RESOLVED`** |
-| `CumulativeApprovedSubstituteSupply` | `VB-16` | `DESIGN PENDING` |
+| `CumulativeApprovedSubstituteSupply` | **`BR-SUBSTITUTE-001` / §2.3** | **`DESIGN RESOLVED`** |
 | `CumulativeGrossRequirement` | **`BR-REQUIREMENT-001` / §2.4** | **`DESIGN RESOLVED`** |
 
 因此：
 
-> `BR-SHORTAGE-001` 的 **Shortage Classification 设计可以 `DESIGN RESOLVED`**，且其**五项依赖中已有四项解决**：
+> `BR-SHORTAGE-001` 的 **Shortage Classification 设计可以 `DESIGN RESOLVED`**，且其**五项核心依赖现已全部解决**：
 >
 > - `OpeningUsableInventory`、`SafetyStock` ← **`BR-INVENTORY-001`**
 > - `CumulativeEffectiveInbound` ← **`BR-INBOUND-001`**
+> - `CumulativeApprovedSubstituteSupply` ← **`BR-SUBSTITUTE-001`**
 > - `CumulativeGrossRequirement` ← **`BR-REQUIREMENT-001`**
 >
-> **完整 shortage engine 现在只剩 `CumulativeApprovedSubstituteSupply`（`VB-16`）一项 dependency 尚未解决**（仍为 `DESIGN PENDING`）。
+> 因此可以声明：
 >
-> 但**仍不得声称**：`IMPLEMENTED`、`TESTED`、或**可运行**。
+> > **Shortage Engine core dependency chain = `DESIGN COMPLETE`**
+>
+> 但**必须明确**：`DESIGN COMPLETE` **≠** `IMPLEMENTED` **≠** `TESTED` **≠** production-ready。
+>
+> **仍不得声称**：`IMPLEMENTED`、`TESTED`、或**可运行**。
 
 #### 2.1.4 Classification States
 
@@ -767,11 +772,579 @@ LLM **可以**解释：
 
 ### 2.3 Substitute Material
 
-**对应：** `VB-16`
+**Rule ID:** `BR-SUBSTITUTE-001`
 
-**Status:** `DESIGN PENDING`
+**Backlog:** `VB-16`
 
-> FROZEN source 中的原问题：替代料如何处理？（关联 `G-05`）
+**Design Status:** `DESIGN RESOLVED`
+
+**Approval:** Human-approved
+
+**Implementation Status:** `NOT STARTED`
+
+> **注意**：`DESIGN RESOLVED` **≠** `IMPLEMENTED` **≠** `TESTED`。
+
+> 关联的 FROZEN 原问题：替代料如何处理？（关联 `G-05`）
+
+#### 2.3.1 Business Definition
+
+本规则回答：
+
+> 某 Target Material 在某个 `required_date` 之前，可以从**已批准的替代关系**获得多少**等效供给**。
+
+**Core Principle — 替代料不得由 AI 自行推断。**
+
+只有**同时满足**以下**全部**条件的替代供给，才可以进入：
+
+```
+CumulativeApprovedSubstituteSupply
+```
+
+1. **明确存在 Substitute Relationship**（来自受控数据源中**已登记**的关系）；
+2. 该 relationship **已 `APPROVED`**；
+3. `source`（Substitute Material）与 `target`（Target Material）**可可靠映射**；
+4. **同一 Plant**；
+5. `source` inventory 符合 **`BR-INVENTORY-001`** 的 eligible inventory rule（`AVAILABLE`）；
+6. **存在明确 allocation**。
+
+上述任一条件不满足，或无法可靠判断，该替代供给**不得计入**。
+
+如果因此无法可靠完成计算：**`DATA_INCOMPLETE`**（见 §2.3.11）。
+
+#### 2.3.2 Calculation Grain
+
+`CumulativeApprovedSubstituteSupply` 按以下粒度计算，与 **`BR-SHORTAGE-001`** 对齐：
+
+```
+plant_id
++ target_material_code
++ required_date
+```
+
+**不得跨 Plant 合并或借用**替代供给。
+
+#### 2.3.3 Directional Relationship
+
+**替代关系必须是有方向的。**
+
+```
+Target Material A
+  ← can be covered by
+Substitute Material B
+```
+
+即：**A 可被 B 替代。**
+
+**不代表：B 可以被 A 替代。**
+
+**不得自动建立双向关系。**
+
+**不得**根据以下任何依据**创建**替代关系：
+
+- name similarity
+- description similarity
+- LLM reasoning
+- embedding similarity
+
+替代关系**只能**来自受控数据源中**已登记**的 Substitute Relationship。
+
+> 本 Task **不设计**该关系的维护 / 录入流程。
+
+#### 2.3.4 Minimum Relationship Attributes
+
+一个 Substitute Relationship 概念上至少需要：
+
+| Attribute | 含义 |
+| --- | --- |
+| `plant_id` | 该替代关系适用的 Plant |
+| `target_material_code` | 被覆盖的 Target Material |
+| `substitute_material_code` | 提供覆盖的 Substitute Material |
+| `substitution_ratio` | 换算率（见 §2.3.6） |
+| `approval_status` | 审批状态（见 §2.3.5） |
+
+这些是 **canonical business attributes**。
+
+**本 Task 不定义**：
+
+- database schema
+- ERP field mapping
+- API contract
+
+#### 2.3.5 Approval Requirement
+
+**只有**：
+
+```
+approval_status = APPROVED
+```
+
+的关系**可以参与** shortage calculation。
+
+其他状态，例如：
+
+- `PENDING`
+- `REJECTED`
+- `UNKNOWN`
+
+**不得进入** Approved Substitute Supply。
+
+如果 `approval_status` **缺失**或**无法可靠判断**：
+
+**处理：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**
+
+**不得由 LLM 自动批准。**
+
+> 本 Task **不定义** approval workflow（由谁批准、通过什么流程批准、如何记录审批人）。
+
+#### 2.3.6 `substitution_ratio` Canonical Semantic
+
+`substitution_ratio` 表示：
+
+> **1 unit Substitute Material 可以覆盖多少 unit Target Material Requirement。**
+
+例如：
+
+```
+substitution_ratio = 1.0
+```
+
+表示：
+
+```
+1 B
+  → equivalent to 1 A
+```
+
+```
+substitution_ratio = 0.5
+```
+
+表示：
+
+```
+1 B
+  → equivalent to 0.5 A
+```
+
+定义：
+
+```
+EquivalentTargetQty
+  = AllocatedSubstituteQty × substitution_ratio
+```
+
+**要求：**
+
+```
+substitution_ratio > 0
+```
+
+**注意语义方向**：这是 **substitute → target** 的换算率，**不是** target → substitute。
+
+如果 `substitution_ratio` **missing** 或 **invalid**（包含 `<= 0`）：
+
+**处理：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**
+
+**不得猜测。**
+
+**不得**：
+
+- `clamp`
+- **默认成 `1.0`**
+- 自动改成其他数值
+- 让 LLM 修正
+
+#### 2.3.7 Explicit Allocation
+
+**不得**将 Substitute Material 的**全部库存**自动视为 Target Material 的供给。
+
+**必须存在明确 allocation：**
+
+```
+AllocatedSubstituteQty
+```
+
+例如：
+
+```
+MAT-B AVAILABLE = 100
+
+Human-approved allocation:
+  60 MAT-B
+    → MAT-A
+```
+
+则：
+
+```
+AllocatedSubstituteQty = 60
+```
+
+**而不是** `100`。
+
+**要求：**
+
+```
+AllocatedSubstituteQty >= 0
+```
+
+`AllocatedSubstituteQty = 0` 是**合法值**，表示该替代关系在本需求窗口内**未分配**任何数量。
+
+但 `AllocatedSubstituteQty` **missing** 或 **invalid** 表示必要 allocation 信息**缺失**：
+
+**处理：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**
+
+**不得默认成 0。**
+
+> 本 Task **不定义** allocation 的产生方式（人工配置 / 计划系统 / 算法），只要求 allocation **可追溯**。
+
+#### 2.3.8 Eligible Source Supply
+
+当前 POC 第一版**只允许**使用：
+
+```
+同一 Plant
++ BR-INVENTORY-001 判定为 AVAILABLE 的 Substitute Inventory
+```
+
+参与 allocation。
+
+**不得自动使用**：
+
+- `INSPECTION`
+- `FROZEN`
+- Future Substitute Inbound
+- Cross-Plant Inventory
+
+这些如未来需要，**必须通过后续独立 Design Change 引入**。
+
+> 关于 `AVAILABLE` / `INSPECTION` / `FROZEN` 的判定口径，见 **`BR-INVENTORY-001` / §2.2**，本规则**不重新定义**。
+
+#### 2.3.9 Same Plant Boundary
+
+Target Material 与 Substitute Supply **默认必须属于同一 `plant_id`**。
+
+例如：
+
+```
+Target               = Plant-A / MAT-A
+Substitute Inventory = Plant-B / MAT-B
+```
+
+**不得直接计入。**
+
+跨 Plant **必须先形成独立的**：
+
+```
+transfer / supply event
+```
+
+**本 Task 不设计该机制。**
+
+如果 Plant 映射无法可靠判断：`DATA_INCOMPLETE` ＋ **Data Quality Issue**。
+
+#### 2.3.10 No Double Allocation
+
+**同一份 Substitute Supply 不得被重复分配。**
+
+必须满足：
+
+```
+Σ AllocatedSubstituteQty
+  <= EligibleSubstituteSupply
+```
+
+例如：
+
+```
+MAT-B AVAILABLE = 100
+
+  60 → MAT-A
+  40 → unallocated
+```
+
+则**已分配的 60 不得同时**：
+
+- 分配给其他 Target（例如 `MAT-C`）；
+- 作为**未分配** Substitute Supply；
+- 被多个 shortage **同时重复消费**；
+- 继续作为 `MAT-B` **自身可自由使用的完整** Available Supply。
+
+如果约束被违反（例如 `60 → MAT-A` 且 `50 → MAT-C`，合计 `110 > 100`）：
+
+**处理：** `DATA_INCOMPLETE` ＋ **Allocation Conflict**
+
+**不得 silently over-allocate。**
+
+**Supply Conservation / Reservation Constraint**
+
+一旦 `AllocatedSubstituteQty` 被分配给某 Target Material，该数量**必须**从 Source Material 在**相同有效需求窗口**内仍可自由使用的 **Eligible Supply Pool** 中**保留 / 扣除**。
+
+因此，**已分配数量不得同时**：
+
+- 分配给其他 Target；
+- 作为**未分配** Substitute Supply；
+- 被多个 shortage **重复消费**；
+- 继续作为 Source Material 自身**可自由使用的完整** Available Supply。
+
+定义：
+
+```
+RemainingUnallocatedSourceSupply
+  = EligibleSubstituteSupply
+  - Σ AllocatedSubstituteQty
+```
+
+要求：
+
+```
+RemainingUnallocatedSourceSupply >= 0
+```
+
+> 这**只是 supply-conservation invariant**，**不是**新的 optimization / allocation algorithm。
+
+**与 `BR-INVENTORY-001` 的关系**
+
+`BR-INVENTORY-001` 定义的是**原始 eligible inventory baseline**（见 §2.2）。
+
+本规则**不修改** `BR-INVENTORY-001` 的原始定义。
+
+但当某部分 `AVAILABLE` inventory **已形成有效 Substitute Allocation** 时，后续 shortage evaluation **不得**继续把该**已分配数量**视为 Source Material 的 **uncommitted supply**。
+
+本节只建立 **`BR-SUBSTITUTE-001` 的 allocation reservation constraint**，**不重新定义** `BR-INVENTORY-001`。
+
+**时间边界（Demand Window）**
+
+该 reservation **只作用于 allocation 有效的 demand window**。
+
+由于本 Task **不设计复杂 allocation timing engine**：
+
+如果**无法可靠判断** allocation 与 Source Material **自身需求窗口是否重叠**：
+
+**处理：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**
+
+**不得同时把 supply 计入两边。**
+
+> 本 Task **只定义约束**。**不得设计**：
+>
+> - optimization algorithm
+> - allocation priority
+> - shortage prioritization
+> - auto scheduling
+
+#### 2.3.11 Zero vs Missing
+
+必须区分两种**语义完全不同**的情况：
+
+**A. 没有批准的 Substitute Relationship**
+
+如果业务**明确**：Target Material **没有** Approved Substitute
+
+则：
+
+```
+ApprovedSubstituteSupply = 0
+```
+
+这是**合法状态**，**不得**返回 `DATA_INCOMPLETE`。
+
+**B. Substitute data 无法可靠取得**
+
+如果**存在**替代关系，但出现以下任一情况：
+
+- `substitution_ratio` missing / invalid
+- `approval_status` unknown
+- allocation qty invalid
+- source material unresolved
+- target material unresolved
+- plant mapping unresolved
+
+则：
+
+**`DATA_INCOMPLETE`**
+
+**不得默认成 0。**
+
+#### 2.3.12 Deterministic Formula
+
+对于**每一个有效 allocation** `i`：
+
+```
+EquivalentTargetQty(i)
+  = AllocatedSubstituteQty(i) × substitution_ratio(i)
+```
+
+随后：
+
+```
+CumulativeApprovedSubstituteSupply(<= t)
+  = Σ EquivalentTargetQty(i)
+```
+
+**仅包含**同时满足以下条件的 allocation：
+
+- approved relationship
+- same Plant
+- eligible `AVAILABLE` source inventory
+- explicit allocation
+- allocation 对当前 `required_date` **有效**
+
+**本 Task 不设计复杂 allocation timing engine。**
+
+如果 allocation **无法可靠关联**当前需求窗口：
+
+**处理：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**
+
+> allocation 与需求窗口的关联机制属 **canonical business meaning 之后的 source mapping**，进入后续 **Data Dictionary / Adapter Design**。
+
+#### 2.3.13 Acceptance Examples
+
+以下为 **deterministic examples**。
+
+**Example A — 1:1 substitute**
+
+| 字段 | 值 |
+| --- | --- |
+| MAT-B AVAILABLE | 100 |
+| Approved allocation to MAT-A | 60 |
+| `substitution_ratio` | 1.0 |
+
+**Expected：**
+
+- `EquivalentTargetQty = 60`
+
+**Example B — Conversion ratio**
+
+| 字段 | 值 |
+| --- | --- |
+| `AllocatedSubstituteQty` | 60 |
+| `substitution_ratio` | 0.8 |
+
+**Expected：**
+
+- `EquivalentTargetQty = 48`
+
+**Example C — Relationship not approved**
+
+| 字段 | 值 |
+| --- | --- |
+| `approval_status` | `PENDING` |
+
+**Expected：**
+
+- **不得计入** Approved Substitute Supply
+
+**Example D — Cross Plant**
+
+| 字段 | 值 |
+| --- | --- |
+| Target | Plant-A / MAT-A |
+| Substitute | Plant-B / MAT-B |
+
+**Expected：**
+
+- **不得直接计入**
+
+**Example E — No substitute exists**
+
+业务**明确**无 Approved Substitute。
+
+**Expected：**
+
+- `ApprovedSubstituteSupply = 0`
+- **不得**返回 `DATA_INCOMPLETE`
+
+**Example F — Missing ratio**
+
+Approved relationship exists，但 `substitution_ratio` **missing**。
+
+**Expected：**
+
+- `DATA_INCOMPLETE`
+
+**Example G — No double allocation**
+
+| 字段 | 值 |
+| --- | --- |
+| Eligible MAT-B | 100 |
+| Allocation | 60 → MAT-A；50 → MAT-C |
+
+**Expected：**
+
+- **`INVALID`**
+
+因为：
+
+```
+110 > 100
+```
+
+必须：
+
+- `DATA_INCOMPLETE`
+- ＋ **Allocation Conflict**
+
+**不得 silently over-allocate。**
+
+**Example H — Source supply conservation**
+
+| 字段 | 值 |
+| --- | --- |
+| MAT-B AVAILABLE | 100 |
+| Allocation | 60 MAT-B → MAT-A |
+| `substitution_ratio` | 1.0 |
+
+**Expected：**
+
+- `MAT-A ApprovedSubstituteSupply = 60`
+- `RemainingUnallocatedSourceSupply(MAT-B) = 40`
+
+对于**同一有效需求窗口**：
+
+- `MAT-B` **不得继续按 `100` 作为完全未承诺 supply 使用**。
+
+如果**无法可靠判断** allocation 与 `MAT-B` **自身需求窗口是否重叠**：
+
+- `DATA_INCOMPLETE`
+
+#### 2.3.14 AI Boundary
+
+**Alternative supply eligibility、allocation 与 quantity 必须由 deterministic logic 决定。**
+
+LLM **不可以**：
+
+- 创建 substitute relationship
+- 批准 substitute relationship
+- 猜 `substitution_ratio`
+- 自行决定 allocation qty
+- 跨 Plant 自动调货
+- 自动决定 shortage priority
+- 重复使用同一 supply
+
+LLM **可以**解释：
+
+- 哪个 Substitute 被批准
+- 分配了多少
+- conversion 后等效多少
+- 为什么某替代料未被计入
+- 为什么出现 `DATA_INCOMPLETE`
+
+#### 2.3.15 Source-field Boundary
+
+**本规则定义 business semantic，而不是 source schema。**
+
+因此**不得创建**：
+
+- ERP field mapping
+- API Contract
+- database column definition
+- adapter implementation
+- allocation engine
+- optimization engine
+
+例如 `substitution_ratio`、`approval_status`、`AllocatedSubstituteQty` **只是 canonical business meaning**。
+
+其 **source mapping** 进入后续 **Data Dictionary / Adapter Design**。
 
 ### 2.4 Scrap / Loss
 
@@ -999,7 +1572,7 @@ CumulativeGrossRequirement(<= 2026-10-15) = 170
 
 **不得**因为存在 Substitute Material 而降低 `BaseRequirement` 或 `GrossRequirement`。
 
-替代料属于**供给侧** `CumulativeApprovedSubstituteSupply`，由 **`VB-16`** 单独设计。
+替代料属于**供给侧** `CumulativeApprovedSubstituteSupply`，由 **`BR-SUBSTITUTE-001` / §2.3**（`VB-16`）单独设计。
 
 因此必须保持 **`GrossRequirement` 与 `Substitute Supply` 两个概念分离**。
 
@@ -1106,7 +1679,7 @@ Original Material `GrossRequirement = 100`；存在 Substitute Supply = 30。
 
 **不得自动改成 70。**
 
-> Substitute Supply 的影响由 `VB-16` / supply-side rule 单独处理。
+> Substitute Supply 的影响由 **`BR-SUBSTITUTE-001` / §2.3**（supply-side rule）单独处理。
 
 #### 2.4.13 AI Boundary
 
@@ -1623,13 +2196,13 @@ Options
 
 ## 11. Open Design Backlog
 
-> 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14`、`VB-15`、`VB-17` 已获得 Human Approval。
+> 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14`、`VB-15`、`VB-16`、`VB-17` 已获得 Human Approval。
 
 | Backlog ID | 归属 | Status |
 | --- | --- | --- |
 | `VB-14` | P0 Business Rules（见 §2.1 Shortage Definition）<br>→ **`BR-SHORTAGE-001` / §2.1** | **`DESIGN RESOLVED`** |
 | `VB-15` | P0 Business Rules（见 §2.2 Available Inventory / Safety Stock）<br>→ **`BR-INVENTORY-001` / §2.2** | **`DESIGN RESOLVED`** |
-| `VB-16` | P0 Business Rules（见 §2.3 Substitute Material） | `NOT STARTED` |
+| `VB-16` | P0 Business Rules（见 §2.3 Substitute Material）<br>→ **`BR-SUBSTITUTE-001` / §2.3** | **`DESIGN RESOLVED`** |
 | `VB-17` | P0 Business Rules（见 §2.4 Scrap / Loss）<br>→ **`BR-REQUIREMENT-001` / §2.4** | **`DESIGN RESOLVED`** |
 | `VB-18` | P0 Business Rules（见 §2.5 MOQ / Purchase Recommendation Quantity） | `NOT STARTED` |
 | `VB-27` | Supplier Risk / Risk Evidence（见 §2.7） | `NOT STARTED` |
