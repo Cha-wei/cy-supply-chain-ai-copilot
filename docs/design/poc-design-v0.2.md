@@ -166,16 +166,22 @@ AI **不可以**：
 > >
 > > **不表示** `POC Design v0.2` **整体完成**。
 > >
-> > 仍存在以下**未完成设计**：
+> > **已可声明：**
 > >
-> > - `§3` System Boundary
+> > ```
+> > Discovery-carried Design Backlog = RESOLVED
+> > ```
+> >
+> > 即所有原先从 Discovery 带入 `POC Design` 的 `VB` backlog 均已完成 Design resolution。
+> >
+> > **但仍存在以下未完成设计：**
+> >
 > > - `§4` Data & Integration Design
 > > - `§6` HITL Workflow
-> > - `§7` Permission & Security
+> > - `§7` remaining Permission & Security（除 `Read / Write Boundary` 外）
 > > - `§8` Audit & Observability
 > > - `§9` Test & AI Eval
 > > - `§10` Architecture Decisions
-> > - `VB-29`
 
 ### 2.1 Shortage Definition
 
@@ -3529,18 +3535,380 @@ Supplier B = HIGH
 
 ## 3. System Boundary
 
-> 本章节只建立结构。**不填入具体技术组件。**
+**Backlog:** `VB-29`
 
-未来需要说明：
+**Design Status:** `DESIGN RESOLVED`
+
+**Approval:** Human-approved
+
+**Implementation Status:** `NOT STARTED`
+
+**Validation Source:** `VR-007` / `SC-INT-001`（`FROZEN`，Human-approved `SIMULATED`）＋ `VB-29` Human Approval
+
+> **注意**：`DESIGN RESOLVED` **≠** `IMPLEMENTED` **≠** `TESTED`。
+>
+> 本节只定义 **conceptual boundary**；**不选择**技术组件 / deployment / API Gateway / database / framework。
+
+**待说明项状态：**
 
 | 待说明项 | Status |
 | --- | --- |
-| POC responsibility | `DESIGN PENDING` |
-| external system boundary | `DESIGN PENDING` |
-| write boundary | `DESIGN PENDING` |
-| failure boundary | `DESIGN PENDING` |
+| POC responsibility | **`DESIGN RESOLVED`** |
+| external system boundary | **`DESIGN RESOLVED`** |
+| write boundary | **`DESIGN RESOLVED`** |
+| failure boundary | **`DESIGN RESOLVED`** |
 
 > 继承约束（不重新定义）：Source-system write = `DENIED`；Production write-back = `OUT OF SCOPE`（见 §5 Design Principles → Integration）。
+
+**VB-29 Design Decision：**
+
+```
+VB-29 = DESIGN RESOLVED
+
+POC 可以且应采用：
+  Read-only source integration
+  +
+  Draft-only business action
+
+无需 Production system write permission。
+```
+
+> `YES` = **当前模拟 POC 的 Design Decision**，**不代表**真实 CY 生产系统已经验证。
+
+#### 3.1 Source Baseline（FROZEN Reference）
+
+引用 `FROZEN` Discovery Validation：**`VR-007`** / **`SC-INT-001`**。
+
+其中已确认：
+
+```
+Integration Pattern = Controlled Export / Snapshot
+```
+
+**Source System Boundary：**
+
+| 操作 | 边界 |
+| --- | --- |
+| `READ` | **allowed only through controlled exported snapshot** |
+| `WRITE` | **`DENIED`** |
+
+```
+Production Write-back = OUT OF SCOPE
+```
+
+> **不得修改 `FROZEN` source。** 本节只引用其已确认结论，**不重新解释、不扩大**。
+
+#### 3.2 POC Responsibility
+
+POC **负责**：
+
+- 只读地获取**已导出的**业务数据快照；
+- 运行 deterministic business rules（§2）；
+- 生成 **Explanation / Recommendation / Draft**（§5）；
+- 支持 Human Review / Modify / Approve / Reject（**POC 内部**）。
+
+POC **不负责**：
+
+- 写入任何 source system；
+- 执行正式业务动作；
+- 替代企业系统的记录职责。
+
+#### 3.3 External System Boundary
+
+POC **不直接读取 Production DB**。
+
+POC business data **只能**通过以下链路进入 POC：
+
+```
+Simulated Enterprise Sources
+      ↓
+Controlled Export
+      ↓
+POC Data Landing Zone
+```
+
+Agent / LLM **不得**：
+
+- direct Production DB access
+- free-form SQL to Production
+- bypass Controlled Export
+- 扩大 source access
+
+#### 3.4 Read Boundary
+
+**POC 不直接读取 Production DB。**
+
+读取**只能**通过 **Controlled Export / Snapshot** 产物（`POC Data Landing Zone`）进行。
+
+**不得**：
+
+- 假设存在真实 Production API 或 direct DB access；
+- 绕过 Controlled Export 直连源系统；
+- 以「只读」为由扩大 source access 范围。
+
+#### 3.5 Write Boundary
+
+**Source-system write：**
+
+```
+DENIED
+```
+
+POC **不允许**：
+
+- 修改 Inventory
+- 修改 Production Plan
+- 修改 Purchase Order
+- 修改 Supplier Master
+- 修改 BOM
+- 创建真实 Purchase Requisition
+- 创建真实 Purchase Order
+- 调用 Production write API
+- 直接写 ERP / WMS / PLM
+
+#### 3.6 Draft Boundary
+
+AI Copilot **可以**生成：
+
+```
+Procurement Request Draft
+```
+
+Draft **只存在**于：
+
+```
+POC / Draft Boundary
+```
+
+必须明确：
+
+```
+POC Draft
+  ≠ ERP Purchase Request
+  ≠ Purchase Order
+```
+
+Draft **不产生**真实业务系统副作用。
+
+#### 3.7 Human Approval Boundary
+
+Human **可以**在 POC 中：
+
+- Review
+- Modify
+- Approve
+- Reject
+
+但必须明确：
+
+```
+Human Approval
+  ≠ Production Execution
+```
+
+Human 在 POC 中 Approve 后：**允许**状态变为：
+
+```
+APPROVED
+```
+
+但**不得**因此：
+
+- 自动写入 ERP
+- 自动创建 PO
+- 自动提交 Production workflow
+
+真实业务执行仍：
+
+```
+OUTSIDE POC WRITE BOUNDARY
+```
+
+#### 3.8 POC State vs Enterprise State
+
+必须区分：
+
+```
+POC internal state
+与
+Enterprise source-system state
+```
+
+例如：
+
+```
+POC Draft = APPROVED
+```
+
+**不意味着**：
+
+```
+ERP Purchase Request exists
+```
+
+也**不意味着**：
+
+```
+Purchase Order created
+```
+
+**不得**将 POC 状态变化描述为**企业系统写入成功**。
+
+#### 3.9 Effective Permission Boundary
+
+继承：
+
+```
+AI Effective Permission
+  = User Permission
+  ∩ Data Scope
+  ∩ Tool Permission
+  ∩ Workflow State
+  ∩ POC Policy
+```
+
+即使 Human 本人拥有真实业务系统写权限：
+
+```
+Human Capability
+  可以高于
+Agent Capability
+```
+
+Agent **仍不得**获得 Production write capability。
+
+#### 3.10 Failure / Safety Boundary
+
+如果：
+
+- Controlled Snapshot unavailable
+- Data Landing Zone unavailable
+- required Tool unavailable
+
+则：**POC 应 fail closed。**
+
+**不得**：
+
+- 切换成 Production direct access
+- 尝试 Production DB
+- 尝试 write API
+- 让 LLM 使用旧数据**伪装当前事实**
+
+**只允许**：
+
+- 报告 unavailable
+- `DATA_INCOMPLETE`
+- Tool failure
+
+#### 3.11 Integration with §5 AI / Tool Boundary
+
+保持：
+
+```
+LLM does not create business truth
+```
+
+以及：
+
+```
+Data Source
+      ↓
+Deterministic Data Tool
+      ↓
+Structured Result
+      ↓
+LLM
+```
+
+`VB-29` **不改变** §5 AI / Tool Boundary。
+
+#### 3.12 Integration with §6 HITL Workflow
+
+本 Task **只为未来 §6 建立硬边界**：
+
+- Draft
+- Review
+- Modify
+- Approve
+- Reject
+
+**都可以存在**于 POC 内。
+
+但：
+
+```
+execution boundary = OUTSIDE POC
+```
+
+**不得本轮设计完整 HITL state machine。**
+
+#### 3.13 Acceptance Examples
+
+以下为 **conceptual examples**。
+
+**Example A — Generate Draft**
+
+AI generates Procurement Request Draft.
+
+**Expected：**
+
+- POC Draft created
+- ERP / source system：**`UNCHANGED`**
+
+**Example B — Human Approves**
+
+Human approves POC Draft.
+
+**Expected：**
+
+- POC workflow state：`APPROVED`
+- Production ERP：**`UNCHANGED`**
+- **不得**自动创建 Purchase Order
+
+**Example C — User asks AI to submit**
+
+User：「直接帮我下单。」
+
+**Expected：**
+
+- AI **不执行** Production write
+- **可以**说明：正式业务执行**超出当前 POC write boundary**
+
+**Example D — Snapshot unavailable**
+
+Controlled Snapshot unavailable.
+
+**Expected：**
+
+- **fail closed**
+- **不得**切换到 direct DB / Production API
+- **不得**使用旧 conversation data **伪装成当前企业事实**
+
+**Example E — Human has production authority**
+
+Human user 本身拥有 Production write 权限。
+
+**Expected：**
+
+- Agent Capability **仍受 POC Policy 限制**
+- Agent **不因此**获得 Production write capability
+
+#### 3.14 Status Boundary
+
+本节 `DESIGN RESOLVED` **只代表**：
+
+```
+conceptual boundary 已定义
+```
+
+**不代表**：
+
+- 真实 ERP write integration 已设计
+- Adapter / Connector 已实现
+- 技术组件 / deployment / API Gateway / database / framework 已选择
+- tested / production-ready
+
+> 本 Task **不得设计真实 ERP write integration**。
 
 ---
 
@@ -4342,6 +4710,21 @@ responsibility / behavioral boundary 已定义
 
 > 继承约束（不重新定义）：AI 只能生成 Procurement Request Draft，**不得** Approve / Formal Submit / Create Purchase Order / Override Approval；审批后若 Supplier / Quantity / Price / Delivery Date 发生重大变更，须重新进入 Review / Approval。
 
+> **`VB-29` 建立的硬边界（不改变上表 Status）**：
+>
+> `Draft` / `Review` / `Modify` / `Approve` / `Reject` **都可以存在**于 POC 内。
+>
+> 但：
+>
+> ```
+> execution boundary = OUTSIDE POC
+> ```
+>
+> 即 Human 在 POC 内 `Approve` **不等于** Production Execution；
+> **不得**自动写入 ERP / 自动创建 PO / 自动提交 Production workflow。
+>
+> 本节**仍为 `DESIGN PENDING`** —— 完整 HITL state machine **不由 `VB-29` 设计**（见 §3.12）。
+
 ---
 
 ## 7. Permission & Security
@@ -4355,12 +4738,19 @@ responsibility / behavioral boundary 已定义
 | RBAC | `DESIGN PENDING` |
 | Data Scope | `DESIGN PENDING` |
 | Tool Permission | `DESIGN PENDING` |
-| Read / Write Boundary | `DESIGN PENDING` |
+| Read / Write Boundary | **`DESIGN RESOLVED`** |
 | Secret Handling | `DESIGN PENDING` |
 
 **继承：`Human Capability may be greater than Agent Capability`。**
 
 > 继承约束（不重新定义）：`AI Effective Permission = User Permission ∩ Data Scope ∩ Tool Permission ∩ Workflow State ∩ POC Policy`；不得将真实企业 credentials 放入 Git，不得将 secrets 写入 prompt / logs。
+
+> **`VB-29` 只解决 `Read / Write Boundary`（依据 `VR-007` ＋ `VB-29` Human Approval）** ——
+> 见 §3 Read / Write / Draft / Failure Boundary。
+>
+> **其余项仍为 `DESIGN PENDING`**：RBAC / Data Scope / Tool Permission / Secret Handling。
+>
+> **不得因为 `VB-29` 完成就把整个 §7 标记为完成。**
 
 ---
 
@@ -4415,7 +4805,7 @@ Options
 
 ## 11. Open Design Backlog
 
-> 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14`、`VB-15`、`VB-16`、`VB-17`、`VB-18`、`VB-27`、`VB-28` 已获得 Human Approval。
+> 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14`、`VB-15`、`VB-16`、`VB-17`、`VB-18`、`VB-27`、`VB-28`、`VB-29` 已获得 Human Approval。
 
 | Backlog ID | 归属 | Status |
 | --- | --- | --- |
@@ -4426,7 +4816,7 @@ Options
 | `VB-18` | P0 Business Rules（见 §2.5 MOQ / Purchase Recommendation Quantity）<br>→ **`BR-PROCUREMENT-001` / §2.5** | **`DESIGN RESOLVED`** |
 | `VB-27` | Supplier Risk / Risk Evidence（见 §2.7）<br>→ **`BR-SUPPLIER-RISK-001` / §2.7** | **`DESIGN RESOLVED`** |
 | `VB-28` | AI Explanation / User Questions（见 §5 AI / Tool Boundary）<br>→ **`§5` ＋ `SC-EXPLAIN-001`** | **`DESIGN RESOLVED`** |
-| `VB-29` | 见下方说明 | `NOT STARTED` |
+| `VB-29` | POC Integration Boundary（见 §3 System Boundary；§7 Read / Write Boundary）<br>→ **`§3` ＋ `§7` ＋ `VR-007` ＋ Human Approval** | **`DESIGN RESOLVED`** |
 
 **已登记但不占用 `VB` 编号的设计项**（`POC Design v0.2` 内部的独立设计项）：
 
@@ -4443,9 +4833,14 @@ Options
 - `VB-14` ～ `VB-18` → **P0 Business Rules**
 - `VB-27` → **Supplier Risk / Risk Evidence**
 - `VB-28` → **AI Explanation / User Questions**
-- `VB-29` → 后续根据 `FROZEN` Validation 中的**原定义**映射，**不得猜测或改写其含义**。
+- `VB-29` → **POC Integration Boundary**；设计结论见 **§3 System Boundary** 与 **§7 Read / Write Boundary**；
+  下方 `FROZEN` 原定义**仅作为历史 Validation baseline 引用**，**不修改其原始内容**。
 
-> **`VB-29` 的 FROZEN 原定义（逐字引用，未改写）**：
+> **`VB-29` 的 `FROZEN` 原定义（历史 Validation baseline，逐字引用，未改写）**：
+>
+> 以下引文**保持原始记录不变** —— 其中 `Current Evidence Status`（`HYPOTHESIS` / `H7`）与
+> `Status`（`NOT STARTED`）**属于 `FROZEN` baseline 的历史状态**，
+> **不得因为本 PR 已完成 Design Resolution 而改写**。
 >
 > `FROZEN` 源文件：`docs/discovery/discovery-validation-v0.1.md`
 >
