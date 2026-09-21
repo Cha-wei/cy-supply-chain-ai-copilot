@@ -3921,14 +3921,22 @@ conceptual boundary 已定义
 | Canonical Data Model | **`DESIGN RESOLVED`** |
 | Data Dictionary | **`DESIGN RESOLVED`** |
 | Snapshot / Import Contract | `DESIGN PENDING` |
-| Data Validation | `DESIGN PENDING` |
+| Data Validation | **`DESIGN RESOLVED`** |
 | Master Data Mapping | `DESIGN PENDING` |
 | Adapter Boundary | `DESIGN PENDING` |
 
 > 继承约束（不重新定义）：Integration Pattern = **Controlled Export / Snapshot**。具体文件格式（CSV / JSON / Parquet）与 Adapter Contract 属本阶段待设计事项，**本轮未决定**。
 
-> **注意**：`Canonical Data Model` 完成**仅**表示 **canonical business entities 与 relationships 已定义**；
-> **不代表**整个 §4 完成。其余 4 项仍为 `DESIGN PENDING`。
+> **注意**：`Data Validation` 完成**仅**表示 **conceptual validation design complete**；
+> **不代表** implemented / data validated / tested。
+>
+> §4 仍有 **3 个 `DESIGN PENDING` 子领域**：
+>
+> - `Snapshot / Import Contract`
+> - `Master Data Mapping`
+> - `Adapter Boundary`
+>
+> **不得声称整个 §4 已完成。**
 
 ### 4.1 Canonical Data Model
 
@@ -5327,12 +5335,29 @@ Accepted Package may be referenced by Analysis Run
 
 ### 4.4 Data Validation —— Capability Readiness & Failure Semantics
 
-> **子章节整体状态：仍为 `DESIGN PENDING`。**
+> **子章节整体状态：`DESIGN RESOLVED`。**
 >
-> 本节已完成其中**四层**：Capability Readiness / Failure Semantics（`§4.4.1` ～ `§4.4.23`）、
-> **Detailed Field Validation**（`§4.4.24` ～ `§4.4.44`）、
-> **Cross-Dataset / Cross-Field Consistency Rules**（`§4.4.45` ～ `§4.4.78`）
-> 与 **Validation Issue Taxonomy**（`§4.4.78` ～ `§4.4.100`）。
+> 本节共 **8 个 design workstream**，经 **Closure Review（PASS）** 后**全部 `DESIGN RESOLVED`**：
+
+| Design Workstream | 覆盖范围 |
+| --- | --- |
+| Validation Layer Model | `§4.4.1` ～ `§4.4.23` |
+| Capability-to-Evidence Requirement | `§4.4.1` ～ `§4.4.23` |
+| Failure Semantics | `§4.4.1` ～ `§4.4.23` |
+| Dataset Absent vs Empty Semantics | `§4.4.1` ～ `§4.4.23` |
+| Failure Isolation Principle | `§4.4.1` ～ `§4.4.23` |
+| Detailed Field Validation | `§4.4.24` ～ `§4.4.44` |
+| Cross-Dataset / Cross-Field Consistency Rules | `§4.4.45` ～ `§4.4.77` |
+| Validation Issue Taxonomy | `§4.4.78` ～ `§4.4.100` |
+
+> **必须区分两个不同概念：**
+>
+> - **`Validation execution` 是「四层模型」** —— Layer 1 Package Structural Validation /
+>   Layer 2 Canonical Evidence Validation / Layer 3 Capability Readiness Validation /
+>   Layer 4 Deterministic Business Rule（见 `§4.4.2`）
+> - **设计工作流是「8 个 workstream」** —— 见上表
+>
+> **不得**把「four validation layers」与「8 design workstreams」混为一谈。
 
 **层级状态登记：**
 
@@ -5346,9 +5371,12 @@ Accepted Package may be referenced by Analysis Run
 | Detailed Field Validation | **`DESIGN RESOLVED`** |
 | Cross-Dataset Consistency Rules | **`DESIGN RESOLVED`** |
 | Validation Issue Taxonomy Finalization | **`DESIGN RESOLVED`** |
-| Final Data Validation Design | `DESIGN PENDING` |
+| Final Data Validation Design | **`DESIGN RESOLVED`** |
 
-> **不得**提前将整个 `Data Validation` 标成 `DESIGN RESOLVED`。
+> **`Data Validation` overall = `DESIGN RESOLVED`。**
+>
+> `DESIGN RESOLVED` **只**表示 **conceptual validation design complete** ——
+> **不代表** implemented / data validated / tested / production-ready。
 
 #### 4.4.1 Purpose & Scope
 
@@ -7503,46 +7531,127 @@ Expected: 不得仅因为 required_quantity semantic pending
           让当前 Shortage Analysis 失败
 ```
 
-#### 4.4.101 Status Boundary
+#### 4.4.101 Final Data Validation Design Closure + Status Boundary
 
-`Validation Issue Taxonomy Finalization` = **`DESIGN RESOLVED`**。
+**Closure Review Result: `PASS`**
 
-保持：
+`Final Data Validation Design` = **`DESIGN RESOLVED`**
 
-| 层 | Status |
+```
+Data Validation overall = DESIGN RESOLVED
+```
+
+**Closure Review Scope**
+
+本轮是 **Closure Review**，**不是** new Design Task。**未新增任何** validation rule / constraint /
+reason / category / enum / mapping rule / source field / data field / reconciliation rule /
+physical schema / architecture / technology / ADR。
+
+**Closure Review Checklist（8 个 workstream）**
+
+| # | Workstream | Status | 复核结论 |
+| --- | --- | --- | --- |
+| 1 | Validation Layer Model | `DESIGN RESOLVED` | 四层 execution model 一致；无互相矛盾的 canonical definition |
+| 2 | Capability-to-Evidence Requirement | `DESIGN RESOLVED` | capability-to-evidence matrix（A–E）与 `§4.1` / `§4.2` 一致 |
+| 3 | Failure Semantics | `DESIGN RESOLVED` | 三层失败含义保持分离，未被重新合并 |
+| 4 | Dataset Absent vs Empty Semantics | `DESIGN RESOLVED` | `not included ≠ included with zero records` 保持 |
+| 5 | Failure Isolation Principle | `DESIGN RESOLVED` | blast radius 限制到 `evidence → grain → capability` |
+| 6 | Detailed Field Validation | `DESIGN RESOLVED` | 只验证已批准项；未新增 range / enum / default / regex / rounding / freshness threshold / precedence |
+| 7 | Cross-Dataset Consistency Rules | `DESIGN RESOLVED` | 8 项关系一致；未新增 reconciliation algorithm |
+| 8 | Validation Issue Taxonomy Finalization | `DESIGN RESOLVED` | 唯一 canonical taxonomy；8 categories ＋ 11 reasons |
+
+**Design DoD**
+
+| # | Item | Result |
+| --- | --- | --- |
+| 1 | validation layers defined | ✅ |
+| 2 | structural / capability / business failure meanings separated | ✅ |
+| 3 | capability evidence requirements defined | ✅ |
+| 4 | dataset absent vs empty semantics defined | ✅ |
+| 5 | field validation policy defined | ✅ |
+| 6 | cross-field / cross-dataset consistency defined | ✅ |
+| 7 | failure isolation defined | ✅ |
+| 8 | no silent exclusion defined | ✅ |
+| 9 | valid zero / absence / ineligible semantics defined | ✅ |
+| 10 | canonical issue taxonomy defined | ✅ |
+| 11 | issue → affected scope / consequence 可表达 | ✅ |
+| 12 | provenance consistency defined | ✅ |
+| 13 | unresolved design explicitly preserved | ✅ |
+| 14 | no duplicate canonical taxonomy | ✅ |
+| 15 | no known internal contradiction | ✅ |
+| 16 | no unauthorized Business Rule created | ✅ |
+| 17 | conceptual Validation Report requirements defined | ✅ |
+
+```
+Design DoD = PASS（17 / 17）
+```
+
+**Unresolved Upstream Design（9 项）—— 不阻塞本 closure**
+
+这 9 项**阻止的是**「某些 capability 当前能够实际运行」，
+**不是**「Data Validation conceptual design 已经定义清楚」。
+
+原因：每一项目前都已有**明确的 fail-safe 分类路径与 blast radius 限制** ——
+即 Validation **知道如何判断 / 如何分类 / 如何限制影响范围**：
+
+| # | Unresolved Item | 状态 | Validation 的处理路径 |
+| --- | --- | --- | --- |
+| 1 | `loss_rate` owner / grain | **`UNKNOWN`** | 要求可靠关联当前计算上下文，否则 `DATA_INCOMPLETE`（`§4.4.54`） |
+| 2 | `required_quantity` semantic | `DESIGN PENDING` | **不产生** runtime issue；`BR-REQUIREMENT-001` 不依赖它（`§4.4.53` / `§4.4.95`） |
+| 3 | Warehouse canonical role | `DESIGN PENDING` | ownership / Plant / scope 不可靠判断 → `DATA_INCOMPLETE`（`§4.4.50`） |
+| 4 | BOM version / validity | `DESIGN PENDING` | 无法可靠确定适用 BOM → `DATA_INCOMPLETE`（`§4.4.52`） |
+| 5 | `sourcing_status` vocabulary | `DESIGN PENDING` | eligibility 无法可靠确定 → `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED`（`§4.4.62` / `§4.4.95`） |
+| 6 | `effective_arrival_date` source mapping | `DESIGN PENDING` | 按既有 Rule 处理 missing / invalid（`§4.4.49`） |
+| 7 | allocation demand-window mapping | `DESIGN PENDING` | 无法判断重叠 → `DATA_INCOMPLETE` ＋ Data Quality Issue（`§4.4.60`） |
+| 8 | `ApplicableMOQ` source | `DESIGN PENDING` | 无法可靠取得 → `DATA_INCOMPLETE` → No Numeric Recommendation（`§4.4.67`） |
+| 9 | provenance carrier | `DESIGN PENDING` | 只提出 requirement，不设计 carrier（`§4.4.15` / `§4.4.93`） |
+
+> 三者均明确禁止 Validation 反向解决这些设计问题：
+> `Consistency Validation 不得成为解决这些问题的后门。` /
+> `Field Validation 不能成为解决这些设计问题的后门。` /
+> `Validation Issue Taxonomy 不得解决这些问题。`
+
+**Dependency Boundary（不得被误解为已完成）**
+
+| 依赖领域 | Status |
 | --- | --- |
-| Final Data Validation Design | `DESIGN PENDING` |
+| Snapshot / Import Contract | `DESIGN PENDING` |
+| Master Data Mapping | `DESIGN PENDING` |
+| Adapter Boundary | `DESIGN PENDING` |
 
-因此：
+`Data Validation = DESIGN RESOLVED` **不要求**且**不表示**：
 
-```
-Data Validation overall = DESIGN PENDING
-```
+- serialization format / physical file layout / field carrier mapping 已完成
+- Master Data Mapping algorithm 已设计
+- Adapter implementation 已完成
 
-**不得本轮**直接把整个 `Data Validation` 标成 `DESIGN RESOLVED`。
-
-**What Final Data Validation Still Needs**
-
-下一步 **Final Data Validation Design** **不是再新增大量规则**。它只需要：
-
-- 对 `§4.4` 已完成层级做**完整性检查**
-- 检查 **taxonomy 与各层是否一致**
-- 检查是否存在 **duplicate / contradiction**
-- 检查 **unresolved design 是否被正确保留**
-- 确认是否满足 **Data Validation 的 Design DoD**
-
-**只有通过该 final review**，才允许考虑：
+**必读限定：**
 
 ```
-Data Validation overall → DESIGN RESOLVED
+Data Validation DESIGN RESOLVED
+  ≠ Snapshot / Import Contract DESIGN RESOLVED
+  ≠ Master Data Mapping DESIGN RESOLVED
+  ≠ Adapter Boundary DESIGN RESOLVED
 ```
 
-`DESIGN RESOLVED` 的八个层级**仅**表示其 **conceptual boundary 已定义**，
-**不表示**：
+**`DESIGN RESOLVED` 的语义边界**
 
-- validator implemented
-- data validated
-- tested
+`DESIGN RESOLVED` **只**表示：
+
+```
+conceptual validation design complete
+```
+
+**不表示**：implemented / data validated / tested / production-ready。
+
+以下**均不构成** closure blocker（`DESIGN RESOLVED` ≠ `IMPLEMENTED` ≠ `TESTED`）：
+
+- no validator implementation
+- no tests yet
+- no JSON Schema / API schema / database schema
+- no error code / severity model
+- no UI / monitoring implementation
+- no physical import format
 
 ---
 
