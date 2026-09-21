@@ -7839,8 +7839,9 @@ conceptual validation design complete
 > 因此现为 **`DESIGN RESOLVED`**。
 >
 > `Supplier Eligibility Vocabulary Mapping` 的 **Supplier Eligibility Mapping Design Review**
-> 已产生 **Review Finding ＋ Human Decision Gate** —— 见 **§4.5.11**；
-> 其状态**仍为 `DESIGN PENDING`**，unresolved count **仍为 7**。
+> 已产生 **Review Finding**，且 **Human Decision 已记录**（**Option B APPROVED**，见 **§4.5.11**）；
+> 但 **semantic synchronization 尚未实施**，因此其状态**仍为 `DESIGN PENDING`**，
+> unresolved count **仍为 7**。
 
 #### 4.5.1 Purpose & Scope
 
@@ -8987,7 +8988,7 @@ code、Adapter、test、API、workflow、supplier ranking、supplier selector、
 
 **未选择技术。**
 
-**Status**
+**Status（PR #32 Review 时点）**
 
 ```
 Supplier Eligibility Vocabulary Mapping = DESIGN PENDING    ← 本 Review 不改变
@@ -9007,6 +9008,159 @@ unresolved count                        = 仍为 7
    `explicitly ineligible ≠ semantic unresolved` 补充）
 
 **只有 Human Approval 后**，下一 Task 才正式实施。
+
+**Human Decision Record —— `SIMULATED POC Design Policy` ＋ `Human-approved`**
+
+> 以下为 Human 对上述 5 项的**正式回复**（本 Review 由 **PR #32** 提交）。
+> 本节**只记录决定**；**未**执行 `§4.1` / `§4.2` / `§4.4` 的 semantic synchronization。
+
+| # | 决定项 | Human Decision |
+| --- | --- | --- |
+| 1 | source `sourcing_status` vocabulary 是否建立全局统一 enum | **NOT ADOPTED** —— 不建立全局统一 enum |
+| 2 | 是否采用 Option B（source-specific → conceptual eligibility condition） | **APPROVED** —— 当前 POC 正式设计方向 |
+| 3 | 三种 conceptual mapping outcome | **APPROVED** —— `eligible` / `ineligible` / `unresolved` |
+| 4 | `explicitly ineligible` 语义 | **APPROVED** —— valid but ineligible，**NO Validation Issue / NO `DATA_INCOMPLETE`** |
+| 5 | `§4.1` / `§4.2` / `§4.4` 最小 consistency synchronization | **AUTHORIZED** —— 仅限后续专门的 **Design Change Task** |
+
+**决定 1 —— Source Global Enum = NOT ADOPTED**
+
+原因：当前 `FROZEN` / Human-approved evidence **只支持** `sourcing_status` **存在**及其
+**logical meaning**，**不支持**任何真实 ERP / SRM source vocabulary。
+
+**不得发明**：
+
+- `APPROVED`
+- `ACTIVE`
+- `QUALIFIED`
+- `BLOCKED`
+- `INACTIVE`
+
+等 **source-system enum**。
+
+**决定 2 —— Option B = APPROVED**
+
+```
+source-specific sourcing_status
+        ↓
+explicit deterministic mapping
+        ↓
+conceptual Relationship Eligibility Condition
+```
+
+该 **mapping contract** 为当前 POC 的**正式设计方向**。
+
+**决定 3 —— Conceptual Tri-State = APPROVED**
+
+```
+eligible  /  ineligible  /  unresolved
+```
+
+**必须明确**：它们**只是 conceptual mapping conditions**，**不是**：
+
+- source enum
+- Business Status
+- Supplier Risk enum
+- database enum
+- canonical persisted field
+- Supplier Ranking
+- Supplier Selection
+
+**不得创建** `SupplierEligibilityStatus` field —— 除非未来**另行 Human-approved**。
+
+**决定 4 —— `explicitly ineligible` 语义 = APPROVED**
+
+```
+explicitly ineligible  =  valid but ineligible
+```
+
+因此：
+
+- **不进入**当前 Supplier Risk **candidate evaluation**
+- 默认：**NO Validation Issue**、**NO `DATA_INCOMPLETE`**
+
+**必须保持：**
+
+```
+explicitly ineligible  ≠  unresolved
+```
+
+**只有**：relationship exists，但 eligibility **无法可靠判断** 时，才：
+
+```
+SEMANTIC_RESOLUTION / SEMANTIC_UNRESOLVED
+```
+
+并在当前 capability **确实需要**该 relationship 时：
+
+```
+Risk Evidence → DATA_INCOMPLETE
+```
+
+**决定 5 —— Minimal Synchronization = AUTHORIZED（授权边界）**
+
+后续专门的 **Design Change Task** 被授权对 `§4.1` / `§4.2` / `§4.4` 执行
+**必要的最小 consistency synchronization**。
+
+**授权范围仅包括：**
+
+- `§4.1` **Supplier-Material Relationship eligibility semantic clarification**
+- `§4.2.8` `sourcing_status` 的
+  **source-vocabulary / canonical mapping-contract status synchronization**
+- `§4.2` **open-items / status synchronization**
+- `§4.4.62` 补充：**`explicitly ineligible ≠ semantic unresolved`**
+
+**不得借此**：
+
+- 修改 Supplier-Material Relationship **grain**
+- 创建新的 **Business enum**
+- 创建 **source enum**
+- 创建 **`is_eligible` field**
+- 创建 **`SupplierEligibilityStatus` field**
+- 修改 **Supplier Risk thresholds**
+- 引入 **Supplier Ranking**
+- 引入 **Supplier Selection**
+- 将 **Risk Result 自动绑定采购建议**
+- 修改**其他** Business Rules
+
+**继续保持 —— Supplier Master Status Boundary**
+
+```
+Supplier Master status  ≠  Supplier-Material sourcing_status
+```
+
+**不得**：`Supplier inactive` → 自动推导 relationship **ineligible** ——
+除非**未来存在明确 approved mapping evidence**。
+
+**继续保持 —— Multiple Eligible Relationships**
+
+**多个 eligible Supplier-Material Relationships 同时存在是合法情况。** 例如：
+
+```
+Supplier A  →  eligible  →  LOW risk
+Supplier B  →  eligible  →  HIGH risk
+```
+
+**允许同时展示。不得自动**：
+
+- 排名
+- 选择 `A`
+- 排除 `B`
+- 将 Risk 高低转换为采购决策
+
+**执行状态（PR #32 时点）**
+
+```
+Human Decision                          = RECORDED
+Option B                                = APPROVED
+Semantic Synchronization                = NOT YET IMPLEMENTED
+Supplier Eligibility Vocabulary Mapping = DESIGN PENDING
+unresolved count                        = 仍为 7
+```
+
+**本 PR 不实施** `§4.1` / `§4.2` / `§4.4` 的 semantic synchronization。
+
+`Supplier Eligibility Vocabulary Mapping` **保持 `DESIGN PENDING`**，unresolved count **仍为 7**，
+**直到 follow-up Design Change 实施并通过 Review**。
 
 #### 4.5.12 Warehouse Role Resolution
 
@@ -9531,9 +9685,9 @@ source evidence exists but canonical mapping unavailable
 > 已由 **Human-approved Option A ＋ Canonical Model Amendment** **RESOLVED**（见 **§4.5.7**）；
 > 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **8 → 7**。
 >
-> `sourcing_status` vocabulary 另有 **Human Decision Gate**
-> （**§4.5.11** Supplier Eligibility Mapping Design Review）；
-> 在 Human Approval 之前其状态**保持 `DESIGN PENDING`**，未决项数量**不减少**。
+> `sourcing_status` vocabulary 的 **Human Decision 已记录**
+> （**Option B APPROVED**，见 **§4.5.11**）；但在 approved **semantic synchronization**
+> 完成并通过 Review 之前，其状态**保持 `DESIGN PENDING`**，未决项数量**不减少**。
 
 本 Task **不以「Master Data Mapping」为名一次性消灭这些问题**。
 
@@ -9604,10 +9758,11 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 - BOM explosion implemented
 - tested
 
-**Open Human Decision Gate：** `Supplier Eligibility Vocabulary Mapping` **仍为 `DESIGN PENDING`** ——
-其 **Supplier Eligibility Mapping Design Review** 已判定推荐方向为 **Option B**
-（source-specific `sourcing_status` → conceptual eligibility condition），
-但**须经 Human Approval** 后才能实施（见 **§4.5.11**）。
+**Open Pending Sync：** `Supplier Eligibility Vocabulary Mapping` **仍为 `DESIGN PENDING`** ——
+其 **Supplier Eligibility Mapping Design Review** 的 **Option B 已获 Human Approval**
+（source-specific `sourcing_status` → conceptual eligibility condition，见 **§4.5.11**），
+但 **`§4.1` / `§4.2` / `§4.4` 的 semantic synchronization 尚未实施**，
+须待 follow-up Design Change 完成并通过 Review。
 
 ---
 
