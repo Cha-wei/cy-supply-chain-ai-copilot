@@ -8212,7 +8212,8 @@ conceptual validation design complete
 > ＋ **Warehouse Role Resolution**（**§4.5.12**）
 > ＋ **BOM Version / Validity Mapping**（**§4.5.7** ／ **§4.1.4 N**）
 > ＋ **Supplier Eligibility Vocabulary Mapping**（**§4.5.11**）
-> ＋ **Effective Arrival Date Source Mapping**（**§4.5.21**）。
+> ＋ **Effective Arrival Date Source Mapping**（**§4.5.21**）
+> ＋ **Allocation Demand-Window Mapping**（**§4.5.9**）。
 >
 > **仍为 `DESIGN PENDING` 的层级：** **Other Source-Semantic Mapping** ／ **Final Master Data Mapping**。
 
@@ -8252,7 +8253,7 @@ conceptual validation design complete
 >
 > **但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
 > 其中仍存在 `loss_rate` owner / grain、`required_quantity` semantic、
-> allocation demand-window mapping、`ApplicableMOQ` source、provenance carrier。
+> `ApplicableMOQ` source、provenance carrier。
 >
 > `allocation demand-window mapping` 的
 > **Substitute Allocation Demand-Window Mapping Design Review** 与 **Option B Implementation Record**
@@ -11617,7 +11618,7 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 **Effective Arrival Date Source Mapping**（**§4.5.21**）
 与 **Allocation Demand-Window Mapping**（**§4.5.9**）。
 
-`DESIGN RESOLVED` 的八个层级**仅**表示其 **conceptual resolution boundary 已定义**，
+`DESIGN RESOLVED` 的九个层级**仅**表示其 **conceptual resolution boundary 已定义**，
 **不表示**：
 
 - 真实 ERP mapping 已完成
@@ -11670,7 +11671,7 @@ exactly one canonical `effective_arrival_date` 或 `unresolved`）
 
 **但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
 其中仍存在 `loss_rate` owner / grain、`required_quantity` semantic、
-allocation demand-window mapping、`ApplicableMOQ` source、provenance carrier。
+`ApplicableMOQ` source、provenance carrier。
 
 `DESIGN RESOLVED` **只**表示 **canonical source-mapping contract 概念设计完成**，
 **不表示** real ERP field known / Adapter implemented / mapping tested / `Effective Inbound` implemented。
