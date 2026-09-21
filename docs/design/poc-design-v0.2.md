@@ -3914,11 +3914,11 @@ conceptual boundary 已定义
 
 ## 4. Data & Integration Design
 
-> 本章节只建立未来子章节。当前只写 `DESIGN PENDING`。**不得创建实际 Schema / Contract。**
+> 本章节建立 POC 的 Data & Integration Design。**不得创建实际 Schema / Contract。**
 
 | 子章节 | Status |
 | --- | --- |
-| Canonical Data Model | `DESIGN PENDING` |
+| Canonical Data Model | **`DESIGN RESOLVED`** |
 | Data Dictionary | `DESIGN PENDING` |
 | Snapshot / Import Contract | `DESIGN PENDING` |
 | Data Validation | `DESIGN PENDING` |
@@ -3926,6 +3926,424 @@ conceptual boundary 已定义
 | Adapter Boundary | `DESIGN PENDING` |
 
 > 继承约束（不重新定义）：Integration Pattern = **Controlled Export / Snapshot**。具体文件格式（CSV / JSON / Parquet）与 Adapter Contract 属本阶段待设计事项，**本轮未决定**。
+
+> **注意**：`Canonical Data Model` 完成**仅**表示 **canonical business entities 与 relationships 已定义**；
+> **不代表**整个 §4 完成。其余 5 项仍为 `DESIGN PENDING`。
+
+### 4.1 Canonical Data Model
+
+**Design Status:** `DESIGN RESOLVED`
+
+**Approval:** Human-approved
+
+**Implementation Status:** `NOT STARTED`
+
+> **注意**：`DESIGN RESOLVED` **≠** `IMPLEMENTED` **≠** `TESTED`。
+
+#### 4.1.1 Purpose & Scope
+
+本子章节只回答：
+
+> POC 业务逻辑中有哪些 **canonical business entities**，它们分别代表什么，如何关联，由哪些既有 Rule 使用。
+
+**本 Task 不回答**：
+
+- 数据库表怎么建
+- SQL Schema
+- ORM model
+- JSON Schema
+- API Contract
+- CSV column layout
+- concrete file format
+- database selection
+- backend framework
+- storage engine
+- implementation class
+
+#### 4.1.2 Source of Truth
+
+本模型**从当前 Repository 已 `DESIGN RESOLVED` 的内容反向提取**：
+
+- `§2` P0 Business Rules（`BR-SHORTAGE-001`、`BR-INVENTORY-001`、`BR-SUBSTITUTE-001`、
+  `BR-REQUIREMENT-001`、`BR-PROCUREMENT-001`、`BR-INBOUND-001`、`BR-SUPPLIER-RISK-001`）
+- `§3` System Boundary
+- `§5` AI / Tool Boundary
+
+**不得凭空增加未来能力需要的数据对象。**
+
+如果某字段 / 概念是否必要**无法从现有 Design 支撑**，则标记为 `DESIGN PENDING` 或 `UNKNOWN`，**不得猜测**。
+
+#### 4.1.3 Canonical Entity Catalog
+
+| # | Entity | Purpose | Canonical identity / grain | 主要使用方 |
+| --- | --- | --- | --- | --- |
+| A | **Plant** | 业务计算边界 | `plant_id` | 全部 Rule |
+| B | **Material** | canonical material identity | `material_code` | 全部 Rule |
+| C | **Production Requirement** | 生产需求来源 | `plant_id` + `material_code` + `required_date` | `BR-REQUIREMENT-001`、`BR-SHORTAGE-001` |
+| D | **Inventory Snapshot** | 可用库存观测 | `plant_id` + `material_code` + `inventory_snapshot_time` ＋ status context | `BR-INVENTORY-001` |
+| E | **Inbound Supply** | 未来可能成为有效供给的 inbound record | `plant_id` + `material_code` ＋ inbound identity | `BR-INBOUND-001` |
+| F | **Substitute Relationship** | 已登记的替代关系（**有方向**） | `plant_id` + `target_material_code` + `substitute_material_code` | `BR-SUBSTITUTE-001` |
+| G | **Substitute Allocation** | 明确分配（**独立于 F**） | source substitute ＋ target ＋ effective demand context | `BR-SUBSTITUTE-001` |
+| H | **Supplier** | supplier identity | `supplier_id` | `BR-SUPPLIER-RISK-001` |
+| I | **Supplier-Material Relationship** | 供应商—物料关系与 eligibility context | `supplier_id` + `material_code` | `BR-SUPPLIER-RISK-001` |
+| J | **Supplier Performance** | performance 观测（含 measurement period） | `supplier_id` + `material_code` + `PerformancePeriod` | `BR-SUPPLIER-RISK-001` |
+| K | **Procurement Recommendation** | 采购数量建议 | `plant_id` + `material_code` + `RecommendationNeedDate` | `BR-PROCUREMENT-001` |
+| L | **Procurement Request Draft** | POC 内 Draft | 由 K 派生（POC 内） | `§3`、`§5` |
+| M | **Analysis Run** | 一次分析运行的上下文 | analysis run identity ＋ `AnalysisDate` | `BR-SHORTAGE-001`、`BR-PROCUREMENT-001`、`BR-SUPPLIER-RISK-001` |
+
+**支撑性 canonical concepts**（由既有 Rule 直接要求，不属最低 A–M 清单）：
+
+| # | Concept | Purpose | Canonical identity / grain | 依据 |
+| --- | --- | --- | --- | --- |
+| N | **BOM Component** | 物料需求展开来源 | `plant_id` + parent material + component `material_code` | §2.4.2、§2.4.3 |
+| O | **Configured Safety Stock** | 业务配置的安全库存 | `plant_id` + `material_code` | §2.2.5 |
+
+> `N` / `O` **不是**本 Task 新引入的能力，而是 §2 已 `DESIGN RESOLVED` 规则**直接引用**的输入；
+> 因此**必须**在 canonical model 中有明确归属，否则模型无法支撑既有 Rule。
+
+#### 4.1.4 Entity Definitions
+
+**A. Plant**
+
+- **Purpose：** 表示业务计算边界中的 Plant。
+- **Canonical identity：** `plant_id`
+- **Attributes：** 至少 `plant_id`
+- **不得设计** Plant Master 全量属性。
+
+**B. Material**
+
+- **Purpose：** canonical material identity。
+- **Canonical identity：** `material_code`
+- **Attributes：** 至少 `material_code`
+- **不得扩展**成完整 Material Master。
+
+**C. Production Requirement**
+
+- **Purpose：** 表达生产需求，支撑 `BR-REQUIREMENT-001` 与 `BR-SHORTAGE-001`。
+- **Canonical identity / grain：** `plant_id` + `material_code` + `required_date`
+- **Attributes：** 至少
+  - plant → `plant_id`
+  - material → `material_code`
+  - `required_date`
+  - `required_quantity`
+  - `ProductionQty`
+- **必要来源关系：** 必须能够**追溯到** `BOM relationship`（见 `N`）与 `loss_rate` 计算来源（见 §4.1.12）。
+- **约束：** **不得跨 Plant 合并需求**。
+
+**D. Inventory Snapshot**
+
+- **Purpose：** 支撑 `BR-INVENTORY-001`。
+- **Canonical identity / grain：** `plant_id` + `material_code` + `inventory_snapshot_time` ＋ status context
+- **Attributes：** 至少
+  - plant → `plant_id`
+  - material → `material_code`
+  - `inventory_snapshot_time`
+  - inventory status
+  - quantity
+- 必须能区分 `AVAILABLE` / `INSPECTION` / `FROZEN`。
+  **不得设计数据库 enum implementation。**
+- **约束：** 状态未知或非法时**不得猜测**，**不得静默归类为 `AVAILABLE`**。
+
+**E. Inbound Supply**
+
+- **Purpose：** 支撑 `BR-INBOUND-001`；表示未来**可能**成为有效供给的 inbound business record。
+- **Canonical identity / grain：** `plant_id` + `material_code` ＋ inbound record identity
+- **Attributes：** 至少
+  - plant → `plant_id`
+  - material → `material_code`
+  - `ordered_qty`
+  - `received_qty`
+  - `effective_arrival_date`
+  - status / eligibility context
+- **派生：** `RemainingInboundQty = ordered_qty - received_qty`
+- **约束：** **不得绑定真实 ERP PO Schema**。
+
+**F. Substitute Relationship**
+
+- **Purpose：** 支撑 `BR-SUBSTITUTE-001`；表示**已登记**的替代关系。
+- **Canonical identity / grain：** `plant_id` + `target_material_code` + `substitute_material_code`
+- **Attributes：** 至少
+  - plant → `plant_id`
+  - target material → `target_material_code`
+  - substitute material → `substitute_material_code`
+  - `substitution_ratio`
+  - approval context → `approval_status`
+- **方向性：** 关系**有方向**；`A 可被 B 替代` **不代表** `B 可以被 A 替代`；**不得自动建立双向关系**。
+
+**G. Substitute Allocation**
+
+- **Purpose：** 支撑 `BR-SUBSTITUTE-001`；表达**实际被分配**的替代供给量。
+- **必须与 `F` 分开评估**，因为：
+  ```
+  Approved relationship
+    ≠ actual allocated quantity
+  ```
+- **Canonical identity / grain：** source substitute material ＋ target material ＋ effective demand context
+- **Attributes：** 至少
+  - source substitute material
+  - target material
+  - `AllocatedSubstituteQty`
+  - effective demand context
+- **用途：** 支撑 `RemainingUnallocatedSourceSupply` 与 **No Double Allocation**。
+- **约束：** `Σ AllocatedSubstituteQty <= EligibleSubstituteSupply`（见 §2.3.10）。
+
+**H. Supplier**
+
+- **Purpose：** 只保留 Supplier identity。
+- **Canonical identity：** `supplier_id`
+- **不得扩展**为完整 Supplier Master。
+
+**I. Supplier-Material Relationship**
+
+- **Purpose：** 支撑 `BR-SUPPLIER-RISK-001`。
+- **Canonical identity / grain：** `supplier_id` + `material_code`
+- **Attributes：** 至少
+  - supplier → `supplier_id`
+  - material → `material_code`
+  - relationship eligibility context → `sourcing_status`
+- **约束：** **不得自行定义** `sourcing_status` enum / vocabulary。
+- **不得**因为 Supplier Master 中存在某 Supplier 就推断其可供应任意 Material。
+
+**J. Supplier Performance**
+
+- **Purpose：** 支撑 `BR-SUPPLIER-RISK-001`。
+- **Canonical identity / grain：** `supplier_id` + `material_code` + `PerformancePeriod`
+- **Attributes：** 至少
+  - supplier → `supplier_id`
+  - material → `material_code`
+  - `PerformancePeriod`
+  - `PerformanceUpdatedAt`
+  - `DeliveryPerformance`
+  - `QualityPerformance`
+- **必须保持：**
+  ```
+  measurement period  ≠  updated_at
+  ```
+  即 `PerformanceUpdatedAt` **不能替代** `PerformancePeriod`。
+- 另需 `standard_lead_time_days` 供 Lead Time Feasibility 使用（见 §2.7.3 / §2.7.5）。
+
+**K. Procurement Recommendation**
+
+- **Purpose：** 支撑 `BR-PROCUREMENT-001`。
+- **Canonical identity / grain：** `plant_id` + `material_code` + `RecommendationNeedDate`
+- **Attributes：** 至少
+  - plant → `plant_id`
+  - material → `material_code`
+  - `RecommendationNeedDate`
+  - `ShortageQty`
+  - `BasePurchaseNeed`
+  - `ApplicableMOQ`
+  - `MOQAdjustmentQty`
+  - `RecommendedPurchaseQty`
+- **必须明确：**
+  ```
+  Recommendation  ≠  Approval  ≠  Purchase Order
+  ```
+
+**L. Procurement Request Draft**
+
+- **Purpose：** 支撑 `§3` / `§5`；表示 **POC 内** Draft。
+- **Must be explicit：**
+  ```
+  POC Draft
+    ≠ ERP Purchase Request
+    ≠ Purchase Order
+  ```
+- **约束：** Draft 只存在于 `POC / Draft Boundary`，**不产生**真实业务系统副作用。
+
+**M. Analysis Run / Snapshot Context**
+
+- **Purpose：** 关联当前 snapshot、calculation timestamp、recommendation result、explanation evidence。
+- **存在依据（来自既有 Design）：**
+  - `§2.5.3` 以「**一次 shortage analysis run**」为建议生成边界；
+  - `§2.7.4` / `§3` 使用 `AnalysisDate`；
+  - `§2.1.2` 的累计计算依赖「截至 `t`」的观测口径。
+- **Canonical identity：** analysis run identity ＋ `AnalysisDate`
+- **结论：** 现有 Design **足以支持**该概念，因此**予以实体化**。
+
+**N. BOM Component（支撑性）**
+
+- **Purpose：** 表达物料需求展开来源，支撑 `BR-REQUIREMENT-001`。
+- **Canonical identity / grain：** `plant_id` + parent material + component `material_code`
+- **Attributes：** 至少 `BOMComponentQty`、`material_code`
+- **DESIGN PENDING（本 Task 明确不设计）：**
+  - BOM version selection
+  - BOM validity selection
+  - BOM explosion algorithm
+  - ERP source-field mapping
+- **约束：** 无法可靠确定适用 BOM → `DATA_INCOMPLETE`。
+
+**O. Configured Safety Stock（支撑性）**
+
+- **Purpose：** 支撑 `BR-INVENTORY-001` / `BR-SHORTAGE-001`。
+- **Canonical identity / grain：** `plant_id` + `material_code`
+- **Attributes：** 至少 `SafetyStock`（业务配置提供的**非负**数量）
+- **当前不设计：** statistical safety stock、service-level calculation、
+  demand / lead-time variability model、dynamic safety stock、AI-generated safety stock。
+
+#### 4.1.5 Relationship Model
+
+```
+Plant
+  → has Material business context
+
+Material
+  → has Production Requirement
+  → has Inventory Snapshot
+  → has Inbound Supply
+
+Target Material
+  ← Substitute Relationship →
+Substitute Material
+
+Substitute Relationship
+  → Substitute Allocation
+
+Supplier
+  ↔ Supplier-Material Relationship
+  ↔ Material
+
+Supplier-Material Relationship
+  → Supplier Performance
+
+Shortage Result
+  → Procurement Recommendation
+
+Procurement Recommendation
+  → Procurement Request Draft
+
+Production Requirement
+  → BOM Component（来源关系）
+
+Material
+  → Configured Safety Stock
+```
+
+**不得因为画关系就创造未批准业务流程。**
+
+> 上述关系仅表达**既有 Rule 已依赖的关联**，**不新增**任何流程、审批或自动化能力。
+
+#### 4.1.6 Time Semantics
+
+必须区分：
+
+```
+event / requirement time
+与
+snapshot / observation time
+```
+
+以下时间语义**互不相同**，**不得合并为一个统一 `date` 字段**：
+
+| 时间 | 语义类别 | 归属 |
+| --- | --- | --- |
+| `required_date` | requirement time | Production Requirement |
+| `effective_arrival_date` | event time（供给可用日） | Inbound Supply |
+| `inventory_snapshot_time` | observation time | Inventory Snapshot |
+| `PerformancePeriod` | observation window | Supplier Performance |
+| `PerformanceUpdatedAt` | observation metadata | Supplier Performance |
+| `AnalysisDate` | 分析运行时间 | Analysis Run |
+
+#### 4.1.7 Quantity Semantics
+
+必须保持以下 canonical quantities **彼此分离**：
+
+- `OpeningUsableInventory`
+- `GrossRequirement`
+- `EffectiveInbound`
+- `ApprovedSubstituteSupply`
+- `ShortageQty`
+- `BufferGap`
+- `BasePurchaseNeed`
+- `MOQAdjustmentQty`
+- `RecommendedPurchaseQty`
+
+**不得因为它们都是 quantity 就合并成一个通用 `quantity` field。**
+
+实体层**可以引用**这些 business meanings，但**不得重新定义 Rule**。
+
+#### 4.1.8 Provenance Requirement
+
+Canonical Data Model **必须保留**未来能够追踪：
+
+> 这个事实来自哪里。
+
+本 Task **只定义**：
+
+```
+provenance is required
+```
+
+**不得设计**具体：
+
+- `source_system_id`
+- lineage DB
+- event bus
+- audit schema
+
+这些进入后续 **Data Dictionary / Audit Design**。
+
+#### 4.1.9 Missing / Unknown Boundary
+
+Canonical model **不得通过默认值隐藏缺失**。
+
+必须继续支持：
+
+- missing
+- invalid
+- unresolved
+- `DATA_INCOMPLETE`
+
+例如：
+
+- `SafetyStock` missing
+- `ApplicableMOQ` missing
+- `PerformancePeriod` missing
+
+**不得因为建立 data model 就自动补默认值。**
+
+#### 4.1.10 Simulated Environment Boundary
+
+必须明确：这些 canonical entities 是 **POC 内的 business representation**。
+
+它们**不代表**：
+
+- 真实 CY ERP schema
+- 真实 CY WMS schema
+- 真实 CY PLM schema
+
+**不得声称**真实系统存在同名表 / 字段。
+
+#### 4.1.11 Explicit Non-Model
+
+`Canonical Data Model` **不包含**：
+
+- physical database design
+- table / column definition
+- primary key / index
+- UUID 生成规则
+- API Contract
+- Transport / file format
+- storage engine
+- framework / ORM
+
+#### 4.1.12 Open Items（`DESIGN PENDING` / `UNKNOWN`）
+
+以下项目**无法从现有 Design 可靠支撑**，因此**不得猜测**：
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| `loss_rate` 的 canonical owner / grain | **`UNKNOWN`** | §2.4 只定义其语义与公式，**未定义**其归属实体与粒度 |
+| Warehouse 是否为 canonical attribute | **`DESIGN PENDING`** | §2.2.1 的 grain **不含** warehouse；§2.2.4 只描述 Plant 内聚合 |
+| BOM version / validity selection | **`DESIGN PENDING`** | §2.4.3 明确不由该规则设计 |
+| `sourcing_status` enum / vocabulary | **`DESIGN PENDING`** | §2.7.24 明确不定义 |
+| `effective_arrival_date` 的 source field | **`DESIGN PENDING`** | §2.6.4 留给 Data Dictionary |
+| Allocation 与 demand window 的关联机制 | **`DESIGN PENDING`** | §2.3.12 明确不设计 timing engine |
+| `ApplicableMOQ` 的来源 | **`DESIGN PENDING`** | §2.5.5 留给 Data Dictionary / Adapter Design |
+| Provenance 的具体承载方式 | **`DESIGN PENDING`** | 见 §4.1.8 |
+
+> 以上条目**不影响** `Canonical Data Model = DESIGN RESOLVED` ——
+> 它们属于**后续 Data Dictionary / Master Data Mapping / Adapter Boundary** 的范围。
 
 ---
 
