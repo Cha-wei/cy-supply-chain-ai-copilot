@@ -5329,9 +5329,10 @@ Accepted Package may be referenced by Analysis Run
 
 > **子章节整体状态：仍为 `DESIGN PENDING`。**
 >
-> 本节已完成其中**三层**：Capability Readiness / Failure Semantics（`§4.4.1` ～ `§4.4.23`）、
-> **Detailed Field Validation**（`§4.4.24` ～ `§4.4.44`）
-> 与 **Cross-Dataset / Cross-Field Consistency Rules**（`§4.4.45` ～ `§4.4.78`）。
+> 本节已完成其中**四层**：Capability Readiness / Failure Semantics（`§4.4.1` ～ `§4.4.23`）、
+> **Detailed Field Validation**（`§4.4.24` ～ `§4.4.44`）、
+> **Cross-Dataset / Cross-Field Consistency Rules**（`§4.4.45` ～ `§4.4.78`）
+> 与 **Validation Issue Taxonomy**（`§4.4.78` ～ `§4.4.100`）。
 
 **层级状态登记：**
 
@@ -5344,7 +5345,7 @@ Accepted Package may be referenced by Analysis Run
 | Failure Isolation Principle | **`DESIGN RESOLVED`** |
 | Detailed Field Validation | **`DESIGN RESOLVED`** |
 | Cross-Dataset Consistency Rules | **`DESIGN RESOLVED`** |
-| Validation Issue Taxonomy Finalization | `DESIGN PENDING` |
+| Validation Issue Taxonomy Finalization | **`DESIGN RESOLVED`** |
 | Final Data Validation Design | `DESIGN PENDING` |
 
 > **不得**提前将整个 `Data Validation` 标成 `DESIGN RESOLVED`。
@@ -5796,36 +5797,47 @@ Data Validation **可以**要求：`BR-REQUIREMENT-001` 执行时**必须存在�
 
 #### 4.4.16 Validation Issue Concept
 
-定义 conceptual：**Validation Issue**，用于记录：
+定义 conceptual：**Validation Issue**，与 **Final Taxonomy**（`§4.4.78` ～ `§4.4.100`）**一致**，至少要求：
 
-- issue category
-- affected evidence
-- affected canonical grain
-- affected capability
-- relevant field / relationship
-- reason
-- referenced Business Rule
+| Dimension | 说明 |
+| --- | --- |
+| Issue Category | 8 个 canonical category 之一（`§4.4.80`） |
+| Reason | 11 个 canonical reason 之一（`§4.4.81`） |
+| Affected Evidence | 受影响 evidence |
+| Affected Grain | affected canonical grain |
+| Affected Capability | affected capability |
+| Relevant Field / Relationship | 相关 field / relationship |
+| Source Rule / Design Reference | 来源 Rule / Design 引用 |
+| Blast Radius / Affected Scope | 影响范围（**非** severity） |
+| Consequence Context | 后果落在哪一层 |
+
+如果 applicable，还应能够追溯 `Snapshot Package` 与 `Analysis Run`。
 
 **注意**：这只是 **conceptual output**。
 
 **不得设计**：DB table、JSON schema、event schema、logging framework。
 
+**不得引入**：error code、severity ranking、owner、assignee、ticket status ——
+这些属于后续 **implementation / operations**。
+
 #### 4.4.17 Snapshot Validation Report Concept
 
-允许定义 conceptual：**Snapshot Validation Report**。
+允许定义 conceptual：**Snapshot Validation Report**，并**引用 Final Taxonomy**（`§4.4.78` ～ `§4.4.100`）。
 
 它应能够回答：
 
-- Package structural result
-- 哪些 capabilities **可以可靠运行**
-- 哪些 capabilities **evidence unavailable**
-- 哪些 business grains **存在 Data Quality Issue**
-- 哪些 issues **会导致 `DATA_INCOMPLETE`**
-- validation **基于哪个 Snapshot Package**
+- Package structural issues
+- capability readiness issues
+- data quality issues
+- affected grains
+- affected capabilities
+- **reason category**（canonical category ＋ reason）
+- **source Rule / Design reference**
+- resulting **consequence context**
 
 **必须可追溯到 `snapshot_package_id`。**
 
-**但本 Task 不定义**：report file format、storage、API。
+**但本 Task 不定义**：report schema / format、storage、API。
 
 #### 4.4.18 Package Accepted ≠ All Capabilities Ready
 
@@ -6343,24 +6355,29 @@ SafetyStock missing     vs     SafetyStock = -10
 
 如果现有 Design 未定义，写：`NOT DEFINED / DESIGN PENDING`。
 
-#### 4.4.43 Interim Validation Issue Reasons
+#### 4.4.43 Validation Issue Reason Seed → Superseded by Final Taxonomy
 
-允许使用**非常有限**的 conceptual reason：
+> **状态：本小节原「interim reason categories」已被 `§4.4.81 Final Canonical Reason Set` 取代（superseded）。**
 
-- `MISSING`
-- `INVALID_TYPE`
-- `OUT_OF_DEFINED_RANGE`
-- `INVALID_DEFINED_STATUS`
-- `UNRESOLVED_IDENTITY`
-- `SEMANTIC_UNRESOLVED`
+本 Task Finalize 后，**authoritative taxonomy 只有一个** ——
+即 **`§4.4.78` ～ `§4.4.100`** 定义的 **POC Validation Issue Taxonomy**。
 
-但**必须标记**为：
+`§4.4.81` 的 11 个 canonical reason **包含并扩展**了本小节最初的 6 个 seed reason：
 
-```
-interim reason categories
-```
+| 原 interim seed | 在 Final Taxonomy 中的归属 |
+| --- | --- |
+| `MISSING` | `FIELD_VALUE` / `MISSING` |
+| `INVALID_TYPE` | `FIELD_VALUE` / `INVALID_TYPE` |
+| `OUT_OF_DEFINED_RANGE` | `FIELD_VALUE` / `OUT_OF_DEFINED_RANGE` |
+| `INVALID_DEFINED_STATUS` | `FIELD_VALUE` / `INVALID_DEFINED_STATUS` |
+| `UNRESOLVED_IDENTITY` | `IDENTITY_RESOLUTION` / `UNRESOLVED_IDENTITY` |
+| `SEMANTIC_UNRESOLVED` | `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED` |
 
-**不是** Final Validation Issue Taxonomy。
+**新增**（seed 未覆盖）：`STRUCTURAL_INCONSISTENCY` / `EVIDENCE_ROLE_NOT_PROVIDED` /
+`UNRESOLVED_SCOPE` / `CONSISTENCY_CONFLICT` / `PROVENANCE_MISMATCH`。
+
+> **本小节不再构成第二套 canonical list。**
+> 引用时应指向 **`§4.4.81`**，而**不是**本小节。
 
 **不得设计**：error code、numeric code、severity ranking、API error object。
 
@@ -6991,15 +7008,509 @@ affected evidence → affected grain → affected capability
 | **G** | Run R2 Recommendation 引用 Run R1 `ShortageQty` | **invalid provenance / consistency**；**不得**当作 R2 的 recommendation evidence |
 | **H** | `inventory_status = INSPECTION` | record **valid**；`OpeningUsableInventory` contribution = **0**；**不是** Data Quality Issue |
 
-#### 4.4.78 Status Boundary
+#### 4.4.78 Canonical Separation
 
-`Cross-Dataset Consistency Rules` = **`DESIGN RESOLVED`**。
+正式定义：
+
+```
+Validation Issue
+  = 导致 evidence / context / capability / business result
+    无法可靠使用或解释的具体 validation condition
+```
+
+必须严格区分以下**四个概念**：
+
+| # | 概念 | 含义 |
+| --- | --- | --- |
+| **A** | **Validation Issue** | 问题本身 / **root condition** |
+| **B** | **Package Disposition** | Package 是否可以 `ACCEPTED` / `REJECTED` / `UNUSABLE` |
+| **C** | **Capability Readiness** | 某 capability 是否拥有足够 logical evidence 进入可靠执行 |
+| **D** | **Business Outcome** | Business Rule 执行后形成的业务结果（`NORMAL` / `BUFFER_BREACH` / `SHORTAGE` / `DATA_INCOMPLETE`） |
+
+必须明确：
+
+```
+Validation Issue  ≠  Package Status  ≠  Capability Status  ≠  Business Status
+```
+
+**不得创建**统一的 `ERROR` 来取代它们。
+
+#### 4.4.79 Taxonomy Dimensions
+
+Validation Issue **至少**需要表达以下 conceptual dimensions：
+
+- Validation Layer
+- Issue Category
+- Reason
+- Affected Evidence
+- Affected Canonical Grain
+- Affected Capability
+- Relevant Field / Relationship
+- Source Rule / Design Reference
+- Blast Radius / Affected Scope
+- Consequence Context
+- Human-readable Detail
+
+如果适用，还应能够追溯：`Snapshot Package` / `Analysis Run`。
+
+**注意**：这里只定义 **conceptual information**。
+
+**不得设计**：JSON Schema、DB Table、API Object、Python Class、event schema。
+
+#### 4.4.80 Canonical Issue Categories
+
+**8 个正式 conceptual categories。** 它们是 **documentation-level taxonomy labels**，
+**不是** implementation enum / error code / API contract。
+
+| # | Category | 含义 | Canonical Reason |
+| --- | --- | --- | --- |
+| **1** | `PACKAGE_STRUCTURE` | Package 自身结构 / integrity 无法可靠确认（manifest unavailable、package identity inconsistent、declared dataset artifact absent、artifact unreadable、integrity evidence unverifiable） | `STRUCTURAL_INCONSISTENCY` |
+| **2** | `EVIDENCE_AVAILABILITY` | Accepted Package 未提供某 capability 所需的 logical evidence role | `EVIDENCE_ROLE_NOT_PROVIDED` |
+| **3** | `FIELD_VALUE` | evidence 已存在，但单字段值不符合已定义的 Data Dictionary / Business Rule | `MISSING` / `INVALID_TYPE` / `OUT_OF_DEFINED_RANGE` / `INVALID_DEFINED_STATUS` |
+| **4** | `IDENTITY_RESOLUTION` | evidence identity 无法可靠解析到 canonical identity | `UNRESOLVED_IDENTITY` |
+| **5** | `SCOPE_COVERAGE` | dataset / evidence 存在，但无法可靠确认 coverage 是否覆盖当前分析范围 | `UNRESOLVED_SCOPE` |
+| **6** | `SEMANTIC_RESOLUTION` | value / relationship 存在，但当前 Design 无法可靠解释其业务语义 | `SEMANTIC_UNRESOLVED` |
+| **7** | `CONSISTENCY` | 多个 individually valid evidence 组合后违反既有 consistency invariant | `CONSISTENCY_CONFLICT` |
+| **8** | `PROVENANCE` | evidence / derived result 来源上下文与当前 Analysis Context 不一致 | `PROVENANCE_MISMATCH` |
+
+**关于 `MISSING` 的限制：**
+
+```
+MISSING = 字段本应存在，但不存在
+```
+
+**不得**用于描述：valid absence / not applicable / dataset role not provided。
+
+**关于 `SEMANTIC_RESOLUTION` 的限制：**
+
+一个 **Design Backlog 项存在**本身**不自动产生** runtime Validation Issue。
+
+**只有当**当前 capability **确实需要**该 semantic **且无法可靠解释**时，才形成 Validation Issue。
+
+#### 4.4.81 Final Canonical Reason Set
+
+本 POC 当前**正式**的 canonical reason set：
+
+| # | Reason | 所属 Category |
+| --- | --- | --- |
+| 1 | `STRUCTURAL_INCONSISTENCY` | `PACKAGE_STRUCTURE` |
+| 2 | `EVIDENCE_ROLE_NOT_PROVIDED` | `EVIDENCE_AVAILABILITY` |
+| 3 | `MISSING` | `FIELD_VALUE` |
+| 4 | `INVALID_TYPE` | `FIELD_VALUE` |
+| 5 | `OUT_OF_DEFINED_RANGE` | `FIELD_VALUE` |
+| 6 | `INVALID_DEFINED_STATUS` | `FIELD_VALUE` |
+| 7 | `UNRESOLVED_IDENTITY` | `IDENTITY_RESOLUTION` |
+| 8 | `UNRESOLVED_SCOPE` | `SCOPE_COVERAGE` |
+| 9 | `SEMANTIC_UNRESOLVED` | `SEMANTIC_RESOLUTION` |
+| 10 | `CONSISTENCY_CONFLICT` | `CONSISTENCY` |
+| 11 | `PROVENANCE_MISMATCH` | `PROVENANCE` |
+
+**不得新增** `UNKNOWN_ERROR` / `GENERIC_ERROR` / `VALIDATION_FAILED` / `BAD_DATA` / `OTHER`
+等 **catch-all reason** —— 除非未来经过正式 **Design Change**。
+
+**但**：`human-readable detail` **可以**描述具体问题。
+
+#### 4.4.82 Reason ≠ Outcome
+
+必须明确：
+
+- **Issue Reason** 描述：**为什么** evidence 不可靠
+- **Outcome** 描述：该问题**对哪个层级**产生**什么后果**
+
+**不得**将 `DATA_INCOMPLETE` 放进 Validation Issue Reason taxonomy ——
+因为它是 **Business Outcome**，**不是** root validation reason。
+
+同样：
+
+- `CAPABILITY_UNAVAILABLE` **不得**作为 Validation Issue Reason
+  （它是 Capability Readiness **consequence**）
+- `REJECTED` / `UNUSABLE` **也不是** Issue Reason
+  （它们属于 Package **consequence / disposition**）
+
+#### 4.4.83 Category Mapping — Package Structure
+
+例如：Manifest declares `Inventory dataset included`，但 Inventory artifact **absent**。
+
+```
+Category:            PACKAGE_STRUCTURE
+Reason:              STRUCTURAL_INCONSISTENCY
+Consequence context: Package may become REJECTED / UNUSABLE
+```
+
+**不得生成** `Shortage Classification = DATA_INCOMPLETE` 来**掩盖** Package structural failure。
+
+#### 4.4.84 Category Mapping — Capability Evidence
+
+例如：Package = `ACCEPTED`；Supplier Performance evidence role **not provided**；
+用户请求 **Supplier Risk**。
+
+```
+Category:    EVIDENCE_AVAILABILITY
+Reason:      EVIDENCE_ROLE_NOT_PROVIDED
+Consequence: Supplier Risk capability unavailable
+```
+
+**不得生成** `OverallSupplierRisk = DATA_INCOMPLETE` ——
+因为 Business Rule **尚未获得条件进入可靠执行**。
+
+#### 4.4.85 Category Mapping — Business DATA_INCOMPLETE
+
+例如：Supplier Performance evidence role **已经提供**，但 `PerformancePeriod = missing`。
+
+```
+Category:    FIELD_VALUE
+Reason:      MISSING
+Consequence: Delivery / Quality Risk evidence 无法完整形成
+最终:        OverallSupplierRisk = DATA_INCOMPLETE
+```
+
+这里 `DATA_INCOMPLETE` 是 **Business Outcome**，**不是** issue category / reason。
+
+#### 4.4.86 Invalid vs Missing Preservation
+
+必须继续保持：
+
+```
+missing  ≠  present but invalid
+```
+
+| 输入 | Issue Reason |
+| --- | --- |
+| `SafetyStock` missing | `MISSING` |
+| `SafetyStock = -10` | `OUT_OF_DEFINED_RANGE` |
+
+**不得**把两者统一成 `MISSING` —— 虽然二者最终都可能使 `Shortage Result = DATA_INCOMPLETE`。
+
+#### 4.4.87 Valid Absence（不生成 Issue）
+
+以下**不生成** Validation Issue：
+
+- `FirstShortageDate` not present because **no shortage**
+- Procurement Recommendation not produced because `NORMAL`
+- Procurement Recommendation not produced because `BUFFER_BREACH`
+- `ApplicableMOQ` absent when Procurement Recommendation **not applicable**
+
+这些属于 **valid absence / not applicable**，**不是** `MISSING`。
+
+#### 4.4.88 Valid Zero（不生成 Issue）
+
+以下合法值**不得创建** issue：
+
+- `SafetyStock = 0`
+- `loss_rate = 0`
+- `AllocatedSubstituteQty = 0`
+- `ApplicableMOQ = 0`
+- `DeliveryPerformance = 0%`
+- `QualityPerformance = 0%`
+
+**不得** `0 → MISSING`；**不得** `0 → OUT_OF_DEFINED_RANGE` ——
+除非对应已有 Rule 明确如此。
+
+#### 4.4.89 Valid but Ineligible（默认不生成 Issue）
+
+| 情形 | 判定 |
+| --- | --- |
+| `inventory_status = INSPECTION` | valid record → ineligible for usable inventory |
+| `inventory_status = FROZEN` | valid record → ineligible |
+| inbound status `CANCELLED` | valid record → ineligible supply |
+| `effective_arrival_date > required_date` | valid record → not eligible before that need date |
+| Substitute Relationship `PENDING` | valid known state → not Approved Substitute Supply |
+
+**不得**把 **business ineligible** 错误分类成 `INVALID_DEFINED_STATUS` / `CONSISTENCY_CONFLICT`
+或 **Data Quality Issue**。
+
+#### 4.4.90 Data Quality Issue Boundary
+
+正式限定现有术语 **`Data Quality Issue`**：
+
+```
+human-readable umbrella term
+```
+
+表示：已提供 business evidence 因为 missing / invalid / unresolved / conflicting / mismatched
+而**无法可靠用于业务判断**。
+
+它**不是** formal Business Status，也**不是**独立 canonical reason。
+
+正式记录时**应落到**具体 **Validation Issue Category + Reason**。例如：
+
+- `FIELD_VALUE` / `OUT_OF_DEFINED_RANGE`
+- `IDENTITY_RESOLUTION` / `UNRESOLVED_IDENTITY`
+- `CONSISTENCY` / `CONSISTENCY_CONFLICT`
+
+**不得只记录** `Data Quality Issue` 而**没有具体 reason**。
+
+#### 4.4.91 Allocation Conflict Boundary
+
+现有术语 **`Allocation Conflict`** **保留**。
+
+但将其定位为 **domain-specific human-readable detail**，对应 canonical taxonomy：
+
+```
+Category: CONSISTENCY
+Reason:   CONSISTENCY_CONFLICT
+```
+
+例如 `Eligible Supply = 100`，Allocation `60 + 50 = 110`：
+
+```
+Issue:  CONSISTENCY / CONSISTENCY_CONFLICT
+Detail: Allocation Conflict: allocated supply exceeds eligible supply.
+Business consequence: BR-SUBSTITUTE-001 → DATA_INCOMPLETE
+```
+
+**不得创建** `ALLOCATION_CONFLICT` 作为**新的 Business Status**。
+
+#### 4.4.92 Other Consistency Conflicts
+
+以下也属于 `CONSISTENCY` ＋ `CONSISTENCY_CONFLICT`（**当已有 Design 支持时**）：
+
+- `received_qty > ordered_qty`
+- conflicting `SafetyStock` at same grain
+- Allocation > Eligible Supply
+- Supplier Performance associated with **wrong Material**
+- conflicting canonical values **without approved precedence**
+
+**但**：`valid but ineligible` **不得**放入该 category。
+
+#### 4.4.93 Provenance Boundary
+
+以下**必须**使用 `PROVENANCE` ＋ `PROVENANCE_MISMATCH`：
+
+- Analysis Run R1 bound to Package P1，但使用 **Inbound from Package P2**
+- Run R2 Recommendation **引用 Run R1 `ShortageQty`**
+- 当前 AI Explanation 将**旧 Run Risk Evidence** 作为**当前 Run 事实**
+
+**不得**把这些问题**仅**写成 `CONSISTENCY_CONFLICT` ——
+因为其核心问题是 **evidence provenance / analysis context 不一致**。
+
+#### 4.4.94 Scope vs Identity
+
+必须区分 `UNRESOLVED_IDENTITY` 与 `UNRESOLVED_SCOPE`：
+
+| 情形 | Taxonomy |
+| --- | --- |
+| `material_code` 无法解析 | `IDENTITY_RESOLUTION` / `UNRESOLVED_IDENTITY` |
+| Inbound dataset 可以解析 Material，但无法确认是否覆盖 Plant-A 当前分析范围 | `SCOPE_COVERAGE` / `UNRESOLVED_SCOPE` |
+
+**不得**合并成一个模糊的 `mapping error`。
+
+#### 4.4.95 Semantic Unresolved Boundary
+
+`SEMANTIC_UNRESOLVED` **仅在**以下条件**同时成立**时使用：
+
+- 当前 capability **确实需要**解释一个 business value / relationship；
+- 但当前 **approved Design** 无法可靠解释其 semantic。
+
+例如 `sourcing_status` value 存在，但 **vocabulary 尚未定义**，
+且当前 Supplier Risk 需要确定 relationship eligibility：
+→ `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED`。
+
+**但**：`required_quantity` semantic 仍未决，
+如果当前 `BR-REQUIREMENT-001` **完全不使用** `required_quantity`，
+则**不得**仅因为字段存在就让 Shortage Analysis 失败。
+
+```
+Open Design Item  ≠  automatic Validation Issue
+```
+
+#### 4.4.96 Issue Impact / Blast Radius
+
+每个 Validation Issue **必须能够说明 affected scope**。至少从 conceptual level 能够表达：
+
+- Package
+- Dataset
+- Record / Field
+- Relationship
+- Canonical Grain
+- Analysis Run
+- Capability
+
+**不得设计**：numeric severity、`HIGH` / `MEDIUM` / `LOW` issue severity、priority score。
+
+```
+Blast Radius  ≠  Severity
+```
+
+继续保持**最小影响范围原则**。
+
+#### 4.4.97 One Issue ≠ One Global Failure
+
+例如：
+
+```
+Plant-A / MAT-A  SafetyStock = missing
+Issue:              FIELD_VALUE / MISSING
+Affected Grain:     Plant-A / MAT-A
+Affected Capability: Shortage Analysis
+Business Outcome:   MAT-A → DATA_INCOMPLETE
+```
+
+但：`Plant-B / MAT-B` 数据完整，**仍允许正常分析**。
+
+**不得** `one Validation Issue → entire package failed` ——
+**除非**该问题属于 `PACKAGE_STRUCTURE` **且确实使 Package 不可信**。
+
+#### 4.4.98 Final Taxonomy — Explicit Prohibitions
+
+**不得创建 issue ID / error code**：`DQ-001` / `VAL-001` / `ERR-001` / `STRUCT-001` 等；
+**不得创建** numeric status code / HTTP status mapping / API error type。
+（这些属于未来 **implementation design**。）
+
+**不得创建 Validation Issue Severity**：`CRITICAL` / `HIGH` / `MEDIUM` / `LOW` ——
+因为目前已有 Design 只定义 **blast radius / affected scope / business consequence**，
+**没有批准 issue priority model**。
+
+> **Supplier Risk 的 `LOW` / `MEDIUM` / `HIGH` 与 Validation Issue severity 完全无关，不得混淆。**
+
+**不得将以下加入 Business Classification**：`CAPABILITY_UNAVAILABLE` / `VALIDATION_ERROR` /
+`STRUCTURAL_ERROR` / `CONSISTENCY_ERROR` / `PROVENANCE_ERROR` / `NOT_APPLICABLE`。
+
+Shortage Classification **仍只有** `NORMAL` / `BUFFER_BREACH` / `SHORTAGE` / `DATA_INCOMPLETE`；
+Risk vocabulary **保持现有定义**。
+
+**本 Task 也不要求创建正式 Capability enum**（`AVAILABLE` / `UNAVAILABLE` / `DEGRADED`）。
+
+可以继续使用 `capability available` / `capability unavailable` 作为 **conceptual readiness description**。
+
+#### 4.4.99 Pending Design Preservation
+
+必须继续保持以下 **9 项**：
+
+| 未决项 | 状态 |
+| --- | --- |
+| `loss_rate` owner / grain | **`UNKNOWN`** |
+| `required_quantity` semantic | `DESIGN PENDING` |
+| Warehouse canonical role | `DESIGN PENDING` |
+| BOM version / validity | `DESIGN PENDING` |
+| `sourcing_status` vocabulary | `DESIGN PENDING` |
+| `effective_arrival_date` source mapping | `DESIGN PENDING` |
+| allocation demand-window mapping | `DESIGN PENDING` |
+| `ApplicableMOQ` source | `DESIGN PENDING` |
+| provenance carrier | `DESIGN PENDING` |
+
+**Validation Issue Taxonomy 不得解决这些问题。**
+
+#### 4.4.100 Canonical Examples
+
+以下为 **conceptual examples**。
+
+**Example A — Missing Required Field**
+
+Package `ACCEPTED`；`SafetyStock` evidence role **provided**；`SafetyStock` missing。
+
+```
+Category:        FIELD_VALUE
+Reason:          MISSING
+Affected Grain:  Plant-A / MAT-A
+Consequence:     BR-SHORTAGE-001 → DATA_INCOMPLETE
+```
+
+**Example B — Dataset Role Not Provided**
+
+Package `ACCEPTED`；Supplier Performance role **not provided**；请求 Supplier Risk。
+
+```
+Category:    EVIDENCE_AVAILABILITY
+Reason:      EVIDENCE_ROLE_NOT_PROVIDED
+Consequence: Supplier Risk capability unavailable
+```
+
+**不得** `OverallSupplierRisk = DATA_INCOMPLETE`。
+
+**Example C — Declared Artifact Missing**
+
+Manifest `Inventory included`；Artifact **missing**。
+
+```
+Category:    PACKAGE_STRUCTURE
+Reason:      STRUCTURAL_INCONSISTENCY
+Consequence: Package may be REJECTED / UNUSABLE
+```
+
+**Example D — Invalid Range**
+
+`DeliveryPerformance = 120%`
+
+```
+Category:    FIELD_VALUE / OUT_OF_DEFINED_RANGE
+Consequence: DeliveryRisk → DATA_INCOMPLETE
+```
+
+**Example E — Unresolved Material**
+
+`material_code` cannot be reliably mapped。
+
+```
+Category: IDENTITY_RESOLUTION / UNRESOLVED_IDENTITY
+```
+
+**不得** fuzzy match。
+
+**Example F — Unresolved Coverage**
+
+Inbound dataset exists，但 scope coverage for `Plant-A` cannot be reliably determined。
+
+```
+Category: SCOPE_COVERAGE / UNRESOLVED_SCOPE
+```
+
+**不得** `no matched records → EffectiveInbound = 0`。
+
+**Example G — Allocation Conflict**
+
+`EligibleSupply = 100`；`Allocated = 110`。
+
+```
+Category:     CONSISTENCY / CONSISTENCY_CONFLICT
+Human Detail: Allocation Conflict
+Consequence:  BR-SUBSTITUTE-001 → DATA_INCOMPLETE
+```
+
+**Example H — Cross Run Provenance**
+
+Run R2 Recommendation uses Run R1 `ShortageQty`。
+
+```
+Category: PROVENANCE / PROVENANCE_MISMATCH
+```
+
+**不得**静默复用。
+
+**Example I — Valid Absence**
+
+`Classification = NORMAL`；`FirstShortageDate` not present。
+
+```
+Expected: NO Validation Issue
+```
+
+**Example J — Valid Ineligible**
+
+`inventory_status = INSPECTION`。
+
+```
+Expected: record valid；not eligible for OpeningUsableInventory
+          NO Validation Issue
+```
+
+**Example K — Design Pending but Not Runtime Issue**
+
+`required_quantity` exists；`BR-REQUIREMENT-001` uses `ProductionQty`, not `required_quantity`。
+
+```
+Expected: 不得仅因为 required_quantity semantic pending
+          让当前 Shortage Analysis 失败
+```
+
+#### 4.4.101 Status Boundary
+
+`Validation Issue Taxonomy Finalization` = **`DESIGN RESOLVED`**。
 
 保持：
 
 | 层 | Status |
 | --- | --- |
-| Validation Issue Taxonomy Finalization | `DESIGN PENDING` |
 | Final Data Validation Design | `DESIGN PENDING` |
 
 因此：
@@ -7008,10 +7519,27 @@ affected evidence → affected grain → affected capability
 Data Validation overall = DESIGN PENDING
 ```
 
-`DESIGN RESOLVED` 的七个层级**仅**表示其 **conceptual boundary 已定义**，
+**不得本轮**直接把整个 `Data Validation` 标成 `DESIGN RESOLVED`。
+
+**What Final Data Validation Still Needs**
+
+下一步 **Final Data Validation Design** **不是再新增大量规则**。它只需要：
+
+- 对 `§4.4` 已完成层级做**完整性检查**
+- 检查 **taxonomy 与各层是否一致**
+- 检查是否存在 **duplicate / contradiction**
+- 检查 **unresolved design 是否被正确保留**
+- 确认是否满足 **Data Validation 的 Design DoD**
+
+**只有通过该 final review**，才允许考虑：
+
+```
+Data Validation overall → DESIGN RESOLVED
+```
+
+`DESIGN RESOLVED` 的八个层级**仅**表示其 **conceptual boundary 已定义**，
 **不表示**：
 
-- validation issue taxonomy finalized
 - validator implemented
 - data validated
 - tested
