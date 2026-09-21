@@ -4872,7 +4872,7 @@ source-specific physical field  ≠  canonical semantic field name
 也**不推进** `ApplicableMOQ` source 与 provenance carrier。
 本 Review **只**引用「`loss_rate` 当前用于 `GrossRequirement` calculation」这一既有事实。
 
-**Status**
+**Status（PR #38 Review 时点）**
 
 ```
 required_quantity semantic = DESIGN PENDING    ← 本 Review 不改变
@@ -4902,6 +4902,154 @@ unresolved count           = 仍为 4
 
 本 Review **未创建**：`required_qty` source column / alias field / DB schema / JSON schema /
 CSV layout / Adapter / mapping code / migration / test。**未选择技术。**
+
+**Human Decision Record —— Human-approved Canonical Model Change（Removal Approved）**
+
+> 以下为 Human 对上述 6 项的**正式回复**（本 Review 由 **PR #38** 提交）。
+> 本节**只记录决定**；**未**执行字段删除，**未**修改 `§2` / `§4.1`。
+
+| # | 决定项 | Human Decision |
+| --- | --- | --- |
+| 1 | `required_quantity = ORPHAN CANONICAL FIELD` | **APPROVED** |
+| 2 | 从 `§4.1.4 C Production Requirement` attributes 移除 | **AUTHORIZED** |
+| 3 | 从 `§4.2.4` Data Dictionary 移除（含 ambiguity 说明） | **AUTHORIZED** |
+| 4 | `ProductionQty` boundary | **CONFIRMED** |
+| 5 | `BaseRequirement` / `GrossRequirement` = derived, unchanged | **CONFIRMED** |
+| 6 | `§4.1` / `§4.2` / `§4.4` / `§4.5` 最小 consistency synchronization | **AUTHORIZED** |
+
+**决定 1 —— `ORPHAN CANONICAL FIELD` = APPROVED**
+
+该结论**仅针对当前**：
+
+- `POC Design v0.2`
+- 现有 `FROZEN` Discovery / Validation
+- Human-approved `SIMULATED` evidence
+- 现有 Business Rules
+
+当前**没有**证据支持 `required_quantity` 作为独立于 `ProductionQty` / `BaseRequirement` /
+`GrossRequirement` 的 canonical quantity。
+
+> 该结论**不表示**未来真实 ERP / MRP **绝不可能**存在另一种 requirement quantity。
+> 如果未来出现新的 Human-approved evidence，**必须**通过新的 Design Change **重新评估**。
+
+**决定 2 —— 从 `§4.1.4 C` attributes 移除 = AUTHORIZED**
+
+原因（本项当前）：
+
+- 无 approved independent semantic
+- **无 Rule consumer**
+- 无独立 source evidence
+- 无独立 grain / ownership
+- 删除**不影响**现有 approved calculation
+
+**不得**借此修改 `Production Requirement` grain —— 仍保持：
+
+```
+plant_id + material_code + required_date
+```
+
+**不得新增替代字段。**
+
+**决定 3 —— 从 `§4.2.4` Data Dictionary 移除 = AUTHORIZED**
+
+删除范围：`required_quantity` Data Dictionary row ＋ 紧邻的
+`required_quantity vs ProductionQty —— SEMANTIC AMBIGUITY` current-state 说明。
+
+> **PR #38 Review History 中关于 `required_quantity` 的历史分析必须保留** ——
+> **不得篡改 Review Finding。**
+
+**决定 4 —— `ProductionQty` Boundary = CONFIRMED**
+
+`ProductionQty` **继续**作为 `BR-REQUIREMENT-001` **唯一**的 production quantity input。
+
+```
+BaseRequirement = ProductionQty × BOMComponentQty
+```
+
+**不得**：
+
+- `ProductionQty` → `required_quantity` alias
+- `required_quantity` removal → 修改 `ProductionQty` semantic
+- 创建新的 production quantity field
+
+**决定 5 —— Derived Quantity Boundary = CONFIRMED**
+
+`BaseRequirement` 与 `GrossRequirement` **继续保持 deterministic derived quantities**。
+它们**不是** `Production Requirement` source attributes。
+**不得**用 `required_quantity` 替代其中任何一个。
+
+```
+ProductionQty
+        ↓ × BOMComponentQty
+BaseRequirement
+        ↓ loss_rate adjustment
+GrossRequirement
+```
+
+该 quantity chain **不因本决定改变**。
+
+**决定 6 —— Minimal Consistency Synchronization = AUTHORIZED（授权边界）**
+
+**授权范围仅包括：**
+
+- **`§4.1`** —— 从 `Production Requirement` attributes 删除 `required_quantity`；**grain 不变**；`ProductionQty` 不变
+- **`§4.2`** —— 删除 `required_quantity` Data Dictionary row；删除其 authoritative ambiguity / pending wording；
+  同步 open-item / current-state lists
+- **`§4.4`** —— 删除或同步**仅用于防止** `required_quantity` 被错误使用的 current-state Validation wording；
+  **不得修改其他 Validation semantics**；Review History **可保留历史说明**
+- **`§4.5`** —— 记录 implementation result；移除 `required_quantity` semantic unresolved item；
+  unresolved count **4 → 3**；同步 current-state status summary
+
+**不得借此**：
+
+- 修改 `§2` Business Rules
+- 修改 `Production Requirement` grain
+- 修改 `BOMComponentQty` / `ProductionQty` / `BaseRequirement` / `GrossRequirement`
+- 解决 `loss_rate` owner / grain
+- 解决 `ApplicableMOQ` source
+- 解决 provenance carrier
+- 创建新 canonical field / 新 Rule / ADR
+- 选择技术
+
+**Status Interpretation（本 PR 只记录，不执行删除）**
+
+```
+required_quantity semantic = DESIGN PENDING
+                           ／ Removal Approved, Not Yet Implemented
+unresolved count           = 4
+```
+
+在 **follow-up Design Change** 真正完成所有 authoritative synchronization 之前，
+该 unresolved item **不关闭**。
+
+**Follow-up 完成后**才写：
+
+```
+required_quantity = REMOVED FROM CURRENT CANONICAL MODEL
+unresolved count  4 → 3
+```
+
+剩余 3 项：`loss_rate` owner / grain（`UNKNOWN`）、`ApplicableMOQ` source、provenance carrier。
+
+**Future Reintroduction Boundary**
+
+未来如果出现新的正式 evidence，证明存在一个**独立于** `ProductionQty` / `BaseRequirement` /
+`GrossRequirement` 之外的 business quantity，**可以**通过新的 **Human-approved Canonical Model
+Design Change** 重新引入。
+
+**不得**因为本次删除声称该概念**永久禁止**。
+
+**执行状态（PR #38 时点）**
+
+```
+Human Decision      = RECORDED
+required_quantity   = ORPHAN CANONICAL FIELD
+Removal             = APPROVED, NOT YET IMPLEMENTED
+ProductionQty       = UNCHANGED
+BaseRequirement     = UNCHANGED
+GrossRequirement    = UNCHANGED
+unresolved count    = 4
+```
 
 #### 4.2.5 Inventory Fields
 
@@ -8470,10 +8618,11 @@ conceptual validation design complete
 > unresolved count **5 → 4**。
 >
 > `required_quantity` semantic 的
-> **Required Quantity Semantic & Canonical Necessity Review** 见 **§4.2.4**；
-> 结论为 **`ORPHAN CANONICAL FIELD` ＋ `Removal Recommended`**，
-> 但**须经 Human Approval** 后才能实施；
-> 其状态**仍为 `DESIGN PENDING`**，unresolved count **仍为 4**。
+> **Required Quantity Semantic & Canonical Necessity Review** 与 **Human Decision Record** 见 **§4.2.4**；
+> 其 **`ORPHAN CANONICAL FIELD`** 结论与**移除**已获 **Human Approval**，
+> 但 **Removal 尚未实施（NOT YET IMPLEMENTED）**，
+> 因此其状态**仍为 `DESIGN PENDING`**（`Removal Approved, Not Yet Implemented`），
+> unresolved count **仍为 4**。
 
 #### 4.5.1 Purpose & Scope
 
@@ -11790,9 +11939,9 @@ Master Data Mapping overall    = 仍 DESIGN PENDING
 > （见 **§4.5.9 Option B Implementation Record**）；
 > 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **5 → 4**。
 >
-> `required_quantity` semantic 的 Review 见 **§4.2.4** ——
-> 结论为 **`ORPHAN CANONICAL FIELD` ＋ `Removal Recommended`**；
-> 在 Human Approval 之前其状态**保持 `DESIGN PENDING`**，未决项数量**不减少**。
+> `required_quantity` semantic 的 **Removal 已获 Human Approval**（见 **§4.2.4** Human Decision Record）；
+> 但在 follow-up Design Change **实施完成前**其状态**保持 `DESIGN PENDING`**
+> （`Removal Approved, Not Yet Implemented`），未决项数量**不减少**。
 
 本 Task **不以「Master Data Mapping」为名一次性消灭这些问题**。
 
@@ -11908,14 +12057,17 @@ canonical **Target Applicability** ＋ **Source Reservation Overlap**）
 **不表示** real ERP allocation evidence known / reservation source field known / Adapter implemented /
 overlap calculation implemented / allocation enforcement implemented / tested。
 
-**Open Human Decision Gate —— `Removal Recommended`：** `required_quantity` semantic
+**Open Pending Removal —— `Removal Approved, Not Yet Implemented`：** `required_quantity` semantic
 （`Other Source-Semantic Mapping`）**仍为 `DESIGN PENDING`** ——
-其 **Required Quantity Semantic & Canonical Necessity Review**（见 **§4.2.4**）
-判定 **`required_quantity = ORPHAN CANONICAL FIELD`** 并推荐 **Option E（移除）**：
-无 approved business semantic、**0 个 Rule consumer**、两份 `FROZEN` 文档均无 source evidence、
-无独立 grain、删除不影响任何既有 approved calculation。
-**移除会修改 `§4.1 Canonical Data Model`（`DESIGN RESOLVED` ＋ Human-approved）**，
-因此**须经 Human Approval** 后才能实施（**本 Review 未自行删除**）。
+其 **Required Quantity Semantic & Canonical Necessity Review** 判定
+**`required_quantity = ORPHAN CANONICAL FIELD`**
+（无 approved business semantic、**0 个 Rule consumer**、两份 `FROZEN` 文档均无 source evidence、
+无独立 grain、删除不影响任何既有 approved calculation），
+且该结论与**从 `§4.1` attributes ＋ `§4.2` Data Dictionary 移除**均已获 **Human Approval**
+（见 **§4.2.4** Human Decision Record）。
+
+**但删除属 follow-up Design Change，尚未实施** ——
+在全部 authoritative synchronization 完成前，其状态**保持 `DESIGN PENDING`**，unresolved count **仍为 4**。
 
 ---
 
