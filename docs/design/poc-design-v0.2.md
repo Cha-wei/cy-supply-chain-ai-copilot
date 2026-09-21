@@ -4983,9 +4983,9 @@ REJECTED / UNUSABLE
 **例如禁止：**
 
 ```
-Inventory   from Snapshot S2
-+ Requirement from Snapshot S1
-+ Inbound     from Snapshot S3
+Inventory   from Package P2
++ Requirement from Package P1
++ Inbound     from Package P3
 ```
 
 在当前 POC 中被**静默合并**成 `Analysis Run R1`。
@@ -5096,21 +5096,60 @@ Package structural completeness
 Business DATA_INCOMPLETE
 ```
 
-**A. Package structural problem** —— 例如：
+**A. Package structural problem（Package Structural Inconsistency）**
 
-- manifest unavailable
-- required dataset artifact absent
-- package identity inconsistent
-- dataset integrity cannot be verified
+**定义收紧：** 只有当 Snapshot Manifest **已声明**某 logical dataset 为 `included`，
+但对应 dataset artifact：
 
-可能导致：**Package Import `REJECTED` / `UNUSABLE`**。
+- absent
+- unreadable
+- identity inconsistent
+- 或 integrity unverifiable
+
+才属于 **Package Structural Inconsistency**。
+
+即：
+
+```
+Declared Included Dataset
++
+Missing Corresponding Artifact
+      ↓
+Structural Failure
+```
+
+**而不是：**
+
+```
+Any Dataset Absent
+      ↓
+Structural Failure
+```
+
+其他结构性条件（例如 manifest unavailable、package identity inconsistent）
+同样可能导致：**Package Import `REJECTED` / `UNUSABLE`**。
+
+> **注意**：本 Task **不得**自行定义某个 logical dataset 永远 `REQUIRED` ——
+> 完整 **capability-to-dataset requirement** 仍留给后续 **Data Validation Design**。
 
 **B. Business data incomplete** —— Package 本身**结构合法**，但某业务字段
 missing / invalid / unresolved：
 
 则 Package **可以被 Accepted**，但对应业务 Rule 可能返回 **`DATA_INCOMPLETE`**。
 
+**C. Dataset not declared / not included** ——
+
+当前 Task **不决定**最终处理，**留给 capability-to-dataset validation**（见 §4.3.14）。
+
 **不得把两个层级混为一谈。**
+
+**三层对照：**
+
+| # | 情形 | 结果 |
+| --- | --- | --- |
+| A | Manifest 声明 `Supplier Performance = included`，但 artifact missing | **Structural inconsistency** → Package may be **`REJECTED` / `UNUSABLE`** |
+| B | Manifest 结构一致且 dataset 存在，但 `PerformancePeriod = missing` | Package may remain **`ACCEPTED`**；Supplier Risk capability may return **`DATA_INCOMPLETE`** |
+| C | `Supplier Performance` dataset **根本未声明**为 included dataset | 当前 Task **不决定**最终处理 → 留给 capability-to-dataset validation |
 
 #### 4.3.13 Valid Absence Preservation
 
@@ -5140,6 +5179,19 @@ Dataset 是否必须存在应取决于：**本 Analysis Capability 所需 eviden
 例如：Supplier Performance 不存在，**不一定**使整个 Snapshot Package 结构非法。
 
 但：运行 Supplier Risk capability 时可能导致 **`DATA_INCOMPLETE`** 或 **capability unavailable**。
+
+**明确：**
+
+```
+Dataset not declared / not included
+```
+
+在本 Task **不得自动判定**：
+
+- Package invalid
+- 或 Business `DATA_INCOMPLETE`
+
+具体结果留给后续 **capability validation**（见 §4.3.12 情形 C）。
 
 > 完整 **capability-to-dataset requirement** 留给 **Data Validation Design**。
 
