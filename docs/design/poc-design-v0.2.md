@@ -151,9 +151,32 @@ AI **不可以**：
 
 > 本节各项均对应 `FROZEN` Discovery Validation v0.1 中的 Open Design Backlog。
 >
-> **当前状态**（`DESIGN RESOLVED`）：`§2.1` `BR-SHORTAGE-001`；`§2.2` `BR-INVENTORY-001`；`§2.3` `BR-SUBSTITUTE-001`；`§2.4` `BR-REQUIREMENT-001`；`§2.5` `BR-PROCUREMENT-001`；`§2.6` `BR-INBOUND-001`（均 Human-approved）。
+> **当前状态**：`§2.1` ～ `§2.7` **全部 business-rule sections** 现已 `DESIGN RESOLVED`（均 Human-approved）：
+> `§2.1` `BR-SHORTAGE-001`；`§2.2` `BR-INVENTORY-001`；`§2.3` `BR-SUBSTITUTE-001`；
+> `§2.4` `BR-REQUIREMENT-001`；`§2.5` `BR-PROCUREMENT-001`；`§2.6` `BR-INBOUND-001`；
+> `§2.7` `BR-SUPPLIER-RISK-001`。
 >
-> **仍为 `DESIGN PENDING`**：`§2.7` Supplier Risk / Evidence。
+> **本节范围内仍为 `DESIGN PENDING` 的项**：无。
+>
+> > **范围限定**：以上**仅**表示
+> >
+> > ```
+> > Section 2 P0 Business Rules = DESIGN RESOLVED
+> > ```
+> >
+> > **不表示** `POC Design v0.2` **整体完成**。
+> >
+> > 仍存在以下**未完成设计**：
+> >
+> > - `§3` System Boundary
+> > - `§4` Data & Integration Design
+> > - `§5` AI / Tool Boundary
+> > - `§6` HITL Workflow
+> > - `§7` Permission & Security
+> > - `§8` Audit & Observability
+> > - `§9` Test & AI Eval
+> > - `§10` Architecture Decisions
+> > - `VB-28`、`VB-29`
 
 ### 2.1 Shortage Definition
 
@@ -2652,13 +2675,856 @@ LLM **可以**解释：
 
 ### 2.7 Supplier Risk / Evidence
 
-**对应：** `VB-27`
+**Rule ID:** `BR-SUPPLIER-RISK-001`
 
-**Status:** `DESIGN / VALIDATION PENDING`
+**Backlog:** `VB-27`
 
-`H3` 仍为 `TBD`。
+**Design Status:** `DESIGN RESOLVED`
 
-> FROZEN source 中的原问题：风险判断是否依赖个人经验？（`HYPOTHESIS` / `TBD`；关联 `G-06`、`G-11`）
+**Approval:** Human-approved
+
+**Implementation Status:** `NOT STARTED`
+
+**Validation Source:** `SC-RISK-001` / Human-approved `SIMULATED` design evidence
+
+> **注意**：`DESIGN RESOLVED` **≠** `IMPLEMENTED` **≠** `TESTED` **≠** `FROZEN` Discovery `H3` resolved。
+
+> 关联的 FROZEN 原问题：风险判断是否依赖个人经验？（`HYPOTHESIS` / `TBD`；关联 `G-06`、`G-11`）
+
+#### 2.7.0 Design Evidence Record — SC-RISK-001
+
+| 字段 | 内容 |
+| --- | --- |
+| Scenario | `SC-RISK-001` — Supplier Risk Judgment |
+| Evidence Type | `SIMULATED` |
+| Evidence Source | Human-approved |
+| Role | Simulated Procurement / Supply Chain Owner |
+| Purpose | support design of deterministic Supplier Risk Evidence |
+
+**必须声明**：该 Scenario
+
+- **不是**云南 CY 集团真实供应商事实；
+- **不是** `PUBLIC FACT`；
+- **不是**对真实企业风险流程的确认；
+- **不修改** `FROZEN` `H3` status；
+- **只**作为模拟 POC 的 **downstream design input**。
+
+**场景内容**：两个物料均 `ShortageQty = 50`，`RecommendationNeedDate` 距当前分析日 **20 days**。
+
+```
+Supplier A:
+  StandardLeadTimeDays   = 10
+  DeliveryPerformance    = 97%
+  QualityPerformance     = 99%
+
+Supplier B:
+  StandardLeadTimeDays   = 35
+  DeliveryPerformance    = 84%
+  QualityPerformance     = 94%
+```
+
+**Human-approved simulated business judgment：** 虽然 `ShortageQty` 相同，两者业务风险**不应被视为相同**。Supplier B 因
+
+- `Standard Lead Time` **超过剩余需求时间**；
+- `Delivery Performance` **较差**；
+- `Quality Performance` **较差**；
+
+**需要更高关注**。
+
+**POC 目标：** 将此类经验判断拆成
+
+```
+deterministic risk evidence
++
+transparent policy
++
+AI explanation
+```
+
+**不得让 LLM 自行生成风险事实。**
+
+#### 2.7.1 Rule Purpose
+
+本规则回答：
+
+> 对于一个 `supplier_id` + `material_code`，当前已知的供应商事实，可以形成哪些 **deterministic ＋ explainable Risk Evidence**。
+
+本规则**不得**回答：
+
+> 「应该选择哪个 Supplier？」
+
+**不得**进行：
+
+- Supplier Ranking
+- Automatic Supplier Selection
+
+#### 2.7.2 Risk Evaluation Grain
+
+风险评估**至少**按：
+
+```
+supplier_id
++ material_code
+```
+
+执行。
+
+当 `Plant` context 对业务含义必要时，保留 `plant_id` 作为 **evaluation context**。
+
+**不得**把多个 Supplier 的数据**合并成一个共同风险值**。
+
+每个 Supplier **必须独立**形成自己的 **Supplier Risk Evidence Card**。
+
+#### 2.7.3 Input Baseline
+
+继承 `VR-006` 已确认可得的 **conceptual data**：
+
+- `supplier_id`
+- `material_code`
+- `standard_lead_time_days`
+- `delivery_performance`
+- `quality_performance`
+- `period`
+- `updated_at`
+
+并使用：
+
+```
+RecommendationNeedDate
+```
+
+作为 **Lead Time Feasibility** 的需求时间基准。
+
+**必须保留 `period`** —— **不得只记录 performance value 而丢失 measurement period**。
+
+因此：
+
+```
+delivery_performance
+与
+quality_performance
+```
+
+**必须对应一个可可靠识别的**：
+
+```
+PerformancePeriod
+```
+
+**不得自行定义真实**：
+
+- ERP / SRM schema
+- field mapping
+- API contract
+
+这些属于后续 **Data Dictionary / Adapter Design**。
+
+> `period` 的完整性要求见 **§2.7.23 Performance Period Context**。
+> Supplier-Material relationship eligibility 要求见 **§2.7.24 Supplier-Material Relationship Eligibility**。
+
+#### 2.7.4 DaysUntilNeed
+
+定义：
+
+```
+DaysUntilNeed
+  = RecommendationNeedDate
+  - AnalysisDate
+```
+
+要求：
+
+```
+DaysUntilNeed >= 0
+```
+
+如果出现以下任一情况：
+
+- `RecommendationNeedDate` missing / invalid
+- `AnalysisDate` missing / invalid
+- `DaysUntilNeed < 0`
+
+则：
+
+```
+LeadTimeRisk = DATA_INCOMPLETE
+```
+
+**不得自行猜日期。**
+
+#### 2.7.5 Lead Time Feasibility Risk
+
+第一版 **`SIMULATED` POC Policy**：
+
+如果：
+
+```
+StandardLeadTimeDays > DaysUntilNeed
+```
+
+则：
+
+```
+LeadTimeRisk = HIGH
+```
+
+如果：
+
+```
+StandardLeadTimeDays <= DaysUntilNeed
+```
+
+则：
+
+```
+LeadTimeRisk = LOW
+```
+
+**注意：** 本版本**不定义** `MEDIUM` Lead Time Risk。**不得自行增加** buffer / grace period。
+
+例如：
+
+| DaysUntilNeed | StandardLeadTimeDays | Expected |
+| --- | --- | --- |
+| 20 | 35 | `LeadTimeRisk = HIGH` |
+| 20 | 10 | `LeadTimeRisk = LOW` |
+
+#### 2.7.6 Delivery Performance Risk
+
+以下 threshold 是 **Human-approved `SIMULATED` POC policy**，**不是**真实 CY 企业 threshold。
+
+```
+DeliveryPerformance >= 95%                → LOW
+90% <= DeliveryPerformance < 95%          → MEDIUM
+DeliveryPerformance < 90%                 → HIGH
+```
+
+要求输入能够被**规范化**为 `0–100%` 或等价 canonical percentage。
+
+本 Task **不设计** source-field normalization implementation。
+
+#### 2.7.7 Quality Performance Risk
+
+同样属于 **Human-approved `SIMULATED` POC policy**。
+
+```
+QualityPerformance >= 98%                 → LOW
+95% <= QualityPerformance < 98%           → MEDIUM
+QualityPerformance < 95%                  → HIGH
+```
+
+#### 2.7.8 OverallSupplierRisk
+
+当前 POC **不使用 weighted score**。
+
+**不得设计**：
+
+```
+0.4 × Lead Time
++ 0.35 × Delivery
++ 0.25 × Quality
+```
+
+或**任何未经验证的权重**。
+
+定义：
+
+```
+OverallSupplierRisk
+  = max severity
+    of all reliable required dimensions
+```
+
+**Severity order：**
+
+```
+LOW < MEDIUM < HIGH
+```
+
+例如：
+
+```
+LeadTimeRisk = LOW
+DeliveryRisk = MEDIUM
+QualityRisk  = LOW
+```
+
+则：
+
+```
+OverallSupplierRisk = MEDIUM
+```
+
+例如：
+
+```
+LeadTimeRisk = HIGH
+DeliveryRisk = LOW
+QualityRisk  = LOW
+```
+
+则：
+
+```
+OverallSupplierRisk = HIGH
+```
+
+#### 2.7.9 Complete-data Requirement
+
+第一版 POC **只有在三个维度**：
+
+- `LeadTimeRisk`
+- `DeliveryRisk`
+- `QualityRisk`
+
+**都能够可靠判定时**，才输出：
+
+```
+OverallSupplierRisk = LOW / MEDIUM / HIGH
+```
+
+如果**任一** required dimension：
+
+- missing
+- invalid
+- unresolved
+
+则：
+
+```
+OverallSupplierRisk = DATA_INCOMPLETE
+```
+
+**但**：已可靠取得的 **individual Risk Evidence 仍允许展示**。
+
+**不得因为一项缺失而丢弃其他可靠事实。**
+
+#### 2.7.10 Zero / Valid Extreme vs Missing
+
+必须区分：
+
+```
+真实合法极值
+```
+
+与：
+
+```
+missing
+```
+
+例如：
+
+```
+DeliveryPerformance = 0%
+```
+
+如果数据**被可靠确认**，这是**合法但极差**的 performance：
+
+```
+DeliveryRisk = HIGH
+```
+
+而：
+
+```
+DeliveryPerformance = missing
+```
+
+表示**无法判断**：
+
+```
+DeliveryRisk = DATA_INCOMPLETE
+```
+
+`QualityPerformance` **同理**。
+
+**不得将 missing 默认成 0。**
+
+#### 2.7.11 Risk Evidence Card
+
+每个 `supplier_id` + `material_code` 形成**独立 Risk Evidence Card**。
+
+至少包含以下 **canonical meaning**：
+
+- `supplier_id`
+- `material_code`
+- `RecommendationNeedDate`
+- `AnalysisDate`
+- `DaysUntilNeed`
+- `StandardLeadTimeDays`
+- `LeadTimeRisk`
+- `PerformancePeriod`
+- `PerformanceUpdatedAt`
+- `DeliveryPerformance`
+- `DeliveryRisk`
+- `QualityPerformance`
+- `QualityRisk`
+- `OverallSupplierRisk`
+- Evidence Status / completeness
+
+本 Task **不定义**：
+
+- API Schema
+- DB Schema
+- JSON format
+- UI layout
+
+这里**只定义业务语义**。
+
+#### 2.7.12 Evidence Explainability
+
+Risk Evidence **必须能够解释**：
+
+> 为什么得到该 Risk Level。
+
+例如：
+
+```
+OverallSupplierRisk = HIGH
+```
+
+**Evidence：**
+
+- Need in 20 days
+- Standard Lead Time = 35 days
+- Lead Time gap = 15 days
+- `LeadTimeRisk = HIGH`
+- Delivery Performance = 84%
+- `DeliveryRisk = HIGH`
+- Quality Performance = 94%
+- `QualityRisk = HIGH`
+
+**不得只输出** `HIGH` 而**没有 evidence**。
+
+#### 2.7.13 Deterministic Examples
+
+以下为 **deterministic examples**（对应 `SC-RISK-001`）。
+
+**Example A — Supplier A**
+
+| 字段 | 值 |
+| --- | --- |
+| `DaysUntilNeed` | 20 |
+| `StandardLeadTimeDays` | 10 |
+| `DeliveryPerformance` | 97% |
+| `QualityPerformance` | 99% |
+
+**Expected：**
+
+- `LeadTimeRisk = LOW`
+- `DeliveryRisk = LOW`
+- `QualityRisk = LOW`
+- `OverallSupplierRisk = LOW`
+
+**Example B — Supplier B**
+
+| 字段 | 值 |
+| --- | --- |
+| `DaysUntilNeed` | 20 |
+| `StandardLeadTimeDays` | 35 |
+| `DeliveryPerformance` | 84% |
+| `QualityPerformance` | 94% |
+
+**Expected：**
+
+- `LeadTimeRisk = HIGH`
+- `DeliveryRisk = HIGH`
+- `QualityRisk = HIGH`
+- `OverallSupplierRisk = HIGH`
+
+**注意：** 这两个结果**只表示**：
+
+```
+两张独立 Supplier Risk Evidence Cards
+```
+
+**不得自动输出**：
+
+```
+Supplier A should be selected
+```
+
+或：
+
+```
+Supplier A ranks #1
+```
+
+**Example C — Performance period missing**
+
+| 字段 | 值 |
+| --- | --- |
+| `supplier_id` | `SUP-A` |
+| `material_code` | `MAT-A` |
+| `DeliveryPerformance` | 97% |
+| `QualityPerformance` | 99% |
+| `period` | missing |
+
+**Expected：**
+
+- `DeliveryRisk = DATA_INCOMPLETE`
+- `QualityRisk = DATA_INCOMPLETE`
+- `OverallSupplierRisk = DATA_INCOMPLETE`
+
+**不得**因为 `97%` / `99%` 数值看起来很好就输出 `LOW`。
+
+**Example D — Relationship unresolved**
+
+Supplier exists；Material exists；但 **Supplier-Material Relationship 无法可靠确认**。
+
+**Expected：**
+
+- Risk Evidence Status = `DATA_INCOMPLETE`
+
+**不得自动**把该 Supplier 视为此 Material 的候选供应商。
+
+#### 2.7.14 Boundary with Supplier Selection
+
+即使同一个 Material 存在多个 Supplier：
+
+```
+Supplier A → LOW
+Supplier B → HIGH
+```
+
+系统当前**只能展示**：
+
+- `Supplier A` Risk Evidence
+- `Supplier B` Risk Evidence
+
+**不得自动**：
+
+- 排名
+- 推荐 Winner
+- 自动选择 Supplier
+- 自动把 LOW Risk Supplier 绑定进采购建议
+- 根据 Risk 修改 `RecommendedPurchaseQty`
+
+Supplier comparison / ranking / advanced supplier intelligence **保持在**：
+
+```
+P1 / Future scope
+```
+
+除非后续**单独 Human-approved Design Change**。
+
+#### 2.7.15 Boundary with Procurement Quantity
+
+`BR-SUPPLIER-RISK-001` **不得改变** `BR-PROCUREMENT-001` 的 `RecommendedPurchaseQty`。
+
+例如：
+
+```
+SupplierRisk = HIGH
+```
+
+**不得自动**：
+
+- 增加采购数量
+- 减少采购数量
+- 拆单
+- 改 MOQ
+- 选备用供应商
+
+`Risk Evidence` 是**决策支持输入**，**不是采购数量算法的一部分**。
+
+#### 2.7.16 Missing / Invalid Input Fail-safe
+
+以下情况应明确处理：
+
+| 输入情况 | 对应维度 |
+| --- | --- |
+| `supplier_id` unresolved | `DATA_INCOMPLETE` |
+| `material_code` unresolved | `DATA_INCOMPLETE` |
+| `RecommendationNeedDate` missing / invalid | `LeadTimeRisk = DATA_INCOMPLETE` |
+| `AnalysisDate` missing / invalid | `LeadTimeRisk = DATA_INCOMPLETE` |
+| `StandardLeadTimeDays` missing / invalid | `LeadTimeRisk = DATA_INCOMPLETE` |
+| `StandardLeadTimeDays < 0` | `LeadTimeRisk = DATA_INCOMPLETE` |
+| `DeliveryPerformance` missing / invalid | `DeliveryRisk = DATA_INCOMPLETE` |
+| `DeliveryPerformance < 0%` | `DeliveryRisk = DATA_INCOMPLETE` |
+| `DeliveryPerformance > 100%` | `DeliveryRisk = DATA_INCOMPLETE` |
+| `QualityPerformance` missing / invalid | `QualityRisk = DATA_INCOMPLETE` |
+| `QualityPerformance < 0%` | `QualityRisk = DATA_INCOMPLETE` |
+| `QualityPerformance > 100%` | `QualityRisk = DATA_INCOMPLETE` |
+| `period` missing / invalid（而 performance value 存在） | `DeliveryRisk` / `QualityRisk` = `DATA_INCOMPLETE` |
+| Supplier-Material Relationship 无法可靠确定 | Risk Evidence Status = `DATA_INCOMPLETE` |
+
+`OverallSupplierRisk`：**`DATA_INCOMPLETE`**
+
+**不得**：
+
+- 猜测
+- `clamp`
+- 默认 `LOW`
+- 默认 0
+- 默认 100
+- 让 LLM 补值
+
+#### 2.7.17 Deterministic Logic Boundary
+
+以下**必须由 deterministic logic 产生**：
+
+- `DaysUntilNeed`
+- `LeadTimeRisk`
+- `DeliveryRisk`
+- `QualityRisk`
+- `OverallSupplierRisk`
+- Evidence completeness
+
+**LLM 不参与 risk classification。**
+
+#### 2.7.18 AI Boundary
+
+LLM **可以**：
+
+- 解释为何风险是 `LOW` / `MEDIUM` / `HIGH`
+- 将结构化 Risk Evidence 转成自然语言
+- 说明哪些输入缺失
+- 说明为什么 `OverallSupplierRisk = DATA_INCOMPLETE`
+- 对比用户**明确指定**的两个 Risk Evidence Cards 的事实差异
+
+LLM **不可以**：
+
+- 猜 performance
+- 猜 lead time
+- 修改 thresholds
+- 创建新的 threshold
+- 自行生成权重
+- 自动 Supplier Ranking
+- 自动 Supplier Selection
+- 把 simulated threshold 说成真实企业规则
+- 把 Risk Level 当成事实来源
+
+#### 2.7.19 Threshold Governance
+
+必须明确：以下 thresholds
+
+```
+Delivery:  95 / 90
+Quality:   98 / 95
+```
+
+是 **Human-approved `SIMULATED` POC policy**。
+
+**不是**：
+
+- `PUBLIC FACT`
+- 真实客户政策
+- 行业标准
+
+未来如果改变 thresholds，属于 **Business Rule Change**，**必须**：
+
+```
+Human Approval
++
+versioned / traceable change
+```
+
+**不得由 Agent / LLM 自行调整。**
+
+#### 2.7.20 H3 / Validation Relationship
+
+必须明确记录：`SC-RISK-001` 为 **Human-approved `SIMULATED` downstream design evidence**。
+
+它支持：
+
+> 「存在将经验型风险判断结构化为 deterministic risk evidence 的设计价值」
+
+**但**：`FROZEN` Discovery Validation v0.1 中
+
+```
+H3 = TBD
+```
+
+**保持不变。**
+
+**不得在本文件声称**：`FROZEN` `H3` 已被正式修改为 `PARTIALLY CONFIRMED`。
+
+**可以记录**：如果未来 Human 决定正式更新 `H3` validation status，应通过：
+
+```
+新的 Validation Version / Addendum
+```
+
+完成。
+
+> 即：本 Task **不修改** `FROZEN` Validation，**不把本 Task 的设计规则倒写成历史 Discovery 事实**。
+
+#### 2.7.21 G-06 / G-11 Relationship
+
+继承 `FROZEN` source：
+
+```
+G-06 = 部分 RESOLVED
+G-11 = 部分 RESOLVED
+```
+
+本 Task **不修改 `FROZEN` 文档**。
+
+设计层完成后，**可以**说明：`VB-27` 的 **Design Gap 已解决**。
+
+但**不得**写成：`FROZEN` Discovery 中的 `G-06` / `G-11` 已经被回写成 `RESOLVED`。
+
+保持以下**两个层级分离**：
+
+```
+Validation baseline
+与
+Design resolution
+```
+
+#### 2.7.22 Source-field Boundary
+
+**本规则定义 business semantic，而不是 source schema。**
+
+因此**不得创建**：
+
+- ERP / SRM field mapping
+- API Contract
+- database column definition
+- adapter implementation
+- risk engine implementation
+- ranking engine
+
+例如 `delivery_performance`、`quality_performance`、`standard_lead_time_days`
+**只是 canonical business meaning**。
+
+其 **source mapping** 进入后续 **Data Dictionary / Adapter Design**。
+
+#### 2.7.23 Performance Period Context
+
+`VR-006` 的 Supplier Performance baseline 中已存在：
+
+- `supplier_id`
+- `period`
+- `delivery_performance`
+- `quality_performance`
+- `updated_at`
+
+因此 `delivery_performance` 与 `quality_performance` **必须对应一个可可靠识别的**：
+
+```
+PerformancePeriod
+```
+
+**它可能代表某个明确的统计窗口，但本 Task 不决定**：
+
+- 30 days
+- 90 days
+- 12 months
+- rolling window
+- fiscal period
+
+这些真实 **period policy** 留给后续 **Data Mapping / Business Rule refinement**。
+
+**本 Task 不得自行发明固定统计周期。**
+
+**Performance Evidence Completeness**
+
+如果：
+
+```
+delivery_performance 有值
+但对应 period 无法可靠确定
+```
+
+则：
+
+```
+DeliveryRisk = DATA_INCOMPLETE
+```
+
+如果：
+
+```
+quality_performance 有值
+但对应 period 无法可靠确定
+```
+
+则：
+
+```
+QualityRisk = DATA_INCOMPLETE
+```
+
+**不得**把：
+
+```
+"97% but period unknown"
+```
+
+视为**完整可靠**的 Risk Evidence。
+
+`updated_at` **不能替代** performance measurement period。
+
+> 本 Task **不定义** performance freshness threshold / maximum age / rolling window。
+> 这些仍属于后续 Design。
+
+#### 2.7.24 Supplier-Material Relationship Eligibility
+
+`VR-006` 已存在：
+
+```
+Supplier-Material Relationship
+```
+
+以及：
+
+```
+sourcing_status
+```
+
+因此补充一个 **eligibility boundary**：
+
+Risk Evidence 的业务上下文**必须能够确认** `supplier_id` 与 `material_code` **存在可可靠识别的
+Supplier-Material Relationship**。
+
+**不得**因为 Supplier Master 中存在某 Supplier，就**自动认为**其可以供应任意 Material。
+
+`sourcing_status` 用于判断该 relationship 是否属于**当前可评估的 candidate relationship**。
+
+本 Task **不定义**具体 `sourcing_status` enum / vocabulary。
+
+**不得自行发明** `APPROVED` / `ACTIVE` / `QUALIFIED` 等真实 source status。
+
+只定义：如果 **relationship eligibility 无法可靠确定**：
+
+```
+Risk Evidence Status = DATA_INCOMPLETE
+```
+
+**不得由 LLM 猜测供应资格。**
+
+**Important Boundary**
+
+Relationship eligibility：
+
+```
+≠ Supplier Ranking
+≠ Supplier Selection
+≠ Supplier Recommendation
+```
+
+它**只回答**：
+
+> 「这个 supplier-material relationship 是否具有足够可靠的业务上下文进入 Risk Evidence evaluation。」
+
+即使**两个 relationship 都 eligible**：
+
+```
+Supplier A = LOW
+Supplier B = HIGH
+```
+
+仍然：
+
+- **不得自动排名**
+- **不得自动选择**
+- **不得绑定到采购建议**
+
+> 本 Task **不定义** supplier qualification workflow。
+> 这些仍属于后续 Design。
 
 ---
 
@@ -2805,7 +3671,7 @@ Options
 
 ## 11. Open Design Backlog
 
-> 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14`、`VB-15`、`VB-16`、`VB-17`、`VB-18` 已获得 Human Approval。
+> 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14`、`VB-15`、`VB-16`、`VB-17`、`VB-18`、`VB-27` 已获得 Human Approval。
 
 | Backlog ID | 归属 | Status |
 | --- | --- | --- |
@@ -2814,7 +3680,7 @@ Options
 | `VB-16` | P0 Business Rules（见 §2.3 Substitute Material）<br>→ **`BR-SUBSTITUTE-001` / §2.3** | **`DESIGN RESOLVED`** |
 | `VB-17` | P0 Business Rules（见 §2.4 Scrap / Loss）<br>→ **`BR-REQUIREMENT-001` / §2.4** | **`DESIGN RESOLVED`** |
 | `VB-18` | P0 Business Rules（见 §2.5 MOQ / Purchase Recommendation Quantity）<br>→ **`BR-PROCUREMENT-001` / §2.5** | **`DESIGN RESOLVED`** |
-| `VB-27` | Supplier Risk / Risk Evidence（见 §2.7） | `NOT STARTED` |
+| `VB-27` | Supplier Risk / Risk Evidence（见 §2.7）<br>→ **`BR-SUPPLIER-RISK-001` / §2.7** | **`DESIGN RESOLVED`** |
 | `VB-28` | AI Explanation / User Questions | `NOT STARTED` |
 | `VB-29` | 见下方说明 | `NOT STARTED` |
 
