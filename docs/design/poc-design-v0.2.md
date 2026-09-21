@@ -151,9 +151,9 @@ AI **不可以**：
 
 > 本节各项均对应 `FROZEN` Discovery Validation v0.1 中的 Open Design Backlog。
 >
-> **当前状态**（`DESIGN RESOLVED`）：`§2.1` `BR-SHORTAGE-001`；`§2.2` `BR-INVENTORY-001`；`§2.3` `BR-SUBSTITUTE-001`；`§2.4` `BR-REQUIREMENT-001`；`§2.6` `BR-INBOUND-001`（均 Human-approved）。
+> **当前状态**（`DESIGN RESOLVED`）：`§2.1` `BR-SHORTAGE-001`；`§2.2` `BR-INVENTORY-001`；`§2.3` `BR-SUBSTITUTE-001`；`§2.4` `BR-REQUIREMENT-001`；`§2.5` `BR-PROCUREMENT-001`；`§2.6` `BR-INBOUND-001`（均 Human-approved）。
 >
-> **仍为 `DESIGN PENDING`**：`§2.5` MOQ / Purchase Recommendation Quantity；`§2.7` Supplier Risk / Evidence。
+> **仍为 `DESIGN PENDING`**：`§2.7` Supplier Risk / Evidence。
 
 ### 2.1 Shortage Definition
 
@@ -1706,11 +1706,620 @@ LLM **可以**解释：
 
 ### 2.5 MOQ / Purchase Recommendation Quantity
 
-**对应：** `VB-18`
+**Rule ID:** `BR-PROCUREMENT-001`
 
-**Status:** `DESIGN PENDING`
+**Backlog:** `VB-18`
 
-> FROZEN source 中的原问题：采购最小批量（MOQ）是否影响采购建议？（关联 `G-10`）
+**Design Status:** `DESIGN RESOLVED`
+
+**Approval:** Human-approved
+
+**Implementation Status:** `NOT STARTED`
+
+> **注意**：`DESIGN RESOLVED` **≠** `IMPLEMENTED` **≠** `TESTED`。
+
+> 关联的 FROZEN 原问题：采购最小批量（MOQ）是否影响采购建议？（关联 `G-10`）
+
+#### 2.5.1 Business Definition
+
+本规则回答：
+
+> 当 Shortage Engine 已确认某 Material 存在**真实 `SHORTAGE`** 时，POC 应建议采购**多少数量**。
+
+当前 POC 采用**保守原则**：
+
+只有：
+
+```
+Classification = SHORTAGE
+```
+
+才生成 **numeric Purchase Recommendation**。
+
+以下状态当前 POC **不自动生成采购数量建议**：
+
+- `NORMAL`
+- `BUFFER_BREACH`
+
+其中 `BUFFER_BREACH` **只是 Safety Stock buffer 被侵蚀**，**并不等同于实际缺料**。
+
+**不得为了恢复 Safety Stock 自动创建采购需求。**
+
+#### 2.5.2 Recommendation Trigger
+
+必须先由 **`BR-SHORTAGE-001`** 产生：
+
+```
+Classification = SHORTAGE
+```
+
+以及：
+
+```
+ShortageQty > 0
+```
+
+才进入本规则。
+
+| Classification | 本规则行为 |
+| --- | --- |
+| `NORMAL` | **No Purchase Recommendation** |
+| `BUFFER_BREACH` | **No Purchase Recommendation**（当前 POC 不自动执行 buffer replenishment） |
+| `SHORTAGE` | Quantity Rule applicable |
+| `DATA_INCOMPLETE` | **No Numeric Recommendation** |
+
+对于 `DATA_INCOMPLETE`：**不得由 LLM 猜测采购数量。**
+
+#### 2.5.3 FirstShortageDate Boundary
+
+当前 POC 第一版对每个：
+
+```
+plant_id
++ material_code
+```
+
+在一次 shortage analysis run 中，**只依据 `FirstShortageDate`** 形成**一条**基础采购数量建议。
+
+定义：
+
+```
+RecommendationNeedDate
+  = FirstShortageDate
+```
+
+```
+BasePurchaseNeed
+  = ShortageQty at FirstShortageDate
+```
+
+**原因：** 当前 POC **尚未设计**完整的 **time-phased replenishment loop**。
+
+如果对每个未来 shortage date 分别创建采购建议，却不把先前 recommendation **重新投入未来 supply calculation**，可能产生：
+
+```
+double counting
++
+duplicate recommendation
+```
+
+因此当前版本**只生成**：
+
+```
+one baseline recommendation
+  per plant_id + material_code
+  per analysis run
+```
+
+#### 2.5.4 BasePurchaseNeed
+
+定义：
+
+```
+BasePurchaseNeed
+  = ShortageQty at FirstShortageDate
+```
+
+其中 `ShortageQty` 已由 **`BR-SHORTAGE-001`** 定义为：
+
+```
+ShortageQty
+  = max(0, -ProjectedAvailable)
+```
+
+**不得重新计算 shortage。**
+
+**不得**将 `BufferGap` 加入 `BasePurchaseNeed`。
+
+即：
+
+```
+BasePurchaseNeed
+  ≠ ShortageQty + BufferGap
+```
+
+当前 POC 的采购建议**只覆盖实际缺口**，**不自动恢复 Safety Stock buffer**。
+
+#### 2.5.5 ApplicableMOQ Canonical Semantic
+
+`ApplicableMOQ` 表示：
+
+> 针对当前采购建议所适用的**最小采购数量约束**。
+
+这是 **canonical business input**。
+
+当前 Task **不决定**它真实来源于：
+
+- Supplier-Material Master
+- Contract
+- Purchasing Info Record
+- ERP proprietary field
+- 其他采购主数据
+
+真实 **source mapping** 留给后续 **Data Dictionary ＋ Adapter Design**。
+
+#### 2.5.6 MOQ Zero vs Missing
+
+必须**严格区分**：
+
+```
+ApplicableMOQ = 0
+```
+
+与：
+
+```
+ApplicableMOQ = missing
+```
+
+**A. `ApplicableMOQ = 0`**
+
+表示业务**明确确认**：当前 recommendation **不存在**最小采购数量约束。
+
+这是**合法值**。
+
+**B. `ApplicableMOQ = missing`**
+
+表示对于一个**已经触发 `SHORTAGE`** 的采购建议，必要的 MOQ 信息**无法可靠取得**。
+
+**处理：** `DATA_INCOMPLETE`
+
+**不得**：
+
+- 默认成 0
+- 猜测 MOQ
+- 使用经验值
+- 让 LLM 补值
+
+#### 2.5.7 MOQ Validation
+
+要求：
+
+```
+ApplicableMOQ >= 0
+```
+
+如果：
+
+```
+ApplicableMOQ < 0
+```
+
+**处理：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**
+
+**不得**：
+
+- `clamp`
+- absolute value
+- 自动改为 0
+
+#### 2.5.8 RecommendedPurchaseQty
+
+**只有在**：
+
+```
+Classification = SHORTAGE
+```
+
+**且所有必要输入可靠时**：
+
+定义：
+
+```
+RecommendedPurchaseQty
+  = max(
+      BasePurchaseNeed,
+      ApplicableMOQ
+    )
+```
+
+同时定义：
+
+```
+MOQAdjustmentQty
+  = RecommendedPurchaseQty - BasePurchaseNeed
+```
+
+要求：
+
+```
+MOQAdjustmentQty >= 0
+```
+
+#### 2.5.9 Meaning of MOQ Adjustment
+
+必须明确：
+
+**`MOQAdjustmentQty` 不是 `ShortageQty`。**
+
+例如：
+
+```
+ShortageQty     = 30
+ApplicableMOQ   = 100
+```
+
+则：
+
+```
+BasePurchaseNeed       = 30
+RecommendedPurchaseQty = 100
+MOQAdjustmentQty       = 70
+```
+
+其中：
+
+- `30` = **实际计算缺口**
+- `70` = **为满足 MOQ 而额外增加的采购数量**
+
+**不得**将 `100` 描述为「**实际缺料 100**」。
+
+解释必须保持：
+
+```
+business shortage
+与
+commercial purchasing constraint
+```
+
+**分离**。
+
+#### 2.5.10 MOQ Does Not Mean Order Multiple
+
+本规则中的 MOQ **只表示**：
+
+```
+Minimum Order Quantity
+```
+
+**不得**把它扩展解释为：
+
+- pack size
+- order multiple
+- carton quantity
+- pallet quantity
+- integer rounding
+- UOM conversion
+
+因此本 Task **不定义**：
+
+```
+ceil(qty / multiple) × multiple
+```
+
+也**不定义** `round` / `ceil` / `floor` 或任何 packaging / quantity precision rule。
+
+这些如果未来需要，**必须作为独立 Design Rule**。
+
+#### 2.5.11 Quantity Precision Boundary
+
+`BasePurchaseNeed` 与 `RecommendedPurchaseQty` 当前保持 **canonical quantity**。
+
+例如：
+
+```
+BasePurchaseNeed = 10.5
+ApplicableMOQ    = 8
+```
+
+则：
+
+```
+RecommendedPurchaseQty = 10.5
+```
+
+**不得自行**：
+
+```
+ceil → 11
+```
+
+除非未来有明确的 **UOM / precision / packaging rule**。
+
+#### 2.5.12 Lead Time Boundary
+
+`FROZEN` P0-2 要求采购建议中包含**供应周期 / Lead Time**。
+
+但本规则当前**只定义** Purchase Recommendation Quantity。
+
+因此：
+
+`Lead Time` **可以**作为 recommendation 的**解释性 / planning input**，
+
+但本 Task **不允许**用 Lead Time **偷偷修改** `RecommendedPurchaseQty`。
+
+本 Task **不定义**：
+
+- Order Date
+- Release Date
+- Expedite Date
+- Late-order policy
+- Dynamic Lead Time
+
+如果 `Need Date` 与 `Lead Time` 显示正常采购**可能已经来不及**，后续**可以**形成：
+
+```
+risk / feasibility evidence
+```
+
+但**不得**在本 Task **自行改变采购数量算法**。
+
+#### 2.5.13 Supplier Boundary
+
+本 Task **不进行** Supplier Selection。
+
+**不得**因为：
+
+```
+Supplier A MOQ = 50
+Supplier B MOQ = 100
+```
+
+**自行选择** Supplier A。
+
+因此：
+
+`ApplicableMOQ` **必须**作为**已可靠确定**的 canonical input 提供给本规则。
+
+如果 MOQ 取值**依赖尚未确定的 Supplier**，且**无法可靠确定**：
+
+```
+ApplicableMOQ = UNKNOWN / missing
+```
+
+则：
+
+`DATA_INCOMPLETE`
+
+**不得**让 LLM 选择 Supplier **只是为了得到一个 MOQ**。
+
+Supplier selection / ranking 属于**其他 Design Scope**。
+
+#### 2.5.14 Recommendation Output Semantics
+
+采购建议至少必须能够区分：
+
+- Material
+- Plant
+- `RecommendationNeedDate`
+- `BasePurchaseNeed`
+- `ShortageQty`
+- `ApplicableMOQ`
+- `MOQAdjustmentQty`
+- `RecommendedPurchaseQty`
+
+并保留以下 **P0-2 要求所需信息**的**引用能力**：
+
+- Current Inventory
+- Effective Inbound
+- Lead Time
+- Risk Evidence
+
+**注意：** 本 Task **不设计最终 API / DB Schema**，这里只定义 **canonical business meaning**。
+
+#### 2.5.15 Human-in-the-loop Boundary
+
+`RecommendedPurchaseQty` **只是**：
+
+```
+Recommendation
+```
+
+**不是**：
+
+```
+ApprovedPurchaseQty
+```
+
+AI / Rule Engine **可以**生成 Procurement Recommendation。
+
+AI **可以**据此生成 Procurement Request Draft。
+
+但最终：
+
+- 修改数量
+- 批准
+- 拒绝
+- 正式提交
+
+属于 **Human / Business Workflow**。
+
+因此：
+
+```
+RecommendedPurchaseQty
+  ≠ ApprovedPurchaseQty
+  ≠ PurchaseOrderQty
+```
+
+#### 2.5.16 Deterministic Examples
+
+以下为 **deterministic examples**。
+
+**Example A — Shortage below MOQ**
+
+| 字段 | 值 |
+| --- | --- |
+| Classification | `SHORTAGE` |
+| ShortageQty | 30 |
+| ApplicableMOQ | 100 |
+
+**Expected：**
+
+- `BasePurchaseNeed = 30`
+- `RecommendedPurchaseQty = 100`
+- `MOQAdjustmentQty = 70`
+
+**Example B — Shortage above MOQ**
+
+| 字段 | 值 |
+| --- | --- |
+| Classification | `SHORTAGE` |
+| ShortageQty | 120 |
+| ApplicableMOQ | 100 |
+
+**Expected：**
+
+- `BasePurchaseNeed = 120`
+- `RecommendedPurchaseQty = 120`
+- `MOQAdjustmentQty = 0`
+
+**Example C — Explicit no MOQ**
+
+| 字段 | 值 |
+| --- | --- |
+| Classification | `SHORTAGE` |
+| ShortageQty | 40 |
+| ApplicableMOQ | 0 |
+
+**Expected：**
+
+- `RecommendedPurchaseQty = 40`
+- `MOQAdjustmentQty = 0`
+
+**Example D — Missing MOQ**
+
+| 字段 | 值 |
+| --- | --- |
+| Classification | `SHORTAGE` |
+| ShortageQty | 40 |
+| ApplicableMOQ | missing |
+
+**Expected：**
+
+- `DATA_INCOMPLETE`
+- **No Numeric Recommendation**
+- **不得默认 MOQ = 0**
+
+**Example E — BUFFER_BREACH**
+
+| 字段 | 值 |
+| --- | --- |
+| Classification | `BUFFER_BREACH` |
+| ShortageQty | 0 |
+| BufferGap | 20 |
+| ApplicableMOQ | 100 |
+
+**Expected：**
+
+- **No Purchase Recommendation**
+
+**不得**生成 `RecommendedPurchaseQty = 100`。
+
+**不得**为了恢复 Safety Stock **自动创建采购建议**。
+
+**Example F — NORMAL**
+
+| 字段 | 值 |
+| --- | --- |
+| Classification | `NORMAL` |
+
+**Expected：**
+
+- **No Purchase Recommendation**
+
+**Example G — DATA_INCOMPLETE**
+
+| 字段 | 值 |
+| --- | --- |
+| Classification | `DATA_INCOMPLETE` |
+
+**Expected：**
+
+- **No Numeric Recommendation**
+
+**Example H — First shortage only**
+
+| 字段 | 值 |
+| --- | --- |
+| `FirstShortageDate` | `2026-10-10` |
+| ShortageQty at `2026-10-10` | 30 |
+| Later projected shortage at `2026-10-20` | 80 |
+| ApplicableMOQ | 50 |
+
+**Expected for current POC：**
+
+- `BasePurchaseNeed = 30`
+- `RecommendedPurchaseQty = 50`
+- `RecommendationNeedDate = 2026-10-10`
+
+**不得**在同一次分析中自动再生成第二条 `2026-10-20` recommendation。
+
+**原因：** 完整 **time-phased replenishment loop** 尚未设计。
+
+#### 2.5.17 AI Boundary
+
+**数量规则必须由 deterministic logic 决定。**
+
+LLM **不可以**：
+
+- 猜 `ShortageQty`
+- 猜 MOQ
+- 把 `BUFFER_BREACH` 当 `SHORTAGE`
+- 为了满足 MOQ 自行选择 Supplier
+- 自行 round quantity
+- 自行创建第二个未来采购建议
+- 将 `MOQAdjustmentQty` 描述成真实缺口
+- 自动批准 `RecommendedPurchaseQty`
+
+LLM **可以**解释：
+
+- 为什么建议采购
+- `ShortageQty` 是多少
+- MOQ 为什么放大了数量
+- `MOQAdjustmentQty` 是多少
+- 为什么没有生成采购建议
+- 为什么返回 `DATA_INCOMPLETE`
+
+#### 2.5.18 Integration with Existing Rules
+
+本规则**必须引用** `BR-SHORTAGE-001`，而**不是重新定义**：
+
+- `ProjectedAvailable`
+- `ShortageQty`
+- `FirstShortageDate`
+- `Classification`
+
+输入关系：
+
+```
+BR-SHORTAGE-001
+        ↓
+Classification
+ShortageQty
+FirstShortageDate
+        ↓
+BR-PROCUREMENT-001
+        ↓
+RecommendedPurchaseQty
+```
+
+**不得修改**以下规则的业务定义：
+
+- `BR-INVENTORY-001`
+- `BR-INBOUND-001`
+- `BR-SUBSTITUTE-001`
+- `BR-REQUIREMENT-001`
 
 ### 2.6 Effective Inbound
 
@@ -2196,7 +2805,7 @@ Options
 
 ## 11. Open Design Backlog
 
-> 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14`、`VB-15`、`VB-16`、`VB-17` 已获得 Human Approval。
+> 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14`、`VB-15`、`VB-16`、`VB-17`、`VB-18` 已获得 Human Approval。
 
 | Backlog ID | 归属 | Status |
 | --- | --- | --- |
@@ -2204,7 +2813,7 @@ Options
 | `VB-15` | P0 Business Rules（见 §2.2 Available Inventory / Safety Stock）<br>→ **`BR-INVENTORY-001` / §2.2** | **`DESIGN RESOLVED`** |
 | `VB-16` | P0 Business Rules（见 §2.3 Substitute Material）<br>→ **`BR-SUBSTITUTE-001` / §2.3** | **`DESIGN RESOLVED`** |
 | `VB-17` | P0 Business Rules（见 §2.4 Scrap / Loss）<br>→ **`BR-REQUIREMENT-001` / §2.4** | **`DESIGN RESOLVED`** |
-| `VB-18` | P0 Business Rules（见 §2.5 MOQ / Purchase Recommendation Quantity） | `NOT STARTED` |
+| `VB-18` | P0 Business Rules（见 §2.5 MOQ / Purchase Recommendation Quantity）<br>→ **`BR-PROCUREMENT-001` / §2.5** | **`DESIGN RESOLVED`** |
 | `VB-27` | Supplier Risk / Risk Evidence（见 §2.7） | `NOT STARTED` |
 | `VB-28` | AI Explanation / User Questions | `NOT STARTED` |
 | `VB-29` | 见下方说明 | `NOT STARTED` |
