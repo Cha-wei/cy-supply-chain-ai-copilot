@@ -4670,11 +4670,55 @@ ProductionQty × BOMComponentQty
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `ordered_qty` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `SOURCE` | 已订购数量 | `ordered_qty >= 0` | `DATA_INCOMPLETE` | `BR-INBOUND-001` |
 | `received_qty` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `SOURCE` | 已收货数量 | `received_qty >= 0`；`received_qty > ordered_qty` 为**非法** | `DATA_INCOMPLETE` ＋ Data Quality Issue | `BR-INBOUND-001` |
-| `effective_arrival_date` | `DATE` | `REQUIRED` | `SOURCE` | Inbound **真正可用于 shortage calculation** 的有效到货日 | `NOT DEFINED`；**source field `DESIGN PENDING`** | `DATA_INCOMPLETE` | `BR-INBOUND-001` |
+| `effective_arrival_date` | `DATE` | `REQUIRED` | `SOURCE` | Inbound **真正可用于 shortage calculation** 的有效到货日（canonical semantic **未改变**） | **source mapping = source-specific / Adapter-defined**；**canonical mapping contract = `DESIGN RESOLVED`**（**§4.5.21**）；**具体 source field 不在 canonical Data Dictionary 中统一定义** | 见下方 **Root-Condition Distinction**；三类最终均为 `DATA_INCOMPLETE` | `BR-INBOUND-001` |
 | inbound status / eligibility context | `STATUS` | `REQUIRED` | `SOURCE` | 判断该 inbound 是否可计入未来供给的状态 | 见 §2.6.3 的保守分类；未知 / 非法 → **不得猜测** | `DATA_INCOMPLETE` ＋ Data Quality Issue | `BR-INBOUND-001` |
 
-> `effective_arrival_date` 的 **source field 未决定**：**不得**自行认定它来自
-> `promised_date` / `confirmed_date` / `planned_delivery_date` / `ETA` 或其他字段（见 §4.2.16）。
+**`effective_arrival_date` —— source mapping / mapping contract（PR #34 Human-approved Option D）**
+
+```
+canonical semantic         = 未改变（仍由 BR-INBOUND-001 / §2.6.4 定义）
+source mapping             = SOURCE-SPECIFIC / Adapter-defined
+canonical mapping contract = DESIGN RESOLVED
+```
+
+**具体 source field 不由 canonical design 全局统一** —— 它是 **`SOURCE-SPECIFIC` / Adapter-defined**；
+但 Adapter **必须遵守** Human-approved **canonical mapping contract**。
+
+正式 contract：
+
+```
+source-specific arrival-date evidence
+        ↓
+explicit deterministic mapping
+        ↓
+exactly one canonical effective_arrival_date
+        或
+unresolved
+```
+
+必须 `deterministic` / `explicit` / `traceable` / `reproducible`；
+**不得**依赖 LLM guess ／ runtime business-rule choice ／ silent fallback ／ implicit precedence。
+
+**Global Source-Field Precedence = `NOT ADOPTED`** —— **不得**声明
+`promised_date` ／ `expected_arrival_date` ／ `confirmed_date` ／ `planned_delivery_date` ／ `ETA`
+中的任何一个是**全局 source**，也**不得**建立
+`expected` fallback `promised` ／ `promised` fallback `expected` ／ earliest wins ／ latest wins ／
+newest `updated_at` wins ／ `min` ／ `max` ／ `average` ／ LLM choose。
+
+**Root-Condition Distinction**（三类的 Business consequence 均为 `DATA_INCOMPLETE`，但 **root condition 不同**）：
+
+| # | Root condition | Validation Reason | Business consequence |
+| --- | --- | --- | --- |
+| **A** | approved mapping 已存在，但 **mapped source value missing** | `FIELD_VALUE` / `MISSING`（或既有适用 Field Validation reason） | `DATA_INCOMPLETE` |
+| **B** | source date evidence **存在**，但 mapping semantic **无法可靠完成** | `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED` | `DATA_INCOMPLETE`（当 capability 需要该 inbound 时） |
+| **C** | approved mapping 已存在，但 mapped value **无法解析为合法 `DATE`** | `FIELD_VALUE` / `INVALID_TYPE`（或既有适用 reason） | `DATA_INCOMPLETE` |
+
+**不得**把 A / B / C 都写成 `effective_arrival_date missing`；
+**不得创建**新的 Validation Reason；
+**不得**在 C 的情况下 fallback 到另一个**未经批准**的 candidate date。
+
+**未新增** `ArrivalDateSourceType` / `ArrivalDatePriority` / `ArrivalConfidence` /
+`source_field_name` 等 canonical fields。
 
 #### 4.2.7 Substitute Fields
 
@@ -4964,7 +5008,6 @@ input evidence
 | `loss_rate` canonical owner / grain | **`UNKNOWN`** |
 | `required_quantity` vs `ProductionQty` | **`DESIGN PENDING` / SEMANTIC AMBIGUITY** |
 | Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
-| `effective_arrival_date` source field | `DESIGN PENDING` |
 | Allocation demand-window mapping | `DESIGN PENDING` |
 | `ApplicableMOQ` source | `DESIGN PENDING` |
 | Provenance carrier | `DESIGN PENDING` |
@@ -4991,8 +5034,18 @@ input evidence
 >
 > 因此 **unresolved count `7 → 6`**。
 >
+> `effective_arrival_date` source field **已从本表移出** ——
+> 已由 **PR #34 Human-approved Option D** 解析：
+> **canonical mapping contract = `DESIGN RESOLVED`**；
+> **concrete source field / Adapter mapping = source-specific / implementation-time**。
+>
+> > 「**真实 source field 未知**」**不再等于** `canonical semantic DESIGN PENDING`。
+>
+> 因此 **unresolved count `6 → 5`**。
+>
 > **未新增** `BOMVersion` / `ValidFrom` / `ValidTo` / `BOM ID` / `ProductionVersion` /
-> `AlternativeBOM` / `Change Number` 等 canonical fields。
+> `AlternativeBOM` / `Change Number` / `ArrivalDateSourceType` / `ArrivalDatePriority` /
+> `ArrivalConfidence` / `source_field_name` 等 canonical fields。
 >
 > **本 Task 不定义任何 source table / column**，因此**未被偷渡**任何 source mapping。
 
@@ -5416,15 +5469,16 @@ controlled export provenance
 #### 4.3.17 Unresolved Carrier Boundary
 
 以下项**仍未完全确定**（见 §4.2.16）——
-其中 `Warehouse canonical role`（**§4.5.12**）、`BOM version / validity`（**§4.5.7** ／ **§4.1.4 N**）
-与 `sourcing_status` vocabulary（**§4.5.11**）**已被解析**，**不再属于未决项**：
+其中 `Warehouse canonical role`（**§4.5.12**）、`BOM version / validity`（**§4.5.7** ／ **§4.1.4 N**）、
+`sourcing_status` vocabulary（**§4.5.11**）与 `effective_arrival_date` source mapping（**§4.5.21**）
+**已被解析**，**不再属于未决项**：
 
 - `loss_rate` owner / grain
 - `required_quantity` vs `ProductionQty`
 - Warehouse canonical role —— **已由 §4.5.12 解析**（source / mapping / scope context）
 - BOM version / validity —— **已由 §4.5.7 ／ §4.1.4 N 解析**（requirement-scoped BOM applicability）
 - `sourcing_status` vocabulary —— **已由 §4.5.11 解析**（source-specific → canonical eligibility condition）
-- `effective_arrival_date` source mapping
+- `effective_arrival_date` source mapping —— **已由 §4.5.21 解析**（source-specific → canonical mapping contract）
 - allocation demand-window mapping
 - `ApplicableMOQ` source
 - provenance carrier
@@ -6539,14 +6593,15 @@ SafetyStock missing     vs     SafetyStock = -10
 
 以下项目**不得在本 Task 中推进**
 （`Warehouse canonical role` 已于 **§4.5.12**、`BOM version / validity` 已于 **§4.5.7** ／ **§4.1.4 N**、
-`sourcing_status` vocabulary 已于 **§4.5.11** 解析，此处保留历史约束记录）：
+`sourcing_status` vocabulary 已于 **§4.5.11**、`effective_arrival_date` source mapping 已于 **§4.5.21**
+解析，此处保留历史约束记录）：
 
 - `loss_rate` owner / grain
 - `required_quantity` semantic
 - Warehouse canonical role —— **已由 §4.5.12 解析**（本 Task 未推进）
 - BOM version / validity —— **已由 §4.5.7 ／ §4.1.4 N 解析**（本 Task 未推进）
 - `sourcing_status` vocabulary —— **已由 §4.5.11 解析**（本 Task 未推进）
-- `effective_arrival_date` source mapping
+- `effective_arrival_date` source mapping —— **已由 §4.5.21 解析**（本 Task 未推进）
 - allocation demand-window mapping
 - `ApplicableMOQ` source
 - provenance carrier
@@ -6716,7 +6771,39 @@ effective_arrival_date > required_date
 
 因此**不得**将其错误标记为 `invalid record`。
 
-**只有** `effective_arrival_date` missing / invalid 才按既有 Rule → **`DATA_INCOMPLETE`**。
+**只有** `effective_arrival_date` 本身不可用才按既有 Rule → **`DATA_INCOMPLETE`**。
+
+**`effective_arrival_date` 在进入本 Rule 之前必须已经：**
+
+```
+exactly one resolved
+    或
+unresolved
+```
+
+（**source semantic resolution 发生在 deterministic business rule 之前** ——
+见 **§4.5.21** 与 **§4.2.6**。）
+
+**三类 root condition：**
+
+| # | Root condition | Validation Reason | Business consequence |
+| --- | --- | --- | --- |
+| **A** | resolved 且为合法 `DATE` | 无 Issue | 正常参与 date boundary 判断 |
+| **B** | approved mapping 已存在，但 mapped value **missing / invalid** | `MISSING` / `INVALID_TYPE` | `DATA_INCOMPLETE` |
+| **C** | source date evidence 存在，但 **mapping 无法可靠完成** | `SEMANTIC_UNRESOLVED` | `DATA_INCOMPLETE`（当该 inbound 为 capability 所需时） |
+
+**Date Difference Boundary：**
+
+```
+promised_date  ≠  expected_arrival_date
+```
+
+**本身不是** `CONSISTENCY_CONFLICT`、**不是** Data Quality Issue，**也不是** invalid evidence ——
+因为两者可能具有**不同 business semantic**。
+
+**只有**未来某个 **approved source-specific mapping contract** 明确声明某 consistency relation，
+且该 relation **被违反**时，才可以产生对应 Validation Issue。
+**本 Task 不发明该 relation。**
 
 #### 4.4.50 Inventory Plant / Scope Consistency
 
@@ -7267,12 +7354,13 @@ affected evidence → affected grain → affected capability
 | Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
 | BOM version / validity | **`DESIGN RESOLVED`** —— requirement-scoped BOM applicability（**§4.5.7** ／ **§4.1.4 N**） |
 | `sourcing_status` vocabulary | **`DESIGN RESOLVED`** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.5.11** |
-| `effective_arrival_date` source mapping | `DESIGN PENDING` |
+| `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** —— source mapping = **source-specific / Adapter-defined**；canonical mapping contract 见 **§4.5.21** |
 | allocation demand-window mapping | `DESIGN PENDING` |
 | `ApplicableMOQ` source | `DESIGN PENDING` |
 | provenance carrier | `DESIGN PENDING` |
 
-> 表中 `Warehouse canonical role`（**§4.5.12**）与 `BOM version / validity`（**§4.5.7** ／ **§4.1.4 N**）
+> 表中 `Warehouse canonical role`（**§4.5.12**）、`BOM version / validity`（**§4.5.7** ／ **§4.1.4 N**）、
+> `sourcing_status` vocabulary（**§4.5.11**）与 `effective_arrival_date` source mapping（**§4.5.21**）
 > 已由后续 Human-approved Design 解析，保留登记以便追溯。
 
 **Consistency Validation 不得成为解决这些问题的后门。**
@@ -7609,6 +7697,17 @@ Business consequence: BR-SUBSTITUTE-001 → DATA_INCOMPLETE
 Risk Evidence → DATA_INCOMPLETE
 ```
 
+**另一个例子 —— inbound arrival date：** source date evidence **存在**，
+但 `source value / semantics` **无法通过 approved source-specific mapping** 解析成
+**唯一的 `effective_arrival_date`**：
+
+→ `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED`。
+
+> **必须明确**：「**没有 global source-field precedence**」**本身不是错误** ——
+> 这是 **Human-approved 正式设计选择**（**Global Source-Field Precedence = `NOT ADOPTED`**）。
+> 真正的问题是：**某个具体 source context 缺少足够 mapping evidence**
+> （见 **§4.4.49** / **§4.5.21**）。
+
 **但**：`required_quantity` semantic 仍未决，
 如果当前 `BR-REQUIREMENT-001` **完全不使用** `required_quantity`，
 则**不得**仅因为字段存在就让 Shortage Analysis 失败。
@@ -7678,7 +7777,7 @@ Risk vocabulary **保持现有定义**。
 
 #### 4.4.99 Pending Design Preservation
 
-必须继续保持以下未决项（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**，保留登记以便追溯）：
+必须继续保持以下未决项（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**、`sourcing_status` vocabulary **已由 §4.5.11 解析**、`effective_arrival_date` source mapping **已由 §4.5.21 解析**，保留登记以便追溯）：
 
 | 未决项 | 状态 |
 | --- | --- |
@@ -7687,7 +7786,7 @@ Risk vocabulary **保持现有定义**。
 | Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
 | BOM version / validity | **`DESIGN RESOLVED`** —— requirement-scoped BOM applicability（**§4.5.7** ／ **§4.1.4 N**） |
 | `sourcing_status` vocabulary | **`DESIGN RESOLVED`** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.5.11** |
-| `effective_arrival_date` source mapping | `DESIGN PENDING` |
+| `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** —— source mapping = **source-specific / Adapter-defined**；canonical mapping contract 见 **§4.5.21** |
 | allocation demand-window mapping | `DESIGN PENDING` |
 | `ApplicableMOQ` source | `DESIGN PENDING` |
 | provenance carrier | `DESIGN PENDING` |
@@ -7861,7 +7960,7 @@ physical schema / architecture / technology / ADR。
 Design DoD = PASS（17 / 17）
 ```
 
-**Upstream Design Items（6 项未决 ＋ 3 项已解析）—— 不阻塞本 closure**
+**Upstream Design Items（5 项未决 ＋ 4 项已解析）—— 不阻塞本 closure**
 
 这 9 项**阻止的是**「某些 capability 当前能够实际运行」，
 **不是**「Data Validation conceptual design 已经定义清楚」。
@@ -7876,7 +7975,7 @@ Design DoD = PASS（17 / 17）
 | 3 | Warehouse canonical role | **`DESIGN RESOLVED`** | 已由 **§4.5.12** 解析为 source / mapping / scope context（`§4.4.50`） |
 | 4 | BOM version / validity | **`DESIGN RESOLVED`** | 已由 **§4.5.7** ／ **§4.1.4 N** 解析为 requirement-scoped BOM applicability（`§4.4.52`） |
 | 5 | `sourcing_status` vocabulary | **`DESIGN RESOLVED`** | 已由 **§4.5.11** 解析为 source-specific → canonical eligibility condition mapping contract（`§4.4.62`） |
-| 6 | `effective_arrival_date` source mapping | `DESIGN PENDING` | 按既有 Rule 处理 missing / invalid（`§4.4.49`） |
+| 6 | `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** | 已由 **§4.5.21** 解析为 source-specific → canonical mapping contract（`§4.4.49`） |
 | 7 | allocation demand-window mapping | `DESIGN PENDING` | 无法判断重叠 → `DATA_INCOMPLETE` ＋ Data Quality Issue（`§4.4.60`） |
 | 8 | `ApplicableMOQ` source | `DESIGN PENDING` | 无法可靠取得 → `DATA_INCOMPLETE` → No Numeric Recommendation（`§4.4.67`） |
 | 9 | provenance carrier | `DESIGN PENDING` | 只提出 requirement，不设计 carrier（`§4.4.15` / `§4.4.93`） |
@@ -7888,8 +7987,11 @@ Design DoD = PASS（17 / 17）
 > （**Human-authorized Canonical Model Amendment**，PR #30 ／ Option A）；
 > 第 5 项 `sourcing_status` vocabulary 已由 **§4.5.11** 解析为
 > **source-specific → canonical eligibility condition** 的 mapping contract
-> （**Human-authorized Design Change**，PR #32 ／ Option B）。
-> 三者均**不再属于未决项**；对应行保留登记以便追溯。剩余 **6 项**未决。
+> （**Human-authorized Design Change**，PR #32 ／ Option B）；
+> 第 6 项 `effective_arrival_date` source mapping 已由 **§4.5.21** 解析为
+> **source-specific → canonical effective_arrival_date** 的 mapping contract
+> （**Human-authorized Design Change**，PR #34 ／ Option D）。
+> 四者均**不再属于未决项**；对应行保留登记以便追溯。剩余 **5 项**未决。
 
 > 三者均明确禁止 Validation 反向解决这些设计问题：
 > `Consistency Validation 不得成为解决这些问题的后门。` /
@@ -7959,6 +8061,7 @@ conceptual validation design complete
 | Warehouse Role Resolution | **`DESIGN RESOLVED`** |
 | BOM Version / Validity Mapping | **`DESIGN RESOLVED`** |
 | Supplier Eligibility Vocabulary Mapping | **`DESIGN RESOLVED`** |
+| Effective Arrival Date Source Mapping | **`DESIGN RESOLVED`** |
 | Other Source-Semantic Mapping | `DESIGN PENDING` |
 | Final Master Data Mapping | `DESIGN PENDING` |
 
@@ -7975,9 +8078,14 @@ conceptual validation design complete
 > 因此现为 **`DESIGN RESOLVED`**，unresolved count **7 → 6**。
 >
 > `effective_arrival_date` source mapping 的
-> **Effective Arrival Date Source Mapping Design Review** —— 见 **§4.5.21**；
-> 其 **Human Decision 已记录**（**Option D APPROVED**），但 **semantic synchronization 尚未实施**，
-> 因此 `Other Source-Semantic Mapping` 状态**仍为 `DESIGN PENDING`**，unresolved count **仍为 6**。
+> **Effective Arrival Date Source Mapping Design Review** 与 **Option D Implementation Record**
+> 见 **§4.5.21**；其 `§4.2` / `§4.4` / `§4.5` semantic synchronization **已实施**，
+> 因此现为 **`DESIGN RESOLVED`**（登记为 **Effective Arrival Date Source Mapping** 层），
+> unresolved count **6 → 5**。
+>
+> **但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
+> 其中仍存在 `loss_rate` owner / grain、`required_quantity` semantic、
+> allocation demand-window mapping、`ApplicableMOQ` source、provenance carrier。
 
 #### 4.5.1 Purpose & Scope
 
@@ -10388,12 +10496,222 @@ unresolved count               = 仍为 6
 
 **本 PR 不实施** `§4.2` / `§4.4` / `§4.5` 的正式 semantic synchronization。
 
-`effective_arrival_date` source mapping **保持 `DESIGN PENDING`**，unresolved count **仍为 6**，
-**直到 follow-up Design Change 实施并通过 Review**。
+**PR #34 当时**：`effective_arrival_date` source mapping **保持 `DESIGN PENDING`**，
+unresolved count 当时**仍为 6**。
+
+> 以上为**历史记录**。后续 **Human-authorized Option D Implementation** 已实施并变更该状态 ——
+> 见下方 **Option D Implementation Record**。
+
+**Option D Implementation Record（Human-authorized Design Change）**
+
+**Human Authorization Source**
+
+```
+PR #34 Human Decision
+  → Global source-field precedence          = NOT ADOPTED
+  → Option D                                = APPROVED
+  → exactly-one-or-unresolved               = APPROVED
+  → date difference ≠ automatic DQ Issue    = APPROVED
+  → minimal synchronization（§4.2/§4.4/§4.5） = AUTHORIZED
+```
+
+**Implementation Result**
+
+```
+source-specific arrival-date evidence
+        ↓
+explicit deterministic mapping
+        ↓
+exactly one canonical effective_arrival_date
+        或
+unresolved
+```
+
+该 contract 统一的是 **canonical business semantic**，**不是** **source field name**。
+
+**Global Source-Field Precedence = `NOT ADOPTED`（正式保持）**
+
+**不得**建立以下任何一项：
+
+- `promised_date` always wins
+- `expected_arrival_date` always wins
+- `expected` fallback `promised`
+- `promised` fallback `expected`
+- earliest wins
+- latest wins
+- newest `updated_at` wins
+- `min` / `max` / `average`
+- LLM choose
+
+**这些均不进入 canonical mapping contract。**
+
+**Source-Specific Mapping Semantics**
+
+不同 source system **可以**有不同 mapping，例如（**conceptual**）：
+
+```
+Source A: field X → canonical effective_arrival_date
+Source B: field Y → canonical effective_arrival_date
+Source C: approved source-specific deterministic rule → canonical effective_arrival_date
+```
+
+**具体 X / Y / precedence 由未来 Adapter / source-specific mapping 提供。**
+**本 Task 不定义**任何真实 ERP field / SRM field / column / JSON path / source vocabulary。
+
+**Exactly-One-or-Unresolved Contract（正式落地）**
+
+对每一个参与 `BR-INBOUND-001` 的 applicable inbound context，
+**进入 deterministic business rule 之前**必须已经得到：
+
+```
+exactly one reliably resolved effective_arrival_date
+    或
+unresolved
+```
+
+**不得**让 `BR-INBOUND-001` 同时面对 `promised_date` / `expected_arrival_date` / `ETA` /
+`planned_delivery_date` 或**多个 candidate dates** 然后自行选一个。
+
+**正式保持：** `source semantic resolution 发生在 deterministic business rule 之前`。
+
+**Multiple Candidate Dates**
+
+多个 candidate dates 存在且不同时：
+
+- **如果**存在 approved source-specific mapping → 按该 mapping 得到 **exactly one** `effective_arrival_date`
+- **如果**不存在 → **不得选择任何一个**；结果 = **mapping unresolved**；
+  Validation：`SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED`；
+  若当前 capability 需要该 inbound → **`DATA_INCOMPLETE`**
+
+**Date Difference Boundary（正式落实 Human Decision）**
+
+```
+promised_date  ≠  expected_arrival_date
+```
+
+**本身不是** `CONSISTENCY_CONFLICT`、**不是** Data Quality Issue、**也不是** invalid evidence ——
+因为两者可能具有**不同 business semantic**。
+
+**只有**未来某个 approved source-specific mapping contract 明确声明某 consistency relation，
+且该 relation **被违反**时，才可以产生对应 Validation Issue。
+
+**Single Candidate Boundary**
+
+即使 source record **只有一个** candidate date 有值，**也不得**因为「只有它存在」
+就自动把它当成 `effective_arrival_date` —— **必须先存在 approved source-specific semantic mapping**。
+
+```
+single candidate  ≠  automatically canonical
+```
+
+**Missing vs Unresolved vs Invalid（正式区分）**
+
+| # | Root condition | Validation Reason | Business consequence |
+| --- | --- | --- | --- |
+| **A** | mapping 已批准，但 mapped source value **不存在** | `FIELD_VALUE` / `MISSING`（或现有适用 Field Validation reason） | `DATA_INCOMPLETE` |
+| **B** | source date evidence **存在**，但无法可靠确定如何映射到 `effective_arrival_date` | `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED` | `DATA_INCOMPLETE`（capability 需要时） |
+| **C** | approved mapping 已确定，但 mapped value **无法解析为合法 `DATE`** | `FIELD_VALUE` / `INVALID_TYPE` | `DATA_INCOMPLETE` |
+
+**不得**把 A / B / C 都写成 `effective_arrival_date missing`；
+**不得**在 C 的情况下 fallback 到另一个**未经批准**的 candidate date；**不得创建**新 Validation Reason。
+
+**Inbound Status Boundary（保持）**
+
+`Inbound status` 与 `arrival-date mapping` **继续是两个独立维度**。**不得**：
+
+- `CONFIRMED` → automatically use `confirmed_date`
+- `OPEN` → automatically use `promised_date`
+- `PARTIALLY_RECEIVED` → automatically use `expected_arrival_date`
+
+**不得**由 status 推导 source-field precedence。
+
+**`updated_at` Boundary（保持）**
+
+```
+updated_at  ≠  effective_arrival_date
+```
+
+**不得** `latest updated record wins`；**不得**把 `updated_at` 当作 canonical arrival date。
+`updated_at` **只是** record-update context。
+
+**Adapter Responsibility（正式定义）**
+
+| 角色 | 负责 |
+| --- | --- |
+| **Adapter / source-specific mapping** | source semantic → canonical `effective_arrival_date` |
+| **Canonical Design** | `effective_arrival_date` **是什么意思** |
+
+```
+Adapter MAY decide:  哪个 approved field / approved source-specific rule 产生 canonical date
+Adapter MUST NOT:    重新定义 effective_arrival_date 在业务上代表什么
+```
+
+后者仍由 **`BR-INBOUND-001`** 定义。
+
+**Provenance / Cross-Package（保持）**
+
+追溯链保持：
+
+```
+source inbound context
+→ source date evidence
+→ source-specific mapping basis
+→ canonical effective_arrival_date
+→ Snapshot Package
+```
+
+**但 provenance carrier 仍 `DESIGN PENDING`**；**不得创建** lineage DB / mapping table /
+JSON metadata / `source_field_name` persisted field / physical lineage schema。
+
+跨 Package 继续继承 **`PROVENANCE_MISMATCH`**；**不得创建新 reason**。
+
+**§4.2 / §4.4 / §4.5 Synchronization Result**
+
+- `§4.2.6` —— `effective_arrival_date` 的 source mapping / mapping contract 已同步；
+  root-condition distinction（A / B / C）已补入
+- `§4.2.16` —— stale open item **已移除**
+- `§4.3.17` / `§4.4.41` / `§4.4.76` / `§4.4.99` / `§4.4` closure 表 —— 已同步
+- `§4.4.49` —— date boundary 扩展为「exactly-one-or-unresolved ＋ 三类 root condition ＋
+  **Date Difference Boundary**」
+- `§4.4.95` —— 新增 arrival-date semantic unresolved 示例，并明确
+  「**没有 global source-field precedence**」**本身不是错误**，而是**正式设计选择**
+
+**§4.1 未修改（授权边界）**
+
+`§4.1 Canonical Data Model` **未被修改**，`Inbound` entity grain 与
+`effective_arrival_date` 的 canonical semantic **均未改变**。
+
+`§4.1.12` 的 `effective_arrival_date 的 source field` 条目**保留原文** ——
+其口径是「**具体 source field**」，与本 Task 解析的 **canonical mapping contract** 不是同一对象；
+如需统一表述，须**另行 Human 授权**。
+
+**Meaning of `DESIGN RESOLVED`**
+
+`DESIGN RESOLVED` **只**表示 **canonical source-mapping contract 概念设计完成**，
+**不表示**：
+
+- real ERP field known
+- source mapping configuration exists
+- Adapter implemented
+- source data validated
+- mapping tested
+- `Effective Inbound` implemented
+- production-ready
+
+**执行状态（本 Task 完成时点）**
+
+```
+Human Decision                 = RECORDED
+Option D                       = IMPLEMENTED
+effective_arrival_date mapping = DESIGN RESOLVED
+unresolved count               = 6 → 5
+Other Source-Semantic Mapping  = 仍 DESIGN PENDING
+Master Data Mapping overall    = 仍 DESIGN PENDING
+```
 
 #### 4.5.22 Preserve Unresolved Items
 
-以下未决项本轮**必须继续保持**（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**、`sourcing_status` vocabulary **已由 §4.5.11 解析**）：
+以下未决项本轮**必须继续保持**（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**、`sourcing_status` vocabulary **已由 §4.5.11 解析**、`effective_arrival_date` source mapping **已由 §4.5.21 解析**）：
 
 | 未决项 | 状态 |
 | --- | --- |
@@ -10402,7 +10720,7 @@ unresolved count               = 仍为 6
 | Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
 | BOM version / validity | **`DESIGN RESOLVED`** —— requirement-scoped BOM applicability（**§4.5.7** ／ **§4.1.4 N**） |
 | `sourcing_status` vocabulary | **`DESIGN RESOLVED`** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.5.11** |
-| `effective_arrival_date` source mapping | `DESIGN PENDING` |
+| `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** —— source mapping = **source-specific / Adapter-defined**；canonical mapping contract 见 **§4.5.21** |
 | allocation demand-window mapping | `DESIGN PENDING` |
 | `ApplicableMOQ` source | `DESIGN PENDING` |
 | provenance carrier | `DESIGN PENDING` |
@@ -10415,9 +10733,9 @@ unresolved count               = 仍为 6
 > （见 **§4.5.11 Option B Implementation Record**）；
 > 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **7 → 6**。
 >
-> `effective_arrival_date` source mapping 的 **Human Decision 已记录**
-> （**Option D APPROVED**，见 **§4.5.21**）；但在 approved **semantic synchronization**
-> 完成并通过 Review 之前，其状态**保持 `DESIGN PENDING`**，未决项数量**不减少**。
+> `effective_arrival_date` source mapping 的 **Option D semantic synchronization 已实施**
+> （见 **§4.5.21 Option D Implementation Record**）；
+> 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **6 → 5**。
 
 本 Task **不以「Master Data Mapping」为名一次性消灭这些问题**。
 
@@ -10456,8 +10774,9 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 `Master Data Mapping` overall **仍为 `DESIGN PENDING`** ——
 本节已完成 Canonical Identity Resolution、Relationship Resolution Boundary、
 **Warehouse Role Resolution**（**§4.5.12**）、
-**BOM Version / Validity Mapping**（**§4.5.7** ／ **§4.1.4 N**）
-与 **Supplier Eligibility Vocabulary Mapping**（**§4.5.11**）。
+**BOM Version / Validity Mapping**（**§4.5.7** ／ **§4.1.4 N**）、
+**Supplier Eligibility Vocabulary Mapping**（**§4.5.11**）
+与 **Effective Arrival Date Source Mapping**（**§4.5.21**）。
 
 `DESIGN RESOLVED` 的七个层级**仅**表示其 **conceptual resolution boundary 已定义**，
 **不表示**：
@@ -10504,12 +10823,18 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 - Supplier Risk implemented
 - tested
 
-**Open Pending Sync：** `effective_arrival_date` source mapping
-（`Other Source-Semantic Mapping`）**仍为 `DESIGN PENDING`** ——
-其 **Effective Arrival Date Source Mapping Design Review** 的 **Option D 已获 Human Approval**
-（source-specific mapping → canonical `effective_arrival_date`，见 **§4.5.21**），
-但 **`§4.2` / `§4.4` / `§4.5` 的 semantic synchronization 尚未实施**，
-须待 follow-up Design Change 完成并通过 Review。
+**Option D —— IMPLEMENTED：** `effective_arrival_date` source mapping **现为 `DESIGN RESOLVED`** ——
+其 **Option D**（source-specific arrival-date evidence → explicit deterministic mapping →
+exactly one canonical `effective_arrival_date` 或 `unresolved`）
+已由 **Human-authorized Design Change** 实施，`§4.2` / `§4.4` / `§4.5` 已完成最小 semantic synchronization
+（见 **§4.5.21 Option D Implementation Record**）。
+
+**但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
+其中仍存在 `loss_rate` owner / grain、`required_quantity` semantic、
+allocation demand-window mapping、`ApplicableMOQ` source、provenance carrier。
+
+`DESIGN RESOLVED` **只**表示 **canonical source-mapping contract 概念设计完成**，
+**不表示** real ERP field known / Adapter implemented / mapping tested / `Effective Inbound` implemented。
 
 ---
 
