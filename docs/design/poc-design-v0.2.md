@@ -5329,7 +5329,8 @@ Accepted Package may be referenced by Analysis Run
 
 > **子章节整体状态：仍为 `DESIGN PENDING`。**
 >
-> 本节只完成其**第一层**。
+> 本节已完成其中**两层**：Capability Readiness / Failure Semantics（`§4.4.1` ～ `§4.4.23`）
+> 与 **Detailed Field Validation**（`§4.4.24` ～ `§4.4.44`）。
 
 **层级状态登记：**
 
@@ -5340,7 +5341,7 @@ Accepted Package may be referenced by Analysis Run
 | Failure Semantics | **`DESIGN RESOLVED`** |
 | Dataset Absent vs Empty Semantics | **`DESIGN RESOLVED`** |
 | Failure Isolation Principle | **`DESIGN RESOLVED`** |
-| Detailed Field Validation | `DESIGN PENDING` |
+| Detailed Field Validation | **`DESIGN RESOLVED`** |
 | Cross-Dataset Consistency Rules | `DESIGN PENDING` |
 | Validation Issue Taxonomy Finalization | `DESIGN PENDING` |
 | Final Data Validation Design | `DESIGN PENDING` |
@@ -5930,17 +5931,473 @@ valid absence  ≠  missing required evidence
 
 **不得**执行 Rule 之后**伪造** `DATA_INCOMPLETE`。
 
-#### 4.4.24 Status Boundary
+#### 4.4.24 Validation Scope & Core Principle
 
-`Data Validation` **整体仍为 `DESIGN PENDING`**。
+Field Validation **只能执行**已经由以下内容明确支持的约束：
 
-本 Task **仅**完成其第一层：Validation Layer Model、Capability-to-Evidence Requirement、
-Failure Semantics、Dataset Absent vs Empty Semantics、Failure Isolation Principle。
+```
+§2 Business Rules
++
+§4.2 Data Dictionary
+```
 
-`DESIGN RESOLVED` 的五个层级**仅**表示其 **conceptual boundary 已定义**，
+**不得**为了让 validation 更「完整」而新增：
+
+- 默认值
+- 新范围
+- 新 enum
+- 新 requiredness
+- source mapping
+- aggregation rule
+- precedence rule
+- business assumption
+
+**原则：**
+
+```
+Validate what is defined.
+Do not invent what is undefined.
+```
+
+本 Task **不得**设计：Cross-Dataset Consistency Rules、Master Data Mapping、Adapter、
+Physical Schema、Implementation Validator。
+
+#### 4.4.25 Field-Level Outcome Boundary
+
+Field-level validation issue **默认影响**：
+
+```
+affected evidence
++
+affected business grain
++
+affected capability
+```
+
+**不得自动** `reject entire Snapshot Package` ——
+**除非**问题属于 **Package Structural Validation**（见 `§4.4.2` Layer 1）。
+
+继续保持：
+
+```
+Structural Failure  ≠  Capability Unavailable  ≠  Business DATA_INCOMPLETE
+```
+
+#### 4.4.26 Identity Fields
+
+至少覆盖 `plant_id` / `material_code` / `supplier_id`。
+
+**Validation：**
+
+- required when corresponding grain needs identity
+- must be present
+- must be non-empty as canonical identifier
+
+**但不得定义**：regex、code length、prefix、numeric-only、case normalization、source-system format。
+
+如果 identifier **missing / empty** → affected evidence **unresolved**。
+
+**不得自动生成 ID。**
+
+#### 4.4.27 Analysis Context Fields
+
+**analysis run identity** —— 必须：
+
+- reliably present for Analysis Run
+- stable within the same run context
+
+**不得设计**：UUID、generation algorithm、database key。
+
+**`AnalysisDate`** —— 必须：
+
+- be a valid `DATE` / `TIMESTAMP` logical value
+- represent analysis context time
+
+**不得自动使用** system current time 补齐 missing `AnalysisDate`。
+
+#### 4.4.28 Requirement / BOM Fields
+
+| Field | Logical Type | Validation |
+| --- | --- | --- |
+| `ProductionQty` | `NON_NEGATIVE_QUANTITY` | `ProductionQty >= 0` |
+| `BOMComponentQty` | `NON_NEGATIVE_QUANTITY` | `BOMComponentQty >= 0` |
+| `loss_rate` | `RATIO` | `0 <= loss_rate < 1` |
+| `required_date` | `DATE` | valid `DATE` |
+| `required_quantity` | — | **仅** parseability（见下） |
+
+`ProductionQty` missing / invalid → `BR-REQUIREMENT-001` **不能形成可靠 result**。
+
+`loss_rate` missing / invalid → Business Rule result → **`DATA_INCOMPLETE`**。
+
+**必须继续保持：**
+
+```
+loss_rate owner / grain = UNKNOWN
+```
+
+**不得决定 carrier。**
+
+**`required_date`** —— 本 Task **不定义**：planning horizon、past-date rejection、future-date maximum。
+
+**`required_quantity`** —— 保持 `SEMANTIC AMBIGUITY / DESIGN PENDING`。
+
+**不得**：
+
+- 与 `ProductionQty` 比较
+- 校验两者必须相等
+- 用它 fallback `ProductionQty`
+- 推导业务含义
+
+**只允许**验证：如果存在，其 physical / logical parseability ——
+且**不能改变其未决 semantic status**。
+
+#### 4.4.29 Inventory Fields
+
+| Field | Validation |
+| --- | --- |
+| `inventory_snapshot_time` | 必须是有效 temporal value；**不得**自动推断 `AnalysisDate = inventory_snapshot_time` |
+| `inventory_status` | 只允许既有 vocabulary：`AVAILABLE` / `INSPECTION` / `FROZEN`；其他值为 invalid / unresolved；**不得** `unknown → AVAILABLE` |
+| `on_hand_qty` | 按当前 Dictionary / Rule 已定义的范围校验；**如果当前 Design 未定义更严格范围，不得新增** |
+| `SafetyStock` | `NON_NEGATIVE_QUANTITY`；`SafetyStock >= 0` |
+
+**必须区分：**
+
+```
+SafetyStock = 0        → valid zero
+SafetyStock missing    → DATA_INCOMPLETE
+```
+
+#### 4.4.30 Inbound Fields
+
+| Field | Validation |
+| --- | --- |
+| `ordered_qty` | `>= 0` |
+| `received_qty` | `>= 0` |
+| `effective_arrival_date` | 必须为有效 `DATE` |
+| inbound status | 只允许既有 Rule 已定义的合法 vocabulary |
+
+**跨字段关系（已由既有 Rule 定义，本层不重复实现）：**
+
+```
+received_qty <= ordered_qty
+```
+
+该约束**已经**由 **`BR-INBOUND-001` / `§2.6.2`** 明确定义：
+
+```
+RemainingInboundQty = ordered_qty - received_qty
+要求 RemainingInboundQty >= 0
+```
+
+因此 `received_qty > ordered_qty` 已被既有 Business Rule 定义为
+**`DATA_INCOMPLETE`** ＋ **Data Quality Issue**；`§4.2.6` Data Dictionary 也已同步记录。
+
+但它是 **cross-field consistency rule** ——
+本 **Detailed Field Validation** Task **不重复实现**其 validation enforcement；
+将在后续 **Cross-Dataset / Cross-Field Consistency** 设计中**正式登记与执行**。
+
+> **重要边界**：这是 **recognize existing approved rule ＋ defer its validation enforcement
+> to the correct validation layer** —— **不是**新增 constraint。
+>
+> ```
+> 已定义 Business Rule  ≠  本 Task 新增 constraint
+> ```
+
+**`effective_arrival_date`** —— source field mapping **仍 `DESIGN PENDING`**。
+
+**不得决定**它来自 `promised_date` / `confirmed_date` / `ETA` 等。
+
+**Inbound status** —— 现有 Design 支持：`OPEN` / `CONFIRMED` / `PARTIALLY_RECEIVED` /
+`CANCELLED` / `CLOSED` / `COMPLETED`。
+
+如果出现**未定义 status** → invalid / unresolved；**不得 silent drop**。
+
+#### 4.4.31 Substitute Relationship Fields
+
+| Field | Validation |
+| --- | --- |
+| `target_material_code` | 必须为可靠 canonical identifier；**不得** fuzzy match |
+| `substitute_material_code` | 同上 |
+| `substitution_ratio` | `RATIO`；必须 `> 0`；missing / invalid 时**不得默认 `1.0`** |
+| `approval_status` | 只有 `APPROVED` 可以参与 Approved Substitute Supply |
+
+`PENDING` / `REJECTED` / `UNKNOWN` **不得参与**。
+
+**不得新增**新的 approval status。
+
+#### 4.4.32 Substitute Allocation Fields
+
+`AllocatedSubstituteQty`：
+
+```
+NON_NEGATIVE_QUANTITY
+>= 0
+```
+
+**必须区分：**
+
+```
+0        = valid explicit allocation
+missing  = cannot assume zero
+```
+
+**effective demand context** —— 必须能够**可靠识别**，
+但具体 carrier / mapping **仍 `DESIGN PENDING`**。
+
+**不得自行定义**：`demand_window_id` / `requirement_id` / `allocation_period` 等新字段。
+
+#### 4.4.33 Supplier Relationship Fields
+
+`sourcing_status` —— semantic 已知：
+
+```
+Supplier-Material relationship eligibility context
+```
+
+但：
+
+```
+vocabulary = DESIGN PENDING
+```
+
+因此 Field Validation **不得建立 enum allowlist**。
+
+如果值存在，**只能**确认：
+
+```
+value is present as unresolved source / canonical context
+```
+
+**不得判断** `ACTIVE` / `APPROVED` / `QUALIFIED` 等是否有效。
+
+Relationship eligibility **仍需后续 Master Data Mapping / Design**。
+
+#### 4.4.34 Supplier Performance Fields
+
+| Field | Validation |
+| --- | --- |
+| `standard_lead_time_days` | `>= 0`；missing / invalid → `LeadTimeRisk` → `DATA_INCOMPLETE` |
+| `PerformancePeriod` | `REQUIRED`；必须可可靠识别 measurement period |
+| `PerformanceUpdatedAt` | valid temporal value when present |
+| `DeliveryPerformance` | `PERCENTAGE`；`0% <= value <= 100%` |
+| `QualityPerformance` | 同上 |
+
+**本 Task 不定义** `PerformancePeriod` 的具体 vocabulary：`30d` / `90d` / rolling year / fiscal period。
+
+继续保持：`PerformanceUpdatedAt` **不单独决定 `OverallSupplierRisk` completeness**。
+
+**Valid extreme：**
+
+```
+DeliveryPerformance = 0%   → valid extreme → DeliveryRisk = HIGH
+DeliveryPerformance missing → DATA_INCOMPLETE
+```
+
+`QualityPerformance` 同理。
+
+#### 4.4.35 Procurement Input Fields
+
+`ApplicableMOQ`：
+
+```
+NON_NEGATIVE_QUANTITY
+>= 0
+```
+
+**必须：** 只有当 `Classification = SHORTAGE` 时才 `REQUIRED`。
+
+| 情形 | 结果 |
+| --- | --- |
+| `ApplicableMOQ = 0` | **valid business configuration** |
+| `ApplicableMOQ` missing ＋ `SHORTAGE` | **`DATA_INCOMPLETE`** |
+| `ApplicableMOQ` 不存在 ＋ `NORMAL` / `BUFFER_BREACH` | **不是 validation failure** |
+
+`RecommendationNeedDate` —— 仅当 **Procurement Recommendation applicable** 时 `CONDITIONAL REQUIRED`。
+
+当前：
+
+```
+RecommendationNeedDate = FirstShortageDate
+```
+
+但**保持两个 canonical semantics 分离**。
+
+#### 4.4.36 Derived Result Validation
+
+对于 `DERIVED` values：**Validation 不重新计算第二套 business logic**。
+
+**只允许**验证：
+
+- logical type
+- presence when applicable
+- allowed existing status vocabulary
+- traceability to `Rule ID` + `Analysis Run`
+
+**不得**在 Data Validation 层重新定义公式或纠正 deterministic result。
+
+例如：`ShortageQty` **不得**由 validator 自行用其他公式重算后覆盖。
+
+#### 4.4.37 Classification & Risk Vocabulary Validation
+
+**Shortage Classification 只允许：**
+
+```
+NORMAL / BUFFER_BREACH / SHORTAGE / DATA_INCOMPLETE
+```
+
+**不得新增** `UNKNOWN` / `ERROR` / `UNAVAILABLE` / `NOT_APPLICABLE` 作为 Business Classification。
+
+**`LeadTimeRisk`：**
+
+```
+LOW / HIGH / DATA_INCOMPLETE（当既有 Rule semantics 要求时）
+```
+
+**不得新增 `MEDIUM`。**
+
+**`DeliveryRisk` / `QualityRisk` / `OverallSupplierRisk`** —— 只允许现有：
+
+```
+LOW / MEDIUM / HIGH / DATA_INCOMPLETE
+```
+
+**不得新增**其他风险等级。
+
+#### 4.4.38 Conditional Presence Rules
+
+字段 requiredness **必须根据业务状态判断**。至少包括：
+
+| 字段 | 业务状态 | 结论 |
+| --- | --- | --- |
+| `FirstShortageDate` | `NORMAL` / `BUFFER_BREACH` 且完整计算无 shortage | **valid absence** |
+| `FirstShortageDate` | `SHORTAGE` | 必须存在**可靠** `FirstShortageDate` |
+| Procurement fields | `NORMAL` / `BUFFER_BREACH` | **not produced by design** |
+| Procurement fields | `SHORTAGE` | 按 `BR-PROCUREMENT-001` 判断 applicable inputs / outputs |
+| `OverallSupplierRisk` | required dimensions reliable | `LOW` / `MEDIUM` / `HIGH` |
+| `OverallSupplierRisk` | 任一 required dimension missing / invalid / unresolved | **`DATA_INCOMPLETE`** |
+
+#### 4.4.39 Valid Zero Rules
+
+统一 Field Validation 规则：以下**合法 `0`** **不得**被标记为 missing / invalid：
+
+- `SafetyStock = 0`
+- `loss_rate = 0`
+- `AllocatedSubstituteQty = 0`
+- `ApplicableMOQ = 0`
+- `DeliveryPerformance = 0%`
+- `QualityPerformance = 0%`
+
+**注意：** `0` 的**业务后果**仍由对应 Business Rule 决定。
+
+#### 4.4.40 Invalid vs Missing
+
+必须区分：
+
+```
+missing
+与
+present but invalid
+```
+
+例如：
+
+```
+SafetyStock missing     vs     SafetyStock = -10
+```
+
+两者**都可能导致** `DATA_INCOMPLETE`，但 Validation Issue **reason 必须不同**。
+
+**不得统一写成** `missing`。
+
+#### 4.4.41 Unknown Semantic Items
+
+以下项目**不得在本 Task 中推进**：
+
+- `loss_rate` owner / grain
+- `required_quantity` semantic
+- Warehouse canonical role
+- BOM version / validity
+- `sourcing_status` vocabulary
+- `effective_arrival_date` source mapping
+- allocation demand-window mapping
+- `ApplicableMOQ` source
+- provenance carrier
+
+**Field Validation 不能成为解决这些设计问题的后门。**
+
+#### 4.4.42 No Stringency Inflation
+
+**特别禁止**因为「企业系统通常如此」而新增：
+
+- identifier regex
+- date freshness threshold
+- inventory age limit
+- supplier performance age limit
+- decimal precision
+- currency
+- unit-of-measure conversion
+- timezone policy
+- quantity rounding
+- mandatory text length
+
+如果现有 Design 未定义，写：`NOT DEFINED / DESIGN PENDING`。
+
+#### 4.4.43 Interim Validation Issue Reasons
+
+允许使用**非常有限**的 conceptual reason：
+
+- `MISSING`
+- `INVALID_TYPE`
+- `OUT_OF_DEFINED_RANGE`
+- `INVALID_DEFINED_STATUS`
+- `UNRESOLVED_IDENTITY`
+- `SEMANTIC_UNRESOLVED`
+
+但**必须标记**为：
+
+```
+interim reason categories
+```
+
+**不是** Final Validation Issue Taxonomy。
+
+**不得设计**：error code、numeric code、severity ranking、API error object。
+
+#### 4.4.44 Field Validation Examples
+
+以下为 **conceptual examples**。
+
+| # | 输入 | Expected |
+| --- | --- | --- |
+| **A** | `SafetyStock = 0` | **valid** —— **不是** missing |
+| **B** | `SafetyStock = -1` | **field invalid**；affected shortage grain **cannot form normal result** |
+| **C** | `DeliveryPerformance = 0%` | **valid percentage**；`DeliveryRisk = HIGH` —— **不是** missing |
+| **D** | `DeliveryPerformance = 120%` | **invalid field**；Supplier Risk result **cannot be normal** |
+| **E** | `ApplicableMOQ` missing ＋ `Classification = NORMAL` | **valid absence / not applicable** —— **不是** `DATA_INCOMPLETE` |
+| **F** | `ApplicableMOQ` missing ＋ `Classification = SHORTAGE` | **Business `DATA_INCOMPLETE`** ＋ **No Numeric Recommendation** |
+| **G** | `required_quantity` exists | **不得用它替代 `ProductionQty`**；semantic ambiguity **remains** |
+
+#### 4.4.45 Status Boundary
+
+`Detailed Field Validation` = **`DESIGN RESOLVED`**。
+
+保持：
+
+| 层 | Status |
+| --- | --- |
+| Cross-Dataset Consistency Rules | `DESIGN PENDING` |
+| Validation Issue Taxonomy Finalization | `DESIGN PENDING` |
+| Final Data Validation Design | `DESIGN PENDING` |
+
+因此：
+
+```
+Data Validation overall = DESIGN PENDING
+```
+
+`DESIGN RESOLVED` 的六个层级**仅**表示其 **conceptual boundary 已定义**，
 **不表示**：
 
-- detailed field validation designed
 - cross-dataset consistency rules defined
 - validation issue taxonomy finalized
 - validator implemented
