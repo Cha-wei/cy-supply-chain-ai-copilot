@@ -4086,14 +4086,43 @@ conceptual boundary 已定义
   Approved relationship
     ≠ actual allocated quantity
   ```
-- **Canonical identity / grain：** source substitute material ＋ target material ＋ effective demand context
+- **Canonical identity / grain：** source substitute material ＋ target material ＋ effective demand context（**未改变**）
 - **Attributes：** 至少
   - source substitute material
   - target material
   - `AllocatedSubstituteQty`
   - effective demand context
+- **`effective demand context` —— conceptual resolved context（**不是** physical field）：**
+
+  它**不是**：
+
+  - 单一 `required_date` field
+  - `requirement_id`
+  - date range field
+  - `allocation_period`
+  - persisted window object
+
+  它是一个 **conceptual resolved context**，用于承载**两个互相独立**的 relation：
+
+  ```
+  1. Target Applicability          —— allocation 对哪些 Target Demand Context
+                                      可以作为 Approved Substitute Supply
+  2. Source Reservation Overlap    —— 同一已分配 Source Supply 与哪些 Source Demand
+                                      Context 发生 reservation overlap
+  ```
+
+  这两个 relation **共同**定义 allocation 在当前业务需求时间语境中的**有效性**。
+
+  **必须保持：** `Target Applicability ≠ Source Reservation Overlap` —— **不得压成一个 Boolean**。
+
+  **不得**把 `effective demand context` 误解成一个**新的 physical field**；
+  **不得**新增 canonical field / canonical entity / identity component
+  （**不得**创建 `requirement_id` / `demand_window_id` / `allocation_period` / `valid_from` / `valid_to`）。
 - **用途：** 支撑 `RemainingUnallocatedSourceSupply` 与 **No Double Allocation**。
 - **约束：** `Σ AllocatedSubstituteQty <= EligibleSubstituteSupply`（见 §2.3.10）。
+- **Human-authorized Design Change（PR #36 ／ Option B）：**
+  本节仅**澄清** `effective demand context` 的 conceptual meaning ——
+  **grain 与 attributes 均未改变**，也**未新增**任何 canonical field。
 
 **H. Supplier**
 
@@ -4473,7 +4502,7 @@ Canonical model **不得通过默认值隐藏缺失**。
 | Warehouse 是否为 canonical attribute | **`DESIGN RESOLVED`** | **不是** canonical attribute —— Warehouse 是 source / mapping / scope context（**§4.5.12**）；§2.2.1 的 grain **不含** warehouse |
 | `sourcing_status` enum / vocabulary | **`DESIGN RESOLVED`** | **不建立全局 source enum** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.1.4 I** ／ **§4.5.11** |
 | **`effective_arrival_date` source mapping policy** | **`DESIGN RESOLVED`** | **不建立 global source field** —— concrete source field = **`SOURCE-SPECIFIC` / Adapter-defined**；canonical mapping contract 见 **§4.2.6** ／ **§4.5.21**；**真实 ERP field 当前仍未知**（**未知 ≠ Design Pending**） |
-| Allocation 与 demand window 的关联机制 | **`DESIGN PENDING`** | §2.3.12 明确不设计 timing engine |
+| Allocation 与 demand window 的关联机制 | **`DESIGN RESOLVED`** | 已由 **§4.5.9** 解析为 **canonical allocation applicability mapping contract**（**Target Applicability** ＋ **Source Reservation Overlap**）；concrete source evidence = **`SOURCE-SPECIFIC` / Adapter-defined**；**未新增** canonical field |
 | `ApplicableMOQ` 的来源 | **`DESIGN PENDING`** | §2.5.5 留给 Data Dictionary / Adapter Design |
 | Provenance 的具体承载方式 | **`DESIGN PENDING`** | 见 §4.1.8 |
 
@@ -4747,7 +4776,24 @@ newest `updated_at` wins ／ `min` ／ `max` ／ `average` ／ LLM choose。
 | `substitution_ratio` | `RATIO` | `REQUIRED` | `SOURCE` | 1 unit Substitute 可覆盖多少 unit Target Requirement（**substitute → target**） | `substitution_ratio > 0` | `DATA_INCOMPLETE` ＋ Data Quality Issue；**不得默认成 `1.0`** | `BR-SUBSTITUTE-001` |
 | `approval_status` | `STATUS` | `REQUIRED` | `SOURCE` | Substitute Relationship 的审批状态 | 仅 `APPROVED` 可参与计算（见 §4.2.14） | 缺失 / 无法判断 → `DATA_INCOMPLETE`；**不得由 LLM 自动批准** | `BR-SUBSTITUTE-001` |
 | `AllocatedSubstituteQty` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `SOURCE` | 明确分配给某 Target 的替代数量 | `AllocatedSubstituteQty >= 0`；`Σ AllocatedSubstituteQty <= EligibleSubstituteSupply` | `DATA_INCOMPLETE` ＋ Data Quality Issue / Allocation Conflict；**不得默认成 0** | `BR-SUBSTITUTE-001` |
-| effective demand context | `TEXT_CONTEXT` | `CONDITIONAL` | `CONTEXT` | allocation 对当前 `required_date` 有效的判定上下文 | `NOT DEFINED`；**关联机制 `DESIGN PENDING`** | `DATA_INCOMPLETE` | `BR-SUBSTITUTE-001` |
+| effective demand context | `TEXT_CONTEXT`（**conceptual context，不是单值 date field**） | `CONDITIONAL` | `CONTEXT` | 解析 allocation 有效性的 conceptual context —— 承载 **Target Applicability** ＋ **Source Reservation Overlap** 两个 relation | **canonical demand-window mapping contract = `DESIGN RESOLVED`**（**§4.5.9**）；具体 source evidence = **`SOURCE-SPECIFIC` / Adapter-defined**；**不得**定义真实 ERP allocation / reservation / planning-link / schedule field | 无法可靠解析 → `SEMANTIC_UNRESOLVED`（见 **§4.4.60**）；capability 需要时 `DATA_INCOMPLETE` | `BR-SUBSTITUTE-001` |
+
+**`effective demand context` —— 不是伪 field（PR #36 Human-approved Option B）**
+
+`effective demand context` **不是单值 date field**。它代表解析以下两个 relation 所**必需的 conceptual context**：
+
+```
+Target Applicability         （allocation → 哪些 Target Demand Context）
+Source Reservation Overlap   （allocation reservation ↔ 哪些 Source Demand Context）
+```
+
+因此**不**把它硬塞成一个 persisted field row，而是在此以**紧邻说明**表达其 conceptual relation。
+
+**具体 source evidence = `SOURCE-SPECIFIC` / Adapter-defined** ——
+**不得定义**真实 ERP allocation field / reservation field / planning-link field / schedule field。
+
+**未新增**任何 canonical field；**不得创建** `requirement_id` / `demand_window_id` /
+`allocation_period` / `valid_from` / `valid_to`。
 
 #### 4.2.8 Supplier Fields
 
@@ -5026,7 +5072,6 @@ input evidence
 | `loss_rate` canonical owner / grain | **`UNKNOWN`** |
 | `required_quantity` vs `ProductionQty` | **`DESIGN PENDING` / SEMANTIC AMBIGUITY** |
 | Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
-| Allocation demand-window mapping | `DESIGN PENDING` |
 | `ApplicableMOQ` source | `DESIGN PENDING` |
 | Provenance carrier | `DESIGN PENDING` |
 
@@ -5060,6 +5105,16 @@ input evidence
 > > 「**真实 source field 未知**」**不再等于** `canonical semantic DESIGN PENDING`。
 >
 > 因此 **unresolved count `6 → 5`**。
+>
+> `Allocation demand-window mapping` **已从本表移出** ——
+> 已由 **PR #36 Human-approved Option B** 解析为
+> **canonical allocation applicability mapping contract**
+> （**Target Applicability** ＋ **Source Reservation Overlap**，见 **§4.1.4 G** / **§4.2.7** / **§4.5.9**）。
+>
+> > 「**真实 allocation / reservation source evidence 当前未知**」**不等于**
+> > `canonical mapping contract` **仍 Design Pending**。
+>
+> 因此 **unresolved count `5 → 4`**。
 >
 > **未新增** `BOMVersion` / `ValidFrom` / `ValidTo` / `BOM ID` / `ProductionVersion` /
 > `AlternativeBOM` / `Change Number` / `ArrivalDateSourceType` / `ArrivalDatePriority` /
@@ -5488,8 +5543,8 @@ controlled export provenance
 
 以下项**仍未完全确定**（见 §4.2.16）——
 其中 `Warehouse canonical role`（**§4.5.12**）、`BOM version / validity`（**§4.5.7** ／ **§4.1.4 N**）、
-`sourcing_status` vocabulary（**§4.5.11**）与 `effective_arrival_date` source mapping（**§4.5.21**）
-**已被解析**，**不再属于未决项**：
+`sourcing_status` vocabulary（**§4.5.11**）、`effective_arrival_date` source mapping（**§4.5.21**）
+与 allocation demand-window mapping（**§4.5.9**）**已被解析**，**不再属于未决项**：
 
 - `loss_rate` owner / grain
 - `required_quantity` vs `ProductionQty`
@@ -5497,7 +5552,7 @@ controlled export provenance
 - BOM version / validity —— **已由 §4.5.7 ／ §4.1.4 N 解析**（requirement-scoped BOM applicability）
 - `sourcing_status` vocabulary —— **已由 §4.5.11 解析**（source-specific → canonical eligibility condition）
 - `effective_arrival_date` source mapping —— **已由 §4.5.21 解析**（source-specific → canonical mapping contract）
-- allocation demand-window mapping
+- allocation demand-window mapping —— **已由 §4.5.9 解析**（Target Applicability ＋ Source Reservation Overlap）
 - `ApplicableMOQ` source
 - provenance carrier
 
@@ -6439,10 +6494,18 @@ NON_NEGATIVE_QUANTITY
 missing  = cannot assume zero
 ```
 
-**effective demand context** —— 必须能够**可靠识别**，
-但具体 carrier / mapping **仍 `DESIGN PENDING`**。
+**effective demand context** —— **canonical demand-window mapping contract = `DESIGN RESOLVED`**
+（**§4.5.9**）；必须能够**可靠识别**，且必须可靠回答两个 relation：
 
-**不得自行定义**：`demand_window_id` / `requirement_id` / `allocation_period` 等新字段。
+```
+Target Applicability         （applicable / not applicable / unresolved）
+Source Reservation Overlap   （overlaps / does not overlap / unresolved）
+```
+
+**具体 source evidence = `SOURCE-SPECIFIC` / Adapter-defined**。
+
+**不得自行定义**：`demand_window_id` / `requirement_id` / `allocation_period` / `valid_from` / `valid_to`
+等新字段；也**不得**创建 persisted applicability / overlap field。
 
 #### 4.4.33 Supplier Relationship Fields
 
@@ -6616,8 +6679,8 @@ SafetyStock missing     vs     SafetyStock = -10
 
 以下项目**不得在本 Task 中推进**
 （`Warehouse canonical role` 已于 **§4.5.12**、`BOM version / validity` 已于 **§4.5.7** ／ **§4.1.4 N**、
-`sourcing_status` vocabulary 已于 **§4.5.11**、`effective_arrival_date` source mapping 已于 **§4.5.21**
-解析，此处保留历史约束记录）：
+`sourcing_status` vocabulary 已于 **§4.5.11**、`effective_arrival_date` source mapping 已于 **§4.5.21**、
+allocation demand-window mapping 已于 **§4.5.9** 解析，此处保留历史约束记录）：
 
 - `loss_rate` owner / grain
 - `required_quantity` semantic
@@ -6625,7 +6688,7 @@ SafetyStock missing     vs     SafetyStock = -10
 - BOM version / validity —— **已由 §4.5.7 ／ §4.1.4 N 解析**（本 Task 未推进）
 - `sourcing_status` vocabulary —— **已由 §4.5.11 解析**（本 Task 未推进）
 - `effective_arrival_date` source mapping —— **已由 §4.5.21 解析**（本 Task 未推进）
-- allocation demand-window mapping
+- allocation demand-window mapping —— **已由 §4.5.9 解析**（本 Task 未推进）
 - `ApplicableMOQ` source
 - provenance carrier
 
@@ -7053,7 +7116,50 @@ RemainingUnallocatedSourceSupply >= 0
 - priority resolve
 - 自动减少某 allocation
 
-本 Task **不设计** allocation algorithm。
+**Same Effective Reservation Context（PR #36 Human-approved clarification）**
+
+```
+Σ AllocatedSubstituteQty <= EligibleSubstituteSupply
+```
+
+的 approved interpretation 是 **within the same effective reservation context** ——
+**不是** all historical allocations **forever accumulated**。
+
+> 这是 **Human-approved clarification**，**不是** Business Rule semantic change；
+> `§2.3.10` 正文**未修改**（见 **PR #36 Human Decision**）。
+
+**三条 Validation 路径：**
+
+| # | 情形 | 处理 |
+| --- | --- | --- |
+| **A** | explicit allocation ＋ mapping **resolved** ＋ applicable / overlap relation **reliable** | **正常继续计算** —— 在**同一有效 reservation context** 内判断 conservation |
+| **B** | allocation **exists**，但 demand-window semantic mapping **unresolved** | `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED` → capability 需要时 `DATA_INCOMPLETE` |
+| **C** | mapping **已可靠解析**，且在同一 effective reservation context **真实发生** over-allocation | `CONSISTENCY` / `CONSISTENCY_CONFLICT` → `DATA_INCOMPLETE` |
+
+**Multiple Contexts Example：**
+
+```
+Eligible MAT-B Supply = 100
+  Allocation A1：60 → MAT-A    （Reservation Context W1）
+  Allocation A2：50 → MAT-C    （Reservation Context W2）
+```
+
+| Case | 情形 | Expected |
+| --- | --- | --- |
+| **A** | `W1` overlaps `W2` | `60 + 50 = 110 > 100` → `CONSISTENCY` / `CONSISTENCY_CONFLICT` → `DATA_INCOMPLETE` |
+| **B** | `W1` does not overlap `W2` | **不得**仅因 `60 + 50 > 100` 就宣布 over-allocation；必须**分别**在各自有效 reservation context 内判断 conservation |
+| **C** | `W1` vs `W2` overlap **unresolved** | `SEMANTIC_UNRESOLVED` → `DATA_INCOMPLETE`；**不得**自动视为 overlap，也**不得**自动视为 not overlap |
+
+**Example G 的 downstream 解释（`§2.3.13` 正文未修改）：**
+
+`§2.3.13` Example G（`60 → MAT-A` ＋ `50 → MAT-C`，`110 > 100` → `INVALID`）
+应理解为：这些 allocations **处于同一 effective reservation context**，
+或 **overlap 已可靠成立** 的情况。
+
+**不得**把 Example G 解释为「任何不同时间 context 的 `60 + 50` 都自动 conflict」。
+这是 **PR #36 已批准的 `§2.3.10` clarification**，**不是修改 `§2`**。
+
+本 Task **不设计** allocation algorithm / timing engine / consumption engine。
 
 #### 4.4.59 Substitute Supply Eligibility Consistency
 
@@ -7073,17 +7179,39 @@ BR-INVENTORY-001 判定为 AVAILABLE 的 Substitute Inventory
 
 已有 Rule 要求：allocation 必须能够**可靠关联当前需求窗口**。
 
-如果无法判断 allocation 与 target / source demand window 是否重叠：
-
-**处理：** **`DATA_INCOMPLETE`** ＋ **Data Quality Issue**
-
-**但：**
+**当前状态（PR #36 Human-approved Option B）：**
 
 ```
-allocation demand-window mapping = DESIGN PENDING
+canonical demand-window mapping contract = DESIGN RESOLVED
+concrete source evidence                 = SOURCE-SPECIFIC / Adapter-defined
 ```
 
-**不得创建** `demand_window_id` / `requirement_id` / `allocation_period` 等新字段。
+**必须形成三条清晰路径（不得创建新的 Validation Reason）：**
+
+**A. mapping resolved 且 applicable / overlap relation reliable**
+
+```
+正常继续计算
+```
+
+**B. allocation exists，但 demand-window semantic mapping unresolved**
+
+```
+SEMANTIC_RESOLUTION / SEMANTIC_UNRESOLVED
+→ DATA_INCOMPLETE        （当 capability 需要该 allocation / 该 supply 判断时）
+```
+
+**C. mapping 已可靠解析，且在同一 effective reservation context 发生真实 over-allocation**
+
+```
+CONSISTENCY / CONSISTENCY_CONFLICT
+→ DATA_INCOMPLETE
+```
+
+**不得**把这三种情形合并成一个笼统的 `Allocation Conflict`。
+
+**不得创建** `demand_window_id` / `requirement_id` / `allocation_period` / `valid_from` / `valid_to`
+等新字段；也**不得**创建新的 Validation Reason。
 
 #### 4.4.61 Supplier-Material Relationship Consistency
 
@@ -7378,12 +7506,13 @@ affected evidence → affected grain → affected capability
 | BOM version / validity | **`DESIGN RESOLVED`** —— requirement-scoped BOM applicability（**§4.5.7** ／ **§4.1.4 N**） |
 | `sourcing_status` vocabulary | **`DESIGN RESOLVED`** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.5.11** |
 | `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** —— source mapping = **source-specific / Adapter-defined**；canonical mapping contract 见 **§4.5.21** |
-| allocation demand-window mapping | `DESIGN PENDING` |
+| allocation demand-window mapping | **`DESIGN RESOLVED`** —— canonical allocation applicability mapping contract 见 **§4.5.9** |
 | `ApplicableMOQ` source | `DESIGN PENDING` |
 | provenance carrier | `DESIGN PENDING` |
 
 > 表中 `Warehouse canonical role`（**§4.5.12**）、`BOM version / validity`（**§4.5.7** ／ **§4.1.4 N**）、
-> `sourcing_status` vocabulary（**§4.5.11**）与 `effective_arrival_date` source mapping（**§4.5.21**）
+> `sourcing_status` vocabulary（**§4.5.11**）、`effective_arrival_date` source mapping（**§4.5.21**）
+> 与 allocation demand-window mapping（**§4.5.9**）
 > 已由后续 Human-approved Design 解析，保留登记以便追溯。
 
 **Consistency Validation 不得成为解决这些问题的后门。**
@@ -7396,7 +7525,7 @@ affected evidence → affected grain → affected capability
 | --- | --- | --- |
 | **A** | `ordered_qty = 100`、`received_qty = 120` | **`DATA_INCOMPLETE`** ＋ **Data Quality Issue**；**不得** clamp |
 | **B** | `required_date = 2026-10-10`、`effective_arrival_date = 2026-10-15` | record **valid** 但 `2026-10-10` 前**不计入**；**不是** Data Quality Issue |
-| **C** | Eligible Substitute Supply = 100；`60 → MAT-A`、`50 → MAT-C` | **Allocation Conflict** ＋ **`DATA_INCOMPLETE`**；**不得**自动调成 60 / 40 |
+| **C** | Eligible Substitute Supply = 100；`60 → MAT-A`、`50 → MAT-C` —— **且两者处于同一 effective reservation context / overlap 已可靠成立** | **`CONSISTENCY_CONFLICT`** ＋ **`DATA_INCOMPLETE`**；**不得**自动调成 60 / 40；**若 overlap 无法可靠判断 → `SEMANTIC_UNRESOLVED`**（见 **§4.4.58** / **§4.4.60**） |
 | **D** | Target `Plant-A / MAT-A`；Source `Plant-B / MAT-B` | **不得直接计入** Approved Substitute Supply；**不得**自动设计 transfer |
 | **E** | Performance `Supplier-A / MAT-X`；Risk request `Supplier-A / MAT-Y` | **不得直接复用** MAT-X performance；Risk Evidence **不能形成可靠正常结论** |
 | **F** | Run R1 bound to Package P1；Inventory from P1 ＋ Requirement from P1 ＋ Inbound from **P2** | **不得静默执行 R1** —— Analysis Run / Snapshot consistency violation |
@@ -7611,6 +7740,8 @@ missing  ≠  present but invalid
 | `effective_arrival_date > required_date` | valid record → not eligible before that need date |
 | Substitute Relationship `PENDING` | valid known state → not Approved Substitute Supply |
 | Supplier-Material Relationship `sourcing_status` → **`ineligible`** | valid record ＋ evidence 可可靠解释 → **not eligible for Supplier Risk candidate evaluation** |
+| Substitute Allocation → Target Applicability = **`not applicable`** | valid allocation ＋ mapping 可靠 → **不计入**当前 Target `CumulativeApprovedSubstituteSupply`；**不是** Data Quality Issue |
+| Substitute Allocation ↔ Source Demand Context = **`does not overlap`** | valid state ＋ mapping 可靠 → 不构成 reservation；**不是** Data Quality Issue |
 
 **不得**把 **business ineligible** 错误分类成 `INVALID_DEFINED_STATUS` / `CONSISTENCY_CONFLICT`
 或 **Data Quality Issue**。
@@ -7620,6 +7751,10 @@ missing  ≠  present but invalid
 >
 > **特别注意**：Supplier-Material Relationship 的 `ineligible` **不得**被压平为 `unresolved`，
 > 反之亦然（见 **§4.4.62**）。
+>
+> **同理**：Substitute Allocation 的 **`not applicable`** / **`does not overlap`**
+> **不得**被压平为 **`unresolved`** ——
+> **只有「无法判断」才是 semantic unresolved**（见 **§4.4.60** / **§4.5.9**）。
 
 #### 4.4.90 Data Quality Issue Boundary
 
@@ -7800,7 +7935,7 @@ Risk vocabulary **保持现有定义**。
 
 #### 4.4.99 Pending Design Preservation
 
-必须继续保持以下未决项（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**、`sourcing_status` vocabulary **已由 §4.5.11 解析**、`effective_arrival_date` source mapping **已由 §4.5.21 解析**，保留登记以便追溯）：
+必须继续保持以下未决项（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**、`sourcing_status` vocabulary **已由 §4.5.11 解析**、`effective_arrival_date` source mapping **已由 §4.5.21 解析**、allocation demand-window mapping **已由 §4.5.9 解析**，保留登记以便追溯）：
 
 | 未决项 | 状态 |
 | --- | --- |
@@ -7810,7 +7945,7 @@ Risk vocabulary **保持现有定义**。
 | BOM version / validity | **`DESIGN RESOLVED`** —— requirement-scoped BOM applicability（**§4.5.7** ／ **§4.1.4 N**） |
 | `sourcing_status` vocabulary | **`DESIGN RESOLVED`** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.5.11** |
 | `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** —— source mapping = **source-specific / Adapter-defined**；canonical mapping contract 见 **§4.5.21** |
-| allocation demand-window mapping | `DESIGN PENDING` |
+| allocation demand-window mapping | **`DESIGN RESOLVED`** —— canonical allocation applicability mapping contract 见 **§4.5.9** |
 | `ApplicableMOQ` source | `DESIGN PENDING` |
 | provenance carrier | `DESIGN PENDING` |
 
@@ -7983,7 +8118,7 @@ physical schema / architecture / technology / ADR。
 Design DoD = PASS（17 / 17）
 ```
 
-**Upstream Design Items（5 项未决 ＋ 4 项已解析）—— 不阻塞本 closure**
+**Upstream Design Items（4 项未决 ＋ 5 项已解析）—— 不阻塞本 closure**
 
 这 9 项**阻止的是**「某些 capability 当前能够实际运行」，
 **不是**「Data Validation conceptual design 已经定义清楚」。
@@ -7999,7 +8134,7 @@ Design DoD = PASS（17 / 17）
 | 4 | BOM version / validity | **`DESIGN RESOLVED`** | 已由 **§4.5.7** ／ **§4.1.4 N** 解析为 requirement-scoped BOM applicability（`§4.4.52`） |
 | 5 | `sourcing_status` vocabulary | **`DESIGN RESOLVED`** | 已由 **§4.5.11** 解析为 source-specific → canonical eligibility condition mapping contract（`§4.4.62`） |
 | 6 | `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** | 已由 **§4.5.21** 解析为 source-specific → canonical mapping contract（`§4.4.49`） |
-| 7 | allocation demand-window mapping | `DESIGN PENDING` | 无法判断重叠 → `DATA_INCOMPLETE` ＋ Data Quality Issue（`§4.4.60`） |
+| 7 | allocation demand-window mapping | **`DESIGN RESOLVED`** | 已由 **§4.5.9** 解析为 canonical allocation applicability mapping contract（`§4.4.58` / `§4.4.60`） |
 | 8 | `ApplicableMOQ` source | `DESIGN PENDING` | 无法可靠取得 → `DATA_INCOMPLETE` → No Numeric Recommendation（`§4.4.67`） |
 | 9 | provenance carrier | `DESIGN PENDING` | 只提出 requirement，不设计 carrier（`§4.4.15` / `§4.4.93`） |
 
@@ -8013,8 +8148,12 @@ Design DoD = PASS（17 / 17）
 > （**Human-authorized Design Change**，PR #32 ／ Option B）；
 > 第 6 项 `effective_arrival_date` source mapping 已由 **§4.5.21** 解析为
 > **source-specific → canonical effective_arrival_date** 的 mapping contract
-> （**Human-authorized Design Change**，PR #34 ／ Option D）。
-> 四者均**不再属于未决项**；对应行保留登记以便追溯。剩余 **5 项**未决。
+> （**Human-authorized Design Change**，PR #34 ／ Option D）；
+> 第 7 项 allocation demand-window mapping 已由 **§4.5.9** 解析为
+> **canonical allocation applicability mapping contract**
+> （**Target Applicability** ＋ **Source Reservation Overlap**，
+> **Human-authorized Design Change**，PR #36 ／ Option B）。
+> 五者均**不再属于未决项**；对应行保留登记以便追溯。剩余 **4 项**未决。
 
 > 三者均明确禁止 Validation 反向解决这些设计问题：
 > `Consistency Validation 不得成为解决这些问题的后门。` /
@@ -8073,7 +8212,8 @@ conceptual validation design complete
 > ＋ **Warehouse Role Resolution**（**§4.5.12**）
 > ＋ **BOM Version / Validity Mapping**（**§4.5.7** ／ **§4.1.4 N**）
 > ＋ **Supplier Eligibility Vocabulary Mapping**（**§4.5.11**）
-> ＋ **Effective Arrival Date Source Mapping**（**§4.5.21**）。
+> ＋ **Effective Arrival Date Source Mapping**（**§4.5.21**）
+> ＋ **Allocation Demand-Window Mapping**（**§4.5.9**）。
 >
 > **仍为 `DESIGN PENDING` 的层级：** **Other Source-Semantic Mapping** ／ **Final Master Data Mapping**。
 
@@ -8089,6 +8229,7 @@ conceptual validation design complete
 | BOM Version / Validity Mapping | **`DESIGN RESOLVED`** |
 | Supplier Eligibility Vocabulary Mapping | **`DESIGN RESOLVED`** |
 | Effective Arrival Date Source Mapping | **`DESIGN RESOLVED`** |
+| Allocation Demand-Window Mapping | **`DESIGN RESOLVED`** |
 | Other Source-Semantic Mapping | `DESIGN PENDING` |
 | Final Master Data Mapping | `DESIGN PENDING` |
 
@@ -8112,13 +8253,13 @@ conceptual validation design complete
 >
 > **但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
 > 其中仍存在 `loss_rate` owner / grain、`required_quantity` semantic、
-> allocation demand-window mapping、`ApplicableMOQ` source、provenance carrier。
+> `ApplicableMOQ` source、provenance carrier。
 >
 > `allocation demand-window mapping` 的
-> **Substitute Allocation Demand-Window Mapping Design Review** —— 见 **§4.5.9**；
-> 其 **Human Decision 已记录**（**`Canonical Model Compatibility = COMPATIBLE` ACCEPTED**、
-> **Option B APPROVED**），但 **semantic synchronization 尚未实施**，
-> 因此其状态**仍为 `DESIGN PENDING`**，unresolved count **仍为 5**。
+> **Substitute Allocation Demand-Window Mapping Design Review** 与 **Option B Implementation Record**
+> 见 **§4.5.9**；其 `§4.1` / `§4.2` / `§4.4` / `§4.5` semantic synchronization **已实施**，
+> 因此现为 **`DESIGN RESOLVED`**（登记为 **Allocation Demand-Window Mapping** 层），
+> unresolved count **5 → 4**。
 
 #### 4.5.1 Purpose & Scope
 
@@ -8137,7 +8278,7 @@ Plant / Material / Supplier 以及关键业务 relationship **必须满足什么
 - mapping provenance requirement
 - mapping failure blast radius
 
-> 后续 Task 已追加 **Warehouse Role Resolution**（见 **§4.5.12**）、**BOM Version / Validity Mapping**（见 **§4.5.7**）、**Supplier Eligibility Vocabulary Mapping**（见 **§4.5.11**）与 **Effective Arrival Date Source Mapping**（见 **§4.5.21**）。
+> 后续 Task 已追加 **Warehouse Role Resolution**（见 **§4.5.12**）、**BOM Version / Validity Mapping**（见 **§4.5.7**）、**Supplier Eligibility Vocabulary Mapping**（见 **§4.5.11**）、**Effective Arrival Date Source Mapping**（见 **§4.5.21**）与 **Allocation Demand-Window Mapping**（见 **§4.5.9**）。
 
 **不得定义**：ERP vendor / ERP version / source table / source column / CSV column / JSON path /
 SQL / mapping code / fuzzy matching algorithm / MDM product / database / API / Adapter implementation。
@@ -8898,13 +9039,15 @@ Allocation evidence **必须**能够解析到：
 对应 Substitute Relationship + target context + source substitute context
 ```
 
-**但：**
+**当前 authoritative state（PR #36 实施后）：**
 
 ```
-allocation demand-window mapping = DESIGN PENDING
+canonical demand-window mapping contract = DESIGN RESOLVED
+concrete source evidence                 = SOURCE-SPECIFIC / Adapter-defined
 ```
 
-因此**不得创建** `demand_window_id` / `requirement_id` / `allocation_period` 等字段。
+因此**不得创建** `demand_window_id` / `requirement_id` / `allocation_period` / `valid_from` / `valid_to`
+等字段；也**不得**创建 persisted applicability / overlap field。
 
 本 Task **只定义**：allocation relationship identity **必须可追溯且不可猜测**。
 
@@ -9391,10 +9534,177 @@ allocation demand-window mapping = DESIGN PENDING
 unresolved count                 = 仍为 5
 ```
 
-**本 PR 不实施** `§4.1` / `§4.2` / `§4.4` / `§4.5` 的 Option B semantic synchronization。
+**PR #36 当时不实施** `§4.1` / `§4.2` / `§4.4` / `§4.5` 的 Option B semantic synchronization；
+`allocation demand-window mapping` 当时**保持 `DESIGN PENDING`**，unresolved count 当时**仍为 5**。
 
-`allocation demand-window mapping` **保持 `DESIGN PENDING`**，unresolved count **仍为 5**，
-**直到 follow-up Design Change 实施并通过 Review**。
+> 以上为**历史记录**。后续 **Human-authorized Option B Implementation** 已实施并变更该状态 ——
+> 见下方 **Option B Implementation Record**。
+
+**Option B Implementation Record（Human-authorized Design Change）**
+
+**Human Authorization Source**
+
+```
+PR #36 Human Decision
+  → Canonical Model                        = COMPATIBLE
+  → Option B                               = APPROVED
+  → Target Applicability ≠ Source Reservation Overlap
+  → conceptual outcomes                    = APPROVED
+  → not applicable ≠ unresolved            = APPROVED
+  → mapping does not create allocation     = APPROVED
+  → summation within same effective reservation context = APPROVED
+  → §2.3.10 semantic                       = UNCHANGED
+  → minimal synchronization（§4.1/§4.2/§4.4/§4.5）    = AUTHORIZED
+```
+
+**Implementation Result**
+
+```
+source-specific allocation evidence
+        ↓
+explicit deterministic mapping
+        ↓
+canonical allocation applicability relation
+        ├─ Target Applicability
+        └─ Source Reservation Overlap
+```
+
+该 contract 统一的是 **relationship semantics**，**不是** **source representation**。
+
+**Target Applicability（正式定义）**
+
+对某个 **Target Demand Context**，至少能够可靠确定：
+
+```
+plant_id
++ target_material_code
++ required_date
+```
+
+**不得创建** `requirement_id`；**不得修改** `Production Requirement` grain。
+
+Allocation **可以**被映射到 **one or more explicitly resolved Target Demand Contexts** ——
+例如同一 allocation `A1` 对 `R1` **applicable**、对 `R2` **not applicable** 或 **unresolved**。
+
+**必须来自 explicit source-specific mapping evidence** ——
+**不得**按 `required_date` proximity 自动匹配。
+
+| Outcome | 含义 | 处理 |
+| --- | --- | --- |
+| **`applicable`** | 该 explicit allocation 对当前 Target Demand Context **可以进入** `CumulativeApprovedSubstituteSupply` 的**候选计算** | 仍必须同时满足既有 `approved relationship` / `same Plant` / eligible `AVAILABLE` source supply / valid quantity / `substitution_ratio` / 其他 `BR-SUBSTITUTE-001` 约束；**Target applicable 不自动等于最终 supply result** |
+| **`not applicable`** | allocation evidence **本身有效**，但**明确不属于**当前 Target Demand Context | **valid but not applicable**；默认 **NO Validation Issue**、**NO `DATA_INCOMPLETE`**；**不得计入**当前 Target `CumulativeApprovedSubstituteSupply`；**必须保持 `not applicable ≠ unresolved`** |
+| **`unresolved`** | **无法可靠判断**是否适用于当前 Target Demand Context | `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED` → capability 需要该 substitute evidence 时 `DATA_INCOMPLETE`；**不得** default applicable / default not applicable / closest date wins / earliest date wins / LLM guess |
+
+**Source Reservation Overlap（正式定义）**
+
+回答：当前 explicit allocation 占用的 Source Supply，与某 **Source Material Demand Context**
+是否属于**同一个 effective reservation context**。
+
+| Outcome | 处理 |
+| --- | --- |
+| **`overlaps`** | 已分配 quantity **不得**在该 context：再分配给其他 overlapping Target ／ 作为 unallocated substitute supply ／ 被多个 shortage 重复消费 ／ 继续作为 Source Material 自身**完整** uncommitted supply；继续继承 `RemainingUnallocatedSourceSupply = EligibleSubstituteSupply - Σ AllocatedSubstituteQty`，但 **sum 必须属于 same effective reservation context** |
+| **`does not overlap`** | **不得**因为历史上存在 allocation 就**永久锁死**该 Source Supply；必须明确 allocation reservation **不是** forever reservation、**也不是** entire Analysis Run reservation（除非 source-specific evidence 明确支持该 context）；**但本 Task 不设计** allocation release / consumption / inventory replenishment engine |
+| **`unresolved`** | `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED` → 当 shortage / substitute calculation 需要判断该 supply 是否仍可使用时 `DATA_INCOMPLETE`；**不得**默认 overlap、**不得**默认 no-overlap，尤其**不得**为了**保守**或**乐观**而自动选边 |
+
+**Conceptual Outcomes Boundary**
+
+`applicable` / `not applicable` / `unresolved` 与 `overlaps` / `does not overlap` / `unresolved`
+**只是 conceptual mapping outcomes** —— **不是** Business Status / runtime enum /
+canonical persisted field / database enum / API enum / Validation Status。
+
+**不得创建** `AllocationApplicabilityStatus` / `DemandWindowStatus` / `ReservationOverlapStatus`。
+
+**§2.3.10 Summation Interpretation（记录于 downstream Design；`§2` 正文未修改）**
+
+```
+Σ AllocatedSubstituteQty <= EligibleSubstituteSupply
+    → within the same effective reservation context
+```
+
+**不是** all historical allocations **forever accumulated**。
+这是 **Human-approved clarification（PR #36 Human Decision）**，**不是** Business Rule semantic change。
+
+**Cumulative / No Double Counting**
+
+`CumulativeApprovedSubstituteSupply(<= t)` 中的 **cumulative 不表示**同一 allocation
+每经过一个 `required_date` 都重新贡献一次 quantity。
+同一 explicit allocation **必须保持其 identity / evidence continuity**，
+只能依据**已解析的 Target Applicability** 参与相应 context 的计算 ——
+**不得** `A1` 在 `R1` 算一次，到 `R2` 又当作一笔**新的** allocation 再次累计。
+
+**No Double Counting（canonical invariant）—— 同一 explicit allocation 不得：**
+
+- 作为两个独立 allocation 重复出现
+- 在 overlapping Target contexts 被重复消费
+- 同时作为 Target allocated supply **和** Source full uncommitted supply
+- 被 cumulative calculation 重复累计
+
+> 如何通过代码 enforcement 属于 **Implementation**；本 Task **只定义 canonical invariant**。
+
+**Mapping Does Not Create Allocation**
+
+Demand-Window Mapping **只解释 already-existing explicit allocation**。**不得**产生：
+allocation quantity / allocation decision / allocation priority / target priority / source priority /
+shortage priority / auto assignment / auto reallocation / proportional allocation / greedy allocation /
+earliest demand first / optimization / scheduling。
+
+**Provenance / Cross-Package（保持）**
+
+追溯链：
+
+```
+source allocation evidence
+→ Substitute Relationship
+→ Target Demand Context
+→ Source Reservation Context
+→ Snapshot Package
+```
+
+**但 provenance carrier 仍 `DESIGN PENDING`**；**不得创建** allocation ID schema / lineage table /
+JSON metadata / DB relation / physical provenance fields。
+
+跨 Package 继续继承 **`PROVENANCE` / `PROVENANCE_MISMATCH`** ——
+**不得**让 Package P1 的 allocation evidence 静默组合 Package P2 的
+Target Demand Context / Source Reservation mapping evidence。
+
+**Critical Scenario Resolution（`§4.5.9` Review 场景重新验证）**
+
+```
+MAT-B AVAILABLE = 100 ／ Allocation A1 = 60 MAT-B → MAT-A
+Target：R1 = MAT-A / 2026-10-10、R2 = MAT-A / 2026-10-20
+Source：S1 = MAT-B / 2026-10-12
+```
+
+**新 Design 不会「自动给出答案」** —— 而是**要求** source-specific mapping 可靠给出：
+
+| # | 必须 resolved 的 relation |
+| --- | --- |
+| 1 | `A1` → `R1` applicable? |
+| 2 | `A1` → `R2` applicable? |
+| 3 | `A1` reservation overlaps `S1`? |
+
+**一旦三者均 resolved**，deterministic Rule 才能可靠计算；
+**如果其中必要 relation unresolved → `DATA_INCOMPLETE`**。
+
+**这正是 Design Resolution** —— **不是**要求当前 POC 发明真实 source evidence。
+
+**Meaning of `DESIGN RESOLVED`**
+
+`DESIGN RESOLVED` **只**表示 **canonical allocation applicability mapping contract 概念设计完成**，
+**不表示**：real ERP allocation evidence known / reservation source field known /
+planning-link source known / Adapter implemented / overlap calculation implemented /
+allocation enforcement implemented / tested / Substitute Supply implemented / production-ready。
+
+**执行状态（本 Task 完成时点）**
+
+```
+Human Decision                   = RECORDED
+Option B                         = IMPLEMENTED
+allocation demand-window mapping = DESIGN RESOLVED
+unresolved count                 = 5 → 4
+Other Source-Semantic Mapping    = 仍 DESIGN PENDING
+Master Data Mapping overall      = 仍 DESIGN PENDING
+```
 
 #### 4.5.10 Supplier-Material Relationship
 
@@ -11236,7 +11546,7 @@ Master Data Mapping overall    = 仍 DESIGN PENDING
 
 #### 4.5.22 Preserve Unresolved Items
 
-以下未决项本轮**必须继续保持**（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**、`sourcing_status` vocabulary **已由 §4.5.11 解析**、`effective_arrival_date` source mapping **已由 §4.5.21 解析**）：
+以下未决项本轮**必须继续保持**（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**、`sourcing_status` vocabulary **已由 §4.5.11 解析**、`effective_arrival_date` source mapping **已由 §4.5.21 解析**、allocation demand-window mapping **已由 §4.5.9 解析**）：
 
 | 未决项 | 状态 |
 | --- | --- |
@@ -11246,7 +11556,7 @@ Master Data Mapping overall    = 仍 DESIGN PENDING
 | BOM version / validity | **`DESIGN RESOLVED`** —— requirement-scoped BOM applicability（**§4.5.7** ／ **§4.1.4 N**） |
 | `sourcing_status` vocabulary | **`DESIGN RESOLVED`** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.5.11** |
 | `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** —— source mapping = **source-specific / Adapter-defined**；canonical mapping contract 见 **§4.5.21** |
-| allocation demand-window mapping | `DESIGN PENDING` |
+| allocation demand-window mapping | **`DESIGN RESOLVED`** —— canonical allocation applicability mapping contract 见 **§4.5.9** |
 | `ApplicableMOQ` source | `DESIGN PENDING` |
 | provenance carrier | `DESIGN PENDING` |
 
@@ -11262,9 +11572,9 @@ Master Data Mapping overall    = 仍 DESIGN PENDING
 > （见 **§4.5.21 Option D Implementation Record**）；
 > 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **6 → 5**。
 >
-> `allocation demand-window mapping` 的 **Human Decision 已记录**
-> （**Option B APPROVED**，见 **§4.5.9**）；但在 approved **semantic synchronization**
-> 完成并通过 Review 之前，其状态**保持 `DESIGN PENDING`**，未决项数量**不减少**。
+> `allocation demand-window mapping` 的 **Option B semantic synchronization 已实施**
+> （见 **§4.5.9 Option B Implementation Record**）；
+> 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **5 → 4**。
 
 本 Task **不以「Master Data Mapping」为名一次性消灭这些问题**。
 
@@ -11304,10 +11614,11 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 本节已完成 Canonical Identity Resolution、Relationship Resolution Boundary、
 **Warehouse Role Resolution**（**§4.5.12**）、
 **BOM Version / Validity Mapping**（**§4.5.7** ／ **§4.1.4 N**）、
-**Supplier Eligibility Vocabulary Mapping**（**§4.5.11**）
-与 **Effective Arrival Date Source Mapping**（**§4.5.21**）。
+**Supplier Eligibility Vocabulary Mapping**（**§4.5.11**）、
+**Effective Arrival Date Source Mapping**（**§4.5.21**）
+与 **Allocation Demand-Window Mapping**（**§4.5.9**）。
 
-`DESIGN RESOLVED` 的八个层级**仅**表示其 **conceptual resolution boundary 已定义**，
+`DESIGN RESOLVED` 的九个层级**仅**表示其 **conceptual resolution boundary 已定义**，
 **不表示**：
 
 - 真实 ERP mapping 已完成
@@ -11360,18 +11671,24 @@ exactly one canonical `effective_arrival_date` 或 `unresolved`）
 
 **但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
 其中仍存在 `loss_rate` owner / grain、`required_quantity` semantic、
-allocation demand-window mapping、`ApplicableMOQ` source、provenance carrier。
+`ApplicableMOQ` source、provenance carrier。
 
 `DESIGN RESOLVED` **只**表示 **canonical source-mapping contract 概念设计完成**，
 **不表示** real ERP field known / Adapter implemented / mapping tested / `Effective Inbound` implemented。
 
-**Open Pending Sync：** `allocation demand-window mapping`
-（`Other Source-Semantic Mapping`）**仍为 `DESIGN PENDING`** ——
-其 **Substitute Allocation Demand-Window Mapping Design Review** 判定
-`Canonical Model Compatibility = COMPATIBLE`，其 **Option B 已获 Human Approval**
-（source-specific mapping → canonical **Target Applicability** ＋ **Source Reservation Overlap**，见 **§4.5.9**），
-但 **`§4.1` / `§4.2` / `§4.4` / `§4.5` 的 semantic synchronization 尚未实施**，
-须待 follow-up Design Change 完成并通过 Review。
+**Option B —— IMPLEMENTED：** `allocation demand-window mapping` **现为 `DESIGN RESOLVED`** ——
+其 **Option B**（source-specific allocation evidence → explicit deterministic mapping →
+canonical **Target Applicability** ＋ **Source Reservation Overlap**）
+已由 **Human-authorized Design Change** 实施，`§4.1` / `§4.2` / `§4.4` / `§4.5` 已完成最小 semantic synchronization
+（见 **§4.5.9 Option B Implementation Record**）。
+
+**但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
+其中仍存在 `loss_rate` owner / grain、`required_quantity` semantic、
+`ApplicableMOQ` source、provenance carrier。
+
+`DESIGN RESOLVED` **只**表示 **canonical allocation applicability mapping contract 概念设计完成**，
+**不表示** real ERP allocation evidence known / reservation source field known / Adapter implemented /
+overlap calculation implemented / allocation enforcement implemented / tested。
 
 ---
 
