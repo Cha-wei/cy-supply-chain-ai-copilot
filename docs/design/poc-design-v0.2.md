@@ -4823,6 +4823,456 @@ data validated、implemented、tested。
 
 ---
 
+### 4.3 Snapshot / Import Contract —— Package Envelope & Import Atomicity
+
+> **子章节整体状态：仍为 `DESIGN PENDING`。**
+>
+> 本节只完成其**第一层**。
+
+**层级状态登记：**
+
+| 层 | Status |
+| --- | --- |
+| Package Envelope | **`DESIGN RESOLVED`** |
+| Atomicity Boundary | **`DESIGN RESOLVED`** |
+| Immutability Boundary | **`DESIGN RESOLVED`** |
+| Analysis Run Linkage | **`DESIGN RESOLVED`** |
+| Serialization Format | `DESIGN PENDING` |
+| Physical Dataset Layout | `DESIGN PENDING` |
+| Field Carrier Mapping | `DESIGN PENDING` |
+| Final Import Contract | `DESIGN PENDING` |
+
+> **不得**提前把整个 `Snapshot / Import Contract` 标记为 `DESIGN RESOLVED`。
+
+#### 4.3.1 Purpose & Scope
+
+本子章节定义：一次 **Controlled Export / Snapshot** 如何作为一个**不可变、可追溯、一致**的
+数据输入单元进入 POC。
+
+**本 Task 只定义：**
+
+- Snapshot Package conceptual envelope
+- package identity
+- package immutability
+- import atomicity
+- cross-snapshot consistency
+- Analysis Run 与 Snapshot Package 的关系
+- package-level provenance requirement
+- package acceptance / rejection boundary
+
+**不得定义**：CSV / JSON / JSONL / Parquet / ZIP、database、directory layout、
+concrete filenames、physical schema、API contract、Adapter implementation。
+
+因此：
+
+```
+Serialization Format = DESIGN PENDING
+```
+
+#### 4.3.2 Snapshot Package Concept
+
+定义：
+
+> **Snapshot Package** 表示一次 **Controlled Export** 产生的、供 POC 读取的
+> **immutable input evidence package**。
+
+它是 **POC Data Landing Zone** 中的 **conceptual import unit**。
+
+**必须明确：**
+
+```
+Snapshot Package  ≠ Analysis Run
+Snapshot Package  ≠ Production System
+Snapshot Package  ≠ Database Snapshot implementation
+```
+
+#### 4.3.3 Package Identity
+
+定义 **transport-level concept**：
+
+```
+snapshot_package_id
+```
+
+**Purpose：** 唯一标识一次受控导出的 Snapshot Package。
+
+**注意：** 它属于 **Import / Transport Context**，**不是** canonical business entity ID。
+
+**不得规定**：UUID / hash / sequence / timestamp-based ID 等生成算法。
+
+**只要求：** 同一 package identity **必须可稳定识别**。
+
+> `snapshot_package_id` **不得**加入 `§4.2 Canonical Data Dictionary` 作为业务字段。
+
+#### 4.3.4 Snapshot Package vs Analysis Run
+
+```
+Snapshot Package = immutable business evidence input
+
+Analysis Run     = 使用某个已接受 Snapshot Package
+                   执行 deterministic analysis 的运行上下文
+```
+
+**要求：**
+
+```
+每个 Analysis Run 必须能够追溯到 exactly one accepted Snapshot Package
+```
+
+当前 POC **不允许**一个 Analysis Run **静默拼接多个 Snapshot Package**。
+
+**但：**
+
+```
+同一个 Snapshot Package 可以支持多次 Analysis Run
+```
+
+例如：
+
+```
+Snapshot Package S1
+      ↓
+Analysis Run R1
+
+Snapshot Package S1
+      ↓
+Analysis Run R2
+```
+
+这允许**相同输入**在重新执行 / 回归验证时**保持可追溯**。
+
+**不得假设：**
+
+```
+Snapshot Package ID  =  Analysis Run ID
+```
+
+#### 4.3.5 Immutability Boundary
+
+一个**已经 Accepted** 的 Snapshot Package **必须视为 immutable**。
+
+**不得：**
+
+- 原地修改内容后继续使用同一个 package identity
+- 部分覆盖 dataset
+- silently replace records
+- 用同一 ID 表示不同内容
+
+如果业务数据发生变化：**必须形成新的 Snapshot Package identity**。
+
+> 本 Task **不定义** storage implementation。
+
+#### 4.3.6 Atomic Import Boundary
+
+一次 Snapshot Package Import **必须具有 package-level atomic meaning**：
+
+```
+ACCEPTED
+   或
+REJECTED / UNUSABLE
+```
+
+**不得：**
+
+```
+部分 dataset 使用新 Snapshot，
+部分 dataset 使用旧 Snapshot，
+然后组成一个未明确声明的混合分析输入。
+```
+
+**例如禁止：**
+
+```
+Inventory   from Snapshot S2
++ Requirement from Snapshot S1
++ Inbound     from Snapshot S3
+```
+
+在当前 POC 中被**静默合并**成 `Analysis Run R1`。
+
+#### 4.3.7 Cross-Snapshot Mixing Prohibition
+
+当前 POC 第一版：**默认禁止 silent cross-snapshot mixing**。
+
+如果未来需要：
+
+- multi-snapshot composition
+- incremental refresh
+- streaming updates
+- delta ingestion
+
+**必须作为独立 Design。**
+
+**不得在本 Task 偷渡。**
+
+#### 4.3.8 Logical Snapshot Manifest
+
+定义 conceptual：**Snapshot Manifest**，用于描述 Package 自身。
+
+**注意：** 这是 **logical manifest**。
+
+本 Task **不决定**：`manifest.json` / `manifest.yaml` / database row / 其他物理实现。
+
+Manifest **至少需要表达以下语义**：
+
+- `snapshot_package_id`
+- contract version
+- export / package creation time
+- environment / evidence classification
+- included logical datasets
+- dataset-level provenance reference
+- dataset-level record count / integrity evidence
+- package completeness state
+
+这些属于 **transport / provenance metadata**。
+
+**不得加入 Canonical Data Dictionary 作为业务字段。**
+
+#### 4.3.9 SIMULATED Boundary
+
+当前项目是**模拟企业 POC**。
+
+Snapshot Package **必须能够明确标记**：
+
+```
+SIMULATED
+```
+
+**不得**让导入后的数据被描述成**真实 CY 企业生产数据**。
+
+未来真实数据环境需要**新的 access / security / validation decision**。
+
+#### 4.3.10 Logical Dataset Roles
+
+Snapshot Package 可以包含支持 P0 的 **logical dataset roles**，例如来自 `§4.1` Canonical Model 的：
+
+- Plant / Material identity context
+- Production Requirement
+- BOM Component
+- Inventory Snapshot
+- Configured Safety Stock
+- Inbound Supply
+- Substitute Relationship
+- Substitute Allocation
+- Supplier identity
+- Supplier-Material Relationship
+- Supplier Performance
+- Procurement policy input
+
+**注意：** 这里是 **logical dataset role**，**不是** physical filename / database table /
+CSV sheet / JSON object name。
+
+#### 4.3.11 Business Time vs Package Time
+
+必须区分：
+
+```
+Package / export time
+与
+business time
+```
+
+Package creation / export time **不得替代**：
+
+- `required_date`
+- `effective_arrival_date`
+- `inventory_snapshot_time`
+- `PerformancePeriod`
+- `PerformanceUpdatedAt`
+- `AnalysisDate`
+
+这些已有 canonical time semantics（见 §4.2.11）。
+
+例如：一个 Package 在 `10:00` 导出，**不代表** Inventory Snapshot Time /
+Supplier Performance Period / Requirement Date 都等于 `10:00`。
+
+#### 4.3.12 Package Completeness vs Business DATA_INCOMPLETE
+
+必须区分：
+
+```
+Package structural completeness
+与
+Business DATA_INCOMPLETE
+```
+
+**A. Package structural problem** —— 例如：
+
+- manifest unavailable
+- required dataset artifact absent
+- package identity inconsistent
+- dataset integrity cannot be verified
+
+可能导致：**Package Import `REJECTED` / `UNUSABLE`**。
+
+**B. Business data incomplete** —— Package 本身**结构合法**，但某业务字段
+missing / invalid / unresolved：
+
+则 Package **可以被 Accepted**，但对应业务 Rule 可能返回 **`DATA_INCOMPLETE`**。
+
+**不得把两个层级混为一谈。**
+
+#### 4.3.13 Valid Absence Preservation
+
+继承 `§4.2`：
+
+```
+valid absence  ≠ missing required data
+```
+
+例如：没有产生 `RecommendedPurchaseQty`，因为 `Classification = NORMAL` ——
+**不得**导致 Snapshot Package invalid。
+
+同样：
+
+```
+FirstShortageDate = not present
+```
+
+如果**完整计算**证明没有 shortage，属于**正常业务结果**，**不是** package integrity error。
+
+#### 4.3.14 Dataset Presence Boundary
+
+**不得要求**每个 Snapshot Package **必须永远包含所有 logical datasets**。
+
+Dataset 是否必须存在应取决于：**本 Analysis Capability 所需 evidence**。
+
+例如：Supplier Performance 不存在，**不一定**使整个 Snapshot Package 结构非法。
+
+但：运行 Supplier Risk capability 时可能导致 **`DATA_INCOMPLETE`** 或 **capability unavailable**。
+
+> 完整 **capability-to-dataset requirement** 留给 **Data Validation Design**。
+
+#### 4.3.15 Integrity Requirement
+
+Snapshot Package **必须支持未来验证**：
+
+- package identity integrity
+- dataset identity
+- dataset presence
+- dataset completeness metadata
+- content integrity
+
+**但本 Task 不决定**：SHA256 / MD5 / digital signature / checksum implementation。
+
+**只定义：**
+
+```
+integrity evidence is required
+```
+
+#### 4.3.16 Provenance Boundary
+
+每个 imported dataset **必须能够追溯到**：
+
+```
+Snapshot Package
++
+logical dataset role
++
+controlled export provenance
+```
+
+**但本 Task 不设计**：`source_system_id` schema、lineage DB、audit DB、event format。
+
+#### 4.3.17 Unresolved Carrier Boundary
+
+以下项**仍未完全确定**（见 §4.2.16）：
+
+- `loss_rate` owner / grain
+- `required_quantity` vs `ProductionQty`
+- Warehouse canonical role
+- BOM version / validity
+- `sourcing_status` vocabulary
+- `effective_arrival_date` source mapping
+- allocation demand-window mapping
+- `ApplicableMOQ` source
+- provenance carrier
+
+因此本 Task **不得为了完成 Snapshot Contract** 擅自决定这些字段属于哪个
+**physical dataset / file**。
+
+**尤其 `loss_rate`：**
+
+**不得**自行挂到 Production Requirement / Material / BOM Component / Plant-Material 之一。
+
+这些**必须继续保持原状态**。
+
+#### 4.3.18 Import Fail-Closed Principle
+
+如果 Package identity / integrity / required structural metadata **无法可靠确定**：
+
+**不得：**
+
+- 猜测
+- 自动修复成另一个 Package
+- 使用旧 Package 补齐
+- 从 Production 重新读取
+- 让 LLM 决定如何拼接
+
+**应 fail closed。**
+
+> 具体 Data Quality taxonomy 留给后续 **Data Validation**。
+
+#### 4.3.19 Read-only Boundary
+
+Import 行为**仍必须遵守 `§3`**：
+
+```
+Controlled Export / Snapshot
+      ↓
+POC Data Landing Zone
+      ↓
+Read-only analysis
+```
+
+**Import 不得：**
+
+- write back Production
+- modify source system
+- request Production DB fallback
+- trigger ERP transaction
+
+#### 4.3.20 Conceptual Import Lifecycle
+
+只定义 **conceptual lifecycle**：
+
+```
+RECEIVED
+   ↓
+STRUCTURAL CHECK
+   ↓
+ACCEPTED
+   or
+REJECTED / UNUSABLE
+   ↓
+Accepted Package may be referenced by Analysis Run
+```
+
+**注意：** 这些**只描述 Import lifecycle**。
+
+**不得**把它们加入：Shortage Classification / Supplier Risk Status / HITL Business Status。
+
+**本 Task 不要求创建正式 enum。**
+
+#### 4.3.21 Status Boundary
+
+`Snapshot / Import Contract` **整体仍为 `DESIGN PENDING`**。
+
+本 Task **仅**完成其第一层：Package Envelope、Import Atomicity、Immutability、Analysis Run linkage。
+
+`DESIGN RESOLVED` 的四个层级**仅**表示其 **conceptual boundary 已定义**，
+**不表示**：
+
+- serialization format determined
+- physical dataset layout determined
+- field carrier mapping determined
+- import implementation exists
+- data validated
+- tested
+
+---
+
 ## 5. AI / Tool Boundary
 
 **Backlog:** `VB-28`
