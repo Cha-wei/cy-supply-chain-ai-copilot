@@ -4560,11 +4560,37 @@ ProductionQty × BOMComponentQty
 
 | Field | Logical Type | Requiredness | Class | Business Semantic | Valid / Invalid Boundary | Missing Behavior | Rule(s) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `RecommendationNeedDate` | `DATE` | `REQUIRED` | `CONTEXT` | 采购建议所使用的 business need date | 当前 POC `= FirstShortageDate` | `DATA_INCOMPLETE` | `BR-PROCUREMENT-001` |
+| `RecommendationNeedDate` | `DATE` | `CONDITIONAL`（`Classification = SHORTAGE` 且 Procurement Recommendation applicable 时 `REQUIRED`） | `CONTEXT` | 采购建议所使用的 business need date | 当前 POC `= FirstShortageDate` | 见下方条件性说明 | `BR-PROCUREMENT-001` |
 | `ApplicableMOQ` | `NON_NEGATIVE_QUANTITY` | `CONDITIONAL`（`Classification = SHORTAGE` 时 `REQUIRED`） | `POLICY_INPUT` | 当前采购建议所适用的最小采购数量约束 | `ApplicableMOQ >= 0` | `DATA_INCOMPLETE`；**不得默认成 0** | `BR-PROCUREMENT-001` |
 
 > **`ApplicableMOQ` 的 Source Mapping = `DESIGN PENDING`。**
 > **不得**自行绑定 Supplier / Contract / ERP Purchasing Info Record（见 §4.2.16）。
+
+**`RecommendationNeedDate` 的条件性**
+
+`RecommendationNeedDate` 的 `Requiredness` 为 **`CONDITIONAL`**，仅当：
+
+```
+Classification = SHORTAGE
+且 Procurement Recommendation applicable
+```
+
+时 `REQUIRED`。
+
+如果：
+
+```
+Classification = NORMAL
+或
+Classification = BUFFER_BREACH
+```
+
+则 **No Purchase Recommendation**，因此 `RecommendationNeedDate` **可以 `not present by design`**。
+
+**这不是 `DATA_INCOMPLETE`。**
+
+如果 `Classification = SHORTAGE`，但 required recommendation inputs **无法可靠取得**，
+才进入 `DATA_INCOMPLETE`。
 
 #### 4.2.10 Derived Result Fields
 
@@ -4588,15 +4614,53 @@ ProductionQty × BOMComponentQty
 | `Classification` | `STATUS` | 短缺分类 | `BR-SHORTAGE-001` | 下游全部 | 仅 `NORMAL` / `BUFFER_BREACH` / `SHORTAGE` / `DATA_INCOMPLETE` | `DATA_INCOMPLETE` |
 | `ShortageQty` | `NON_NEGATIVE_QUANTITY` | 实际缺口数量 | `BR-SHORTAGE-001` | `BasePurchaseNeed` | `= max(0, -ProjectedAvailable)` | `DATA_INCOMPLETE` |
 | `BufferGap` | `NON_NEGATIVE_QUANTITY` | Safety Stock buffer 缺口 | `BR-SHORTAGE-001` | 解释 / 展示 | `= max(0, SafetyStock - ProjectedAvailable)` | `DATA_INCOMPLETE` |
-| `FirstShortageDate` | `DATE` | 最早出现 `ProjectedAvailable < 0` 的日期 | `BR-SHORTAGE-001` | `RecommendationNeedDate` | 按 `required_date` ascending 取最早；从未满足时为 `null / not present` | `DATA_INCOMPLETE` |
+| `FirstShortageDate` | `DATE` | 最早出现 `ProjectedAvailable < 0` 的日期 | `BR-SHORTAGE-001` | `RecommendationNeedDate` | 按 `required_date` ascending 取最早；从未满足时为 `null / not present`（**valid absence**） | 数据完整但整个 analysis horizon 从未满足 → **valid absence**（**不是** `DATA_INCOMPLETE`）；仅当 shortage calculation 因关键数据缺失 / invalid / unresolved 无法可靠执行 → `DATA_INCOMPLETE` |
 | `DaysUntilNeed` | `DECIMAL_QUANTITY` | 距需求日的天数 | `BR-SUPPLIER-RISK-001` | `LeadTimeRisk` | `= RecommendationNeedDate - AnalysisDate`；`>= 0` | `LeadTimeRisk = DATA_INCOMPLETE` |
 | `LeadTimeRisk` | `STATUS` | Lead Time 可行性风险 | `BR-SUPPLIER-RISK-001` | `OverallSupplierRisk` | 仅 `LOW` / `HIGH`（**本版本无 `MEDIUM`**） | `DATA_INCOMPLETE` |
 | `DeliveryRisk` | `STATUS` | 交付绩效风险 | `BR-SUPPLIER-RISK-001` | `OverallSupplierRisk` | 仅 `LOW` / `MEDIUM` / `HIGH` | `DATA_INCOMPLETE` |
 | `QualityRisk` | `STATUS` | 质量绩效风险 | `BR-SUPPLIER-RISK-001` | `OverallSupplierRisk` | 仅 `LOW` / `MEDIUM` / `HIGH` | `DATA_INCOMPLETE` |
 | `OverallSupplierRisk` | `STATUS` | 综合供应商风险 | `BR-SUPPLIER-RISK-001` | 决策支持 | `= max severity`（**非** weighted score）；`LOW < MEDIUM < HIGH` | 任一维度不可靠 → `DATA_INCOMPLETE` |
-| `BasePurchaseNeed` | `NON_NEGATIVE_QUANTITY` | 基础采购需求 | `BR-PROCUREMENT-001` | `RecommendedPurchaseQty` | `= ShortageQty at FirstShortageDate`；**不得**加 `BufferGap` | `DATA_INCOMPLETE` |
-| `MOQAdjustmentQty` | `NON_NEGATIVE_QUANTITY` | 为满足 MOQ 额外增加的数量 | `BR-PROCUREMENT-001` | 解释 / 展示 | `= RecommendedPurchaseQty - BasePurchaseNeed`；`>= 0`；**不是** `ShortageQty` | `DATA_INCOMPLETE` |
-| `RecommendedPurchaseQty` | `NON_NEGATIVE_QUANTITY` | 建议采购数量 | `BR-PROCUREMENT-001` | Procurement Request Draft | `= max(BasePurchaseNeed, ApplicableMOQ)`；保持 canonical quantity | `DATA_INCOMPLETE`；**No Numeric Recommendation** |
+| `BasePurchaseNeed` | `NON_NEGATIVE_QUANTITY` | 基础采购需求 | `BR-PROCUREMENT-001` | `RecommendedPurchaseQty` | `= ShortageQty at FirstShortageDate`；**不得**加 `BufferGap` | `NORMAL` / `BUFFER_BREACH` → **not produced by design**；`SHORTAGE` ＋ inputs reliable → numeric；`SHORTAGE` ＋ 关键输入不可靠 → `DATA_INCOMPLETE` / **No Numeric Recommendation** |
+| `MOQAdjustmentQty` | `NON_NEGATIVE_QUANTITY` | 为满足 MOQ 额外增加的数量 | `BR-PROCUREMENT-001` | 解释 / 展示 | `= RecommendedPurchaseQty - BasePurchaseNeed`；`>= 0`；**不是** `ShortageQty` | `NORMAL` / `BUFFER_BREACH` → **not produced by design**；`SHORTAGE` ＋ inputs reliable → numeric；`SHORTAGE` ＋ 关键输入不可靠 → `DATA_INCOMPLETE` / **No Numeric Recommendation** |
+| `RecommendedPurchaseQty` | `NON_NEGATIVE_QUANTITY` | 建议采购数量 | `BR-PROCUREMENT-001` | Procurement Request Draft | `= max(BasePurchaseNeed, ApplicableMOQ)`；保持 canonical quantity | `NORMAL` / `BUFFER_BREACH` → **not produced by design**；`SHORTAGE` ＋ inputs reliable → numeric；`SHORTAGE` ＋ 关键输入不可靠 → `DATA_INCOMPLETE` / **No Numeric Recommendation** |
+
+**Conditional Applicability of Procurement Derived Results**
+
+以下 derived results 具有 **conditional applicability**：
+
+- `BasePurchaseNeed`
+- `MOQAdjustmentQty`
+- `RecommendedPurchaseQty`
+
+它们**只在**：
+
+```
+Classification = SHORTAGE
+且 BR-PROCUREMENT-001 required inputs reliable
+```
+
+时产生 **numeric value**。
+
+| 情况 | 行为 |
+| --- | --- |
+| `Classification = NORMAL` 或 `BUFFER_BREACH` | 这些 procurement result **not produced by design** —— **不是** `DATA_INCOMPLETE` |
+| `Classification = SHORTAGE` 且 required inputs reliable | 产生 **numeric result** |
+| `Classification = SHORTAGE` 但 required input 不可靠（例如 `ApplicableMOQ` missing / invalid） | **`DATA_INCOMPLETE`** ＋ **No Numeric Recommendation** |
+
+**Valid Absence vs Missing Required Data**
+
+```
+valid absence
+  ≠ missing required data
+```
+
+- **valid absence** —— 该字段在当前业务状态下**本来就不适用**，或不产生；
+  属于**字段存在性语义**，**不得**解释成 `DATA_INCOMPLETE`。
+- **missing required data** —— 本来**需要**形成可靠结果，但关键数据缺失 / invalid / unresolved，
+  因此无法可靠计算 → **`DATA_INCOMPLETE`**。
+
+**不得新增** `NOT_APPLICABLE` / `N/A` / `NO_SHORTAGE` / `NO_RECOMMENDATION`
+等正式业务 enum / classification。
 
 #### 4.2.11 Time Semantics
 
@@ -4640,6 +4704,33 @@ RecommendationNeedDate = FirstShortageDate
 | `ApplicableMOQ` | 业务明确确认**不存在**最小采购数量约束，**合法值** | 必要 MOQ 信息缺失 → `DATA_INCOMPLETE`，**不得默认成 0** |
 | `DeliveryPerformance` | **合法但极差**的绩效 → `DeliveryRisk = HIGH` | 无法判断 → `DeliveryRisk = DATA_INCOMPLETE` |
 | `QualityPerformance` | **合法但极差**的绩效 → `QualityRisk = HIGH` | 无法判断 → `QualityRisk = DATA_INCOMPLETE` |
+
+**Valid Absence vs Missing Required Data**
+
+必须区分**两类完全不同的「字段不存在」**：
+
+| 语义 | 含义 | 是否 `DATA_INCOMPLETE` |
+| --- | --- | --- |
+| **valid absence / not applicable** | 该字段在当前业务状态下**本来就不适用**，或不产生 | **否** |
+| **missing required data** | 本来**需要**形成可靠结果，但关键数据缺失 / invalid / unresolved | **是** |
+
+必须保持 `DATA_INCOMPLETE` 的含义：
+
+```
+DATA_INCOMPLETE
+  = 本来需要形成可靠结果，
+    但关键数据缺失 / invalid / unresolved，
+    因此无法可靠计算
+```
+
+**不得**将「该字段在当前业务状态下本来就不适用」**错误解释成** `DATA_INCOMPLETE`。
+
+典型 valid absence 情形：
+
+- `FirstShortageDate` —— 数据完整且整个 analysis horizon **从未**出现 `ProjectedAvailable < 0` → `null / not present`
+- `RecommendationNeedDate` 与 procurement derived results —— `Classification` 为 `NORMAL` / `BUFFER_BREACH` 时 **not produced by design**
+
+> 以上均为**字段存在性语义**，**不是**新的业务 status / enum。
 
 #### 4.2.13 Quantity Constraints
 
