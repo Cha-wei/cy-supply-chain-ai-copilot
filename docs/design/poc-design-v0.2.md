@@ -170,13 +170,12 @@ AI **不可以**：
 > >
 > > - `§3` System Boundary
 > > - `§4` Data & Integration Design
-> > - `§5` AI / Tool Boundary
 > > - `§6` HITL Workflow
 > > - `§7` Permission & Security
 > > - `§8` Audit & Observability
 > > - `§9` Test & AI Eval
 > > - `§10` Architecture Decisions
-> > - `VB-28`、`VB-29`
+> > - `VB-29`
 
 ### 2.1 Shortage Definition
 
@@ -3564,20 +3563,765 @@ Supplier B = HIGH
 
 ## 5. AI / Tool Boundary
 
-> 本章节只建立未来需要设计的职责。**不得选择 Agent Framework。**
+**Backlog:** `VB-28`
 
-未来需要设计的职责：
+**Design Status:** `DESIGN RESOLVED`
+
+**Approval:** Human-approved
+
+**Implementation Status:** `NOT STARTED`
+
+**Validation Source:** `SC-EXPLAIN-001` / Human-approved `SIMULATED` downstream design evidence
+
+> **注意**：`DESIGN RESOLVED` **≠** `IMPLEMENTED` **≠** `TESTED` **≠** `FROZEN` Discovery `H4` resolved。
+>
+> 本节为 `VB-28` 的 **Canonical Design**。本 Task **未指派** `BR-*` Rule ID —— **不得为了方便自行创建**。
+
+**职责边界状态：**
 
 | 职责 | Status |
 | --- | --- |
-| LLM | `DESIGN PENDING` |
-| deterministic business logic | `DESIGN PENDING` |
-| Tool | `DESIGN PENDING` |
-| Agent orchestration | `DESIGN PENDING` |
+| LLM | **`DESIGN RESOLVED`** |
+| deterministic business logic | **`DESIGN RESOLVED`** |
+| Tool | **`DESIGN RESOLVED`** |
+| Agent orchestration | **`DESIGN RESOLVED`** |
+
+> 这里的 `DESIGN RESOLVED` **只代表 responsibility / behavioral boundary 已定义**。
+>
+> **不代表**：framework selected、tools implemented、orchestration implemented、
+> prompts implemented、LLM selected、tested、production-ready。
 
 **明确：LLM 不直接自由访问 Production Database。**
 
 > 继承约束（不重新定义）：LLM 获取结构化业务事实必须通过 Controlled Tool（`Data Source → Deterministic Data Tool → Structured Result → LLM`）；不得采用 `LLM → Free-form SQL → Production Database`。
+
+#### 5.0 Design Evidence Record — SC-EXPLAIN-001
+
+| 字段 | 内容 |
+| --- | --- |
+| Scenario | `SC-EXPLAIN-001` — Shortage Analysis High-frequency Questions |
+| Evidence Type | `SIMULATED` |
+| Evidence Source | Human-approved |
+| Role | Simulated Business Owner ＋ Simulated Procurement / Supply Chain User |
+| Purpose | define P0 AI Explanation / User Question boundary |
+
+**必须声明**：该场景
+
+- **不是**云南 CY 集团真实用户访谈；
+- **不是** `PUBLIC FACT`；
+- **不证明**真实企业的信息解释成本；
+- **不修改** `FROZEN` `H4 = TBD`；
+- **只**作为模拟 POC 的 **downstream design input**。
+
+该 Scenario 批准以下 **6 类 P0 User Questions** 作为 **`SIMULATED` high-frequency question baseline**。
+
+**不得**描述为真实 CY 企业统计频率。
+
+#### 5.1 Core AI Principle
+
+正式定义：
+
+```
+LLM does not create business truth.
+```
+
+**LLM 的职责：**
+
+- understand user intent
+- request authorized structured facts
+- explain deterministic results
+- summarize evidence
+- surface uncertainty
+- generate clearly labeled **Draft** content when allowed
+
+**Deterministic Logic / Controlled Tool 的职责：**
+
+- business facts
+- calculations
+- classification
+- business-rule results
+- completeness / missing-data status
+
+必须保持：
+
+```
+Facts / Calculation / Classification
+  ≠ LLM-generated judgment
+```
+
+#### 5.2 Canonical Interaction Flow
+
+定义**概念链路**：
+
+```
+User Question
+      ↓
+LLM / Agent understands intent
+      ↓
+Authorized Controlled Tool Request
+      ↓
+Structured Facts
+      ↓
+Deterministic Business Rules
+      ↓
+Structured Result + Evidence
+      ↓
+LLM Explanation
+      ↓
+Human
+```
+
+**禁止**：
+
+```
+User Question
+      ↓
+LLM guesses business facts
+      ↓
+Answer
+```
+
+继续继承：
+
+```
+Data Source
+      ↓
+Deterministic Data Tool
+      ↓
+Structured Result
+      ↓
+LLM
+```
+
+**不得采用**：
+
+```
+LLM
+      ↓
+Free-form SQL
+      ↓
+Production Database
+```
+
+#### 5.3 P0 Supported Question Baseline
+
+**Q1 — Why is this material short?**
+
+用户意图示例：「为什么这个物料会缺料？」
+
+回答**必须来自** `BR-SHORTAGE-001` 及其**已解析 dependency results**。
+
+可解释：
+
+- `OpeningUsableInventory`
+- Effective Inbound
+- Approved Substitute Supply
+- Gross Requirement
+- Safety Stock
+- `ProjectedAvailable`
+- `FirstShortageDate`
+- `ShortageQty`
+- `Classification`
+
+LLM **可以**解释计算结果。
+
+**不得**：
+
+- 重新发明计算公式
+- 重新计算一套不同结果
+- 篡改 deterministic result
+
+**Q2 — Which materials need attention?**
+
+用户意图示例：「现在有哪些物料需要处理？」
+
+**必须基于明确状态过滤**：
+
+- `SHORTAGE`
+- `BUFFER_BREACH`
+- `DATA_INCOMPLETE`
+- `NORMAL`
+
+例如用户明确问：「真正缺料的物料有哪些？」
+
+**只能返回**：
+
+```
+Classification = SHORTAGE
+```
+
+**不得**将 `BUFFER_BREACH` 描述为**已经缺料**。
+
+如果用户问：「哪些物料需要关注？」
+
+**允许**展示多种状态，但**必须保留状态差异**，**不得**混成一个统一的「缺料」标签。
+
+**Q3 — Why is the recommended purchase quantity X?**
+
+用户意图示例：「为什么建议采购 100？」
+
+**必须引用** `BR-PROCUREMENT-001`，并明确区分：
+
+- `ShortageQty`
+- `BasePurchaseNeed`
+- `ApplicableMOQ`
+- `MOQAdjustmentQty`
+- `RecommendedPurchaseQty`
+
+例如：
+
+```
+ShortageQty            = 30
+RecommendedPurchaseQty = 100
+MOQAdjustmentQty       = 70
+```
+
+**正确解释**：实际缺口为 `30`；由于 `MOQ = 100`，采购建议被调整为 `100`。
+
+**禁止**：「实际缺料 100。」
+
+**Q4 — Why is this supplier high risk?**
+
+用户意图示例：「这个供应商为什么风险高？」
+
+**必须引用** `BR-SUPPLIER-RISK-001`。
+
+可解释：
+
+- `DaysUntilNeed`
+- `StandardLeadTimeDays`
+- `LeadTimeRisk`
+- `PerformancePeriod`
+- `DeliveryPerformance`
+- `DeliveryRisk`
+- `QualityPerformance`
+- `QualityRisk`
+- `OverallSupplierRisk`
+- Evidence completeness
+
+**不得**进一步自动：
+
+- Supplier Ranking
+- Supplier Selection
+- recommend a winner
+- 修改 `RecommendedPurchaseQty`
+
+**Q5 — Why can't the system give a conclusion?**
+
+用户意图示例：「为什么现在不能给结果？」
+
+当 deterministic result 为 `DATA_INCOMPLETE` 时，**必须展示具体 missing / invalid evidence**。
+
+例如：
+
+- `SafetyStock` missing
+- `ApplicableMOQ` missing
+- `PerformancePeriod` missing
+- Material mapping unresolved
+- Supplier-Material Relationship unresolved
+- `substitution_ratio` missing
+
+**不得**为了产生「完整回答」而**补值**。
+
+**Q6 — Summarize this shortage case**
+
+用户意图示例：「总结一下这个缺料案例，我接下来要看什么？」
+
+LLM **可以**组织：
+
+```
+结论
+  ↓
+关键数量
+  ↓
+缺料原因
+  ↓
+Supplier Risk Evidence
+  ↓
+Data Quality / Missing Data
+  ↓
+Purchase Recommendation
+  ↓
+Human Decision Required
+```
+
+但**不得越过**：
+
+- HITL
+- Approval
+- Write Boundary
+
+#### 5.4 P0 Scope Boundary
+
+必须明确：`VB-28` **并不实现**广义：
+
+```
+Natural Language Supply Chain Query
+```
+
+P0 **只支持**：围绕**已设计的 P0 deterministic outputs** 进行**受控查询与解释**。
+
+以下仍属于 **P1 / Future scope**，例如：
+
+- arbitrary cross-domain analytics
+- unrestricted natural-language enterprise query
+- advanced supplier comparison
+- broad RAG-based business Q&A
+- open-ended optimization
+
+**不得**因为用户可以自然语言提问，就声称 P1 的 Natural Language Query 已完成。
+
+#### 5.5 Standard Explanation Structure
+
+当适用时，P0 Explanation 使用统一**语义结构**：
+
+1. Answer
+2. Evidence
+3. Uncertainty / Missing Data
+4. Human Decision Required
+
+> **注意**：这是 **canonical response meaning**，**不是** API / JSON / UI schema。
+
+**Answer** —— 回答用户的问题；**不得**与 deterministic result **冲突**。
+
+**Evidence** —— 展示支持结论的结构化依据。包括适用的：
+
+- business status
+- quantities
+- dates
+- risk dimensions
+- relevant rule result
+- evidence completeness
+
+**不得**添加 Tool 未提供、且 Repo 中无正式规则支持的业务事实。
+
+**Uncertainty / Missing Data** —— **必须显式展示**：
+
+- `UNKNOWN`
+- missing
+- invalid
+- `DATA_INCOMPLETE`
+- tool failure
+- unresolved mapping
+
+**不得隐藏。**
+
+**Human Decision Required** —— 当结果涉及以下内容时：
+
+- Procurement Recommendation
+- Draft
+- Supplier decision
+- approval
+- modify / reject / approve
+- formal execution
+
+**必须提醒用户**：哪些仍需要 Human 决策。
+
+**不得**将 Recommendation 写成 Approved Decision。
+
+#### 5.6 Evidence Fidelity Rule
+
+定义：
+
+```
+LLM may paraphrase evidence,
+but may not mutate evidence.
+```
+
+例如 Tool 返回 `ShortageQty = 30` —— LLM **不得**回答「约 50 件」。
+
+Tool 返回 `Classification = BUFFER_BREACH` —— LLM **不得**回答「已经缺料」。
+
+Tool 返回 `OverallSupplierRisk = DATA_INCOMPLETE` —— LLM **不得**根据部分 `LOW` evidence
+自行宣布 `OverallSupplierRisk = LOW`。
+
+#### 5.7 No Unsupported Fact Rule
+
+核心 fail-safe：
+
+**Tool / deterministic result 没有提供的业务事实，LLM 不得作为事实写入答案。**
+
+**允许**明确说明：
+
+> 「当前证据不足以判断。」
+
+**禁止**以下内容替代缺失业务数据：
+
+- reasonable guess
+- likely
+- probably
+- industry-normal default
+- model inference
+
+#### 5.8 Partial Answer Rule
+
+如果只有**部分可靠 evidence**：**允许**回答可靠部分。
+
+**必须同时指出**：哪些结论无法形成。
+
+例如：
+
+```
+LeadTimeRisk = HIGH
+```
+
+但：
+
+```
+PerformancePeriod missing
+```
+
+则**可以**解释：Lead Time 已显示 `HIGH` Risk。
+
+但：`OverallSupplierRisk` 仍为 `DATA_INCOMPLETE`。
+
+**不得**因为部分证据可靠就把整体结论**补全**。
+
+#### 5.9 Tool Failure Boundary
+
+如果：
+
+- Controlled Tool unavailable
+- timeout
+- error
+- invalid structured result
+
+则：
+
+**不得**使用模型记忆 / 旧回答代替当前业务事实。
+
+应明确：
+
+```
+Current data unavailable
+```
+
+或
+
+```
+Tool failure
+```
+
+并说明：当前**不能可靠回答**哪些部分。
+
+> 本 Task **不定义**：retry implementation、timeout value、circuit breaker、tool framework。
+> 这些属于后续 **Architecture / Implementation**。
+
+#### 5.10 Permission Boundary
+
+继承：
+
+```
+AI Effective Permission
+  = User Permission
+  ∩ Data Scope
+  ∩ Tool Permission
+  ∩ Workflow State
+  ∩ POC Policy
+```
+
+`VB-28` **不设计** RBAC implementation。
+
+但**必须明确**：Agent / LLM **不得**因为用户自然语言请求**扩大**其 Data Scope 或 Tool Permission。
+
+如果请求**超出当前权限**：**不得获取或泄露数据**。
+
+> 本 Task **不定义**具体 `PERMISSION_DENIED` API contract。
+
+#### 5.11 Out-of-Scope Question Handling
+
+如果用户问题要求当前 P0 **未设计**的能力，例如：
+
+- 「自动帮我选最优供应商」
+- 「帮我给供应商排名」
+- 「自动把订单下掉」
+- 「跨所有企业数据自由分析」
+- 「预测未来动态 Lead Time」
+
+AI **不得临时创造规则**。
+
+**必须说明**：该问题**超出当前 P0 已设计能力**，或需要 **Human-approved Future Design**。
+
+#### 5.12 Deterministic / LLM Boundary
+
+以下**不得由 LLM 决定**：
+
+- `Classification`
+- `ShortageQty`
+- `FirstShortageDate`
+- Safety Stock logic
+- Substitute eligibility / quantity
+- `GrossRequirement`
+- `RecommendedPurchaseQty`
+- MOQ adjustment
+- `LeadTimeRisk`
+- `DeliveryRisk`
+- `QualityRisk`
+- `OverallSupplierRisk`
+- `DATA_INCOMPLETE` status
+- permission
+- approval status
+
+这些来自：
+
+```
+deterministic rules
++
+structured business facts
+```
+
+**LLM 负责**：
+
+- intent understanding
+- explanation
+- summarization
+- user-facing wording
+- approved Draft generation
+
+#### 5.13 Agent Orchestration Responsibility
+
+只定义 **conceptual responsibility**，**不得选择 Agent Framework**。
+
+**Agent 可以**：
+
+- identify supported user intent
+- determine which authorized business capability is needed
+- request required structured result
+- combine multiple authorized structured results
+- pass structured evidence to LLM for explanation
+- stop when required evidence is unavailable
+
+**Agent 不可以**：
+
+- invent Tool capability
+- bypass Controlled Tool
+- directly query Production DB
+- bypass deterministic rule
+- expand permissions
+- convert missing evidence into facts
+
+#### 5.14 Controlled Tool Responsibility
+
+本 Task **不定义**实际 Tool names / API schema。只定义 **capability boundary**。
+
+Controlled Tool **应负责提供**：
+
+- structured business facts
+- deterministic calculation results
+- classifications
+- relevant evidence
+- missing / invalid state
+
+而**不是**让 LLM 从自由文本数据中**自行重建业务计算**。
+
+#### 5.15 Draft Generation Boundary
+
+继承 P0：
+
+**AI 可以**：Generate Procurement Request Draft。
+
+但 Draft **必须基于**：**已取得的 structured deterministic result**。
+
+Draft **必须明确**：
+
+```
+DRAFT
+```
+
+且：
+
+```
+RecommendedPurchaseQty
+  ≠ ApprovedPurchaseQty
+  ≠ PurchaseOrderQty
+```
+
+**LLM 不得**：
+
+- Approve
+- Formal Submit
+- Create Purchase Order
+- Override Human Approval
+
+> 本 Task **不设计** §6 的完整 HITL 状态机。
+
+#### 5.16 Acceptance Examples
+
+以下为 **conceptual examples**。
+
+**Example A — Shortage Explanation**
+
+Structured result：
+
+| 字段 | 值 |
+| --- | --- |
+| `Classification` | `SHORTAGE` |
+| `OpeningUsableInventory` | 20 |
+| `CumulativeEffectiveInbound` | 30 |
+| `CumulativeApprovedSubstituteSupply` | 0 |
+| `CumulativeGrossRequirement` | 80 |
+| `ProjectedAvailable` | -30 |
+| `FirstShortageDate` | `2026-10-10` |
+| `ShortageQty` | 30 |
+
+**Expected AI behavior：** 解释缺料由哪些 deterministic values 形成。
+
+**不得改变** `ShortageQty = 30`。
+
+**Example B — Buffer Breach**
+
+```
+Classification = BUFFER_BREACH
+ShortageQty    = 0
+```
+
+User asks：「是不是已经缺料？」
+
+**Expected：** 明确回答**尚未形成实际 shortage**，当前是 **Safety Stock buffer breach**。
+
+**不得回答**：「是，已经缺料。」
+
+**Example C — Purchase Recommendation**
+
+```
+ShortageQty            = 30
+ApplicableMOQ          = 100
+RecommendedPurchaseQty = 100
+MOQAdjustmentQty       = 70
+```
+
+**Expected：** 解释**实际缺口 30**；**MOQ 导致建议采购量为 100**。
+
+**不得说**：「实际缺料 100。」
+
+**Example D — Partial Supplier Risk Evidence**
+
+```
+LeadTimeRisk        = HIGH
+DeliveryRisk        = DATA_INCOMPLETE
+QualityRisk         = DATA_INCOMPLETE
+OverallSupplierRisk = DATA_INCOMPLETE
+```
+
+**Expected：** **允许**解释 Lead Time `HIGH` evidence。
+
+**必须说明**：Overall Risk 尚**无法可靠确定**。
+
+**不得**自动输出 `HIGH` Overall。
+
+**Example E — Missing Data**
+
+```
+ApplicableMOQ = missing
+```
+
+**Expected：**
+
+- **No Numeric Purchase Recommendation**
+- 解释 **MOQ 信息缺失**
+
+**不得**：`ApplicableMOQ = 0`。
+
+**Example F — Unsupported Supplier Selection**
+
+```
+Supplier A Risk = LOW
+Supplier B Risk = HIGH
+```
+
+User asks：「直接帮我选 A 下单。」
+
+**Expected：** **可以**解释两者 Risk Evidence 差异。
+
+**不得**：
+
+- 自动选择 Supplier A
+- 批准采购
+- 正式下单
+
+**Example G — Tool Failure**
+
+Required controlled capability unavailable.
+
+**Expected：** 明确说明当前**无法取得可靠实时结构化结果**。
+
+**不得**引用旧聊天内容**伪装成当前事实**。
+
+#### 5.17 H4 Relationship
+
+必须记录：`SC-EXPLAIN-001` 提供的是
+
+```
+Human-approved SIMULATED
+high-frequency question baseline
++
+downstream design evidence
+```
+
+它支持当前 POC 设计 **AI Explanation capability**。
+
+**但**：`FROZEN` Discovery Validation 中
+
+```
+H4 = TBD
+```
+
+**保持不变。**
+
+**不得**写成 `H4 = PARTIALLY CONFIRMED`。
+
+未来若正式更新 `H4`：**新的 Validation Version / Addendum ＋ Human Approval**。
+
+> 即：本 Task **不修改** `FROZEN` Validation，**不把设计证据倒写成历史 Discovery 事实**。
+
+#### 5.18 Status Semantics Boundary
+
+本节各项 `DESIGN RESOLVED` **只代表**：
+
+```
+responsibility / behavioral boundary 已定义
+```
+
+**不代表**：
+
+- framework selected
+- tools implemented
+- orchestration implemented
+- prompts implemented
+- LLM selected
+- tested
+- production-ready
+
+#### 5.19 Source-field / Implementation Boundary
+
+本 Task **只做 Design Boundary**。
+
+因此**不得创建**：
+
+- prompts / system prompts
+- code
+- tests / evals
+- mock API
+- tool implementation
+- function schema
+- JSON contract
+- database schema
+- UI
+- agent graph
+- workflow engine
+- RAG
+- vector DB
+- ADR
+
+本 Task **不选择**：
+
+- Agent Framework
+- LLM Provider / Model
+- Vector Database / RAG Framework
+- API Framework
+- Tool Protocol / MCP implementation
+- database
+- deployment stack
 
 ---
 
@@ -3671,7 +4415,7 @@ Options
 
 ## 11. Open Design Backlog
 
-> 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14`、`VB-15`、`VB-16`、`VB-17`、`VB-18`、`VB-27` 已获得 Human Approval。
+> 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14`、`VB-15`、`VB-16`、`VB-17`、`VB-18`、`VB-27`、`VB-28` 已获得 Human Approval。
 
 | Backlog ID | 归属 | Status |
 | --- | --- | --- |
@@ -3681,7 +4425,7 @@ Options
 | `VB-17` | P0 Business Rules（见 §2.4 Scrap / Loss）<br>→ **`BR-REQUIREMENT-001` / §2.4** | **`DESIGN RESOLVED`** |
 | `VB-18` | P0 Business Rules（见 §2.5 MOQ / Purchase Recommendation Quantity）<br>→ **`BR-PROCUREMENT-001` / §2.5** | **`DESIGN RESOLVED`** |
 | `VB-27` | Supplier Risk / Risk Evidence（见 §2.7）<br>→ **`BR-SUPPLIER-RISK-001` / §2.7** | **`DESIGN RESOLVED`** |
-| `VB-28` | AI Explanation / User Questions | `NOT STARTED` |
+| `VB-28` | AI Explanation / User Questions（见 §5 AI / Tool Boundary）<br>→ **`§5` ＋ `SC-EXPLAIN-001`** | **`DESIGN RESOLVED`** |
 | `VB-29` | 见下方说明 | `NOT STARTED` |
 
 **已登记但不占用 `VB` 编号的设计项**（`POC Design v0.2` 内部的独立设计项）：
