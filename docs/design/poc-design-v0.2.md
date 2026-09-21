@@ -6814,7 +6814,7 @@ physical carrier **仍是独立设计问题**（**logical provenance carrier = `
 | Dimension | 说明 |
 | --- | --- |
 | Issue Category | 8 个 canonical category 之一（`§4.4.80`） |
-| Reason | 11 个 canonical reason 之一（`§4.4.81`） |
+| Reason | 12 个 canonical reason 之一（`§4.4.81`） |
 | Affected Evidence | 受影响 evidence |
 | Affected Grain | affected canonical grain |
 | Affected Capability | affected capability |
@@ -7392,7 +7392,7 @@ allocation demand-window mapping 已于 **§4.5.9** 解析，此处保留历史�
 本 Task Finalize 后，**authoritative taxonomy 只有一个** ——
 即 **`§4.4.78` ～ `§4.4.100`** 定义的 **POC Validation Issue Taxonomy**。
 
-`§4.4.81` 的 11 个 canonical reason **包含并扩展**了本小节最初的 6 个 seed reason：
+`§4.4.81` 的 12 个 canonical reason **包含并扩展**了本小节最初的 6 个 seed reason：
 
 | 原 interim seed | 在 Final Taxonomy 中的归属 |
 | --- | --- |
@@ -7404,7 +7404,8 @@ allocation demand-window mapping 已于 **§4.5.9** 解析，此处保留历史�
 | `SEMANTIC_UNRESOLVED` | `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED` |
 
 **新增**（seed 未覆盖）：`STRUCTURAL_INCONSISTENCY` / `EVIDENCE_ROLE_NOT_PROVIDED` /
-`UNRESOLVED_SCOPE` / `CONSISTENCY_CONFLICT` / `PROVENANCE_MISMATCH`。
+`UNRESOLVED_SCOPE` / `CONSISTENCY_CONFLICT` / `PROVENANCE_MISMATCH` /
+`PROVENANCE_UNRESOLVED`。
 
 > **本小节不再构成第二套 canonical list。**
 > 引用时应指向 **`§4.4.81`**，而**不是**本小节。
@@ -8109,7 +8110,7 @@ PIR      MOQ = 100
 **不得**：`Contract wins` ／ `PIR wins` ／ `latest wins` ／ `most specific wins` ／
 `min` ／ `max` ／ `average` ／ `first wins`。
 
-**未新增**任何 Validation Reason（`§4.4.81` 的 **11 个 canonical reason** 未变）。
+**未新增**任何 Validation Reason（本项**未**扩展 `§4.4.81` canonical reason set；该 set 现为 **12 个**）。
 
 **Valid Absence Boundary：** `Classification = NORMAL` 或 `BUFFER_BREACH` 时
 **No Purchase Recommendation**，因此 `ApplicableMOQ` **not present by design**
@@ -8359,7 +8360,7 @@ Validation Issue **至少**需要表达以下 conceptual dimensions：
 | **5** | `SCOPE_COVERAGE` | dataset / evidence 存在，但无法可靠确认 coverage 是否覆盖当前分析范围 | `UNRESOLVED_SCOPE` |
 | **6** | `SEMANTIC_RESOLUTION` | value / relationship 存在，但当前 Design 无法可靠解释其业务语义 | `SEMANTIC_UNRESOLVED` |
 | **7** | `CONSISTENCY` | 多个 individually valid evidence 组合后违反既有 consistency invariant | `CONSISTENCY_CONFLICT` |
-| **8** | `PROVENANCE` | evidence / derived result 来源上下文与当前 Analysis Context 不一致 | `PROVENANCE_MISMATCH` |
+| **8** | `PROVENANCE` | required **package-scoped provenance linkage** **无法可靠建立 ／ 解析**，或**已建立**但与当前 Analysis Context 不一致 | `PROVENANCE_UNRESOLVED` / `PROVENANCE_MISMATCH` |
 
 **关于 `MISSING` 的限制：**
 
@@ -8375,9 +8376,22 @@ MISSING = 字段本应存在，但不存在
 
 **只有当**当前 capability **确实需要**该 semantic **且无法可靠解释**时，才形成 Validation Issue。
 
+**关于 `PROVENANCE` 的限制：**
+
+该 category **只**覆盖 **required package-scoped provenance linkage** 的两种 root condition：
+
+```
+PROVENANCE_UNRESOLVED = required linkage 无法可靠建立 ／ 无法可靠解析
+PROVENANCE_MISMATCH   = required linkage 已建立，但指向错误 ／ incompatible Analysis Context
+```
+
+**不得**扩展解释为：artifact missing ／ logical evidence role 未提供 ／
+canonical business field value 缺失 ／ business semantic unresolved ／
+entity identity unresolved ／ business scope coverage unresolved。
+
 #### 4.4.81 Final Canonical Reason Set
 
-本 POC 当前**正式**的 canonical reason set：
+本 POC 当前**正式**的 canonical reason set（共 **12 个**）：
 
 | # | Reason | 所属 Category |
 | --- | --- | --- |
@@ -8392,6 +8406,12 @@ MISSING = 字段本应存在，但不存在
 | 9 | `SEMANTIC_UNRESOLVED` | `SEMANTIC_RESOLUTION` |
 | 10 | `CONSISTENCY_CONFLICT` | `CONSISTENCY` |
 | 11 | `PROVENANCE_MISMATCH` | `PROVENANCE` |
+| 12 | `PROVENANCE_UNRESOLVED` | `PROVENANCE` |
+
+**变更记录：** 第 **12** 项 `PROVENANCE_UNRESOLVED` 由 **PR #46 Human Decision**
+（**`APPROVED FOR IMPLEMENTATION`**）授权并已实施 ——
+见 **§4.5.22 Validation Taxonomy Implementation Record**。
+既有 `1` ～ `11` 的编号与语义**未变**；`PROVENANCE_MISMATCH` **未**重命名、**未**修改。
 
 **不得新增** `UNKNOWN_ERROR` / `GENERIC_ERROR` / `VALIDATION_FAILED` / `BAD_DATA` / `OTHER`
 等 **catch-all reason** —— 除非未来经过正式 **Design Change**。
@@ -8585,39 +8605,44 @@ Business consequence: BR-SUBSTITUTE-001 → DATA_INCOMPLETE
 **不得**把这些问题**仅**写成 `CONSISTENCY_CONFLICT` ——
 因为其核心问题是 **evidence provenance / analysis context 不一致**。
 
-**Missing vs Mismatch（概念区分）**
+**Missing vs Unresolved vs Mismatch（概念区分）**
 
-| 情形 | 概念类别 |
+| 情形 | Taxonomy |
 | --- | --- |
-| **A** provenance reference **缺失** | 视缺失对象而定 —— 若 **required evidence role 本身未提供** → `EVIDENCE_ROLE_NOT_PROVIDED`；若 **canonical field value 缺失** → `FIELD_VALUE` ／ `MISSING` |
-| **B** provenance reference **存在**，但指向**错误 Package / Analysis Context** | **`PROVENANCE` ／ `PROVENANCE_MISMATCH`** |
+| **A** required **logical evidence role 本身未提供** | `EVIDENCE_AVAILABILITY` ／ `EVIDENCE_ROLE_NOT_PROVIDED` |
+| **B** required **canonical business field value 缺失** | `FIELD_VALUE` ／ `MISSING` |
+| **C** evidence ／ business value **存在**，但 required **package-scoped provenance linkage 缺失 ／ 无法可靠解析 ／ 无法可靠建立** | **`PROVENANCE` ／ `PROVENANCE_UNRESOLVED`** |
+| **D** provenance linkage **可以建立**，但指向**错误 Package / Analysis Context** | **`PROVENANCE` ／ `PROVENANCE_MISMATCH`** |
 
-> **Validation Taxonomy Limitation（已由 PR #44 Human Decision 裁定；独立 Review 已完成）：**
-> 「evidence **存在**，但其 **provenance reference 缺失 ／ package scope 无法确定**」这一情形，
-> 当前 **`PROVENANCE_MISMATCH` 无法精确表达**（它语义上是 *mismatch*，不是 *absence*）。
+> **Validation Taxonomy Limitation —— `DESIGN RESOLVED`：**
+> 「evidence **存在**，但其 **required package-scoped provenance linkage 缺失 ／ 无法可靠解析 ／
+> 无法可靠建立**」这一情形，**已**由 **`PROVENANCE_UNRESOLVED`**（`PROVENANCE` category）精确表达；
+> 该 taxonomy gap **不再 `OPEN`**（见 **§4.5.22 Validation Taxonomy Implementation Record**）。
 >
-> **PR #44 Human Decision：** **DO NOT EXTEND** `PROVENANCE_MISMATCH` 覆盖此情形；
-> **不新增** `PROVENANCE_MISSING` ／ `LINEAGE_MISSING` 等 reason
-> （见 **§4.5.22 Human Decision Record** 决定 13 ／ 14）。
+> **演进链（保留以便追溯）：**
+> - **PR #44 Human Decision：** **DO NOT EXTEND** `PROVENANCE_MISMATCH` 覆盖此情形；
+>   **不新增** `PROVENANCE_MISSING` ／ `LINEAGE_MISSING` 等 reason
+>   （见 **§4.5.22 Human Decision Record** 决定 13 ／ 14）。
+> - **PR #46 Review Finding ＋ Human Decision Record：** `Current Taxonomy Compatibility = INSUFFICIENT`；
+>   **`PROVENANCE_UNRESOLVED` = `APPROVED FOR IMPLEMENTATION`**（见 **§4.5.22**）。
+> - **Validation Taxonomy Implementation：** `Canonical Reasons` `11 → 12`；
+>   **`Validation Taxonomy Limitation` `OPEN` → `DESIGN RESOLVED`**
+>   （见 **§4.5.22 Validation Taxonomy Implementation Record**）。
 >
-> **独立 Review 已完成**：**Missing Provenance Reference — Validation Taxonomy Gap Design Review
-> （Review Finding）** 见 **§4.5.22**；其结论
-> **`Current Taxonomy Compatibility = INSUFFICIENT`**，推荐新增 **`PROVENANCE_UNRESOLVED`**
-> （`PROVENANCE` category）。
->
-> **Human Decision 已记录**（见 **§4.5.22 Human Decision Record**）：
-> **`PROVENANCE_UNRESOLVED` = `APPROVED FOR IMPLEMENTATION`**；
-> 但 **taxonomy implementation = `NOT YET EXECUTED`**。
->
-> 因此 **Canonical Reasons 仍为 `11`**，该 taxonomy gap **仍保持 `OPEN`**；
 > **`PROVENANCE_MISMATCH` 语义保持不变**；
-> 且该情形**不得**被误分类为 `PACKAGE_STRUCTURE`。
+> 该情形**不得**被误分类为 `PACKAGE_STRUCTURE`；
+> **`PROVENANCE_UNRESOLVED` 不得**作为 **catch-all reason**。
+>
+> **`DESIGN RESOLVED` 边界：** 只表示 **canonical validation taxonomy 概念设计已完成**，
+> **不表示** runtime validator implemented ／ API implemented ／ enum implemented ／
+> schema implemented ／ Adapter implemented ／ tested production behavior。
 
 **Structural vs Business Provenance（不得误分类）**
 
 ```
 Snapshot Manifest / artifact integrity                                  → PACKAGE_STRUCTURE
 canonical fact / derived result 引用非当前 Analysis Context 的 evidence  → PROVENANCE
+required package-scoped provenance linkage 无法可靠建立 / 无法可靠解析   → PROVENANCE_UNRESOLVED
 ```
 
 **不得**把 **artifact missing** 错误归到 `PROVENANCE_MISMATCH`。
@@ -8891,7 +8916,7 @@ physical schema / architecture / technology / ADR。
 | 5 | Failure Isolation Principle | `DESIGN RESOLVED` | blast radius 限制到 `evidence → grain → capability` |
 | 6 | Detailed Field Validation | `DESIGN RESOLVED` | 只验证已批准项；未新增 range / enum / default / regex / rounding / freshness threshold / precedence |
 | 7 | Cross-Dataset Consistency Rules | `DESIGN RESOLVED` | 8 项关系一致；未新增 reconciliation algorithm |
-| 8 | Validation Issue Taxonomy Finalization | `DESIGN RESOLVED` | 唯一 canonical taxonomy；8 categories ＋ 11 reasons |
+| 8 | Validation Issue Taxonomy Finalization | `DESIGN RESOLVED` | 唯一 canonical taxonomy；8 categories ＋ 12 reasons |
 
 **Design DoD**
 
@@ -15617,14 +15642,16 @@ Validation Taxonomy Limitation       = OPEN / SEPARATE REVIEW REQUIRED
      —— **Human Decision 已记录**（见其后的 **Human Decision Record**）：
         **`PROVENANCE_UNRESOLVED` = APPROVED FOR IMPLEMENTATION**
         （Category = `PROVENANCE`）。
-     —— 但 **taxonomy implementation = NOT YET EXECUTED**；
-        **Canonical Reasons 仍为 `11`**，**`Validation Taxonomy Limitation` 仍为 `OPEN`**。
-     —— **后续必须另开独立 Implementation PR** 完成 taxonomy implementation；
-        该项**不得**写成 `DESIGN RESOLVED`。
+     —— **taxonomy implementation 已完成**（见其后的 **Validation Taxonomy
+        Implementation Record**）：`Canonical Reasons` `11 → 12`；
+        **`Validation Taxonomy Limitation` `OPEN` → `DESIGN RESOLVED`**。
+     —— 本 Review Finding 与 Human Decision Record 中 `11` ／ `OPEN` 的表述
+        **按其各自时点原样保留**，**不得**回写。
 
 2. Master Data Mapping Closure Review
-     —— 必须在 provenance implementation 完成后独立执行
-     —— 本 Task 未定义 closure criteria，也未宣布 overall closure
+     —— **须在 provenance implementation 完成后独立执行** ——
+        provenance implementation **已完成**（见本节 **Option D Implementation Record**）
+     —— 本 Task **未**定义 closure criteria，也**未**宣布 overall closure
 ```
 
 **Missing Provenance Reference — Validation Taxonomy Gap Design Review（Review Finding）**
@@ -16236,6 +16263,168 @@ PROVENANCE_UNRESOLVED          = APPROVED FOR IMPLEMENTATION
 Validation Taxonomy Limitation = OPEN
 ```
 
+**Validation Taxonomy Implementation Record（Human-authorized Taxonomy Design Change）**
+
+**Human Authorization Source**
+
+```
+PR #46 Human Decision — Human-approved
+  → Current Taxonomy Compatibility       = INSUFFICIENT（ACCEPTED）
+  → PROVENANCE_MISMATCH semantic         = UNCHANGED
+  → PROVENANCE_UNRESOLVED                = APPROVED FOR IMPLEMENTATION
+  → Category                             = PROVENANCE（不新增 Category）
+  → Canonical Category count             = 仍为 8
+  → Canonical Reasons                    = 11 → 12（AUTHORIZED）
+  → §4.4.80 PROVENANCE 最小扩辞           = AUTHORIZED
+  → §4.4.81 新增第 12 个 reason           = AUTHORIZED
+  → current-state reason count sync      = AUTHORIZED
+  → §4.4.93 Provenance Boundary 更新      = AUTHORIZED
+  → Implementation Record                = AUTHORIZED
+  → Validation Taxonomy Limitation       = OPEN → DESIGN RESOLVED
+                                           （implementation ＋ Validation PASS 后）
+```
+
+**Implemented Change**
+
+```
+Canonical Categories                 = 8（未变）
+Canonical Reasons                    = 11 → 12
+新增 reason                          = PROVENANCE_UNRESOLVED
+所属 Category                        = PROVENANCE
+PROVENANCE_MISMATCH semantic         = UNCHANGED
+Validation Taxonomy Limitation       = OPEN → DESIGN RESOLVED
+```
+
+**`§4.4.80` —— `PROVENANCE` category（最小 semantic extension）**
+
+`PROVENANCE` category 现**同时覆盖**两种 root condition：
+
+```
+1. required package-scoped provenance linkage
+   cannot be reliably established / resolved
+        → PROVENANCE_UNRESOLVED
+2. required package-scoped provenance linkage
+   established but points to wrong / incompatible Analysis Context
+        → PROVENANCE_MISMATCH
+```
+
+**未新增** Category；`Canonical Category count` **仍为 `8`**；
+`§4.4.80` 其他 7 个 category **未修改**。
+
+**`§4.4.81` —— 第 12 个 canonical reason**
+
+```
+| 12 | `PROVENANCE_UNRESOLVED` | `PROVENANCE` |
+```
+
+既有 `1` ～ `11` 的**编号与语义未变**；`PROVENANCE_MISMATCH` **未**重命名、**未**重定义；
+**未**新增 `UNKNOWN_ERROR` ／ `GENERIC_ERROR` ／ `VALIDATION_FAILED` ／ `BAD_DATA` ／ `OTHER`
+等 catch-all reason。
+
+**`PROVENANCE_UNRESOLVED` Canonical Semantic（正式落地）**
+
+```
+Category                   = PROVENANCE
+canonical semantic         = Required package-scoped provenance linkage
+                             cannot be reliably established or resolved.
+```
+
+覆盖（与 **PR #46 Human Decision** 决定 3 一致）：
+
+| # | 情形 | 判定 |
+| --- | --- | --- |
+| **P1** | required provenance reference **完全缺失** | `PROVENANCE_UNRESOLVED` |
+| **P2** | provenance reference **存在**，但**无法可靠解析为 package-scoped evidence locator** | `PROVENANCE_UNRESOLVED` |
+| **P4** | provenance metadata **存在**，但**不完整到无法建立 required package-scoped linkage** | `PROVENANCE_UNRESOLVED` |
+
+**`PROVENANCE_UNRESOLVED` vs `PROVENANCE_MISMATCH`**
+
+```
+PROVENANCE_UNRESOLVED = linkage cannot be reliably established / resolved
+PROVENANCE_MISMATCH   = linkage established,
+                        but points to wrong / incompatible Analysis Context
+```
+
+**P3 的归属不改变：**
+
+| # | 情形 | 判定 |
+| --- | --- | --- |
+| **P3** | reference **可以可靠解析**，但指向**错误 Package / Analysis Context** | **仍为 `PROVENANCE_MISMATCH`**（**不**改为 `PROVENANCE_UNRESOLVED`） |
+
+**Canonical Boundary（正式同步）**
+
+```
+PROVENANCE_UNRESOLVED
+  ≠ EVIDENCE_AVAILABILITY / EVIDENCE_ROLE_NOT_PROVIDED
+  ≠ FIELD_VALUE / MISSING
+  ≠ IDENTITY_RESOLUTION / UNRESOLVED_IDENTITY
+  ≠ SCOPE_COVERAGE / UNRESOLVED_SCOPE
+  ≠ SEMANTIC_RESOLUTION / SEMANTIC_UNRESOLVED
+  ≠ PROVENANCE_MISMATCH
+```
+
+**不得**作为 **catch-all reason**；其 root condition **必须保持**为
+`provenance linkage cannot be reliably established or resolved`。
+
+**Current-State Synchronization**
+
+| 位置 | 同步内容 |
+| --- | --- |
+| `§4.4.16 Validation Issue Concept` | `Reason` dimension = **12 个 canonical reason 之一** |
+| `§4.4.43 Reason Seed → Superseded` | `§4.4.81` = **12 个** canonical reason；新增清单补入 `PROVENANCE_UNRESOLVED` |
+| `§4.4.67 ApplicableMOQ Boundary` | 本项**未**扩展 canonical reason set；该 set 现为 **12 个** |
+| `§4.4.80 Canonical Issue Categories` | `PROVENANCE` 含 `PROVENANCE_UNRESOLVED` ＋ `PROVENANCE_MISMATCH`；Category count 仍 **8** |
+| `§4.4.81 Final Canonical Reason Set` | 共 **12 个**；第 12 项 = `PROVENANCE_UNRESOLVED` |
+| `§4.4.93 Provenance Boundary` | Missing ／ Unresolved ／ Mismatch 四种情形（A ／ B ／ C ／ D） |
+| `§4.4.101 Final Data Validation Design Closure` | closure checklist row 8 = `8 categories ＋ 12 reasons` |
+| `§4.5.22 NEXT REQUIRED DESIGN REVIEW` | Validation Taxonomy review **已完成**；仅 `Master Data Mapping Closure Review` 仍待执行 |
+| `§4.5.24 Status Boundary` | `Validation Taxonomy Limitation` = `DESIGN RESOLVED` |
+
+**Historical Record Preservation（未回写）**
+
+以下**保持原样**（其中 `11 canonical reasons` ／ `OPEN` 表述准确反映各自时点）：
+
+- **PR #46 Review Finding**（含 `Existing Taxonomy Baseline` ／
+  `Status（本 Review 时点）` ／ `Human Decision Required` ／ `Known Risks`）
+- **PR #46 Human Decision Record**（含 `执行状态（PR #46 时点）`）
+- **Historical Review Record —— PR #40**
+- 各 **`执行状态（本 Task 完成时点）`** ／ **`执行状态（PR #xx 时点）`** ／
+  **`Status（本 Review 时点）`** 块（例如 PR #44 ／ PR #45 implementation record status）
+
+**Meaning of `DESIGN RESOLVED`**
+
+`Validation Taxonomy Limitation = DESIGN RESOLVED` **只**表示
+**canonical validation taxonomy 概念设计同步完成**，
+**不表示**：
+
+```
+runtime validator implemented
+API implemented
+enum implemented
+schema implemented
+Adapter implemented
+production tested
+```
+
+**未实施**：runtime validator ／ implementation enum ／ JSON Schema ／ API error object ／
+Adapter ／ 任何 runtime behavior test。
+
+**执行状态（本 Task 完成时点）**
+
+```
+Human Decision                       = RECORDED
+PROVENANCE_UNRESOLVED                = IMPLEMENTED / CANONICAL
+PROVENANCE_UNRESOLVED Category       = PROVENANCE
+Canonical Categories                 = 8
+Canonical Reasons                    = 11 → 12
+PROVENANCE_MISMATCH semantic         = UNCHANGED
+Validation Taxonomy Limitation       = OPEN → DESIGN RESOLVED
+Other Source-Semantic Mapping        = DESIGN RESOLVED
+Final Master Data Mapping            = DESIGN PENDING
+Master Data Mapping overall          = DESIGN PENDING
+Snapshot / Import Contract overall   = DESIGN PENDING
+```
+
 #### 4.5.23 Examples
 
 以下为 **conceptual examples**。
@@ -16427,7 +16616,7 @@ Other Source-Semantic Mapping        = DESIGN RESOLVED
 Final Master Data Mapping            = DESIGN PENDING   ← 未关闭
 Master Data Mapping overall          = DESIGN PENDING   ← 未关闭
 Snapshot / Import Contract overall   = DESIGN PENDING
-Validation Taxonomy Limitation       = OPEN / SEPARATE REVIEW REQUIRED
+Validation Taxonomy Limitation       = DESIGN RESOLVED
 ```
 
 `DESIGN RESOLVED` **只**表示 **logical provenance carrier contract 概念设计完成**，
@@ -16445,13 +16634,15 @@ Validation Taxonomy Limitation       = OPEN / SEPARATE REVIEW REQUIRED
 
 ```
 1. Validation Taxonomy Design Review
-     —— evidence exists 但 provenance reference missing 应如何进入 taxonomy
+     —— **已完成**：Review Finding 与 Human Decision Record 见 **§4.5.22**；
+        taxonomy implementation 见 **§4.5.22 Validation Taxonomy Implementation Record**
 2. Master Data Mapping Closure Review
-     —— 须在 provenance implementation 完成后独立执行
+     —— 须在 provenance implementation 完成后独立执行（provenance implementation **已完成**）；
+        该项**仍待独立执行**
 ```
 
 ```
-Validation Taxonomy Limitation = OPEN ／ SEPARATE DESIGN REVIEW REQUIRED
+Validation Taxonomy Limitation = DESIGN RESOLVED
 PROVENANCE_MISMATCH semantic   = UNCHANGED
 Final Master Data Mapping      = NOT CLOSED
 Master Data Mapping overall    = NOT CLOSED
@@ -16461,10 +16652,34 @@ Master Data Mapping overall    = NOT CLOSED
 
 ```
 1. Validation Taxonomy Design Review
-     —— 独立于 provenance implementation，可在本 PR 之后启动
+     —— **已完成**（见 **§4.5.22 Validation Taxonomy Implementation Record**）
 2. Master Data Mapping Closure Review
-     —— 须在 provenance Option D 实施完成后进行
+     —— 须在 provenance Option D 实施完成后进行（**provenance Option D 已完成**）；
+        该项**仍待独立执行**
 ```
+
+**Validation Taxonomy Design Change —— IMPLEMENTED：** `Validation Taxonomy Limitation`
+**现为 `DESIGN RESOLVED`** ——
+其 **PR #46 Human Decision**（**`PROVENANCE_UNRESOLVED` = `APPROVED FOR IMPLEMENTATION`**）
+已由 **Human-authorized Design Change** 实施，`§4.4` 已完成最小 canonical taxonomy synchronization
+（见 **§4.5.22 Validation Taxonomy Implementation Record**）。
+
+```
+Human Decision                       = RECORDED
+PROVENANCE_UNRESOLVED                = IMPLEMENTED / CANONICAL
+Canonical Categories                 = 8
+Canonical Reasons                    = 12
+PROVENANCE_MISMATCH semantic         = UNCHANGED
+Validation Taxonomy Limitation       = DESIGN RESOLVED
+```
+
+`DESIGN RESOLVED` **只**表示 **canonical validation taxonomy 概念设计已完成**，
+**不表示** runtime validator implemented ／ API implemented ／ enum implemented ／
+schema implemented ／ Adapter implemented ／ tested production behavior。
+
+**未变更** `§4.5` 任何 layer status —— 本 Task **不是** Master Data Mapping layer 变更；
+`DESIGN RESOLVED` layer 数**仍为 10**；`Final Master Data Mapping` **仍为 `DESIGN PENDING`**；
+`Master Data Mapping` overall **仍为 `DESIGN PENDING`**。
 
 ---
 
