@@ -7694,7 +7694,8 @@ conceptual validation design complete
 >
 > `BOM Version / Validity Mapping` 的 **BOM Applicability Design Review** 结论为
 > **`INSUFFICIENT`（Blocking Finding / Canonical Model Conflict）** —— 见 **§4.5.7**；
-> **Human Decision Required**，本轮**不变更状态**。
+> **Human Decision 已记录**（**Option A** 已批准），但 **Canonical Model Change 尚未实施**，
+> 因此本轮**不变更状态**。
 
 #### 4.5.1 Purpose & Scope
 
@@ -8018,9 +8019,9 @@ Source pre-resolution 是**必要的**（POC 不自行重新执行真实 ERP BOM
 > 并明确 `required_date` 与 validity 边界的**包含 / 排除**规则。
 > 若 Human 选择 **D**，必须同时定义**违反该约束时的业务后果**。
 
-**Required Date as Applicability Anchor —— 候选 Policy（未生效）**
+**Required Date as Applicability Anchor —— Human-approved Policy（未实施）**
 
-如果 Human 批准扩展模型，**推荐**的 business-time anchor 为：
+**Human 已批准**以下 business-time anchor 为：
 
 ```
 Production Requirement.required_date
@@ -8049,7 +8050,7 @@ SIMULATED POC Design Policy  +  Human-approved after merge
 
 **不得**描述为**真实 CY 企业 BOM selection 规则**。
 
-> **本轮状态：candidate policy，未生效。** `BOM Version / Validity Mapping` 仍为 `DESIGN PENDING`。
+> **本轮状态：`Human-approved`（`SIMULATED POC Design Policy`）；implementation 仍属后续 Design Change Task。** `BOM Version / Validity Mapping` 仍为 `DESIGN PENDING`。
 
 **Applicable BOM Definition（conceptual）**
 
@@ -8261,6 +8262,83 @@ Master Data Mapping overall    = DESIGN PENDING
 4. 是否采用 `required_date` 作为 **BOM applicability business-time anchor**
    （需标记 `SIMULATED POC Design Policy`）
 5. 是否接受 **8 项未决项保持不变**（本轮**不**减少 unresolved count）
+
+**Human Decision Record —— `SIMULATED POC Design Policy` ＋ `Human-approved`**
+
+> 以下为 Human 对上述 5 项的**正式回复**（本 Review 由 **PR #30** 提交）。
+> 本节**只记录决定**；**未**执行任何 Canonical Model 修改。
+
+| # | 决定项 | Human Decision |
+| --- | --- | --- |
+| 1 | 是否接受 `Canonical Model Compatibility = INSUFFICIENT` | **ACCEPTED** —— finding 成立 |
+| 2 | 采用哪个 Recommended Minimal Change Option | **Option A APPROVED** |
+| 3 | 是否授权修改 `§4.1` Canonical Data Model | **AUTHORIZED** —— 仅限后续专门的 **Design Change Task** |
+| 4 | 是否采用 `required_date` 作为 BOM applicability business-time anchor | **APPROVED** |
+| 5 | 是否接受 8 项未决项保持不变 | **ACCEPTED** |
+
+**Option A —— Authorized Scope（授权边界）**
+
+被批准的方案为：
+
+```
+将 applicable BOM relationship
+显式关联到 Production Requirement context
+```
+
+后续专门的 **Design Change Task** **只允许**解决：
+
+```
+time-varying / version-varying BOM
+无法由当前 BOM Component grain 无歧义表达的问题
+```
+
+**不得借此**：
+
+- 重构其他 canonical entities
+- 改其他 Business Rule grain
+- 解决 `loss_rate` owner / grain
+- 解决 `required_quantity` semantic
+- 扩展 BOM explosion
+- 创建真实 ERP BOM schema
+
+> **本 PR 不执行**该 Design Change。
+> `§4.1` / `§4.2` / `§4.4` 的 canonical design modification **不在本 PR 范围内**。
+
+**`required_date` anchor —— 批准状态**
+
+```
+Production Requirement.required_date
+  = POC v0.2 的 BOM applicability business-time anchor
+```
+
+**标记（必须）：**
+
+```
+SIMULATED POC Design Policy  ＋  Human-approved
+```
+
+**不得**描述成**真实 CY 企业 BOM selection rule**。
+
+**不得**使用以下时间**替代** `required_date`：
+
+- Snapshot creation time
+- Package export time
+- `AnalysisDate`
+- system current time
+
+**执行状态**
+
+```
+Human Decision                 = RECORDED
+Canonical Model Change         = NOT YET IMPLEMENTED
+Option A implementation        = DEFERRED → follow-up Design Change Task
+BOM Version / Validity Mapping = DESIGN PENDING
+unresolved count               = 仍为 8 项
+```
+
+`BOM Version / Validity Mapping` **保持 `DESIGN PENDING`**，
+直到 approved Canonical Model Change **完成并通过 Review** 为止。
+
 #### 4.5.8 Substitute Relationship Resolution
 
 **必须保持有方向：**
@@ -8858,7 +8936,8 @@ source evidence exists but canonical mapping unavailable
 
 > `BOM version / validity` 另有 **Blocking Finding**
 > （`Canonical Model Compatibility = INSUFFICIENT`，见 **§4.5.7**）；
-> 在 Human Decision 之前其状态**保持 `DESIGN PENDING`**，未决项数量**不减少**。
+> 在 approved **Canonical Model Change** 完成并通过 Review 之前，
+> 其状态**保持 `DESIGN PENDING`**，未决项数量**不减少**。
 
 本 Task **不以「Master Data Mapping」为名一次性消灭这些问题**。
 
@@ -8915,8 +8994,9 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 本轮只完成 **conceptual resolution boundary**。
 
 **Open Blocking Finding：** `BOM Version / Validity Mapping` **仍为 `DESIGN PENDING`** ——
-其 **BOM Applicability Design Review** 判定 `Canonical Model Compatibility = INSUFFICIENT`，
-需要 **Human Decision** 后才能继续（见 **§4.5.7**）。
+其 **BOM Applicability Design Review** 判定 `Canonical Model Compatibility = INSUFFICIENT`；
+**Human Decision 已记录**（**Option A** 已批准，见 **§4.5.7**），
+但 **Canonical Model Change 尚未实施**，须待其完成并通过 Review 后才能继续。
 
 ---
 
