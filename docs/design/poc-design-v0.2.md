@@ -7837,6 +7837,10 @@ conceptual validation design complete
 > **`INSUFFICIENT`（Blocking Finding / Canonical Model Conflict）** —— 见 **§4.5.7**；
 > 该冲突已由 **Human-approved Option A ＋ Canonical Model Amendment** **RESOLVED**，
 > 因此现为 **`DESIGN RESOLVED`**。
+>
+> `Supplier Eligibility Vocabulary Mapping` 的 **Supplier Eligibility Mapping Design Review**
+> 已产生 **Review Finding ＋ Human Decision Gate** —— 见 **§4.5.11**；
+> 其状态**仍为 `DESIGN PENDING`**，unresolved count **仍为 7**。
 
 #### 4.5.1 Purpose & Scope
 
@@ -8667,6 +8671,342 @@ vocabulary = DESIGN PENDING
 ```
 SEMANTIC_RESOLUTION / SEMANTIC_UNRESOLVED
 ```
+**Supplier Eligibility Mapping Design Review（Review Finding）**
+
+**Evidence Boundary**
+
+现有 `FROZEN` / Human-approved evidence 与既有 Design 支持：
+
+| 事实 | 来源 |
+| --- | --- |
+| 存在结构化 Supplier Data | `VR-006`（SC-DATA-002，Human-approved `SIMULATED`） |
+| 存在 **Supplier-Material Relationship**：`supplier_id` / `material_code` / `sourcing_status` / `standard_lead_time_days` / `updated_at` | `VR-006` §A-2 |
+| `sourcing_status` 的**逻辑语义** = relationship eligibility context | `§2.7.24` ／ `§4.1.4 I` ／ `§4.2.8` |
+| 允许**一个 Material 对应多个已批准 Supplier** | `VR-006` §A-2 |
+| Data Quality baseline **可以出现 Inactive Supplier**（`supplier_status`） | `VR-006` §A-1 |
+| mapping **不得**由 Agent / AI 猜测 | `§2.7.24` ／ `§4.1.4 I` ／ `§4.4.62` ／ `§4.5.2` |
+
+**`VR-006` 没有定义 `sourcing_status` 的具体允许值集合。**
+
+因此：
+
+> **不得**把任何现实 ERP / SRM 常见状态当作当前项目事实。
+
+**本 Review 不得发明** `APPROVED` / `ACTIVE` / `QUALIFIED` / `BLOCKED` / `INACTIVE` 等 source-system enum。
+
+**Existing Business Boundary（继续保持）**
+
+`§2.7.24` 已定义：`sourcing_status` 用于判断该 relationship 是否属于
+**当前可评估的 candidate relationship**；并明确：
+
+```
+relationship eligibility
+  ≠ Supplier Ranking
+  ≠ Supplier Selection
+  ≠ Supplier Recommendation
+```
+
+Supplier Risk 仍**只做** **Risk Evidence evaluation**。
+本 Review **不得**增加任何自动供应商选择能力。
+
+**Critical Semantic Distinction（三态）**
+
+必须明确区分**三种**情况：
+
+| # | 情况 | 含义 | Business 后果 |
+| --- | --- | --- | --- |
+| **A** | **Relationship eligible** | 存在可靠 Supplier-Material Relationship，**且**有足够 evidence 明确确认其可进入 Risk Evaluation | 进入 Risk Evidence evaluation |
+| **B** | **Relationship explicitly ineligible** | relationship 存在且可识别，但 evidence **明确**表示其不属于可评估 candidate relationship | **valid but ineligible** —— 不进入 candidate evaluation；**默认 NO Validation Issue** |
+| **C** | **Relationship eligibility unresolved** | relationship 存在，但 `sourcing_status` / eligibility evidence **无法可靠解释** | **semantic unresolved**；若当前请求需要 Supplier Risk → Risk Evidence → **`DATA_INCOMPLETE`** |
+
+**必须保持：**
+
+```
+explicitly ineligible  ≠  unresolved
+```
+
+**Option Review**
+
+| Option | 内容 | 现有证据是否支持 | 结论 |
+| --- | --- | --- | --- |
+| **0** | 保持 `sourcing_status` unresolved | 支持（安全） | **安全但长期阻塞** —— Supplier Risk eligibility 无法可靠执行 |
+| **A** | 定义 source `sourcing_status` enum（`APPROVED` / `ACTIVE` / `QUALIFIED` / `BLOCKED`） | **不支持** —— `VR-006` 未定义允许值集合 | **拒绝** —— 会发明 source semantic |
+| **B** | source-specific status → **canonical eligibility condition**（explicit deterministic mapping） | 支持 —— 只要求存在足够 explicit eligibility evidence | **推荐方向（待 Human Approval）** |
+| **C** | 引入 canonical `is_eligible` Boolean | **不支持** —— 无法可靠表达三态 | **拒绝** |
+| **D** | Relationship Exists = Eligible | **违反** `§2.7.24` 与 `VR-006` | **拒绝** |
+
+**Option 0 —— 评估**
+
+不发明任何 source semantic（优点），但 Supplier Risk eligibility **长期无法可靠执行**。
+`§4.4.62` 已为「无法解释」定义了 fail-safe 路径，因此 Option 0
+**只是安全但长期阻塞**，**不是**设计终点。
+
+**Option A —— 拒绝依据**
+
+`VR-006` 只确认 `sourcing_status` **字段存在**，**未定义**其允许值集合。
+因此定义 source enum 属于**发明 source semantic**：
+
+- 违反 `§2.7.24`「本 Task **不定义**具体 `sourcing_status` enum / vocabulary」
+- 违反 `§4.1.4 I`「**不得自行定义** `sourcing_status` enum / vocabulary」
+- 违反 `§4.4.62`「**不得创建** `APPROVED` / `ACTIVE` / `QUALIFIED` / `BLOCKED` 等 source enum」
+
+> **不得**因为「企业通常这样」就定义 source enum。
+
+**Option B —— 推荐方向（待 Human Approval）**
+
+保持：
+
+```
+sourcing_status  =  source / mapping evidence
+```
+
+**不要求**全企业存在一个**统一** source vocabulary。
+
+由 **explicit deterministic mapping** 把 source-specific status 解释成 conceptual eligibility condition：
+
+```
+source-specific sourcing_status
+        ↓
+explicit mapping evidence
+        ↓
+Relationship Eligibility Condition
+        ↓
+eligible  /  ineligible  /  unresolved
+```
+
+**注意：** `eligible` / `ineligible` / `unresolved` **只属于**
+**canonical mapping outcome / condition** —— 它们**不是**：
+
+- source enum
+- Business Status
+- Risk Level
+- Supplier Ranking
+- persisted field schema
+
+**Option C —— 拒绝依据**
+
+`is_eligible = true / false` 会**错误压平**三态：
+`false` 可能表示 **explicitly ineligible**，也可能被误解为 **unknown / missing**。
+
+二者在 Business 上的后果**完全不同**（前者 NO Validation Issue；后者 `DATA_INCOMPLETE`）。
+**无法可靠表示三态 → 不得采用。**
+
+**Option D —— 拒绝依据**
+
+```
+supplier_id + material_code relationship exists   ⇏   eligible
+```
+
+违反 `§2.7.24`（`sourcing_status` 存在的意义正是判断是否属于可评估 candidate relationship），
+也违反 `VR-006` 中允许出现的 **Inactive Supplier** 与非 approved relationship context。
+
+**Source Vocabulary Boundary**
+
+即使采用 **Option B**，**也不得**声明：
+
+```
+APPROVED → eligible
+ACTIVE   → eligible
+BLOCKED  → ineligible
+```
+
+等**具体映射** —— 因为当前**没有** source vocabulary evidence。
+
+具体：
+
+```
+source value → eligibility condition
+```
+
+仍属于 **Adapter / source-specific mapping**。
+
+**本层只定义 mapping contract。**
+
+**`eligible` 语义**
+
+如果最终采用 Option B，`eligible` 表示：
+
+> 该 Supplier-Material Relationship 拥有**足够可靠的 eligibility evidence**，
+> 允许其进入 `BR-SUPPLIER-RISK-001` 的 Risk Evidence evaluation。
+
+它**不表示**：
+
+- supplier is selected
+- supplier is recommended
+- supplier is best
+- purchase should be placed
+- procurement recommendation belongs to this supplier
+
+**`explicitly ineligible` 语义**
+
+如果 relationship 被**可靠判断**为 ineligible：
+
+- 该 relationship **不进入**当前 Supplier Risk candidate evaluation
+- 但 **relationship record 本身仍可能有效**
+
+因此默认：
+
+```
+NO Validation Issue
+```
+
+只属于 **valid but ineligible**。
+
+**不得**输出 `OverallSupplierRisk = DATA_INCOMPLETE` 来表示
+「这个 relationship 明确不 eligible」—— 因为 `DATA_INCOMPLETE` 表示
+**应该能够评估但 evidence 不完整**，**不是**明确的业务不适用。
+
+**`unresolved` 语义**
+
+如果 relationship **存在**，但 eligibility **无法可靠判断**：
+
+```
+SEMANTIC_RESOLUTION / SEMANTIC_UNRESOLVED
+```
+
+如果当前 capability **确实需要**评估该 relationship：
+
+```
+Risk Evidence Status → DATA_INCOMPLETE
+```
+
+**不得**：默认 eligible ／ 默认 ineligible ／ LLM guess。
+
+**Missing Relationship Boundary**
+
+| 情形 | 性质 | 处理 |
+| --- | --- | --- |
+| Supplier exists + Material exists + **Relationship absent** | relationship **不存在** | **不得**凭空建立 Supplier-Material Relationship（见 `§4.5.10`） |
+| Relationship exists but **eligibility unresolved** | relationship **semantic resolution** 问题 | `SEMANTIC_UNRESOLVED` → Risk Evidence `DATA_INCOMPLETE` |
+
+**不得**把后者混为 `sourcing_status missing`，也**不得**把前者当作 eligibility 问题。
+
+**Multiple Suppliers**
+
+`VR-006` 已允许**一个 Material 对应多个已批准 Supplier**。因此：
+
+```
+多个 eligible relationships 同时存在  =  合法情况
+```
+
+**不得**：
+
+- 因多个 eligible Supplier 产生 conflict
+- 自动排名
+- 自动选择一个
+- 用 SupplierRisk 高低做自动采购选择
+
+例如：
+
+```
+Supplier A  eligible  →  LOW risk
+Supplier B  eligible  →  HIGH risk
+```
+
+两者**都可以展示**。仍**不得**自动 `A > B` 或选择 `A`。
+
+**Supplier Master Status Boundary**
+
+`VR-006` §A-1 允许 **Inactive Supplier**（`supplier_status`）作为 Data Quality / business context。
+
+必须评估：**Supplier Master status** 与 **Supplier-Material `sourcing_status`** 是否同一语义。
+
+默认：
+
+```
+Supplier Master status  ≠  Supplier-Material `sourcing_status`
+```
+
+**不得**：`Supplier inactive` **自动推导** `sourcing_status` —— 除非已有**明确 approved mapping evidence**。
+
+如果二者冲突，需要使用既有 **consistency / semantic boundary**，而**不是静默选择一个**。
+
+**Canonical Model Impact Review**
+
+`§4.1.4 I` `Supplier-Material Relationship` 的 attributes 已包含 `sourcing_status`。
+
+**结论：`NO` —— 不需要修改 canonical entity grain。**
+
+```
+Supplier-Material Relationship grain = supplier_id + material_code   （保持不变）
+```
+
+Eligibility mapping **不应改变**该 relationship grain。
+本 Review **未**发现需要修改 `§4.1` 的理由。
+
+**Data Dictionary Impact Review**
+
+`§4.2.8` / `§4.2.14` / `§4.2.16` 当前登记：
+
+```
+sourcing_status vocabulary = DESIGN PENDING
+```
+
+如果 Human 批准 **Option B**，未来可能改写为：
+
+```
+source vocabulary                      = source-specific / Adapter mapping
+canonical eligibility mapping contract = DESIGN RESOLVED
+```
+
+**但本 Review PR 不修改**已批准的 canonical semantic ——
+该改写涉及语义层面变化，**必须**先经 **Human Approval**（见下方 **Human Decision Required**）。
+
+**Validation Alignment**
+
+保持 `§4.4.62` 的核心规则：
+
+```
+eligibility 无法可靠确定 → semantic unresolved → Risk Evidence DATA_INCOMPLETE
+```
+
+**本 Review 补充结论（待 Human Approval 后同步）：**
+
+```
+explicitly ineligible  ≠  semantic unresolved
+```
+
+**不得**把 **valid but ineligible** 错误变成 Validation Issue。
+
+**No New Business Enum**
+
+**不得**把 `ELIGIBLE` / `INELIGIBLE` / `UNRESOLVED` 加入：
+
+- Supplier Risk enum
+- Business Classification
+- Source System status enum
+
+如果使用这些词，必须明确它们**只是 conceptual mapping conditions**。
+
+**不得创建** `SupplierEligibilityStatus` field —— 除非 Human 后续明确批准。
+
+**No Implementation**
+
+本 Review **未创建**：source enum、database enum、`is_eligible` field、schema、mapping table、
+code、Adapter、test、API、workflow、supplier ranking、supplier selector、ADR。
+
+**未选择技术。**
+
+**Status**
+
+```
+Supplier Eligibility Vocabulary Mapping = DESIGN PENDING    ← 本 Review 不改变
+unresolved count                        = 仍为 7
+```
+
+**Human Decision Required**
+
+请 Human 决定：
+
+1. 是否接受 **source vocabulary 不做全局统一 enum**
+2. 是否采用 **Option B**（source-specific `sourcing_status` → conceptual eligibility condition）
+3. 是否接受三种 conceptual outcome：**`eligible` / `ineligible` / `unresolved`**
+4. 是否确认 **`explicitly ineligible` = valid but ineligible**，**不产生** `DATA_INCOMPLETE`
+5. 是否授权必要的 **`§4.1` / `§4.2` / `§4.4` 最小 consistency synchronization**
+   （含 `§4.2.8` / `§4.2.16` 的 status 表述，以及 `§4.4.62` 的
+   `explicitly ineligible ≠ semantic unresolved` 补充）
+
+**只有 Human Approval 后**，下一 Task 才正式实施。
 
 #### 4.5.12 Warehouse Role Resolution
 
@@ -9190,6 +9530,10 @@ source evidence exists but canonical mapping unavailable
 > `BOM version / validity` 的 **Blocking Finding**（`Canonical Model Compatibility = INSUFFICIENT`）
 > 已由 **Human-approved Option A ＋ Canonical Model Amendment** **RESOLVED**（见 **§4.5.7**）；
 > 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **8 → 7**。
+>
+> `sourcing_status` vocabulary 另有 **Human Decision Gate**
+> （**§4.5.11** Supplier Eligibility Mapping Design Review）；
+> 在 Human Approval 之前其状态**保持 `DESIGN PENDING`**，未决项数量**不减少**。
 
 本 Task **不以「Master Data Mapping」为名一次性消灭这些问题**。
 
@@ -9259,6 +9603,11 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 - BOM selection code exists
 - BOM explosion implemented
 - tested
+
+**Open Human Decision Gate：** `Supplier Eligibility Vocabulary Mapping` **仍为 `DESIGN PENDING`** ——
+其 **Supplier Eligibility Mapping Design Review** 已判定推荐方向为 **Option B**
+（source-specific `sourcing_status` → conceptual eligibility condition），
+但**须经 Human Approval** 后才能实施（见 **§4.5.11**）。
 
 ---
 
