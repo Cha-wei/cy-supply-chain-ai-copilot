@@ -4454,10 +4454,10 @@ provenance is required
 
 这些进入后续 **Data Dictionary / Audit Design**。
 
-> **Provenance Carrier / Minimum Traceability Contract Design Review（Review Finding）** 与
-> **Human Decision Record** 见 **§4.5.22** —— **Option D = APPROVED**；
-> 但 **Option D Implementation = NOT YET EXECUTED**，
-> 因此 `provenance carrier` **仍为 `DESIGN PENDING`**（**未变**）。
+> **Provenance Carrier / Minimum Traceability Contract Design Review（Review Finding）** ／
+> **Human Decision Record** ／ **Option D Implementation Record** 见 **§4.5.22** ——
+> **Option D = IMPLEMENTED**；**Layered Logical Provenance Contract** 已落地，
+> 因此 `provenance carrier` **现为 `DESIGN RESOLVED`**，未决项数量 **1 → 0**。
 
 #### 4.1.9 Missing / Unknown Boundary
 
@@ -4515,7 +4515,7 @@ Canonical model **不得通过默认值隐藏缺失**。
 | **`effective_arrival_date` source mapping policy** | **`DESIGN RESOLVED`** | **不建立 global source field** —— concrete source field = **`SOURCE-SPECIFIC` / Adapter-defined**；canonical mapping contract 见 **§4.2.6** ／ **§4.5.21**；**真实 ERP field 当前仍未知**（**未知 ≠ Design Pending**） |
 | Allocation 与 demand window 的关联机制 | **`DESIGN RESOLVED`** | 已由 **§4.5.9** 解析为 **canonical allocation applicability mapping contract**（**Target Applicability** ＋ **Source Reservation Overlap**）；concrete source evidence = **`SOURCE-SPECIFIC` / Adapter-defined**；**未新增** canonical field |
 | `ApplicableMOQ` 的来源 | **`DESIGN RESOLVED`** | canonical applicability resolution 由 **§4.5.22 Option D Implementation Record** 解析：owner = **exact Procurement Recommendation Context**（`plant_id` + `material_code` + `RecommendationNeedDate`）；source semantic role = **`SOURCE-SPECIFIC` purchasing-policy evidence**；resolution contract = **exactly one applicable `ApplicableMOQ` or `unresolved`**；**未新增** canonical field / entity，**未**修改 Recommendation grain；physical carrier **仍 SOURCE-SPECIFIC / not yet defined**（**§4.2.9** ／ **§4.4.67**） |
-| Provenance 的具体承载方式 | **`DESIGN PENDING`** | **Provenance Carrier / Minimum Traceability Contract Design Review（Review Finding）** 与 **Human Decision Record**（**Option D = APPROVED**）见 **§4.5.22**；**Implementation = NOT YET EXECUTED**，状态**未变**（见 §4.1.8） |
+| Provenance 的具体承载方式 | **`DESIGN RESOLVED`** | **Layered Logical Provenance Contract** 已由 **§4.5.22 Option D Implementation Record** 实施：`Snapshot Package Identity` + `Logical Dataset Role` + **`Stable Source Evidence Locator`** + `Mapping / Resolution Basis`（when applicable）+ `Analysis Run linkage`；**logical carrier ≠ physical carrier**（**§4.3** `Field Carrier Mapping` / `Final Import Contract` 仍 `DESIGN PENDING`）；**未新增** canonical field / entity（见 §4.1.8） |
 
 > 以上条目**不影响** `Canonical Data Model = DESIGN RESOLVED` ——
 > 它们属于**后续 Master Data Mapping / Adapter Boundary** 的范围，
@@ -5414,7 +5414,7 @@ database field / API enum / ranking / selection result）。
 > Source Semantic Role            = SOURCE-SPECIFIC purchasing-policy evidence
 > Resolution Contract             = exactly one applicable ApplicableMOQ
 >                                   或 unresolved
-> Physical Carrier                = NOT YET DEFINED（provenance carrier = DESIGN PENDING）
+> Physical Carrier                = NOT YET DEFINED（logical provenance carrier = DESIGN RESOLVED；physical realization 仍属 §4.3）
 > ```
 >
 > **不得**把 Supplier ／ Contract ／ ERP Purchasing Info Record 声明为真实来源 ——
@@ -5648,9 +5648,19 @@ input evidence
 
 **但本 Task 不设计**：provenance schema、`source_system_id`、lineage database、audit event format。
 
-> **`DERIVED` result** 的 provenance（`input evidence` ＋ `Rule ID` ＋ `Analysis Run`）
-> 已由 **§4.5.22 Provenance Carrier / Minimum Traceability Contract Design Review** 进一步细化为
-> **Option D（Layered Logical Provenance Contract）** 的 **Review Finding only** —— **未实施**。
+> **`DERIVED` result** 的 provenance 已由 **Option D（Layered Logical Provenance Contract）**
+> 正式落地（见 **§4.5.22 Option D Implementation Record**）：
+>
+> ```
+> Derived Result Provenance = Analysis Run + Deterministic Rule ID
+>                             + Upstream Canonical References / Contexts
+> ```
+>
+> 对发生 semantic mapping 的 `SOURCE` ／ `POLICY_INPUT`，还必须能够识别
+> **Mapping / Resolution Basis**（**§4.2.15** ／ **§4.4.93**）。
+>
+> **`provenance carrier` 属于 provenance metadata / mapping boundary，
+> 不是 canonical business field** —— **未**加入 `§4.2` Canonical Data Dictionary field table。
 
 #### 4.2.16 Open Semantic / Mapping Items
 
@@ -5659,7 +5669,7 @@ input evidence
 | 项 | 状态 |
 | --- | --- |
 | Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
-| Provenance carrier | `DESIGN PENDING` —— **Provenance Carrier / Minimum Traceability Contract Design Review（Review Finding）** 与 **Human Decision Record**（**Option D = APPROVED**）见 **§4.5.22**；**Implementation = NOT YET EXECUTED**，本表状态**未变** |
+| Provenance carrier | **`DESIGN RESOLVED`** —— **Layered Logical Provenance Contract**（**§4.5.22 Option D Implementation Record**）；**不是** canonical business field，**不进入** Data Dictionary |
 
 > 以上条目**不影响** `Data Dictionary = DESIGN RESOLVED` ——
 > 它们属于 **source mapping / Master Data Mapping / Adapter Boundary / Data Validation** 的范围。
@@ -5956,6 +5966,21 @@ Manifest **至少需要表达以下语义**：
 **不得把两者混为一层** —— dataset-level reference **不足以**定位单条 source evidence
 （见 **§4.5.22** Critical Scenario A）。
 
+**Logical Provenance Carrier Contract（**§4.5.22 Option D Implementation Record**）：**
+
+```
+Package Identity
++ Logical Dataset Role
++ Stable Source Evidence Locator
++ Mapping / Resolution Basis（when applicable）
+```
+
+上述四者之间的 conceptual relation **已定义**（**§4.5.22**）。
+
+**但 `Serialization Format` ／ `Physical Dataset Layout` ／ `Field Carrier Mapping` ／
+`Final Import Contract` 仍为 `DESIGN PENDING`** ——
+**logical carrier resolved ≠ physical serialization resolved**。
+
 #### 4.3.9 SIMULATED Boundary
 
 当前项目是**模拟企业 POC**。
@@ -6153,7 +6178,19 @@ logical dataset role
 controlled export provenance
 ```
 
-**但本 Task 不设计**：`source_system_id` schema、lineage DB、audit DB、event format。
+**但本 Task 不设计**：source_system_id schema、lineage DB、audit DB、event format。
+
+**logical provenance carrier contract 已定义**（**§4.5.22 Option D Implementation Record**）：
+
+```
+Snapshot Package
++ logical dataset role
++ Stable Source Evidence Locator
++ Mapping / Resolution Basis（when applicable）
+```
+
+**logical carrier resolved** **不表示** physical serialization 已完成 ——
+后者仍属 **§4.3 `Field Carrier Mapping` ／ `Final Import Contract`**。
 
 > **controlled export provenance** 的 **logical carrier contract** 已由 **§4.5.22** Review 提出
 > （**Option D**）；该 Review **未改变**本边界，且 **physical serialization** 仍属后续设计（**未**完成）。
@@ -6756,7 +6793,7 @@ physical carrier               = SOURCE-SPECIFIC / not yet defined
 Data Validation **可以**要求：`BR-REQUIREMENT-001` 执行时**必须存在可靠 `loss_rate` evidence**。
 
 **但不得决定** `loss_rate` 来自哪个 Entity / Dataset / Source Field ——
-physical carrier **仍是独立设计问题**（`provenance carrier` = `DESIGN PENDING`）。
+physical carrier **仍是独立设计问题**（**logical provenance carrier = `DESIGN RESOLVED`**；physical realization 仍属 **§4.3**）。
 
 **必须区分 root condition：**
 
@@ -8018,7 +8055,7 @@ Canonical Applicability Context = exact Procurement Recommendation Context
                                   （plant_id + material_code + RecommendationNeedDate）
 Resolution Contract             = exactly one applicable ApplicableMOQ
                                   或 unresolved
-Physical Carrier                = NOT YET DEFINED（provenance carrier = DESIGN PENDING）
+Physical Carrier                = NOT YET DEFINED（logical provenance carrier = DESIGN RESOLVED；physical realization 仍属 §4.3）
 ```
 
 因此**不得自行决定** `Supplier` / `Contract` / `Purchasing Info Record` / `Material Master`
@@ -8226,7 +8263,7 @@ affected evidence → affected grain → affected capability
 | `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** —— source mapping = **source-specific / Adapter-defined**；canonical mapping contract 见 **§4.5.21** |
 | allocation demand-window mapping | **`DESIGN RESOLVED`** —— canonical allocation applicability mapping contract 见 **§4.5.9** |
 | `ApplicableMOQ` source | **`DESIGN RESOLVED`** —— owner = **exact Procurement Recommendation Context**；source semantic role = **`SOURCE-SPECIFIC` purchasing-policy evidence**；resolution contract = **exactly one applicable `ApplicableMOQ` or `unresolved`**（**§4.5.22 Option D Implementation Record**）；physical carrier **仍 SOURCE-SPECIFIC / not yet defined** |
-| provenance carrier | `DESIGN PENDING` —— **Provenance Carrier / Minimum Traceability Contract Design Review（Review Finding）** 与 **Human Decision Record**（**Option D = APPROVED**）见 **§4.5.22**；**Implementation = NOT YET EXECUTED**，本表状态**未变** |
+| provenance carrier | **`DESIGN RESOLVED`** —— **Layered Logical Provenance Contract**（**§4.5.22 Option D Implementation Record**）：`Snapshot Package Identity` + `Logical Dataset Role` + **`Stable Source Evidence Locator`** + `Mapping / Resolution Basis`（when applicable）+ `Analysis Run linkage`；physical carrier **仍属 §4.3 后续设计** |
 
 > 表中 `Warehouse canonical role`（**§4.5.12**）、`BOM version / validity`（**§4.5.7** ／ **§4.1.4 N**）、
 > `sourcing_status` vocabulary（**§4.5.11**）、`effective_arrival_date` source mapping（**§4.5.21**）
@@ -8701,7 +8738,7 @@ Risk vocabulary **保持现有定义**。
 | `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** —— source mapping = **source-specific / Adapter-defined**；canonical mapping contract 见 **§4.5.21** |
 | allocation demand-window mapping | **`DESIGN RESOLVED`** —— canonical allocation applicability mapping contract 见 **§4.5.9** |
 | `ApplicableMOQ` source | **`DESIGN RESOLVED`** —— owner = **exact Procurement Recommendation Context**；source semantic role = **`SOURCE-SPECIFIC` purchasing-policy evidence**；resolution contract = **exactly one applicable `ApplicableMOQ` or `unresolved`**（**§4.5.22 Option D Implementation Record**）；physical carrier **仍 SOURCE-SPECIFIC / not yet defined** |
-| provenance carrier | `DESIGN PENDING` —— **Provenance Carrier / Minimum Traceability Contract Design Review（Review Finding）** 与 **Human Decision Record**（**Option D = APPROVED**）见 **§4.5.22**；**Implementation = NOT YET EXECUTED**，本表状态**未变** |
+| provenance carrier | **`DESIGN RESOLVED`** —— **Layered Logical Provenance Contract**（**§4.5.22 Option D Implementation Record**）：`Snapshot Package Identity` + `Logical Dataset Role` + **`Stable Source Evidence Locator`** + `Mapping / Resolution Basis`（when applicable）+ `Analysis Run linkage`；physical carrier **仍属 §4.3 后续设计** |
 
 **Validation Issue Taxonomy 不得解决这些问题。**
 
@@ -8873,7 +8910,7 @@ physical schema / architecture / technology / ADR。
 Design DoD = PASS（17 / 17）
 ```
 
-**Upstream Design Items（1 项未决 ＋ 7 项已解析 ＋ 1 项已移除）—— 不阻塞本 closure**
+**Upstream Design Items（0 项未决 ＋ 8 项已解析 ＋ 1 项已移除）—— 不阻塞本 closure**
 
 这 9 项**阻止的是**「某些 capability 当前能够实际运行」，
 **不是**「Data Validation conceptual design 已经定义清楚」。
@@ -8891,7 +8928,7 @@ Design DoD = PASS（17 / 17）
 | 6 | `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** | 已由 **§4.5.21** 解析为 source-specific → canonical mapping contract（`§4.4.49`） |
 | 7 | allocation demand-window mapping | **`DESIGN RESOLVED`** | 已由 **§4.5.9** 解析为 canonical allocation applicability mapping contract（`§4.4.58` / `§4.4.60`） |
 | 8 | `ApplicableMOQ` source | **`DESIGN RESOLVED`** | 已由 **§4.5.22 Option D Implementation Record** 解析为 **Procurement Recommendation Context ＋ exactly-one-or-unresolved**；physical carrier 仍 `SOURCE-SPECIFIC` / not yet defined（`§4.4.67`） |
-| 9 | provenance carrier | `DESIGN PENDING` | 只提出 requirement，不设计 carrier；**Provenance Carrier Design Review（Option D）** 见 `§4.5.22`（`§4.4.15` / `§4.4.93`） |
+| 9 | provenance carrier | **`DESIGN RESOLVED`** | 已由 **§4.5.22 Option D Implementation Record** 实施为 **Layered Logical Provenance Contract**；physical carrier 仍属 `§4.3` 后续设计（`§4.4.93`） |
 
 > 第 3 项 `Warehouse canonical role` 已由 **§4.5.12 Warehouse Role Resolution**
 > 解析为 **source / mapping / scope context**；
@@ -8921,7 +8958,10 @@ Design DoD = PASS（17 / 17）
 > 第 8 项 `ApplicableMOQ` source 已由 **Human-authorized Design Change** 解析
 > （**Option D**：`Procurement Recommendation Context` ＋ **exactly-one-or-unresolved**，
 > 见 **§4.5.22 Option D Implementation Record**）；该行**保留登记以便追溯**。
-> 剩余 **1 项**未决：provenance carrier。
+> 第 9 项 `provenance carrier` 已由 **Human-authorized Design Change** 解析
+> （**Option D**：**Layered Logical Provenance Contract**，
+> 见 **§4.5.22 Option D Implementation Record**）；该行**保留登记以便追溯**。
+> 剩余 **0 项**未决。
 
 > 三者均明确禁止 Validation 反向解决这些设计问题：
 > `Consistency Validation 不得成为解决这些问题的后门。` /
@@ -8981,9 +9021,10 @@ conceptual validation design complete
 > ＋ **BOM Version / Validity Mapping**（**§4.5.7** ／ **§4.1.4 N**）
 > ＋ **Supplier Eligibility Vocabulary Mapping**（**§4.5.11**）
 > ＋ **Effective Arrival Date Source Mapping**（**§4.5.21**）
-> ＋ **Allocation Demand-Window Mapping**（**§4.5.9**）。
+> ＋ **Allocation Demand-Window Mapping**（**§4.5.9**）
+> ＋ **Other Source-Semantic Mapping**（**§4.5.22**）。
 >
-> **仍为 `DESIGN PENDING` 的层级：** **Other Source-Semantic Mapping** ／ **Final Master Data Mapping**。
+> **仍为 `DESIGN PENDING` 的层级：** **Final Master Data Mapping**。
 
 **层级状态登记：**
 
@@ -8998,7 +9039,7 @@ conceptual validation design complete
 | Supplier Eligibility Vocabulary Mapping | **`DESIGN RESOLVED`** |
 | Effective Arrival Date Source Mapping | **`DESIGN RESOLVED`** |
 | Allocation Demand-Window Mapping | **`DESIGN RESOLVED`** |
-| Other Source-Semantic Mapping | `DESIGN PENDING` |
+| Other Source-Semantic Mapping | **`DESIGN RESOLVED`** |
 | Final Master Data Mapping | `DESIGN PENDING` |
 
 > **`Master Data Mapping` overall 仍为 `DESIGN PENDING`。**
@@ -9019,8 +9060,9 @@ conceptual validation design complete
 > 因此现为 **`DESIGN RESOLVED`**（登记为 **Effective Arrival Date Source Mapping** 层），
 > unresolved count **6 → 5**。
 >
-> **但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
-> 其中仍存在 provenance carrier。
+> `Other Source-Semantic Mapping` 的 **`provenance carrier`（最后一个 internal unresolved item）**
+> 已由 **§4.5.22 Option D Implementation Record** 解析；因此该层现为 **`DESIGN RESOLVED`**，
+> unresolved count **1 → 0**。
 >
 > `allocation demand-window mapping` 的
 > **Substitute Allocation Demand-Window Mapping Design Review** 与 **Option B Implementation Record**
@@ -9046,9 +9088,13 @@ conceptual validation design complete
 > resolution contract = **exactly one applicable `ApplicableMOQ` or `unresolved`**），
 > unresolved count **2 → 1**。
 >
-> `provenance carrier` 的 **Provenance Carrier / Minimum Traceability Contract Design Review** 与
-> **Human Decision Record**（**Option D = APPROVED**）见 **§4.5.22** ——
-> 但 **Option D Implementation = NOT YET EXECUTED**，其状态**仍为 `DESIGN PENDING`**。
+> `provenance carrier` 的 **Option D semantic synchronization 已实施**
+> （见 **§4.5.22 Option D Implementation Record**）；**Layered Logical Provenance Contract** 已落地，
+> 因此其状态已变更为 **`DESIGN RESOLVED`**，unresolved count **1 → 0** ——
+> **`Other Source-Semantic Mapping` 现为 `DESIGN RESOLVED`**。
+>
+> **`Final Master Data Mapping` 仍为 `DESIGN PENDING`**（尚无 closure criteria，见 **§4.5.22** 决定 18 ／ 19）；
+> **`Master Data Mapping` overall 仍为 `DESIGN PENDING`**。
 
 #### 4.5.1 Purpose & Scope
 
@@ -9558,7 +9604,7 @@ Production Requirement
 → Snapshot Package
 ```
 
-**但**：**provenance carrier 仍 `DESIGN PENDING`**。
+**但**：**physical provenance carrier 仍属 `§4.3` 后续设计**（**logical provenance carrier = `DESIGN RESOLVED`**，见 **§4.5.22 Option D Implementation Record**）。
 
 **不得创建**：BOM mapping table / JSON / CSV / DB schema / lineage DB。
 
@@ -9778,7 +9824,7 @@ R2 Context + MAT-B → BOMComponentQty = 3
   **不得** `one BOM issue → entire Package rejected`，除非同时构成 **Package Structural Failure**
 - **Provenance** —— 必须未来可追溯 `Production Requirement → applicability evidence →
   applicable BOM relationship set → component relationship → Snapshot Package`；
-  **provenance carrier 仍 `DESIGN PENDING`**；**不得**创建 lineage DB / JSON schema / mapping table
+  **physical provenance carrier 仍属 `§4.3` 后续设计**（**logical provenance carrier = `DESIGN RESOLVED`**，见 **§4.5.22 Option D Implementation Record**）；**不得**创建 lineage DB / JSON schema / mapping table
 - **No BOM Explosion** —— `BOM explosion algorithm = DESIGN PENDING / OUTSIDE THIS TASK`
 
 **Terminology Clarification**
@@ -10087,7 +10133,7 @@ source allocation evidence
 → Snapshot Package
 ```
 
-**但 provenance carrier 仍 `DESIGN PENDING`**；
+**但 physical provenance carrier 仍属 `§4.3` 后续设计**（**logical provenance carrier = `DESIGN RESOLVED`**，见 **§4.5.22 Option D Implementation Record**）；
 **不得创建** lineage schema / allocation ID schema / DB table / JSON metadata。
 
 **Canonical Model Compatibility Result**
@@ -10308,7 +10354,7 @@ source allocation evidence
 → Snapshot Package
 ```
 
-**必须未来可追溯。** 但 **provenance carrier = `DESIGN PENDING`**；
+**必须未来可追溯。** 但 **physical provenance carrier 仍属 `§4.3` 后续设计**（**logical provenance carrier = `DESIGN RESOLVED`**，见 **§4.5.22 Option D Implementation Record**）；
 **不得**因本决定创建任何 physical lineage carrier。
 
 **执行状态（PR #36 时点）**
@@ -10449,7 +10495,7 @@ source allocation evidence
 → Snapshot Package
 ```
 
-**但 provenance carrier 仍 `DESIGN PENDING`**；**不得创建** allocation ID schema / lineage table /
+**但 physical provenance carrier 仍属 `§4.3` 后续设计**（**logical provenance carrier = `DESIGN RESOLVED`**，见 **§4.5.22 Option D Implementation Record**）；**不得创建** allocation ID schema / lineage table /
 JSON metadata / DB relation / physical provenance fields。
 
 跨 Package 继续继承 **`PROVENANCE` / `PROVENANCE_MISMATCH`** ——
@@ -11284,8 +11330,10 @@ POC Inventory Scope 的 membership 判定**必须**：
 **本 Task 不设计**：physical scope list、database table、warehouse whitelist file、
 configuration format、API、field name。
 
-> POC Inventory Scope 的**实际 membership 来源**仍属
-> **Other Source-Semantic Mapping / Final Master Data Mapping** 层，当前仍为 `DESIGN PENDING`。
+> POC Inventory Scope 的 **logical / source-semantic boundary** 已由现有 **Master Data Mapping** Design 解析
+> （**`Other Source-Semantic Mapping` 现为 `DESIGN RESOLVED`**，见 **§4.5.22 Option D Implementation Record**）；
+> 但 **physical membership evidence / source representation** 仍属**后续 source-specific /
+> physical mapping realization** —— **`Final Master Data Mapping` 仍为 `DESIGN PENDING`**。
 
 **两种可接受的 Source Evidence Shape**
 
@@ -11420,7 +11468,7 @@ source warehouse context
 → Snapshot Package
 ```
 
-**但**：**provenance carrier 仍 `DESIGN PENDING`**。
+**但**：**physical provenance carrier 仍属 `§4.3` 后续设计**（**logical provenance carrier = `DESIGN RESOLVED`**，见 **§4.5.22 Option D Implementation Record**）。
 
 **不得创建**：mapping table / schema / JSON / CSV / database。
 
@@ -11553,18 +11601,23 @@ source identity context
   → Snapshot Package
 ```
 
-**但：**
+**现行状态：**
 
 ```
-provenance carrier = DESIGN PENDING   ← 未变
+provenance carrier = DESIGN RESOLVED
 ```
 
-本 Task **不设计**：mapping table / lineage DB / JSON object / `source_system_id` schema。
+**Mapping Provenance Requirement** 为 **`DESIGN RESOLVED`**；
+其 **carrier contract** 已由 **Option D（Layered Logical Provenance Contract）** 落地
+（见 **§4.5.22 Option D Implementation Record**）。
+
+本 Task **不设计**：mapping table / lineage DB / JSON object / `source_system_id` schema ——
+**physical carrier** 仍属 **§4.3** 后续设计。
 
 > **Mapping Provenance Requirement** 本身为 **`DESIGN RESOLVED`**；
-> **carrier contract** 的 **Design Review** 与 **Human Decision Record**（**Option D = APPROVED**）
-> 见 **§4.5.22** —— **Option D Implementation = NOT YET EXECUTED**，
-> 因此 `provenance carrier` **仍为 `DESIGN PENDING`**（**未变**）。
+> **carrier contract** 的 **Design Review** ／ **Human Decision Record** ／ **Option D Implementation Record**
+> 见 **§4.5.22** —— **Layered Logical Provenance Contract** 已落地，
+> 因此 `provenance carrier` **现为 `DESIGN RESOLVED`**（physical carrier 仍属 **§4.3**）。
 
 #### 4.5.15 Snapshot Consistency
 
@@ -11917,7 +11970,7 @@ source inbound context
 → Snapshot Package
 ```
 
-**但**：**provenance carrier 仍 `DESIGN PENDING`**。
+**但**：**physical provenance carrier 仍属 `§4.3` 后续设计**（**logical provenance carrier = `DESIGN RESOLVED`**，见 **§4.5.22 Option D Implementation Record**）。
 
 **不得创建**：lineage DB / mapping table / JSON metadata /
 `source_field_name` persisted field 等 **physical design**。
@@ -12285,7 +12338,7 @@ source inbound context
 → Snapshot Package
 ```
 
-**但 provenance carrier 仍 `DESIGN PENDING`**；**不得创建** lineage DB / mapping table /
+**但 physical provenance carrier 仍属 `§4.3` 后续设计**（**logical provenance carrier = `DESIGN RESOLVED`**，见 **§4.5.22 Option D Implementation Record**）；**不得创建** lineage DB / mapping table /
 JSON metadata / `source_field_name` persisted field / physical lineage schema。
 
 跨 Package 继续继承 **`PROVENANCE_MISMATCH`**；**不得创建新 reason**。
@@ -12340,7 +12393,7 @@ Master Data Mapping overall    = 仍 DESIGN PENDING
 
 #### 4.5.22 Preserve Unresolved Items
 
-以下未决项本轮**必须继续保持**（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**、`sourcing_status` vocabulary **已由 §4.5.11 解析**、`effective_arrival_date` source mapping **已由 §4.5.21 解析**、allocation demand-window mapping **已由 §4.5.9 解析**、`loss_rate` owner / grain **已由 §4.5.22 Option E Implementation Record 解析**、`ApplicableMOQ` source **已由 §4.5.22 Option D Implementation Record 解析**）：
+以下未决项本轮**必须继续保持**（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**、`sourcing_status` vocabulary **已由 §4.5.11 解析**、`effective_arrival_date` source mapping **已由 §4.5.21 解析**、allocation demand-window mapping **已由 §4.5.9 解析**、`loss_rate` owner / grain **已由 §4.5.22 Option E Implementation Record 解析**、`ApplicableMOQ` source **已由 §4.5.22 Option D Implementation Record 解析**、`provenance carrier` **已由 §4.5.22 Option D Implementation Record 解析**）：
 
 | 未决项 | 状态 |
 | --- | --- |
@@ -12351,7 +12404,7 @@ Master Data Mapping overall    = 仍 DESIGN PENDING
 | `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** —— source mapping = **source-specific / Adapter-defined**；canonical mapping contract 见 **§4.5.21** |
 | allocation demand-window mapping | **`DESIGN RESOLVED`** —— canonical allocation applicability mapping contract 见 **§4.5.9** |
 | `ApplicableMOQ` source | **`DESIGN RESOLVED`** —— owner = **exact Procurement Recommendation Context**；source semantic role = **`SOURCE-SPECIFIC` purchasing-policy evidence**；resolution contract = **exactly one applicable `ApplicableMOQ` or `unresolved`**（**§4.5.22 Option D Implementation Record**）；physical carrier **仍 SOURCE-SPECIFIC / not yet defined** |
-| provenance carrier | `DESIGN PENDING` —— **Provenance Carrier / Minimum Traceability Contract Design Review（Review Finding）** 与 **Human Decision Record**（**Option D = APPROVED**）见 **§4.5.22**；**Implementation = NOT YET EXECUTED**，本表状态**未变** |
+| provenance carrier | **`DESIGN RESOLVED`** —— **Layered Logical Provenance Contract**（**§4.5.22 Option D Implementation Record**）：`Snapshot Package Identity` + `Logical Dataset Role` + **`Stable Source Evidence Locator`** + `Mapping / Resolution Basis`（when applicable）+ `Analysis Run linkage`；physical carrier **仍属 §4.3 后续设计** |
 
 > `BOM version / validity` 的 **Blocking Finding**（`Canonical Model Compatibility = INSUFFICIENT`）
 > 已由 **Human-approved Option A ＋ Canonical Model Amendment** **RESOLVED**（见 **§4.5.7**）；
@@ -12385,6 +12438,12 @@ Master Data Mapping overall    = 仍 DESIGN PENDING
 > owner = **exact Procurement Recommendation Context**，
 > resolution contract = **exactly one applicable `ApplicableMOQ` or `unresolved`**；
 > 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **2 → 1**。
+>
+> `provenance carrier` 的 **Option D semantic synchronization 已实施**
+> （见下方 **Option D Implementation Record**）；
+> **Layered Logical Provenance Contract** 已落地，
+> 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **1 → 0**；
+> `Other Source-Semantic Mapping` 随之成为 **`DESIGN RESOLVED`**。
 
 本 Task **不以「Master Data Mapping」为名一次性消灭这些问题**。
 
@@ -14338,6 +14397,19 @@ Master Data Mapping overall          = 仍 DESIGN PENDING
 **`Master Data Mapping` overall 保持 `DESIGN PENDING`** —— **不得**因
 `unresolved count = 1` 就提前 closure。
 
+**Historical Review Record —— PR #44（不得作为当前状态解读）**
+
+> 以下 **Provenance Carrier / Minimum Traceability Contract Design Review（Review Finding）**、
+> **Known Risks** 与 **Human Decision Record** 是 **PR #44** 时点的原始记录，
+> **按当时时点原样保留**，以便追溯。
+>
+> 其中出现的 `provenance carrier = DESIGN PENDING`、`Option D Implementation = NOT YET EXECUTED`、
+> `unresolved count = 1` 等表述**均为 PR #44 时点状态**，**不得**被解读为当前状态。
+>
+> **Option D 已由后续 Human-authorized Design Change 实施** ——
+> `provenance carrier` 现为 **`DESIGN RESOLVED`**，`unresolved count` 现为 **0**，
+> `Other Source-Semantic Mapping` 现为 **`DESIGN RESOLVED`**
+> （见下方 **Option D Implementation Record**）。
 **Provenance Carrier / Minimum Traceability Contract Design Review（Review Finding）**
 
 **Review Question**
@@ -15246,6 +15318,297 @@ Other Source-Semantic Mapping = DESIGN PENDING
      —— 须在 provenance Option D 实施完成后进行
 ```
 
+**Option D Implementation Record（Human-authorized Design Change）**
+
+**Human Authorization Source**
+
+```
+PR #44 Human Decision — Human-approved
+  → Canonical Model Compatibility       = COMPATIBLE（Option D resolution-contract form only）
+  → Option D                            = APPROVED
+  → Layered Logical Provenance Contract = APPROVED
+  → minimum provenance layers           = APPROVED
+  → Stable Source Evidence Locator      = APPROVED
+  → derived provenance contract         = APPROVED
+  → logical carrier ≠ physical carrier  = CONFIRMED
+  → PROVENANCE_MISMATCH semantic        = UNCHANGED
+  → taxonomy limitation                 = SEPARATE REVIEW REQUIRED
+  → minimal §4.2/§4.3/§4.4/§4.5 sync    = AUTHORIZED
+```
+
+**Implementation Result**
+
+```
+provenance carrier = DESIGN RESOLVED
+
+through:
+  Snapshot Package Identity
+  + Logical Dataset Role
+  + Stable Source Evidence Locator
+  + Mapping / Resolution Basis
+  + Analysis Run linkage
+```
+
+**Layered Logical Provenance Contract（正式落地）**
+
+```
+Snapshot Package Identity
+        ↓
+Logical Dataset Role
+        ↓
+Stable Source Evidence Locator
+        ↓
+Mapping / Resolution Basis（when applicable）
+        ↓
+Canonical Fact / Relationship
+        ↓
+Analysis Run
+        ↓
+Derived Result / Recommendation
+```
+
+**Layer 1 —— Snapshot Package Identity（复用，未修改）**
+
+复用既有 **`snapshot_package_id`**；语义保持 **Import / Transport Context identity**，
+**不是** canonical business identity。**未**创建 `provenance_package_id`。
+
+**Layer 2 —— Logical Dataset Role（复用，未修改）**
+
+继续使用既有 **logical dataset / evidence role**（**§4.3.10**）。
+
+```
+logical dataset role  ≠  CSV filename  ≠  table name  ≠  physical artifact path
+```
+
+**未**重新设计 physical file layout。
+
+**Layer 3 —— Stable Source Evidence Locator（正式定义，conceptual）**
+
+定义：在一个 **immutable accepted Snapshot Package** 内，能够**稳定重新定位**支撑某
+canonical fact ／ relationship ／ policy input 的**具体 source evidence**。
+
+必须满足：
+
+```
+stable within package
+reproducible
+package-scoped
+source-specific
+```
+
+**必须明确：**
+
+```
+Source Evidence Locator  ≠  Canonical Business Identity
+Source Evidence Locator  ≠  ERP primary key requirement
+Source Evidence Locator  ≠  globally unique ID
+Source Evidence Locator  ≠  cross-package stable ID
+```
+
+**不得规定**物理实现一定是 `row ID` ／ `primary key` ／ `file line` ／
+`JSON pointer` ／ `composite key` ／ `source_record_id`。
+
+**Dataset-level vs Evidence-level（两层同时存在，不得混为一个字段 / concept）**
+
+| 层 | 回答 |
+| --- | --- |
+| **dataset-level provenance reference** | **整个 logical dataset** 来自哪里 / 哪个 artifact |
+| **Stable Source Evidence Locator** | dataset 内**哪一份具体 source evidence** 支撑当前 canonical observation |
+
+**Layer 4 —— Mapping / Resolution Basis（when applicable）**
+
+对于发生 semantic mapping / resolution 的 canonical input，**必须能够稳定识别**
+使用了什么 **approved mapping / resolution basis**，包括但不限于既有：
+
+- Supplier eligibility mapping（**§4.5.11**）
+- `effective_arrival_date` mapping（**§4.5.21**）
+- Substitute allocation applicability（**§4.5.9**）
+- `loss_rate` resolution（**§4.5.22 Option E**）
+- `ApplicableMOQ` resolution（**§4.5.22 Option D**）
+- Master Data identity / relationship mapping（**§4.5.3** ～ **§4.5.6**）
+
+**不得要求** mapping basis 一定具有 persisted `mapping_rule_id`。
+本 Task 只定义：**mapping basis must be identifiable and reproducible**。
+
+**Mapping Basis ≠ Business Rule（正式区分）**
+
+| | 例子 | 作用 |
+| --- | --- | --- |
+| **A. Mapping / Resolution Basis** | source `promised` / `expected` evidence → canonical `effective_arrival_date` | 解释 **source semantic** |
+| **B. Deterministic Business Rule** | `RemainingInboundQty = ordered_qty - received_qty` | 计算 **canonical / derived business result** |
+
+**不得混淆。**
+
+**Derived Result Provenance（正式落地）**
+
+```
+Derived Result Provenance
+= Analysis Run + Deterministic Rule ID
++ Upstream Canonical References / Contexts
+```
+
+例如 `RecommendedPurchaseQty` 可经
+`Analysis Run R1` ＋ `BR-PROCUREMENT-001` ＋ `ShortageQty context` ＋ `ApplicableMOQ context`
+继续向上追溯。
+
+**不得**把全部 upstream provenance metadata 复制到每个 derived result。
+
+**Existing Rule IDs（复用，未新增）**
+
+`BR-REQUIREMENT-001` ／ `BR-INVENTORY-001` ／ `BR-INBOUND-001` ／ `BR-SUBSTITUTE-001` ／
+`BR-SHORTAGE-001` ／ `BR-PROCUREMENT-001` 等既有 Rule IDs
+**足以**作为 **deterministic calculation basis conceptual identifier**；
+**未创建** duplicate calculation rule IDs。
+
+**Direct Source Fact Provenance**
+
+即使 canonical value 只是 source evidence 的**直接映射**（例如 `on_hand_qty = 100`），
+**仍必须**至少能够追溯 `Snapshot Package` ＋ `Logical Dataset Role` ＋ `Stable Source Evidence Locator`。
+
+**不得** `direct copy → no provenance`。
+
+**Provenance Completeness —— Canonical Input**
+
+一个 canonical input 的 provenance complete，**至少**表示能够回答：
+
+1. 来自哪个 **Snapshot Package**？
+2. 属于哪个 **logical dataset role**？
+3. **哪份具体 source evidence** 支撑？
+4. 如果发生 semantic mapping，**使用什么 mapping / resolution basis**？
+5. 当前 canonical observation 属于哪个 **Analysis / business context**？
+
+若上述必要信息**无法可靠回答**，**不得声称** `provenance complete`。
+
+**Provenance Completeness —— Derived Result**
+
+一个 derived result 的 provenance complete，**至少**表示能够回答：
+
+1. 属于哪个 **Analysis Run**？
+2. 由哪个 **deterministic Rule** 产生？
+3. 使用了哪些 **upstream canonical inputs / contexts**？
+4. upstream inputs 是否**继续可以追溯**到 source evidence？
+
+**不得要求** derived result 复制全部 source metadata。
+
+**Package Immutability Invariant（只定义 invariant）**
+
+```
+同一个 snapshot_package_id + 同一个 Stable Source Evidence Locator
+  在 Package acceptance 之后
+ 不得指向不同内容
+```
+
+否则 **provenance contract 失效**。
+
+**本 Task 未设计** storage enforcement ／ content-addressing ／ hash schema ／ database constraint。
+
+**Cross-Package Boundary（保持）**
+
+```
+Analysis Run → exactly one accepted Snapshot Package
+```
+
+若 `Run R1 → Package P1`，但某 canonical input ／ mapping evidence provenance → `Package P2`，
+且**没有**另行批准的 **multi-package composition**：
+
+```
+→ PROVENANCE / PROVENANCE_MISMATCH
+```
+
+**不得**：silent accept ／ silent remap ／ silent copy ／ cross-package fallback。
+
+**One-to-Many / Many-to-One（保持）**
+
+必须支持 `multiple source evidence → one canonical fact`
+以及 `one source evidence → multiple canonical outputs`。
+
+**不得**强制 `one canonical fact = exactly one source evidence`，
+也**不得**假定 `one source row = one canonical field`。
+**但不得因此设计** lineage graph DB。
+
+**Logical Carrier ≠ Physical Carrier（保持）**
+
+```
+Logical Provenance Carrier = DESIGN RESOLVED
+        ≠
+physical carrier realization = resolved
+```
+
+未来 `CSV` ／ `JSON` ／ `DB` ／ file layout ／ record key representation 如何承载
+`Stable Source Evidence Locator` ／ `Mapping Basis` ／ references，
+**仍属** **§4.3 `Field Carrier Mapping` ／ `Final Import Contract`** 后续 Design。
+
+**Validation Taxonomy Limitation（保持 OPEN）**
+
+```
+evidence exists
++ required provenance reference absent
+/ package scope cannot be established
+        → 当前 PROVENANCE_MISMATCH 无法精确表达
+        → Validation Taxonomy Limitation = OPEN / SEPARATE REVIEW REQUIRED
+```
+
+**未**重定义 `PROVENANCE_MISMATCH`；**未**新增 `PROVENANCE_MISSING` ／ `LINEAGE_MISSING`；
+**未**创建其他新 Reason。`PROVENANCE_MISMATCH` 原语义
+（reference exists but points to wrong / incompatible provenance context）**保持不变**。
+
+**Structural vs Business Provenance（保持）**
+
+```
+Manifest / artifact missing / integrity failure       → PACKAGE_STRUCTURE
+canonical evidence 引用错误 Package / Analysis Context → PROVENANCE / PROVENANCE_MISMATCH
+evidence 存在但 provenance reference 缺失              → Validation Taxonomy Gap（pending separate review）
+```
+
+**`§4.2` / `§4.3` / `§4.4` / `§4.5` Synchronization Result**
+
+| 章节 | 同步内容 |
+| --- | --- |
+| **`§4.2`** | `§4.2.15` 同步 provenance metadata boundary 与 **Layered Logical Provenance Contract**；`§4.2.16` 关闭该 open item；明确 `provenance carrier` **不是** canonical business field，**未**加入 Data Dictionary field table |
+| **`§4.3`** | `§4.3.8` ／ `§4.3.16` 补清 **Package Identity ＋ Logical Dataset Role ＋ Stable Source Evidence Locator ＋ Mapping / Resolution Basis** 的 conceptual relation；**保持** `Serialization Format` ／ `Physical Dataset Layout` ／ `Field Carrier Mapping` ／ `Final Import Contract` **`DESIGN PENDING`** |
+| **`§4.4`** | `§4.4.93` 同步 provenance completeness ／ cross-package behavior ／ derived provenance ／ logical-vs-physical boundary；**保留** `PROVENANCE_MISMATCH` 原语义；**taxonomy gap 仍待独立 Review**；**未新增** Validation Reason |
+| **`§4.5`** | 本节记录 Option D implementation；`§4.5.14` ／ `§4.5.22` ／ `§4.5.24` 同步 status 与 unresolved count |
+
+**未修改 `§2` Business Rules**（**byte-semantically identical**）。
+
+**Meaning of `DESIGN RESOLVED`**
+
+`provenance carrier = DESIGN RESOLVED` **只**表示 **logical provenance carrier contract 概念设计完成**，
+**不表示** real ERP source known ／ source table / field known ／ mapping config exists ／
+Adapter implemented ／ physical carrier finalized ／ storage enforcement exists ／ tested ／ production-ready。
+
+**执行状态（本 Task 完成时点）**
+
+```
+Human Decision                       = RECORDED
+Option D                             = IMPLEMENTED
+Layered Logical Provenance Contract  = IMPLEMENTED
+provenance carrier                   = DESIGN RESOLVED
+unresolved count                     = 1 → 0
+Other Source-Semantic Mapping        = DESIGN RESOLVED
+Final Master Data Mapping            = 仍 DESIGN PENDING
+Master Data Mapping overall          = 仍 DESIGN PENDING
+Snapshot / Import Contract overall   = 仍 DESIGN PENDING
+Validation Taxonomy Limitation       = OPEN / SEPARATE REVIEW REQUIRED
+```
+
+**未新增**任何 Master Data Mapping layer —— `Other Source-Semantic Mapping` 是**既有层**，
+本 Task 只关闭其**最后一个 internal unresolved item**。
+`DESIGN RESOLVED` layer 数现为 **10**；`Final Master Data Mapping` **仍为 `DESIGN PENDING`**。
+
+**NEXT REQUIRED DESIGN REVIEW**
+
+```
+1. Validation Taxonomy Review
+     问题：evidence exists + required provenance reference missing /
+           package scope cannot be determined 应如何进入 canonical taxonomy
+     —— 本 Task 未实施该 Review
+
+2. Master Data Mapping Closure Review
+     —— 必须在 provenance implementation 完成后独立执行
+     —— 本 Task 未定义 closure criteria，也未宣布 overall closure
+```
+
 #### 4.5.23 Examples
 
 以下为 **conceptual examples**。
@@ -15283,10 +15646,11 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 **Warehouse Role Resolution**（**§4.5.12**）、
 **BOM Version / Validity Mapping**（**§4.5.7** ／ **§4.1.4 N**）、
 **Supplier Eligibility Vocabulary Mapping**（**§4.5.11**）、
-**Effective Arrival Date Source Mapping**（**§4.5.21**）
-与 **Allocation Demand-Window Mapping**（**§4.5.9**）。
+**Effective Arrival Date Source Mapping**（**§4.5.21**）、
+**Allocation Demand-Window Mapping**（**§4.5.9**）
+与 **Other Source-Semantic Mapping**（**§4.5.22**）。
 
-`DESIGN RESOLVED` 的九个层级**仅**表示其 **conceptual resolution boundary 已定义**，
+`DESIGN RESOLVED` 的十个层级**仅**表示其 **conceptual resolution boundary 已定义**，
 **不表示**：
 
 - 真实 ERP mapping 已完成
@@ -15337,8 +15701,8 @@ exactly one canonical `effective_arrival_date` 或 `unresolved`）
 已由 **Human-authorized Design Change** 实施，`§4.2` / `§4.4` / `§4.5` 已完成最小 semantic synchronization
 （见 **§4.5.21 Option D Implementation Record**）。
 
-**但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
-其中仍存在 provenance carrier。
+**`Other Source-Semantic Mapping` 现为 `DESIGN RESOLVED`** ——
+其最后一个 internal unresolved item `provenance carrier` 已由 **§4.5.22 Option D Implementation Record** 解析。
 
 `DESIGN RESOLVED` **只**表示 **canonical source-mapping contract 概念设计完成**，
 **不表示** real ERP field known / Adapter implemented / mapping tested / `Effective Inbound` implemented。
@@ -15349,8 +15713,8 @@ canonical **Target Applicability** ＋ **Source Reservation Overlap**）
 已由 **Human-authorized Design Change** 实施，`§4.1` / `§4.2` / `§4.4` / `§4.5` 已完成最小 semantic synchronization
 （见 **§4.5.9 Option B Implementation Record**）。
 
-**但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
-其中仍存在 provenance carrier。
+**`Other Source-Semantic Mapping` 现为 `DESIGN RESOLVED`** ——
+其最后一个 internal unresolved item `provenance carrier` 已由 **§4.5.22 Option D Implementation Record** 解析。
 
 `DESIGN RESOLVED` **只**表示 **canonical allocation applicability mapping contract 概念设计完成**，
 **不表示** real ERP allocation evidence known / reservation source field known / Adapter implemented /
@@ -15384,19 +15748,20 @@ Option E                          = IMPLEMENTED
 loss_rate canonical owner / grain = DESIGN RESOLVED
 owner                             = Requirement Calculation Context
 resolution contract               = exactly one applicable loss_rate or unresolved
-physical carrier                  = STILL UNRESOLVED（provenance carrier = DESIGN PENDING）
+Logical Provenance Carrier         = DESIGN RESOLVED
+Physical Carrier Realization       = DESIGN PENDING（§4.3 Field Carrier Mapping / Final Import Contract）
 unresolved count                  = 3 → 2
 ```
 
-**但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
-其中仍存在 provenance carrier（**不**因 `loss_rate` ／ `ApplicableMOQ` 解析而提前关闭）。
+**`Other Source-Semantic Mapping` 现为 `DESIGN RESOLVED`** ——
+其最后一个 internal unresolved item `provenance carrier` 已由 **§4.5.22 Option D Implementation Record** 解析。
 
 `DESIGN RESOLVED` **只**表示 **canonical owner / applicability grain / resolution contract 概念设计完成**，
 **不表示** real ERP source known / source field known / Adapter implemented / tested /
 `GrossRequirement` engine implemented。
 
 **未新增**任何 Master Data Mapping layer —— 这是 **`Other Source-Semantic Mapping`
-内部 unresolved item 的关闭**，**不是**新的 resolved layer；`DESIGN RESOLVED` layer 数**仍为 9**。
+内部 unresolved item 的关闭**，**不是**新的 resolved layer；`DESIGN RESOLVED` layer 数现为 **10**（**`Final Master Data Mapping` 仍为 `DESIGN PENDING`**）。
 
 **Option D —— IMPLEMENTED：** `ApplicableMOQ` source / applicability **现为 `DESIGN RESOLVED`** ——
 其 **Option D**（Source-Specific Purchasing-Policy Resolution ＋ resolution-contract form）
@@ -15413,37 +15778,50 @@ Supplier Selection                   = NOT INTRODUCED
 unresolved count                     = 2 → 1
 ```
 
-**但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
-其中仍存在 provenance carrier（**不**因 `ApplicableMOQ` 解析而提前关闭）。
+**`Other Source-Semantic Mapping` 现为 `DESIGN RESOLVED`** ——
+其最后一个 internal unresolved item `provenance carrier` 已由 **§4.5.22 Option D Implementation Record** 解析。
 
 `DESIGN RESOLVED` **只**表示 **canonical applicability ＋ source semantic resolution contract
 概念设计完成**，**不表示** real ERP source known / Supplier selected / Contract known /
 PIR known / Adapter implemented / procurement engine implemented / tested。
 
-**未新增**任何 Master Data Mapping layer —— 这是 **`Other Source-Semantic Mapping`
-内部 unresolved item 的关闭**，**不是**新的 resolved layer；`DESIGN RESOLVED` layer 数**仍为 9**。
-
-**`Master Data Mapping` overall 仍为 `DESIGN PENDING`** —— 因 `provenance carrier` 未解决，
-**不得**因 `unresolved count = 1` 而提前 closure。
-
-**`provenance carrier` —— Review 已提出，Status 未变：**
-
-**Provenance Carrier / Minimum Traceability Contract Design Review（Review Finding）** 见 **§4.5.22** ——
-recommended direction = **Option D（Layered Logical Provenance Contract）**，
-`Canonical Model Compatibility = COMPATIBLE`。
+**Option D —— IMPLEMENTED：** `provenance carrier` **现为 `DESIGN RESOLVED`** ——
+其 **Option D**（**Layered Logical Provenance Contract**）已由 **Human-authorized Design Change** 实施，
+`§4.2` ／ `§4.3` ／ `§4.4` ／ `§4.5` 已完成最小 semantic synchronization
+（见 **§4.5.22 Option D Implementation Record**）。
 
 ```
-provenance carrier                 = DESIGN PENDING   ← 未变
-unresolved count                   = 1                ← 未变
-Other Source-Semantic Mapping      = DESIGN PENDING
-Final Master Data Mapping          = DESIGN PENDING
-Master Data Mapping overall        = DESIGN PENDING
-Snapshot / Import Contract overall = DESIGN PENDING
+Human Decision                       = RECORDED
+Option D                             = IMPLEMENTED
+Layered Logical Provenance Contract  = IMPLEMENTED
+provenance carrier                   = DESIGN RESOLVED
+unresolved count                     = 1 → 0
+Other Source-Semantic Mapping        = DESIGN RESOLVED
+Final Master Data Mapping            = DESIGN PENDING   ← 未关闭
+Master Data Mapping overall          = DESIGN PENDING   ← 未关闭
+Snapshot / Import Contract overall   = DESIGN PENDING
+Validation Taxonomy Limitation       = OPEN / SEPARATE REVIEW REQUIRED
 ```
 
-**Human Decision 已记录**（见 **§4.5.22 Human Decision Record**）—— **Option D = APPROVED**；
-但 **Option D Implementation = NOT YET EXECUTED**，
-因此本 PR **不实施** Option D，**不**减少 unresolved count，**不**宣布任何 closure。
+`DESIGN RESOLVED` **只**表示 **logical provenance carrier contract 概念设计完成**，
+**不表示** real ERP source known / Adapter implemented / physical carrier finalized / tested。
+
+**未新增**任何 Master Data Mapping layer —— `Other Source-Semantic Mapping` 是**既有层**，
+本 Task 只关闭其**最后一个 internal unresolved item**。
+`DESIGN RESOLVED` layer 数现为 **10**；`Final Master Data Mapping` **仍为 `DESIGN PENDING`**。
+
+**`Master Data Mapping` overall 仍为 `DESIGN PENDING`** —— 因 **`Final Master Data Mapping` 尚无 closure criteria**
+（见 **§4.5.22 Human Decision Record** 决定 18 ／ 19），
+**不得**因 `unresolved count = 0` 而提前 closure。
+
+**须另行进行的独立 Review：**
+
+```
+1. Validation Taxonomy Design Review
+     —— evidence exists 但 provenance reference missing 应如何进入 taxonomy
+2. Master Data Mapping Closure Review
+     —— 须在 provenance implementation 完成后独立执行
+```
 
 ```
 Validation Taxonomy Limitation = OPEN ／ SEPARATE DESIGN REVIEW REQUIRED
