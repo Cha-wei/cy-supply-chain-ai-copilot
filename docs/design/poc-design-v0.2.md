@@ -5329,8 +5329,9 @@ Accepted Package may be referenced by Analysis Run
 
 > **子章节整体状态：仍为 `DESIGN PENDING`。**
 >
-> 本节已完成其中**两层**：Capability Readiness / Failure Semantics（`§4.4.1` ～ `§4.4.23`）
-> 与 **Detailed Field Validation**（`§4.4.24` ～ `§4.4.44`）。
+> 本节已完成其中**三层**：Capability Readiness / Failure Semantics（`§4.4.1` ～ `§4.4.23`）、
+> **Detailed Field Validation**（`§4.4.24` ～ `§4.4.44`）
+> 与 **Cross-Dataset / Cross-Field Consistency Rules**（`§4.4.45` ～ `§4.4.78`）。
 
 **层级状态登记：**
 
@@ -5342,7 +5343,7 @@ Accepted Package may be referenced by Analysis Run
 | Dataset Absent vs Empty Semantics | **`DESIGN RESOLVED`** |
 | Failure Isolation Principle | **`DESIGN RESOLVED`** |
 | Detailed Field Validation | **`DESIGN RESOLVED`** |
-| Cross-Dataset Consistency Rules | `DESIGN PENDING` |
+| Cross-Dataset Consistency Rules | **`DESIGN RESOLVED`** |
 | Validation Issue Taxonomy Finalization | `DESIGN PENDING` |
 | Final Data Validation Design | `DESIGN PENDING` |
 
@@ -6377,15 +6378,627 @@ interim reason categories
 | **F** | `ApplicableMOQ` missing ＋ `Classification = SHORTAGE` | **Business `DATA_INCOMPLETE`** ＋ **No Numeric Recommendation** |
 | **G** | `required_quantity` exists | **不得用它替代 `ProductionQty`**；semantic ambiguity **remains** |
 
-#### 4.4.45 Status Boundary
+#### 4.4.45 Core Principle
 
-`Detailed Field Validation` = **`DESIGN RESOLVED`**。
+定义：
+
+```
+一个字段通过 Field Validation，
+不代表它与其他 evidence 一致。
+```
+
+例如：
+
+```
+ordered_qty  = 100
+received_qty = 120
+```
+
+两个字段**分别**满足 `>= 0`，但**组合**违反 `BR-INBOUND-001` / `§2.6.2`。
+
+因此 **Cross-Field Consistency 必须独立检查**。
+
+但：**不得借此新增**现有 Design 不支持的新业务关系。
+
+```
+Field Valid  ≠  Business Evidence Consistent
+```
+
+#### 4.4.46 Existing Rule vs New Rule Boundary
+
+本 Task **只能正式登记**已经由以下内容支持的 consistency invariant：
+
+- `§2` Business Rules
+- `§4.1` Canonical Data Model
+- `§4.2` Data Dictionary
+- `§4.3` Snapshot Boundary
+- `§4.4` 已有 Validation Design
+
+如果某关系**当前没有可靠 Design**，**必须标记** `DESIGN PENDING` 或 `SEMANTIC_UNRESOLVED`。
+
+**不得自行补齐。**
+
+#### 4.4.47 Inbound Quantity Consistency
+
+正式登记既有规则 `BR-INBOUND-001` / `§2.6.2`：
+
+```
+RemainingInboundQty = ordered_qty - received_qty
+要求 RemainingInboundQty >= 0
+```
+
+因此必须满足：
+
+```
+received_qty <= ordered_qty
+```
+
+如果 `received_qty > ordered_qty`：
+
+**处理：** Business **`DATA_INCOMPLETE`** ＋ **Data Quality Issue**
+
+**不得**：
+
+- clamp to 0
+- 自动解释为 over-delivery
+- 修改 `ordered_qty`
+- 修改 `received_qty`
+
+> **注意**：这是**已有 Business Rule enforcement**，**不是**本 Task 新增 constraint。
+
+#### 4.4.48 Inbound Identity Consistency
+
+Inbound evidence 必须能够可靠关联到 `plant_id` ＋ `material_code`，
+且必须与当前被分析的 **Plant / Material grain 一致**。
+
+**不得**：
+
+- 将 Plant-B inbound 用于 Plant-A
+- 将 unresolved material 自动归给当前 material
+- fuzzy match
+- LLM guess
+
+如果 mapping 无法可靠确定 → affected grain → **`DATA_INCOMPLETE` / Data Quality Issue**。
+
+但具体 `source code → canonical code` 映射规则仍属于 **Master Data Mapping**，本 Task **不设计**。
+
+#### 4.4.49 Inbound Date Relationship Boundary
+
+必须区分：
+
+```
+valid but ineligible
+与
+inconsistent / invalid
+```
+
+例如：
+
+```
+effective_arrival_date > required_date
+```
+
+这是 **合法 Inbound record**，但当前 `required_date` 前**不可计入 supply**。
+
+**不是** Data Quality Issue。
+
+因此**不得**将其错误标记为 `invalid record`。
+
+**只有** `effective_arrival_date` missing / invalid 才按既有 Rule → **`DATA_INCOMPLETE`**。
+
+#### 4.4.50 Inventory Plant / Scope Consistency
+
+继承 `BR-INVENTORY-001`。
+
+- **同 Plant 内**：允许聚合被纳入当前 POC Inventory Scope 且符合状态要求的 inventory records
+- **不同 Plant**：**不得自动聚合**
+
+如果存在 Warehouse context，必须能够可靠判断：`warehouse ownership` ＋ 所属 `Plant` ＋
+是否位于当前 POC Inventory Scope。
+
+如果无法可靠判断 → affected inventory grain → **`DATA_INCOMPLETE` / Data Quality Issue**。
+
+**但必须保持：**
+
+```
+Warehouse canonical role = DESIGN PENDING
+```
+
+**不得**因为 consistency validation 创建新的 Warehouse canonical entity 或 physical key。
+
+#### 4.4.51 Configured Safety Stock Grain Consistency
+
+Configured Safety Stock 的既有 grain：
+
+```
+plant_id + material_code
+```
+
+因此用于 Shortage Analysis 的 `SafetyStock` 必须与当前 **Plant ＋ Material** 分析 grain 一致。
+
+**不得**：
+
+- 跨 Plant 使用 `SafetyStock`
+- 用 MAT-B `SafetyStock` 代替 MAT-A
+- 自动使用其他记录 fallback
+
+如果在**同一 canonical grain** 出现多个**互相冲突**的 `SafetyStock` 值，
+**且没有既有 precedence rule**，**不得**：
+
+- first wins
+- latest wins
+- max
+- min
+- average
+
+应视为 **unresolved data quality conflict**，并影响该 grain 的可靠性。
+
+#### 4.4.52 Production Requirement / BOM Consistency
+
+继承 `BR-REQUIREMENT-001`。
+
+Production Requirement 必须能够追溯到：
+
+```
+Production Requirement
++
+reliably resolved applicable BOM relationship
+```
+
+用于计算的 BOM Component 必须能够可靠解析到：当前 Plant context ＋ canonical component Material。
+
+如果出现以下任一情况：
+
+- BOM relationship unresolved
+- component Material unresolved
+- Plant context inconsistent
+
+则：`Gross Requirement` → **`DATA_INCOMPLETE`**。
+
+**不得**：
+
+- 猜 BOM
+- 选任意 BOM
+- 自动选最新 BOM
+- fuzzy match component
+
+**必须保持：**
+
+```
+BOM version / validity selection = DESIGN PENDING
+```
+
+本 Task **不解决**该设计问题。
+
+#### 4.4.53 `required_quantity` Boundary
+
+保持：
+
+```
+required_quantity  vs  ProductionQty
+= SEMANTIC AMBIGUITY / DESIGN PENDING
+```
+
+**不得定义** `required_quantity` 必须等于 `ProductionQty`，
+也**不得创建 cross-field mismatch rule** ——
+因为当前**没有证据**证明两者语义相同。
+
+`BR-REQUIREMENT-001` 继续只使用：
+
+```
+ProductionQty × BOMComponentQty
+```
+
+#### 4.4.54 `loss_rate` Boundary
+
+Cross-Dataset Consistency **可以要求**：
+`BR-REQUIREMENT-001` 所使用的 `loss_rate` evidence 必须能够**可靠关联到当前计算上下文**。
+
+但：
+
+```
+loss_rate owner / grain = UNKNOWN
+```
+
+因此**不得定义**它必须来自 `Material` / `BOM Component` / `Plant-Material` /
+`Production Requirement` 中的**任何一种**。
+
+如果无法可靠关联 → **`DATA_INCOMPLETE`**，但 carrier / ownership **继续留待后续 Design**。
+
+#### 4.4.55 Substitute Relationship Consistency
+
+Substitute Allocation 必须对应一个**可可靠识别的 Substitute Relationship**。
+
+参与 Approved Substitute Supply 时，该 Relationship 必须满足既有：
+
+```
+approval_status = APPROVED
+```
+
+**不得**出现 `Allocation exists but no corresponding relationship` 然后仍然计入 Supply。
+
+如果 relationship unresolved → affected substitute calculation → **`DATA_INCOMPLETE`**。
+
+**不得自动创建 relationship。**
+
+#### 4.4.56 Substitute Source / Target Identity
+
+每个 Substitute Relationship / Allocation 必须能够可靠解析：`target material` /
+`substitute material` / `plant context`，并保持：
+
+```
+substitute → target
+```
+
+方向。
+
+**不得反转** `target → substitute`。
+
+**不得**因为两个 Material 都存在就推断它们可替代。
+
+#### 4.4.57 Substitute Same-Plant Consistency
+
+继承 `BR-SUBSTITUTE-001`：Target Material 与 Substitute Supply 当前 POC 必须 **same plant**。
+
+如果：
+
+```
+Target             = Plant-A
+Substitute Inventory = Plant-B
+```
+
+**不得直接计入。**
+
+这不表示 Plant-B data **invalid**。
+
+它表示：**该 supply 对当前 Plant-A substitute calculation 不可作为有效供给**。
+
+**不得自动设计** cross-plant transfer。
+
+#### 4.4.58 Substitute Allocation vs Eligible Supply
+
+继承 `BR-SUBSTITUTE-001` / **No Double Allocation**。必须满足：
+
+```
+Σ AllocatedSubstituteQty <= EligibleSubstituteSupply
+```
+
+并保持：
+
+```
+RemainingUnallocatedSourceSupply = EligibleSubstituteSupply - Σ AllocatedSubstituteQty
+RemainingUnallocatedSourceSupply >= 0
+```
+
+如果违反：**`DATA_INCOMPLETE`** ＋ **Allocation Conflict**
+
+**不得**：
+
+- silently over-allocate
+- clamp
+- priority resolve
+- 自动减少某 allocation
+
+本 Task **不设计** allocation algorithm。
+
+#### 4.4.59 Substitute Supply Eligibility Consistency
+
+Allocated substitute source supply 只能来自：
+
+```
+same Plant
++
+BR-INVENTORY-001 判定为 AVAILABLE 的 Substitute Inventory
+```
+
+**不得自动使用**：`INSPECTION` / `FROZEN` / Future Substitute Inbound / Cross-Plant Inventory。
+
+**不得**因为 source inventory record 存在就认为它 **automatically eligible**。
+
+#### 4.4.60 Allocation Demand-Window Consistency
+
+已有 Rule 要求：allocation 必须能够**可靠关联当前需求窗口**。
+
+如果无法判断 allocation 与 target / source demand window 是否重叠：
+
+**处理：** **`DATA_INCOMPLETE`** ＋ **Data Quality Issue**
+
+**但：**
+
+```
+allocation demand-window mapping = DESIGN PENDING
+```
+
+**不得创建** `demand_window_id` / `requirement_id` / `allocation_period` 等新字段。
+
+#### 4.4.61 Supplier-Material Relationship Consistency
+
+Supplier Performance / Risk Evidence **不得只依据** `Supplier exists` ＋ `Material exists` 就直接关联。
+
+**必须存在**可可靠识别的 **Supplier-Material Relationship**。
+
+如果 relationship 无法解析 → Risk Evidence → **`DATA_INCOMPLETE`**。
+
+**不得**：Supplier Master 中存在 Supplier → 自动认为它能供应所有 Materials。
+
+#### 4.4.62 `sourcing_status` Boundary
+
+Relationship eligibility 必须能够**可靠判断**。但：
+
+```
+sourcing_status vocabulary = DESIGN PENDING
+```
+
+因此本 Task **不得创建** `APPROVED` / `ACTIVE` / `QUALIFIED` / `BLOCKED` 等 source enum。
+
+如果 relationship 存在，但 eligibility **无法可靠确定**：
+
+```
+Risk Evidence Status → DATA_INCOMPLETE
+```
+
+**不得由 LLM 猜测资格。**
+
+#### 4.4.63 Supplier Performance Relationship Consistency
+
+Supplier Performance evidence 必须与被评估的 `supplier_id` ＋ `material_code`
+**Supplier-Material Relationship 一致**。
+
+**不得**：
+
+```
+Supplier-A / MAT-X 的 performance
+用于
+Supplier-A / MAT-Y
+```
+
+**除非**未来存在明确 aggregation / shared-performance Design。
+
+**当前没有该规则**，因此**不得自动共享**。
+
+#### 4.4.64 Performance Period Consistency
+
+`DeliveryPerformance` 与 `QualityPerformance` **必须各自存在可靠 `PerformancePeriod` context**。
+
+必须保持：
+
+```
+PerformancePeriod  ≠  PerformanceUpdatedAt
+```
+
+`updated_at` **不得替代** measurement period。
+
+如果 performance value exists 但 period unreliable：
+
+对应 `DeliveryRisk` / `QualityRisk` → **`DATA_INCOMPLETE`**。
+
+> 这属于**既有 Rule enforcement**。
+
+#### 4.4.65 Procurement Recommendation ↔ Shortage Result
+
+Procurement Recommendation 必须与产生它的 **Analysis Run ＋ Shortage Result** 保持一致。
+
+当前：
+
+```
+RecommendationNeedDate = FirstShortageDate
+```
+
+因此当 `Classification = SHORTAGE` 且生成 numeric recommendation 时：
+`RecommendationNeedDate` **必须对应同一 Analysis Run 的 `FirstShortageDate`**。
+
+**不得**使用另一 Analysis Run 或另一 Material 的 `FirstShortageDate`。
+
+本 Task **不重算**采购公式。
+
+#### 4.4.66 Procurement Recommendation Grain
+
+必须保持：
+
+```
+Analysis Run + plant_id + material_code + RecommendationNeedDate
+```
+
+context 一致。
+
+**不得**：
+
+- MAT-A Shortage Result → 生成 MAT-B recommendation
+- Plant-A Shortage Result → 生成 Plant-B recommendation
+
+#### 4.4.67 `ApplicableMOQ` Boundary
+
+`ApplicableMOQ` 必须属于当前 Procurement Recommendation 的**可靠业务上下文**。但其：
+
+```
+source mapping = DESIGN PENDING
+```
+
+因此**不得自行决定** `Supplier` / `Contract` / `Purchasing Info Record` / `Material Master`
+谁是它的来源。
+
+如果 `SHORTAGE` 但当前 recommendation 无法可靠取得适用 MOQ，继承：
+
+```
+BR-PROCUREMENT-001
+    → DATA_INCOMPLETE
+    → No Numeric Recommendation
+```
+
+#### 4.4.68 Analysis Run ↔ Snapshot Package Consistency
+
+继承 `§4.3`：每个 Analysis Run 必须追溯到 **exactly one accepted Snapshot Package**。
+
+一个 Snapshot Package **可以支持多个** Analysis Run。
+
+**但**一个 Analysis Run **不得静默组合多个 Package 的 source evidence**。
+
+必须保证：所有用于某 Analysis Run 的 imported source evidence，
+均可追溯到**该 Run 所绑定的同一个 accepted Snapshot Package**。
+
+**不得**：
+
+```
+Inventory   from P2
++ Requirement from P1
++ Inbound     from P3
+```
+
+静默形成**同一个** Analysis Run。
+
+#### 4.4.69 Derived Result Run Consistency
+
+所有 deterministic derived results（例如 Shortage Result / Supplier Risk Result /
+Procurement Recommendation）必须能够追溯到**其 Analysis Run**，
+且**不得静默引用其他 Run 的 source result**。
+
+例如：
+
+```
+Run-R2 Procurement Recommendation  不得引用  Run-R1 ShortageQty
+```
+
+**即使** `plant_id` / `material_code` / `date` 恰好相同。
+
+#### 4.4.70 AI Explanation Evidence Consistency
+
+AI Explanation 使用的 `structured result` ＋ `evidence` ＋ `uncertainty`
+必须属于**同一个被解释的 business outcome context**。
+
+**不得**：
+
+```
+当前 Run 的 Shortage Result
++
+旧 Run 的 Supplier Risk Evidence
+```
+
+拼成一个**未声明的当前事实**。
+
+如果跨 Run 信息被未来允许比较，**必须**作为明确的 **comparison capability Design**。
+
+**当前不设计。**
+
+#### 4.4.71 Duplicate vs Conflict
+
+继续继承 **Grain Conflict Principle**：
+
+```
+multiple records  ≠  automatically duplicate
+```
+
+**只有当**多个 records 在**同一个 canonical grain / context** 产生**互相冲突**
+且**现有 Rule 没有 aggregation / precedence 规则**时，
+才属于 **unresolved consistency conflict**。
+
+**不得**：
+
+- first wins
+- latest wins
+- arbitrary sum
+- average
+- random selection
+
+#### 4.4.72 Valid but Ineligible vs Invalid
+
+必须集中区分「**合法记录但业务上不 eligible**」与「**数据 inconsistency / invalid**」。
+
+| 情形 | 判定 |
+| --- | --- |
+| Inbound `CANCELLED` | valid record → **ineligible supply** → **不是** Data Quality Issue |
+| Inbound `effective_arrival_date > required_date` | valid record → 当前 `required_date` 前不计入 → **不是** Data Quality Issue |
+| Inventory `INSPECTION` | valid record → **0% eligible** → **不是** Data Quality Issue |
+| Substitute Relationship `PENDING` | valid known relationship state → 不参与 Approved Substitute Supply → **不是** Data Quality Issue |
+
+与以下必须区分：
+
+- unknown / invalid status
+- unresolved identity
+- conflicting grain
+
+#### 4.4.73 No Auto-Reconciliation
+
+Consistency conflict **不得**通过以下方式自动修复：
+
+- last-write-wins
+- first-write-wins
+- newest timestamp wins
+- largest quantity wins
+- smallest quantity wins
+- fuzzy matching
+- LLM judgment
+- cross-package fallback
+- fallback to previous Analysis Run
+- default relationship creation
+- automatic allocation rebalance
+
+**除非已有 Rule 明确授权。**
+
+#### 4.4.74 Blast Radius
+
+Consistency Issue **默认限制到**：
+
+```
+affected evidence → affected grain → affected capability
+```
+
+**不得自动** `one relationship conflict → entire Package rejected`，
+**除非**它同时构成 **Package Structural Failure**。
+
+例如：`MAT-A` substitute allocation conflict **不应**使 `MAT-B` unrelated shortage analysis 自动不可用。
+
+#### 4.4.75 Consistency Rule Registry Concept
+
+允许建立 conceptual table：
+
+| Consistency Requirement | Source Rule / Design | Evidence Involved | Expected Relationship | Failure Meaning | Blast Radius |
+| --- | --- | --- | --- | --- | --- |
+
+**但不得创建**新的 `CR-*` / `VR-*` / `BR-*` ID —— 除非现有治理已经明确授权。
+
+**本 Task 不需要新 Rule ID。**
+
+#### 4.4.76 Do Not Resolve Pending Design Through Validation
+
+必须继续保持以下未决项：
+
+| 未决项 | 状态 |
+| --- | --- |
+| `loss_rate` owner / grain | **`UNKNOWN`** |
+| `required_quantity` semantic | `DESIGN PENDING` |
+| Warehouse canonical role | `DESIGN PENDING` |
+| BOM version / validity | `DESIGN PENDING` |
+| `sourcing_status` vocabulary | `DESIGN PENDING` |
+| `effective_arrival_date` source mapping | `DESIGN PENDING` |
+| allocation demand-window mapping | `DESIGN PENDING` |
+| `ApplicableMOQ` source | `DESIGN PENDING` |
+| provenance carrier | `DESIGN PENDING` |
+
+**Consistency Validation 不得成为解决这些问题的后门。**
+
+#### 4.4.77 Cross-Dataset Consistency Examples
+
+以下为 **conceptual examples**。
+
+| # | 情形 | Expected |
+| --- | --- | --- |
+| **A** | `ordered_qty = 100`、`received_qty = 120` | **`DATA_INCOMPLETE`** ＋ **Data Quality Issue**；**不得** clamp |
+| **B** | `required_date = 2026-10-10`、`effective_arrival_date = 2026-10-15` | record **valid** 但 `2026-10-10` 前**不计入**；**不是** Data Quality Issue |
+| **C** | Eligible Substitute Supply = 100；`60 → MAT-A`、`50 → MAT-C` | **Allocation Conflict** ＋ **`DATA_INCOMPLETE`**；**不得**自动调成 60 / 40 |
+| **D** | Target `Plant-A / MAT-A`；Source `Plant-B / MAT-B` | **不得直接计入** Approved Substitute Supply；**不得**自动设计 transfer |
+| **E** | Performance `Supplier-A / MAT-X`；Risk request `Supplier-A / MAT-Y` | **不得直接复用** MAT-X performance；Risk Evidence **不能形成可靠正常结论** |
+| **F** | Run R1 bound to Package P1；Inventory from P1 ＋ Requirement from P1 ＋ Inbound from **P2** | **不得静默执行 R1** —— Analysis Run / Snapshot consistency violation |
+| **G** | Run R2 Recommendation 引用 Run R1 `ShortageQty` | **invalid provenance / consistency**；**不得**当作 R2 的 recommendation evidence |
+| **H** | `inventory_status = INSPECTION` | record **valid**；`OpeningUsableInventory` contribution = **0**；**不是** Data Quality Issue |
+
+#### 4.4.78 Status Boundary
+
+`Cross-Dataset Consistency Rules` = **`DESIGN RESOLVED`**。
 
 保持：
 
 | 层 | Status |
 | --- | --- |
-| Cross-Dataset Consistency Rules | `DESIGN PENDING` |
 | Validation Issue Taxonomy Finalization | `DESIGN PENDING` |
 | Final Data Validation Design | `DESIGN PENDING` |
 
@@ -6395,10 +7008,9 @@ interim reason categories
 Data Validation overall = DESIGN PENDING
 ```
 
-`DESIGN RESOLVED` 的六个层级**仅**表示其 **conceptual boundary 已定义**，
+`DESIGN RESOLVED` 的七个层级**仅**表示其 **conceptual boundary 已定义**，
 **不表示**：
 
-- cross-dataset consistency rules defined
 - validation issue taxonomy finalized
 - validator implemented
 - data validated
