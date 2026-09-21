@@ -4546,6 +4546,12 @@ Canonical model **不得通过默认值隐藏缺失**。
 > 而**不是** **具体 source-system field selection**。
 >
 > **真实 ERP field 当前仍未知** —— **真实 ERP field 未知 ≠ Design Pending**。
+>
+> **`loss_rate` canonical owner / grain** 已提出 **Design Review** ——
+> 见 **§4.5.22** **`loss_rate` Canonical Owner / Grain Design Review（Review Finding）**。
+> 该 Review **未改变**任何 status：owner / grain **仍为 `UNKNOWN`**，
+> 其 **Human Decision Record** 已记录（**Option E = APPROVED**）；
+> 但 **Option E Implementation = NOT YET EXECUTED**，因此 status **不变**。
 
 ---
 
@@ -5589,6 +5595,11 @@ input evidence
 > `ArrivalConfidence` / `source_field_name` 等 canonical fields。
 >
 > **本 Task 不定义任何 source table / column**，因此**未被偷渡**任何 source mapping。
+>
+> `loss_rate` canonical owner / grain 的 **Design Review** 见 **§4.5.22** ——
+> 该 Review **未改变**本表状态：`loss_rate` canonical owner / grain **仍为 `UNKNOWN`**，
+> unresolved count **仍为 3**；其 **Human Decision Record** 已记录（**Option E = APPROVED**），
+> 但 **Option E Implementation = NOT YET EXECUTED**，因此本表状态**不变**。
 
 #### 4.2.17 Status Semantics Boundary
 
@@ -6602,6 +6613,11 @@ Data Validation **可以**要求：`BR-REQUIREMENT-001` 执行时**必须存在�
 
 **但不得决定** `loss_rate` 来自哪个 Entity / Dataset / Source Field。
 
+> `loss_rate` owner / grain 的 **Design Review** 见 **§4.5.22** ——
+> 该 Review **未改变**本边界：owner / grain **仍为 `UNKNOWN`**。
+> 其 **Human Decision Record** 已记录（**Option E = APPROVED**）；
+> 但 **Option E Implementation = NOT YET EXECUTED**，本 PR **不实施** Option E。
+
 #### 4.4.16 Validation Issue Concept
 
 定义 conceptual：**Validation Issue**，与 **Final Taxonomy**（`§4.4.78` ～ `§4.4.100`）**一致**，至少要求：
@@ -7509,6 +7525,10 @@ loss_rate owner / grain = UNKNOWN
 `Production Requirement` 中的**任何一种**。
 
 如果无法可靠关联 → **`DATA_INCOMPLETE`**，但 carrier / ownership **继续留待后续 Design**。
+
+> `loss_rate` owner / grain 的 **Design Review** 见 **§4.5.22** ——
+> 当前**仍为 `UNKNOWN`**；**Option E** 已获 **Human Approval**
+> （**Human Decision Record** 见该处），但 **Option E Implementation = NOT YET EXECUTED**。
 
 #### 4.4.55 Substitute Relationship Consistency
 
@@ -12062,6 +12082,731 @@ Master Data Mapping overall    = 仍 DESIGN PENDING
 
 本 Task **不以「Master Data Mapping」为名一次性消灭这些问题**。
 
+**loss_rate Canonical Owner / Grain Design Review（Review Finding）**
+
+**Review Question**
+
+本 Review **只解决一个问题**：
+
+> 对于某一次 **`BR-REQUIREMENT-001` GrossRequirement calculation**，
+> **哪一个 business context 拥有 / 决定 applicable `loss_rate`？**
+
+**Evidence Boundary**
+
+| 证据来源 | 是否定义 `loss_rate` source field / owner / grain / precedence |
+| --- | --- |
+| `FROZEN` Discovery Brief（`discovery-brief-v0.1.1.md`） | **否** |
+| `FROZEN` Discovery Validation（`discovery-validation-v0.1.md`） | **否** |
+| `§2.4`（`BR-REQUIREMENT-001`） | 只定义 semantic / formula / range / missing behavior，**未定义** owner / grain |
+| `§4.1.12` Canonical Model Open Items | 明确登记 owner / grain = **`UNKNOWN`** |
+| `§4.2.16` Open Semantic / Mapping Items | 明确登记 canonical owner / grain = **`UNKNOWN`** |
+| `§4.4.15` / `§4.4.54` | 只要求「能可靠关联到当前计算上下文」，并**明确禁止**决定其来源 |
+
+- Discovery Validation 明确将 **Scrap / Loss** 归入 **`VB-17` / `POC Design v0.2`**，
+  而**不是** Discovery Data Readiness 已确认的 source field。
+- 两份 `FROZEN` Discovery **没有**定义 `loss_rate` 的 source field / owner / grain / precedence。
+- 因此**不得声称**真实 CY / ERP 中 `loss_rate` 一定属于 `Material` ／ `BOM` ／
+  `BOM Component` ／ `Plant-Material` ／ `Production Order` ／ `Routing` ／ `Work Center` ／
+  Policy table 中的**任何一个**。
+- **行业常见做法只能作为 option reasoning，不能作为项目事实。**
+
+**Existing Calculation Context**
+
+`§2.4.2` 规定 Gross Requirement calculation **至少对齐** `plant_id` + `material_code` + `required_date`，
+且必须能够**追溯到** `Production Requirement` + `BOM relationship`。
+
+当前实际 calculation chain：
+
+```
+Production Requirement（parent / production material context）
+        ↓
+Applicable BOM Relationship（requirement-scoped；applicability anchor = required_date）
+        ↓
+Component Material
+        ↓
+BOMComponentQty
+        ↓
+BaseRequirement = ProductionQty × BOMComponentQty
+        ↓
+applicable loss_rate          ← 本 Review 的唯一问题所在
+        ↓
+GrossRequirement = BaseRequirement / (1 - loss_rate)
+```
+
+**Review 必须回答：** `loss_rate` 是在**哪一层**被可靠解析到这个 calculation？
+
+现状：
+
+```
+loss_rate canonical semantic          = DESIGN RESOLVED
+loss_rate formula / range / missing   = DESIGN RESOLVED
+loss_rate canonical owner / grain     = UNKNOWN
+```
+
+因此当前只能要求「**必须能够可靠关联到当前计算上下文**」，
+同时**明确禁止**决定它来自哪个 Entity / Dataset / Source Field ——
+即 **requirement 存在，但无法判定它是否已被满足**。
+
+**Critical Scenario（必须回答 —— 当前 Design 无法唯一回答）**
+
+```
+Plant-A
+
+Production Requirement R1:
+  parent MAT-A
+  required_date = 2026-10-10
+
+Applicable BOM:
+  MAT-B × 2
+  MAT-C × 1
+
+Source evidence:
+  loss evidence X = 0.05
+  loss evidence Y = 0.02
+```
+
+必须回答：X / Y 到底对应 `MAT-A`？`MAT-B` / `MAT-C`？`Plant-A` + component？
+`R1`？某一条 BOM relationship？某个 configuration context？
+
+当前 evidence **没有给答案**。没有 owner / grain 就**无法可靠决定**
+`MAT-B` 用 5% 还是 2% → `GrossRequirement` **不可可靠执行** → **`DATA_INCOMPLETE`**。
+
+**不得**：`first wins` ／ `latest wins` ／ `max` ／ `min` ／ `average` ／
+`copy previous` ／ `LLM choose`。
+
+**Cross-Requirement Scenario**
+
+```
+R1: Plant-A / MAT-A / required_date = 2026-10-10 / BOM relationship: MAT-B × 2
+R2: Plant-A / MAT-A / required_date = 2026-11-10 / BOM relationship: MAT-B × 3
+```
+
+必须回答：是否允许 `R1 loss_rate = 0.02`、`R2 loss_rate = 0.05`？
+
+当前 evidence **没有给答案**。
+
+关键检查：`§4.1.4 N` 已明确 **同一 `Plant` + `Parent` + `Component` 跨 `required_date`
+不得视作同一个 BOM Component grain** —— 即 BOM applicability **已经是 requirement-scoped**。
+
+若 owner 只定义为 `Material MAT-B`，则**强制** R1 与 R2 共享同一个 `loss_rate`。
+这种共享**没有 evidence 支持**，因此**不得自动采用**；
+反之也**不得**自动声明两者必须不同（见 **Time Semantics**）。
+
+**Multi-Parent Scenario**
+
+```
+MAT-B 同时是 MAT-A 与 MAT-X 的 component
+```
+
+必须回答：是否允许
+
+```
+MAT-A → MAT-B   loss_rate = 0.02
+MAT-X → MAT-B   loss_rate = 0.06
+```
+
+若 owner 只定义为 `Material`，则二者**不能区分** —— 会发生 **information loss**，
+且该损失**不可被 Validation 检测**（两个 requirement 各自「有」一个 `loss_rate`，
+表面上都合法，因此不会被 `SEMANTIC_UNRESOLVED` 捕获）。
+
+必须评估这种 information loss 是否可接受。
+**不得凭行业经验回答。**
+
+**Canonical Owner ≠ Physical Carrier（必须显式区分）**
+
+```
+Canonical Owner / Applicability Grain   ≠   Physical Source Owner
+Canonical Grain                          ≠   Database Primary Key
+```
+
+- 这里的 **owner** **不是**「哪个数据库表拥有该字段」，
+  而是「**哪一个 business context 决定当前 `loss_rate` 的适用范围**」。
+- 未来 `loss_rate` 可能物理来源于 BOM export ／ Material master ／ planning configuration ／
+  custom ERP table ／ controlled configuration file ——
+  这些属于 **carrier / source representation**。
+- 本 Review **只定义 canonical applicability semantics**；
+  **不得因为 carrier 未知就认为 owner 无法设计**。
+- **provenance carrier 仍是独立 unresolved item**，本 Review **不得顺手解决**
+  （见 **§4.5.22** ／ **§4.5.24**）。
+
+**Option Review**
+
+**Option 0 —— Keep owner / grain `UNKNOWN`**
+
+- 保持：`loss_rate` 无法可靠关联 → **`DATA_INCOMPLETE`**。
+- 评估：**正确但非设计终点**。它是**安全 fallback**，长期会**阻塞 `GrossRequirement`**，
+  使 `BR-REQUIREMENT-001` 在当前 POC 中**永远不能形成可靠 result**。
+- 结论：**安全但不足**；只有当前述缺口**无法在现有 canonical model 内表达**时才应保持。
+
+**Option A —— Material-level loss_rate**
+
+- grain：`material_code`，或 `plant_id` + `material_code`。
+- 优点：**简单**。
+- 必须检查它是否能够区分：
+
+| 需要区分的情形 | Option A 能否区分 |
+| --- | --- |
+| 同一 component 在不同 Parent 下 | **不能** |
+| 不同 BOM relationship（`MAT-B × 2` vs `MAT-B × 3`） | **不能** |
+| 不同 `required_date` | **不能** |
+| 不同 Plant | 仅当采用 `plant_id` + `material_code` 时**能** |
+
+- 结论：**无法区分** → 会把同一 `loss_rate` **silent reuse** 到语义上不同的
+  calculation context。没有 evidence 支持 → **不得采用**。
+
+**Option B —— Plant-Material loss_rate**
+
+- grain：`plant_id` + component `material_code`。
+- 比 Option A **多了 Plant 维度**，但**仍无法区分**：不同 Parent、
+  不同 Production Requirement、不同 BOM applicability context。
+- 结论：**仍不足**。**不得因为它「比较常见」就采用。**
+
+**Option C —— BOM Relationship-level loss_rate**
+
+- conceptually：`loss_rate` belongs to **applicable BOM Component relationship**。
+- grain：`Production Requirement context` + component `material_code`
+  —— 与 `BOMComponentQty` **同一 applicability context**。
+- 优点：同一 component 可以在不同 Parent / requirement context 拥有不同 `loss_rate`，
+  恰好消除 Option A / B 的 information loss。
+- **但**：若把它实现为 **`§4.1.4 N` BOM Component 的 canonical persisted attribute**，
+  则这是 **substantive Canonical Model Change**（修改 `§4.1.4 N` 的 attributes / ownership），
+  必须 **Human Approval**。
+  并且 `§4.1.4 N` 在 **PR #30** 的授权范围中已明确**未**改动 `loss_rate` owner / grain。
+- 结论：**语义方向正确，但按「BOM Component attribute」实现需要 Canonical Model Amendment
+  → 记为 `INSUFFICIENT`**。
+
+**Option D —— Production Requirement-level loss_rate**
+
+- grain：`plant_id` + parent / requirement `material_code` + `required_date`。
+- 优点：与 `§4.1.4 N` 的 **Production Requirement context** **完全对齐**，时间语义天然正确。
+- **但**：一个 Production Requirement 有多个 components（`MAT-B` ／ `MAT-C` ／ `MAT-D`），
+  该 grain **意味着三者必须共用同一个 `loss_rate`**。
+- 现有 Design / evidence **没有**支持「同一 requirement 下所有 component 共用同一 loss rate」。
+- 结论：**Option D 无法表达 component-specific loss** —— 本 Review **明确指出**这一点，
+  因此它**不足以**作为最终 owner。
+
+**Option E —— Calculation-Context Configuration（重点评估）**
+
+不把 `loss_rate` 强行定义成 Material attribute ／ BOM Component persisted attribute ／
+Production Requirement attribute，而是定义：
+
+```
+loss_rate
+= required configuration evidence
+  resolved for an exact Requirement Calculation Context
+```
+
+conceptual grain（**至少**能够区分）：
+
+```
+plant_id
++ parent / requirement material_code
++ required_date
++ component material_code
+```
+
+解析契约：
+
+```
+source-specific loss evidence
+        ↓
+explicit deterministic mapping
+        ↓
+exactly one applicable canonical loss_rate
+      for this GrossRequirement calculation
+```
+
+**是否能够在不创建新 canonical entity、不新增 persisted field 的前提下解决 owner / grain？**
+
+**能** —— 理由：
+
+1. 上述所需 grain **已经存在**：`§4.1.4 N` 的 BOM Component canonical grain 就是
+   `Production Requirement context`（= `plant_id` + parent / requirement `material_code`
+   + `required_date`）`+ component material_code`。
+2. `§4.1.4 N` 已明确该 grain **不是** physical composite key / database primary key，
+   而是表达 **grain** ——「哪个 requirement context 下的哪一条 component relationship」——
+   与 Option E 所需的 **conceptual applicability context** 语义**一致**。
+3. 因此 Option E **只需声明**：`loss_rate` 是**在该 context 上被解析出来的 required
+   configuration evidence**，而**不是**任何 entity 的 persisted attribute ——
+   这属于 **applicability / resolution contract** 层面的声明，
+   **不改变**任何 entity 的 attributes 列表、**不新增** entity、**不新增** identity component。
+
+- 结论：**推荐方向（Option E，待 Human Decision）。**
+
+**Requirement Calculation Context（conceptual）**
+
+若 Option E 获 Human Approval，需要正式定义的只是**一个 conceptual context**，
+**不是**新的 canonical entity：
+
+```
+Requirement Calculation Context
+= Production Requirement（plant_id + parent / requirement material_code + required_date）
++ applicable BOM relationship
++ component material_code
+```
+
+- 它**由既有 canonical fields 组合表达**，**不引入**新的 identity 字段。
+- **不得创建** `requirement_calculation_id` ／ `loss_policy_id` ／ `scrap_policy_id`
+  等 physical / canonical ID。
+- **不得**把它实现为新的 entity、table、schema 或 registry。
+- 它的**唯一**用途是表达：`loss_rate` 的 **applicability grain**。
+
+**Canonical Model Compatibility Result**
+
+推荐方向 **Option E** 的判定：
+
+```
+Canonical Model Compatibility = COMPATIBLE
+```
+
+依据（**不新增**任何 field / entity / identity component）：
+
+| 需要表达的内容 | 现有 Canonical Model 是否已能表达 |
+| --- | --- |
+| `plant_id` | **已有**（`§4.1.4 C` ／ `§4.1.4 N`） |
+| parent / requirement material | **已有**（`§4.1.4 C` ＋ `§4.1.4 N` 的 contextual role clarification） |
+| `required_date` | **已有**（`§4.1.4 C` ＋ `§4.1.4 N` 的 applicability anchor） |
+| component material | **已有**（`§4.1.4 N`） |
+| 「哪个 requirement context 下的哪一条 component relationship」 | **已有**（`§4.1.4 N` grain） |
+
+**必须明确 —— 判为 `COMPATIBLE` 的唯一前提：**
+Option E 的 **resolution-contract** 形式，即 `loss_rate` 作为 **required configuration evidence**
+被解析到该 context，**不**成为任何 entity 的 attribute。
+
+**同时必须明确（不得模糊）：**
+
+- 若 Human 选择 **Option C 的 attribute 实现形式**
+  （把 `loss_rate` 加入 `§4.1.4 N` BOM Component 的 attributes / ownership），
+  则 **`Canonical Model Compatibility = INSUFFICIENT`**，
+  必须走 **Human-approved Canonical Model Amendment**（与 PR #30 同类）。
+- **Option A ／ B ／ D** 在**表达能力**上不足（无法区分 Multi-Parent / Cross-Requirement）
+  或**过度合并**（Option D 强制同一 requirement 下所有 component 共用），
+  因此**不推荐**；但它们的失败属于**表达能力不足**，
+  **不构成** canonical model 冲突。
+
+**Exactly-One-or-Unresolved Contract（评估）**
+
+建议采用，且**仅作为 canonical resolution contract**：
+
+```
+对每一个 GrossRequirement calculation context：
+  必须解析出 exactly one applicable canonical loss_rate
+  或
+  unresolved
+```
+
+- 好处：`BR-REQUIREMENT-001` **不必**面对多个 candidate `loss_rate` 再临时选择 ——
+  这与 **§4.5.21** 已批准的 **Exactly-One-or-Unresolved Contract** **同构**。
+- **这只是 canonical resolution contract**：它**不**定义 precedence、
+  **不**定义 source field、**不**定义 carrier、**不**创建 ID。
+- 若无法解析出唯一值 → `GrossRequirement` = **`DATA_INCOMPLETE`**。
+
+**Relationship to `BOMComponentQty`（必须明确）**
+
+```
+BOMComponentQty = 净用量系数
+loss_rate       = Gross-up loss configuration
+```
+
+- 两者**用途不同**，**不得**相互替代或合并。
+- 两者作用于**同一个** `Production Requirement` + component calculation。
+- 本 Review 判断：**`loss_rate` applicability 必须与 applicable BOM relationship 一起被解析**。
+  **理由：** `loss_rate` 的放大对象是 `BaseRequirement = ProductionQty × BOMComponentQty`，
+  而 `BOMComponentQty` **只**在其所属 **Production Requirement context** 中具有 canonical meaning
+  （`§4.1.4 N`）。若 `loss_rate` 在同一 calculation 中不遵循同一 context，
+  就会对**同一个 `BaseRequirement`** 应用**来自不同 context** 的放大系数 ——
+  这在语义上**不可辩护**。
+- **但**：这**不**意味着 `loss_rate` 成为 `BOMComponentQty` 的属性 ——
+  **不得自动把 `loss_rate` 变成 BOM Component 的 attribute，除非 Human 后续批准**
+  （见 Option C 的 `INSUFFICIENT` 判定）。
+
+**Time Semantics**
+
+- 当前 calculation **明确存在** `required_date`，且 BOM applicability **已 requirement-scoped**
+  （`§4.1.4 N`）。
+- 若两个 `required_date` 可能使用**不同 loss configuration**，
+  Option E 的 grain（含 `required_date`）**能够表达**；Option A ／ B **不能**。
+- 当前**没有 evidence** 证明 `loss_rate` 永久固定 →
+  **不得自动声明 `loss_rate` timeless**。
+- 同样**不得自动声明**每个 `required_date` 都不同 →
+  **不得**推断「按日期分裂」是业务事实。
+- 结论：**source-specific applicability mapping 更安全** ——
+  模型只要求「对当前 context 解析出 exactly one」，
+  **不预设**时间维度上的相同或不同。
+
+**Multiple Candidate Loss Evidence Boundary**
+
+若同一 calculation context 出现多个 candidate `loss_rate`（例如 `0.02` ／ `0.05`），
+且**没有 approved precedence**：
+
+**不得**：`max` ／ `min` ／ `average` ／ `latest wins` ／ `first wins` ／ `most specific wins`。
+
+处理：**`SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`** →
+`GrossRequirement` = **`DATA_INCOMPLETE`**。
+
+> **不得新增** Validation Reason —— 只使用既有 **11 个 canonical reason** 之一（`§4.4.81`）。
+
+**Missing vs Unresolved vs Invalid（必须区分）**
+
+| 情形 | 判定 | 结果 |
+| --- | --- | --- |
+| **A** applicable owner / grain 已可靠解析，但 **value missing** | `FIELD_VALUE` ／ `MISSING` | `DATA_INCOMPLETE` |
+| **B** `loss_rate` evidence 存在，但**无法可靠判断哪个适用于当前 calculation context** | `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED` | `DATA_INCOMPLETE` |
+| **C** applicable `loss_rate` 已解析，但 `loss_rate < 0` 或 `loss_rate >= 1` | `FIELD_VALUE` ／ 既有 invalid / range reason | `DATA_INCOMPLETE` |
+
+**不得**把三者都叫 `loss_rate missing`。
+
+**Zero Boundary（保持）**
+
+```
+loss_rate = 0
+```
+
+继续是**合法显式配置**。
+
+**不得**：`0 → missing`、`0 → fallback`、`0 → use another record`。
+
+**No Precedence Invention**
+
+本 Review **不定义**：
+
+- BOM-level wins Material-level
+- Material-level wins Plant-level
+- most specific wins
+- latest configuration wins
+- requirement-level wins default
+- Plant-specific overrides global
+
+除非现有 approved evidence 已经支持 —— 当前**没有**。
+
+**Option E 的重点是**「**mapping 必须最终产生 exactly one applicable `loss_rate`**」，
+而**不是**「本 Review 发明 precedence」。
+
+**Status（本 Review 时点）**
+
+```
+loss_rate canonical semantic          = DESIGN RESOLVED   ← 未变
+loss_rate formula / range / missing   = DESIGN RESOLVED   ← 未变
+loss_rate canonical owner / grain     = UNKNOWN           ← 未变
+unresolved count                      = 3                 ← 未变
+Other Source-Semantic Mapping         = DESIGN PENDING    ← 未变
+```
+
+本 Review **不**修改 `§2.4`，**不**修改 `§4.1` canonical model，
+**不**实施任何 Option，**不**减少 unresolved count。
+
+**Human Decision Required**
+
+1. 是否接受 **Canonical Model Compatibility = `COMPATIBLE`**
+   （按 Option E 的 **resolution-contract** 形式）？
+2. 是否接受 **canonical owner** 定义：
+   `loss_rate` **belongs to / is resolved for** an exact **Requirement Calculation Context**？
+3. 是否接受 **applicability grain** **至少**区分：
+   `plant_id` ／ parent / requirement `material_code` ／ `required_date` ／ component `material_code`？
+4. 是否接受 **exactly one applicable `loss_rate` or `unresolved`**
+   作为 canonical resolution contract？
+5. 是否确认 **owner / applicability grain ≠ physical carrier / source table**？
+6. 是否授权后续 **`§4.1` ／ `§4.2` ／ `§4.4` ／ `§4.5` 最小 consistency synchronization**？
+
+**若 Human 选择 Option C 的 attribute 实现形式**，则还需额外给出：
+**Blocking Finding** ＋ **Minimal Canonical Model Change Options** ＋ **trade-offs** ＋
+**Human Approval Required**（本 Review 当前**不**推荐该形式）。
+
+**Known Risks（本 Review 识别，未消除）**
+
+| # | Risk | 说明 | 当前状态 |
+| --- | --- | --- | --- |
+| 1 | **适用性信息丢失不可检测** | 若 owner 退化为 `Material`-level，同一 component 在不同 Parent / requirement context 下的不同 `loss_rate` 会被 **silent reuse**；两个 calculation 各自「有」一个 `loss_rate`，表面上都合法，因此**不会**被 `SEMANTIC_UNRESOLVED` 捕获 | **未消除** —— 只能靠 applicability grain 承载 Parent / requirement context |
+| 2 | **Carrier 未知** | 真实 physical carrier（BOM export ／ Material master ／ planning configuration ／ ERP-specific configuration ／ controlled configuration file ／ other approved source）**仍未知** | **未消除** —— `provenance carrier` 仍为独立 **`DESIGN PENDING`** |
+| 3 | **时间维度不可预设** | 无 evidence 证明 `loss_rate` 永久固定，也无 evidence 证明每个 `required_date` 都不同 | **未消除** —— 模型只要求「每个 context 独立解析 exactly one or unresolved」，**不预设**相同或不同 |
+| 4 | **Source evidence 可能需要额外维度** | 未来 source-specific evidence 可能需要更多维度才能唯一解析 | **未消除** —— `Adapter` ／ `mapping` **必须保留足够 evidence**，**不得 silently drop** |
+| 5 | **Attribute 形式会使 `COMPATIBLE` 失效** | 若改为把 `loss_rate` 加入 `§4.1.4 N` BOM Component attributes（或其他 canonical entity）作为 persisted attribute | **已设边界** —— 该变化**必须重新进入** **Canonical Model Compatibility Review** ＋ **Human-approved Canonical Model Amendment** |
+| 6 | **无 precedence** | 无 approved precedence 时，多 candidate 只能解析为 `unresolved` | **已设边界** —— 未来如需 precedence，**必须**另有新的 **Human-approved Design Decision** |
+| 7 | **`Other Source-Semantic Mapping` 仍未闭合** | `loss_rate` 只是该层其中一个子项，本层整体仍 `DESIGN PENDING` | **未消除** —— 本 PR **未**减少 unresolved count |
+
+**Human Decision Record —— `SIMULATED POC Design Policy` ＋ `Human-approved`**
+
+> 本节是对**上方 Review Finding** 的 **Human Decision**。
+> 上方 Review Finding 中的 `待 Human Decision` ／ `Human Decision Required` 表述
+> **已在本节获得答案**；未实施部分见本节末 **执行状态**。
+>
+> 上方 **Evidence Boundary** ／ **Critical Scenarios** ／ **Option Review** ／
+> **Canonical Owner ≠ Physical Carrier** ／ **Canonical Model Compatibility Result** ／
+> **Known Risks** **全部保留，未删除、未改写**。
+
+**决定 1 —— Canonical Model Compatibility = `COMPATIBLE`（ACCEPTED，附严格限定）**
+
+接受：
+
+```
+Canonical Model Compatibility = COMPATIBLE
+```
+
+**该结论严格限定于：**
+
+```
+Option E
+= Calculation-Context Configuration
++ resolution-contract implementation form
+```
+
+即：`loss_rate` **不是**新增到任何 canonical entity 中的 **persisted attribute**，
+而是 **required configuration evidence** 针对一个明确的 **Requirement Calculation Context**
+被**可靠解析**。
+
+**若未来方案改变为**：将 `loss_rate` 直接加入 `§4.1.4 N` BOM Component attributes
+或其他 canonical entity 作为 **persisted attribute** ——
+则当前 **`COMPATIBLE`** 结论**不再适用**，
+该变化**必须重新进入**：
+
+```
+Canonical Model Compatibility Review
+        +
+Human-approved Canonical Model Amendment
+```
+
+**决定 2 —— Option E = APPROVED**
+
+**决定 3 —— Canonical Owner Definition = CONFIRMED**
+
+正式批准 `loss_rate` canonical owner 应理解为：
+
+```
+loss_rate is resolved for
+an exact Requirement Calculation Context
+```
+
+此处的 **owner** 表示「**哪一个 business context 决定该 `loss_rate` 的适用范围**」，
+**不表示**：
+
+- 哪个数据库表拥有字段
+- 哪个 ERP module 拥有字段
+- 哪个 Dataset 物理保存字段
+- 哪个 API object 保存字段
+
+因此：
+
+```
+Canonical Owner  ≠  Physical Source Owner
+```
+
+**决定 4 —— Requirement Calculation Context = ADOPTED（conceptual）**
+
+正式采用 conceptual **`Requirement Calculation Context`**，
+其 applicability grain **必须至少能够区分**：
+
+```
+plant_id
++ parent / requirement material
++ required_date
++ component material
+```
+
+同时**必须能够可靠关联到** the applicable BOM relationship：
+
+```
+Production Requirement
+        +
+Applicable BOM Relationship
+        +
+Component Material
+        ↓
+Requirement Calculation Context
+```
+
+**不得创建** `requirement_calculation_id` ／ `loss_policy_id` ／ `scrap_policy_id`
+等新 canonical / physical ID。
+
+**决定 5 —— Applicability Grain Boundary = CONFIRMED**
+
+上述 `plant_id` + parent material + `required_date` + component material 是：
+
+```
+canonical applicability distinction
+```
+
+**不是** database primary key ／ physical schema ／ source table key。
+
+- **不得**因本 Human Decision 创建新的 **persisted grain object**。
+- 未来 source-specific evidence 若**需要额外维度**才能唯一解析：**不得 silently drop** ——
+  `Adapter` ／ `mapping` **必须保留足够 evidence** 以可靠解析到当前 `Requirement Calculation Context`。
+
+**决定 6 —— Exactly-One-or-Unresolved Contract = APPROVED**
+
+对于每一个 `GrossRequirement` calculation context，在进入 **`BR-REQUIREMENT-001`**
+确定性计算**之前**，**必须得到**：
+
+```
+exactly one applicable canonical loss_rate
+或
+unresolved
+```
+
+**不得**让 `BR-REQUIREMENT-001` 面对多个 candidate `loss_rate` 后**自行选择**。
+
+**不得**：`first wins` ／ `latest wins` ／ `max` ／ `min` ／ `average` ／
+`most specific wins` ／ `copy previous` ／ `LLM choose` ——
+**除非未来另有 Human-approved precedence rule**。
+
+**决定 7 —— Resolved `loss_rate` Semantics = UNCHANGED（CONFIRMED）**
+
+一旦 **exactly one applicable `loss_rate`** 被可靠解析，**继续使用**现有 Human-approved：
+
+```
+0 <= loss_rate < 1
+GrossRequirement = BaseRequirement / (1 - loss_rate)
+```
+
+**不得修改公式。** **`loss_rate = 0` 继续是合法显式配置。**
+
+**决定 8 —— Missing ／ Unresolved ／ Invalid = 三类保持分离（CONFIRMED）**
+
+| 情形 | 判定 | 结果 |
+| --- | --- | --- |
+| **A** applicability context 已可靠解析，但 required `loss_rate` value **missing** | `FIELD_VALUE` ／ `MISSING` | `DATA_INCOMPLETE` |
+| **B** `loss_rate` evidence 存在，但**无法可靠判断哪一个适用于当前 Requirement Calculation Context** | `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED` | `DATA_INCOMPLETE` |
+| **C** applicable `loss_rate` 已可靠解析，但 `loss_rate < 0` 或 `loss_rate >= 1` | existing `FIELD_VALUE` ／ range-invalid handling | `DATA_INCOMPLETE` |
+
+**不得**把三者统一叫 `loss_rate missing`。
+
+**决定 9 —— Owner vs Carrier = CONFIRMED（carrier 仍 OPEN）**
+
+正式确认：
+
+```
+canonical owner / applicability grain  ≠  physical carrier / source table
+```
+
+未来 physical carrier 可能来自：BOM export ／ Material master ／ planning configuration ／
+ERP-specific configuration ／ controlled configuration file ／ other approved source，
+但**当前 Design 不决定真实 physical source**。
+
+因此 **`provenance carrier` 仍保持独立：`DESIGN PENDING`** ——
+**不得**在本 Decision **顺手关闭** `provenance carrier`。
+
+**决定 10 —— Relationship to BOM = CONFIRMED**
+
+正式确认：**`loss_rate` applicability 必须与 applicable BOM relationship 一起被可靠解析。**
+
+**原因：** `loss_rate` 放大的是
+
+```
+BaseRequirement = ProductionQty × BOMComponentQty
+```
+
+而 `BOMComponentQty` 本身**只**在其 `Production Requirement` ＋ `applicable BOM relationship`
+context 中具有可靠 canonical meaning。
+
+**但：** 这**不表示** `loss_rate` 就是 **BOM Component persisted attribute**。
+必须保持：
+
+```
+applicability relationship  ≠  persisted ownership field
+```
+
+**决定 11 —— Cross-Requirement Boundary = CONFIRMED**
+
+**不得**因为 `Plant` ／ Parent Material ／ Component Material 相同，
+就默认不同 `required_date` 的 `Requirement Calculation Context` **共享**同一个 `loss_rate`。
+
+例如：
+
+```
+R1: 2026-10-10
+R2: 2026-11-10
+```
+
+**允许** future source evidence 解析出**不同**的 applicable `loss_rate`。
+
+**但本 Design：既不规定必须相同，也不规定必须不同。**
+只要求**每个 context 独立可靠解析** exactly one or unresolved。
+
+**决定 12 —— Multi-Parent Boundary = CONFIRMED**
+
+同一 component Material `MAT-B` 出现在 `MAT-A → MAT-B` 与 `MAT-X → MAT-B` 时，
+**不得**因为 `component material_code` 相同就**自动共享** `loss_rate` ——
+**Parent / requirement context 属于 applicability grain**，**不得 silent reuse**。
+
+**决定 13 —— No Precedence Rule（未批准任何 precedence）**
+
+本 Human Decision **不批准任何 source precedence**，尤其**未批准**：
+
+- BOM-level wins
+- Material-level wins
+- Plant-level wins
+- requirement-level wins
+- most specific wins
+- latest configuration wins
+- global fallback
+
+未来如需要 precedence：**必须**有新的 **Human-approved Design Decision**。
+
+**决定 14 —— Minimal Consistency Synchronization = AUTHORIZED（授权边界）**
+
+授权后续**专门 Design Change Task** 对 `§4.1` ／ `§4.2` ／ `§4.4` ／ `§4.5`
+执行实施 **Option E** 所需要的最小 consistency synchronization：
+
+| 章节 | 授权内容 |
+| --- | --- |
+| **`§4.1`** | **仅**澄清 `Requirement Calculation Context` 可由现有 `Production Requirement` ＋ applicable BOM relationship ＋ component context 表达；**不新增** canonical entity；**不新增** canonical field；**不修改**现有 entity grain |
+| **`§4.2`** | 记录 `loss_rate` applicability contract；记录 owner / grain = `Requirement Calculation Context`；source / physical carrier **继续未定义**；同步 current open-item status |
+| **`§4.4`** | 同步 missing vs unresolved vs invalid；同步 exactly-one-or-unresolved boundary；**不新增** Validation Reason |
+| **`§4.5`** | 记录 Option E implementation；同步 owner / grain current status；同步 unresolved count |
+
+**不得修改 `§2` Business Rules。**
+
+**决定 15 —— Explicitly Not Authorized**
+
+本 Human Decision **不授权**：
+
+- 将 `loss_rate` 加入 BOM Component attributes
+- 将 `loss_rate` 加入 Production Requirement attributes
+- 新增 `LossRatePolicy` entity
+- 新增 `ScrapPolicy` entity
+- 新增 `loss_policy_id`
+- 新增 `requirement_calculation_id`
+- 新增 precedence rule
+- 新增 source field
+- 新增 source table
+- 新增 schema
+- 新增 Adapter
+- 新增 mapping config
+- 新增 API
+- 新增 Validation Reason
+- 解决 `ApplicableMOQ` source
+- 解决 `provenance carrier`
+- 重新引入 `required_quantity`
+- 修改 `loss_rate` formula
+
+**执行状态（PR #40 时点）**
+
+```
+Canonical Model Compatibility = COMPATIBLE（Option E resolution-contract form only）
+Option E                      = APPROVED
+canonical owner               = exact Requirement Calculation Context
+applicability grain           = plant_id + parent / requirement material
+                                + required_date + component material
+applicable BOM relationship   = required applicability context
+Exactly-One-or-Unresolved     = APPROVED
+owner / grain                 ≠ physical carrier / source table
+minimal §4.1/§4.2/§4.4/§4.5 sync = AUTHORIZED
+
+Option E Implementation       = NOT YET EXECUTED
+loss_rate owner / grain       = UNKNOWN until follow-up implementation
+unresolved count              = 3
+Other Source-Semantic Mapping = DESIGN PENDING
+provenance carrier            = DESIGN PENDING
+```
+
+**本 PR 不实施 Option E semantic synchronization。** 在 follow-up
+**Human-authorized Design Change** 完成前：
+
+```
+loss_rate canonical owner / grain = UNKNOWN
+unresolved count                  = 3
+Other Source-Semantic Mapping     = DESIGN PENDING
+```
+
 #### 4.5.23 Examples
 
 以下为 **conceptual examples**。
@@ -12188,6 +12933,22 @@ unresolved count  = 4 → 3
 
 **未新增**任何 Master Data Mapping layer —— 这是 **canonical model cleanup / amendment**，
 **不是**新的 resolved layer。
+
+**`loss_rate` owner / grain —— Review 已提出 ＋ Human Decision 已记录，Status 未变：**
+
+**`loss_rate` Canonical Owner / Grain Design Review（Review Finding）** 见 **§4.5.22** ——
+recommended direction = **Option E（Calculation-Context Configuration）**，
+`Canonical Model Compatibility = COMPATIBLE`（按其 **resolution-contract** 形式）。
+
+```
+loss_rate owner / grain = UNKNOWN   ← 未变
+unresolved count        = 3         ← 未变
+```
+
+**Human Decision 已记录（见 §4.5.22 Human Decision Record）** —— **Option E = APPROVED**，
+**Canonical Model Compatibility = `COMPATIBLE`**（resolution-contract form only）；
+但 **Option E Implementation = NOT YET EXECUTED**，因此 PR #40 **不实施** Option E，
+**不**减少 unresolved count；`Other Source-Semantic Mapping` **仍为 `DESIGN PENDING`**。
 
 ---
 
