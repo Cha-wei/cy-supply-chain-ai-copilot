@@ -4380,7 +4380,7 @@ Canonical model **不得通过默认值隐藏缺失**。
 | 项 | 状态 | 说明 |
 | --- | --- | --- |
 | `loss_rate` 的 canonical owner / grain | **`UNKNOWN`** | §2.4 只定义其语义与公式，**未定义**其归属实体与粒度 |
-| Warehouse 是否为 canonical attribute | **`DESIGN PENDING`** | §2.2.1 的 grain **不含** warehouse；§2.2.4 只描述 Plant 内聚合 |
+| Warehouse 是否为 canonical attribute | **`DESIGN RESOLVED`** | **不是** canonical attribute —— Warehouse 是 source / mapping / scope context（**§4.5.12**）；§2.2.1 的 grain **不含** warehouse |
 | BOM version / validity selection | **`DESIGN PENDING`** | §2.4.3 明确不由该规则设计 |
 | `sourcing_status` enum / vocabulary | **`DESIGN PENDING`** | §2.7.24 明确不定义 |
 | `effective_arrival_date` 的 source field | **`DESIGN PENDING`** | §2.6.4 留给 Data Dictionary |
@@ -4391,6 +4391,9 @@ Canonical model **不得通过默认值隐藏缺失**。
 > 以上条目**不影响** `Canonical Data Model = DESIGN RESOLVED` ——
 > 它们属于**后续 Master Data Mapping / Adapter Boundary** 的范围，
 > 其**语义层面**已在 **§4.2 Data Dictionary** 中登记（见 §4.2.16）。
+>
+> `Warehouse 是否为 canonical attribute` 已由 **§4.5.12 Warehouse Role Resolution** 解析 ——
+> 结论是**不是** canonical attribute。
 
 ---
 
@@ -4525,7 +4528,8 @@ ProductionQty × BOMComponentQty
 | `SafetyStock` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `POLICY_INPUT` | 业务配置的安全库存（Configured Safety Stock） | `SafetyStock >= 0` | `DATA_INCOMPLETE`；**不得默认成 0** | `BR-INVENTORY-001`、`BR-SHORTAGE-001` |
 
 > `warehouse ownership unresolved` 是 **Data Quality fail-safe 触发项**（见 §2.2.9）；
-> 但 **Warehouse 的 canonical role 仍为 `DESIGN PENDING`**（见 §4.2.16）。
+> **Warehouse 的 canonical role 已由 §4.5.12 解析** 为 source / mapping / scope context ——
+> 它**不是** canonical field，因此本表**不新增** Warehouse field（见 §4.2.16）。
 
 #### 4.2.6 Inbound Fields
 
@@ -4805,7 +4809,7 @@ input evidence
 | --- | --- |
 | `loss_rate` canonical owner / grain | **`UNKNOWN`** |
 | `required_quantity` vs `ProductionQty` | **`DESIGN PENDING` / SEMANTIC AMBIGUITY** |
-| Warehouse canonical role | `DESIGN PENDING` |
+| Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
 | BOM version / validity selection | `DESIGN PENDING` |
 | `sourcing_status` vocabulary | `DESIGN PENDING` |
 | `effective_arrival_date` source field | `DESIGN PENDING` |
@@ -4815,6 +4819,9 @@ input evidence
 
 > 以上条目**不影响** `Data Dictionary = DESIGN RESOLVED` ——
 > 它们属于 **source mapping / Master Data Mapping / Adapter Boundary / Data Validation** 的范围。
+>
+> `Warehouse canonical role` 已由 **§4.5.12** 解析 ——
+> Warehouse 是 **source / mapping / scope context**，**不进入** Data Dictionary 的 canonical field 集合。
 >
 > **本 Task 不定义任何 source table / column**，因此**未被偷渡**任何 source mapping。
 
@@ -5237,11 +5244,12 @@ controlled export provenance
 
 #### 4.3.17 Unresolved Carrier Boundary
 
-以下项**仍未完全确定**（见 §4.2.16）：
+以下项**仍未完全确定**（见 §4.2.16）——
+其中 `Warehouse canonical role` **已由 §4.5.12 解析**，**不再属于未决项**：
 
 - `loss_rate` owner / grain
 - `required_quantity` vs `ProductionQty`
-- Warehouse canonical role
+- Warehouse canonical role —— **已由 §4.5.12 解析**（source / mapping / scope context）
 - BOM version / validity
 - `sourcing_status` vocabulary
 - `effective_arrival_date` source mapping
@@ -6352,11 +6360,12 @@ SafetyStock missing     vs     SafetyStock = -10
 
 #### 4.4.41 Unknown Semantic Items
 
-以下项目**不得在本 Task 中推进**：
+以下项目**不得在本 Task 中推进**
+（`Warehouse canonical role` 已于后续 **§4.5.12** 解析，此处保留历史约束记录）：
 
 - `loss_rate` owner / grain
 - `required_quantity` semantic
-- Warehouse canonical role
+- Warehouse canonical role —— **已由 §4.5.12 解析**（本 Task 未推进）
 - BOM version / validity
 - `sourcing_status` vocabulary
 - `effective_arrival_date` source mapping
@@ -6543,13 +6552,14 @@ effective_arrival_date > required_date
 
 如果无法可靠判断 → affected inventory grain → **`DATA_INCOMPLETE` / Data Quality Issue**。
 
-**但必须保持：**
+**并保持既有结论（`Warehouse canonical role` 已由 §4.5.12 解析）：**
 
 ```
-Warehouse canonical role = DESIGN PENDING
+Warehouse canonical role = source / mapping / scope context
 ```
 
-**不得**因为 consistency validation 创建新的 Warehouse canonical entity 或 physical key。
+**不得**创建新的 Warehouse canonical entity 或 physical key；
+也**不得**因为 consistency validation 改变既有 Plant-level calculation grain。
 
 #### 4.4.51 Configured Safety Stock Grain Consistency
 
@@ -7011,7 +7021,7 @@ affected evidence → affected grain → affected capability
 | --- | --- |
 | `loss_rate` owner / grain | **`UNKNOWN`** |
 | `required_quantity` semantic | `DESIGN PENDING` |
-| Warehouse canonical role | `DESIGN PENDING` |
+| Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
 | BOM version / validity | `DESIGN PENDING` |
 | `sourcing_status` vocabulary | `DESIGN PENDING` |
 | `effective_arrival_date` source mapping | `DESIGN PENDING` |
@@ -7403,13 +7413,13 @@ Risk vocabulary **保持现有定义**。
 
 #### 4.4.99 Pending Design Preservation
 
-必须继续保持以下 **9 项**：
+必须继续保持以下未决项（`Warehouse canonical role` **已由 §4.5.12 解析**，保留登记以便追溯）：
 
 | 未决项 | 状态 |
 | --- | --- |
 | `loss_rate` owner / grain | **`UNKNOWN`** |
 | `required_quantity` semantic | `DESIGN PENDING` |
-| Warehouse canonical role | `DESIGN PENDING` |
+| Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
 | BOM version / validity | `DESIGN PENDING` |
 | `sourcing_status` vocabulary | `DESIGN PENDING` |
 | `effective_arrival_date` source mapping | `DESIGN PENDING` |
@@ -7586,7 +7596,7 @@ physical schema / architecture / technology / ADR。
 Design DoD = PASS（17 / 17）
 ```
 
-**Unresolved Upstream Design（9 项）—— 不阻塞本 closure**
+**Upstream Design Items（8 项未决 ＋ 1 项已解析）—— 不阻塞本 closure**
 
 这 9 项**阻止的是**「某些 capability 当前能够实际运行」，
 **不是**「Data Validation conceptual design 已经定义清楚」。
@@ -7598,13 +7608,17 @@ Design DoD = PASS（17 / 17）
 | --- | --- | --- | --- |
 | 1 | `loss_rate` owner / grain | **`UNKNOWN`** | 要求可靠关联当前计算上下文，否则 `DATA_INCOMPLETE`（`§4.4.54`） |
 | 2 | `required_quantity` semantic | `DESIGN PENDING` | **不产生** runtime issue；`BR-REQUIREMENT-001` 不依赖它（`§4.4.53` / `§4.4.95`） |
-| 3 | Warehouse canonical role | `DESIGN PENDING` | ownership / Plant / scope 不可靠判断 → `DATA_INCOMPLETE`（`§4.4.50`） |
+| 3 | Warehouse canonical role | **`DESIGN RESOLVED`** | 已由 **§4.5.12** 解析为 source / mapping / scope context（`§4.4.50`） |
 | 4 | BOM version / validity | `DESIGN PENDING` | 无法可靠确定适用 BOM → `DATA_INCOMPLETE`（`§4.4.52`） |
 | 5 | `sourcing_status` vocabulary | `DESIGN PENDING` | eligibility 无法可靠确定 → `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED`（`§4.4.62` / `§4.4.95`） |
 | 6 | `effective_arrival_date` source mapping | `DESIGN PENDING` | 按既有 Rule 处理 missing / invalid（`§4.4.49`） |
 | 7 | allocation demand-window mapping | `DESIGN PENDING` | 无法判断重叠 → `DATA_INCOMPLETE` ＋ Data Quality Issue（`§4.4.60`） |
 | 8 | `ApplicableMOQ` source | `DESIGN PENDING` | 无法可靠取得 → `DATA_INCOMPLETE` → No Numeric Recommendation（`§4.4.67`） |
 | 9 | provenance carrier | `DESIGN PENDING` | 只提出 requirement，不设计 carrier（`§4.4.15` / `§4.4.93`） |
+
+> 第 3 项 `Warehouse canonical role` 已由后续 **§4.5.12 Warehouse Role Resolution**
+> 解析为 **source / mapping / scope context**，因此**不再属于未决项**；
+> 该行保留登记以便追溯。剩余 **8 项**未决。
 
 > 三者均明确禁止 Validation 反向解决这些设计问题：
 > `Consistency Validation 不得成为解决这些问题的后门。` /
@@ -7659,7 +7673,8 @@ conceptual validation design complete
 
 > **子章节整体状态：仍为 `DESIGN PENDING`。**
 >
-> 本节只完成其**第一层**：Canonical Identity Resolution ＋ Relationship Resolution Boundary。
+> 本节已完成：Canonical Identity Resolution ＋ Relationship Resolution Boundary
+> ＋ **Warehouse Role Resolution**（**§4.5.12**）。
 
 **层级状态登记：**
 
@@ -7669,7 +7684,7 @@ conceptual validation design complete
 | Relationship Resolution Boundary | **`DESIGN RESOLVED`** |
 | Mapping Conflict / Failure Boundary | **`DESIGN RESOLVED`** |
 | Mapping Provenance Requirement | **`DESIGN RESOLVED`** |
-| Warehouse Role Resolution | `DESIGN PENDING` |
+| Warehouse Role Resolution | **`DESIGN RESOLVED`** |
 | BOM Version / Validity Mapping | `DESIGN PENDING` |
 | Supplier Eligibility Vocabulary Mapping | `DESIGN PENDING` |
 | Other Source-Semantic Mapping | `DESIGN PENDING` |
@@ -7693,6 +7708,8 @@ Plant / Material / Supplier 以及关键业务 relationship **必须满足什么
 - unresolved / conflicting mapping behavior
 - mapping provenance requirement
 - mapping failure blast radius
+
+> 后续 Task 已追加 **Warehouse Role Resolution**（见 **§4.5.12**）。
 
 **不得定义**：ERP vendor / ERP version / source table / source column / CSV column / JSON path /
 SQL / mapping code / fuzzy matching algorithm / MDM product / database / API / Adapter implementation。
@@ -7912,28 +7929,384 @@ vocabulary = DESIGN PENDING
 SEMANTIC_RESOLUTION / SEMANTIC_UNRESOLVED
 ```
 
-#### 4.5.12 Warehouse Boundary
+#### 4.5.12 Warehouse Role Resolution
 
-保持：
+**Decision Question**
+
+Warehouse 在 POC v0.2 中究竟是：
+
+| 选项 | 内容 |
+| --- | --- |
+| **A** | first-class canonical business entity |
+| **B** | canonical calculation grain |
+| **C** | source / mapping / scope context |
+| **D** | completely irrelevant |
+
+**必须基于现有 Design 判断。**
+
+**不得**因为真实 ERP 通常存在 Warehouse 就自动创建 canonical Warehouse entity。
+
+**Option Review**
+
+| 比较维度 | Option 0：保持 unresolved | Option 1：first-class canonical entity | Option 2：source / mapping / scope context | Option 3：canonical calculation grain（即 Decision Question 的 **B**） |
+| --- | --- | --- | --- | --- |
+| 是否改变 `BR-INVENTORY-001` grain | 否 | 否 | **否** | **是 —— 违反 Human-approved Rule** |
+| 是否增加当前 P0 不需要的复杂度 | 保持现状 | **是** | **否** | **是** |
+| 对 Plant-level aggregation 的影响 | **是 —— eligibility 无法判断** | 改变 aggregation 的语义来源 | 只影响 eligibility 判断，**不改变 aggregation grain** | **是 —— 直接改变 aggregation grain** |
+| 对 traceability 的影响 | 无（也不提升） | 提升 | **保持 source-level granularity 可追溯** | 破坏既有 grain 一致性 |
+| 是否要求新增 Business Rule | 否 | **是** | **否** | **是** |
+| 是否与现有 Canonical Data Model 冲突 | 否（但**长期悬置**） | **是 —— `§4.1.4 D` 的 Inventory Snapshot attributes 不含 Warehouse** | **否** | **是 —— `§4.1.3` / `§4.1.4 D`** |
+| Reversibility | —— | 低（成为 canonical identity 后移除属 breaking change） | **高** | 低 |
+
+**Option 0 不予采用**：`§2.2.9` 已把 `warehouse ownership unresolved` 列为
+**Data Quality fail-safe 触发项**，`§2.2.4` 又要求「Warehouse 必须属于同一 Plant，
+且位于当前 POC Inventory Scope 中」—— 说明 Warehouse 在当前 POC 中**已经承担**必要的
+reliability 判断职责，长期悬置**会阻碍** Capability Readiness。
+
+**Option 1 不予采用**：会要求在 `§4.1 Canonical Data Model` 中**新增 canonical entity** ——
+这超出本 Task 授权，且 `§4.1` 已是 `DESIGN RESOLVED` / Human-approved；
+当前 `§2` 的 P0 Business Rules **全部为 Plant-level**，**没有任何 P0 requirement 是 Warehouse-level**；
+项目为 **`SIMULATED` POC**，**不存在**真实 ERP Warehouse 主数据，无法可靠设计 Warehouse canonical identity。
+
+**Option 3（canonical calculation grain）不予采用**：
+直接违反 `BR-INVENTORY-001` `§2.2.1` 的 **Human-approved** grain，
+并使 `OpeningUsableInventory` 与 `§2.2.5` 的 `SafetyStock` grain
+（`plant_id + material_code`）**无法对齐**。
+
+**Option D（completely irrelevant）不予采用**：
+`§2.2.4`、`§2.2.9`、`§2.2.11`、`§4.2.5`、`§4.4.50` 均以 Warehouse context 作为
+reliability / eligibility 的判断依据，因此 Warehouse **并非无关**。
+
+**因此推荐并采用 Option 2。**
+
+> 现有 Design 在**所有相关位置**一致地只把 Warehouse 当作 source-side context，
+> 因此**不存在 substantive ambiguity** —— 本项可以可靠关闭，**不需要**升级 Human Attention。
+
+**Selected Role —— 正式表述**
 
 ```
-Warehouse canonical role = DESIGN PENDING
+Warehouse is a source / mapping / scope context
+for Plant-level inventory aggregation;
+it is not a first-class canonical entity
+or calculation grain in POC v0.2.
 ```
 
-本 Task **不创建** Warehouse canonical entity。
-
-只定义：如果 source inventory 带有 Warehouse context，则**必须**能够可靠判断：
+中文正式表述：
 
 ```
-Warehouse → belongs to which Plant
-          + whether inside current POC inventory scope
+Warehouse canonical role = source / mapping / scope context
 ```
 
-才能执行 Plant-level aggregation。
+Warehouse 在当前 POC 中**只**用于可靠判断：
 
-**不得**：未知 Warehouse → 默认属于当前 Plant。
+```
+source inventory → belongs to which canonical Plant
+source inventory → whether inside current POC Inventory Scope
+```
 
-> 具体 Warehouse canonical role 留待后续 **Master Data Mapping Design**。
+**Warehouse 在当前 POC 中不是：**
+
+- first-class canonical business entity
+- shortage calculation grain
+- independent supply-sharing boundary
+
+**Calculation Grain 保持不变（重要）**
+
+本 Task **不改变** `BR-INVENTORY-001` `§2.2.1` 的 canonical calculation grain：
+
+```
+OpeningUsableInventory grain
+  = plant_id
+  + material_code
+  + inventory_snapshot_time
+```
+
+**明确禁止**改成：
+
+```
+plant_id + warehouse + material_code + inventory_snapshot_time
+```
+
+Warehouse **可以**保留 **source-level granularity**；
+但 **aggregation 之后的 canonical business calculation 仍使用既有 Plant-level grain**。
+
+同时保持 `§2.2.5` 的既有 grain：
+
+```
+SafetyStock grain = plant_id + material_code
+```
+
+**Warehouse Identity Boundary**
+
+当前 POC **不需要、也不创建** `canonical warehouse_id`。
+
+source-side warehouse identifier **可以存在**，但：
+
+```
+source warehouse identifier  ≠  canonical business entity identity
+```
+
+**不得**自动升级为 canonical business entity identity。
+
+**POC Inventory Scope —— conceptual requirement**
+
+POC Inventory Scope 的 membership 判定**必须**：
+
+- `explicit`
+- `deterministic`
+- `traceable`
+
+**不得**由以下方式决定：
+
+- LLM
+- Warehouse name
+- Warehouse description
+- 经验猜测
+
+**本 Task 不设计**：physical scope list、database table、warehouse whitelist file、
+configuration format、API、field name。
+
+> POC Inventory Scope 的**实际 membership 来源**仍属
+> **Other Source-Semantic Mapping / Final Master Data Mapping** 层，当前仍为 `DESIGN PENDING`。
+
+**两种可接受的 Source Evidence Shape**
+
+**Shape A —— Warehouse-level source evidence**
+
+如果 source inventory **包含** Warehouse-level records，则在进入 Plant-level aggregation 前，
+**必须**能够可靠解析：
+
+```
+source warehouse context → canonical plant_id
+```
+
+并且**必须**能够可靠判断：
+
+```
+该 Warehouse 是否属于当前 POC Inventory Scope
+```
+
+如果：
+
+- Plant ownership **unresolved**
+- 或 scope membership **unresolved**
+
+则该 inventory **不得**计入正常 `OpeningUsableInventory` —— 继承既有 Validation **fail-safe**（见 `§4.4`）。
+
+**Shape B —— Already Plant-scoped aggregate evidence**
+
+如果 Controlled Export **本身已经提供** **Plant + Material** 粒度的 inventory aggregate，
+则**不得**强制要求人为拆回 Warehouse-level data。
+
+**但必须**有可靠 evidence / provenance 说明：
+
+```
+该 aggregate 已经按照当前 POC Inventory Scope 形成
+```
+
+因此：
+
+```
+Warehouse-level identity
+≠ 所有 Inventory evidence 的 universal required field
+```
+
+**不得**：`Warehouse absent → 自动 DATA_INCOMPLETE` —— **如果** source evidence
+已经能够可靠证明 **Plant-level scope semantics**。
+
+**Warehouse Status vs Inventory Status（概念分离）**
+
+**不得发明** `Warehouse Status` 来替代 `Inventory Status`。
+
+已批准的：
+
+```
+AVAILABLE  /  INSPECTION  /  FROZEN
+```
+
+是 **Inventory eligibility semantics**（`§2.2.3`）。
+
+以 `§2.2.4` 的既有 example 为例：
+
+| Warehouse | 状态 | 数量 |
+| --- | --- | --- |
+| Warehouse-01 | `AVAILABLE` | 100 |
+| Warehouse-02 | `AVAILABLE` | 30 |
+| Warehouse-QA | `INSPECTION` | 40 |
+| Warehouse-FR | `FROZEN` | 20 |
+
+**必须**理解为：
+
+```
+inventory records 具有对应的 Inventory Status
+```
+
+**不得**推导：
+
+```
+Warehouse-QA 这个 Warehouse 永远属于 INSPECTION
+```
+
+**Warehouse 名称与 Inventory Status 必须保持概念分离。**
+
+> 该 example 中的 Warehouse **名称**不得被当作业务状态来源。
+
+**Cross-Plant Boundary**
+
+继续保持：
+
+如果 Warehouse context 解析到 `Plant-B`，则其 Inventory：
+
+```
+不得计入 Plant-A OpeningUsableInventory
+```
+
+**但**：`Plant-B` Inventory **本身不因此 invalid**。
+
+它只是：
+
+```
+对 Plant-A 当前 calculation ineligible
+```
+
+**不得设计**：cross-plant transfer / rebalancing / shared warehouse。
+
+**Unknown Warehouse**
+
+如果 Warehouse-level source evidence **存在**，但 `warehouse → Plant` **无法可靠解析**：
+
+```
+IDENTITY_RESOLUTION / UNRESOLVED_IDENTITY
+```
+
+或既有适用 Validation Reason —— 按 `§4.4.80` / `§4.4.81` 既有 Taxonomy 处理。
+
+**不得**：`unknown warehouse → current Plant`。
+
+如果 **Plant 已可靠确定**，但**是否在 POC Inventory Scope 无法确定**：
+
+```
+SCOPE_COVERAGE / UNRESOLVED_SCOPE
+```
+
+**不得**默认 **included**、也**不得**默认 **excluded** 后**继续宣称结果完整**。
+
+**Warehouse Mapping Provenance**
+
+如果 Warehouse-level mapping 被使用，则**必须未来可追溯**：
+
+```
+source warehouse context
+→ Plant
+→ scope resolution evidence
+→ Snapshot Package
+```
+
+**但**：**provenance carrier 仍 `DESIGN PENDING`**。
+
+**不得创建**：mapping table / schema / JSON / CSV / database。
+
+**No Physical Mapping**
+
+本 Task **不得定义**：`warehouse_code` / `storage_location` / `storage_location_id` /
+`sloc` / `warehouse_number` / `plant_storage_location` / ERP field 等真实系统字段。
+
+这些属于 **Adapter / real source mapping**。
+
+本 Task **只解决 canonical role**。
+
+**Future Extension（不得过度外推）**
+
+如果未来需要：
+
+- Warehouse-level shortage
+- Warehouse transfer
+- Warehouse replenishment
+- warehouse-specific Safety Stock
+- warehouse-specific reservation
+- cross-Warehouse optimization
+
+则**必须重新评估**：
+
+```
+Canonical Model  +  Business Rule  +  calculation grain
+```
+
+当前 Warehouse Role Resolution **不得**被解释为：
+
+```
+Warehouse 永远不会成为 canonical entity
+```
+
+它只表示：**POC v0.2 当前范围内不需要**。
+
+**Preserve Other Pending Items**
+
+本轮**只**解决 Warehouse Role。其余未决项**继续保持**（见 **§4.5.21**）：
+
+- `loss_rate` owner / grain
+- `required_quantity` semantic
+- BOM version / validity
+- `sourcing_status` vocabulary
+- `effective_arrival_date` source mapping
+- allocation demand-window mapping
+- `ApplicableMOQ` source
+- provenance carrier
+
+**Warehouse Acceptance Examples（A–F）**
+
+以下为 **conceptual examples**。
+
+**Example A —— Warehouse-level inventory**
+
+`WH-01` → reliably mapped to `Plant-A` → **in POC scope** → `AVAILABLE` inventory `100`
+
+**Expected：** `100` **可以**参与 `Plant-A` aggregation。
+
+**Example B —— Warehouse belongs to another Plant**
+
+`WH-02` → `Plant-B`；当前分析：`Plant-A`
+
+**Expected：** **不得**计入 `Plant-A`。
+
+> 该 source record **不是 invalid** —— 它只是对 `Plant-A` 当前 calculation **ineligible**。
+
+**Example C —— Warehouse Plant unresolved**
+
+`WH-X` → Plant **unknown**
+
+**Expected：** `IDENTITY_RESOLUTION` / `UNRESOLVED_IDENTITY`；
+affected inventory grain **不得形成正常结果**。
+
+**Example D —— Scope unresolved**
+
+`WH-01` → `Plant-A` resolved；但**是否属于 POC Inventory Scope** 无法确定
+
+**Expected：** `SCOPE_COVERAGE` / `UNRESOLVED_SCOPE`；
+**不得**默认 included / excluded。
+
+**Example E —— Plant-level aggregate**
+
+Source evidence：`Plant-A` / `MAT-A` / `AVAILABLE = 130`，
+并有可靠 export provenance 表明该值**已经按 POC Inventory Scope** 汇总。
+
+**Expected：** **不要求**必须存在 Warehouse-level records；
+**可以**作为 Plant-level inventory evidence 使用。
+
+**Example F —— Warehouse name does not define status**
+
+Warehouse name：`WH-QA`；Inventory status：`AVAILABLE`
+
+**Expected：** **不得**因为名称含 `QA` 就自动改为 `INSPECTION`。
+
+**Status**
+
+```
+Warehouse canonical role      = DESIGN RESOLVED
+Warehouse Role Resolution     = DESIGN RESOLVED
+```
+
+`Master Data Mapping` overall **仍为 `DESIGN PENDING`**。
 
 #### 4.5.13 Cross-System Identifier Boundary
 
@@ -8058,13 +8431,13 @@ source evidence exists but canonical mapping unavailable
 
 #### 4.5.21 Preserve Unresolved Items
 
-本轮**必须继续保持**：
+以下未决项本轮**必须继续保持**（`Warehouse canonical role` **已由本 Task §4.5.12 解析**）：
 
 | 未决项 | 状态 |
 | --- | --- |
 | `loss_rate` owner / grain | **`UNKNOWN`** |
 | `required_quantity` semantic | `DESIGN PENDING` |
-| Warehouse canonical role | `DESIGN PENDING` |
+| Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
 | BOM version / validity | `DESIGN PENDING` |
 | `sourcing_status` vocabulary | `DESIGN PENDING` |
 | `effective_arrival_date` source mapping | `DESIGN PENDING` |
@@ -8102,11 +8475,15 @@ unclear 而 unresolved → **不得**将 inventory 计入当前 Plant aggregatio
 business evidence 来自 P1，但 Material mapping 取自 P2
 → **`PROVENANCE_MISMATCH`**；**不得静默使用**。
 
+> `Warehouse Role Resolution` 的 acceptance examples（**Example A ～ Example F**）见 **§4.5.12**。
+
 #### 4.5.23 Status Boundary
 
-`Master Data Mapping` overall **仍为 `DESIGN PENDING`** —— 本节只完成**第一层**。
+`Master Data Mapping` overall **仍为 `DESIGN PENDING`** ——
+本节已完成 Canonical Identity Resolution、Relationship Resolution Boundary
+与 **Warehouse Role Resolution**（**§4.5.12**）。
 
-`DESIGN RESOLVED` 的四个层级**仅**表示其 **conceptual resolution boundary 已定义**，
+`DESIGN RESOLVED` 的五个层级**仅**表示其 **conceptual resolution boundary 已定义**，
 **不表示**：
 
 - 真实 ERP mapping 已完成
