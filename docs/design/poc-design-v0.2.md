@@ -3919,7 +3919,7 @@ conceptual boundary 已定义
 | 子章节 | Status |
 | --- | --- |
 | Canonical Data Model | **`DESIGN RESOLVED`** |
-| Data Dictionary | `DESIGN PENDING` |
+| Data Dictionary | **`DESIGN RESOLVED`** |
 | Snapshot / Import Contract | `DESIGN PENDING` |
 | Data Validation | `DESIGN PENDING` |
 | Master Data Mapping | `DESIGN PENDING` |
@@ -3928,7 +3928,7 @@ conceptual boundary 已定义
 > 继承约束（不重新定义）：Integration Pattern = **Controlled Export / Snapshot**。具体文件格式（CSV / JSON / Parquet）与 Adapter Contract 属本阶段待设计事项，**本轮未决定**。
 
 > **注意**：`Canonical Data Model` 完成**仅**表示 **canonical business entities 与 relationships 已定义**；
-> **不代表**整个 §4 完成。其余 5 项仍为 `DESIGN PENDING`。
+> **不代表**整个 §4 完成。其余 4 项仍为 `DESIGN PENDING`。
 
 ### 4.1 Canonical Data Model
 
@@ -4381,7 +4381,445 @@ Canonical model **不得通过默认值隐藏缺失**。
 | Provenance 的具体承载方式 | **`DESIGN PENDING`** | 见 §4.1.8 |
 
 > 以上条目**不影响** `Canonical Data Model = DESIGN RESOLVED` ——
-> 它们属于**后续 Data Dictionary / Master Data Mapping / Adapter Boundary** 的范围。
+> 它们属于**后续 Master Data Mapping / Adapter Boundary** 的范围，
+> 其**语义层面**已在 **§4.2 Data Dictionary** 中登记（见 §4.2.16）。
+
+---
+
+### 4.2 Data Dictionary
+
+**Design Status:** `DESIGN RESOLVED`
+
+**Approval:** Human-approved
+
+**Implementation Status:** `NOT STARTED`
+
+> **注意**：`DESIGN RESOLVED` **仅**表示 **canonical field semantics defined**。
+>
+> **不表示**：source mapping complete、physical schema complete、import contract complete、
+> data validated、implemented、tested。
+
+#### 4.2.1 Purpose & Scope
+
+本子章节建立 **canonical business field dictionary**：
+
+- canonical field name
+- 所属 entity / derived result
+- business semantic
+- logical type
+- requiredness
+- valid / invalid boundary
+- missing behavior
+- producing / consuming Rule
+- source / derived / context 属性
+
+**边界 —— Data Dictionary：**
+
+```
+≠ Database Schema
+≠ API Contract
+≠ JSON Schema
+≠ CSV layout
+≠ ORM Model
+≠ ERP field mapping
+```
+
+**本 Task 不定义**：SQL types、varchar length、primary key、foreign key、index、
+JSON structure、file columns、source table / column、serialization format。
+
+#### 4.2.2 Dictionary Conventions
+
+**Logical Types（technology-neutral，仅业务逻辑类型）：**
+
+| Logical Type | 含义 |
+| --- | --- |
+| `IDENTIFIER` | 业务标识 |
+| `ANALYSIS_RUN_ID` | Analysis Run 的业务标识 |
+| `DATE` | 业务日期（日粒度） |
+| `TIMESTAMP` | 观测时间点 |
+| `DECIMAL_QUANTITY` | 可为小数的数量 |
+| `NON_NEGATIVE_QUANTITY` | 非负数量 |
+| `RATIO` | 比例（无量纲，非百分比） |
+| `PERCENTAGE` | 百分比 |
+| `STATUS` | 业务状态 / 分类 |
+| `TEXT_CONTEXT` | 业务上下文文本 |
+
+**不得映射成**：`VARCHAR`、`DECIMAL(18,2)`、`UUID`、`BIGINT`、`JSONB` 等数据库类型。
+
+**Requiredness 语义：**
+
+| 值 | 含义 |
+| --- | --- |
+| `REQUIRED` | 对相应业务事实 / Rule **必须可靠存在** |
+| `CONDITIONAL` | 仅在特定 capability / state 下必须存在 |
+| `DERIVED` | 由 deterministic rule 产生 |
+| `CONTEXT` | 用于 traceability / observation context |
+
+**不得**把 `missing` 等同于 `0` / `false` / empty string / `UNKNOWN` status ——
+除非已有 Rule 明确定义（见 §4.2.12）。
+
+**Source Classification：**
+
+| 值 | 含义 |
+| --- | --- |
+| `SOURCE` | 来自受控数据源的业务事实 |
+| `DERIVED` | 由 deterministic rule 产生 |
+| `CONTEXT` | 观测 / 追溯上下文 |
+| `POLICY_INPUT` | 业务配置 / 策略输入 |
+
+> **不得**因此决定真实 ERP 来源。
+
+#### 4.2.3 Identity & Context Fields
+
+| Field | Logical Type | Requiredness | Class | Business Semantic | Valid / Invalid Boundary | Missing Behavior | Rule(s) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `plant_id` | `IDENTIFIER` | `REQUIRED` | `CONTEXT` | 业务计算边界中的 Plant 标识 | `NOT DEFINED` | `DATA_INCOMPLETE` | 全部 Rule |
+| `material_code` | `IDENTIFIER` | `REQUIRED` | `CONTEXT` | canonical material identity | `NOT DEFINED` | `DATA_INCOMPLETE` | 全部 Rule |
+| `supplier_id` | `IDENTIFIER` | `CONDITIONAL`（Supplier Risk 评估时 `REQUIRED`） | `SOURCE` | supplier identity | `NOT DEFINED` | `DATA_INCOMPLETE` | `BR-SUPPLIER-RISK-001` |
+| analysis run identity | `ANALYSIS_RUN_ID` | `REQUIRED` | `CONTEXT` | 一次短缺分析运行的标识 | `NOT DEFINED`；**ID 生成方式未设计** | `DATA_INCOMPLETE` | `BR-SHORTAGE-001`、`BR-PROCUREMENT-001`、`BR-SUPPLIER-RISK-001` |
+| `AnalysisDate` | `DATE` | `CONDITIONAL`（Lead Time Feasibility 时 `REQUIRED`） | `CONTEXT` | 分析运行日期（`DaysUntilNeed` 的减数） | `NOT DEFINED` | `LeadTimeRisk = DATA_INCOMPLETE` | `BR-SUPPLIER-RISK-001` |
+
+#### 4.2.4 Requirement / BOM Fields
+
+| Field | Logical Type | Requiredness | Class | Business Semantic | Valid / Invalid Boundary | Missing Behavior | Rule(s) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `required_date` | `DATE` | `REQUIRED` | `SOURCE` | 需求日期（累计计算的 `t`） | `NOT DEFINED` | `DATA_INCOMPLETE` | `BR-REQUIREMENT-001`、`BR-SHORTAGE-001` |
+| `required_quantity` | `NON_NEGATIVE_QUANTITY` | **`DESIGN PENDING`** | **`DESIGN PENDING`** | **语义未定**（见下） | `NOT DEFINED` | `DESIGN PENDING` | — （**未被任何 Rule 使用**） |
+| `ProductionQty` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `SOURCE` | 生产数量 | `ProductionQty >= 0` | `DATA_INCOMPLETE` | `BR-REQUIREMENT-001` |
+| `BOMComponentQty` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `SOURCE` | 单位父项所需组件数量 | `BOMComponentQty >= 0`；必须来自**可靠解析的 applicable BOM relationship** | `DATA_INCOMPLETE` | `BR-REQUIREMENT-001` |
+| `loss_rate` | `RATIO` | `REQUIRED`（for `BR-REQUIREMENT-001`） | `POLICY_INPUT` | 预计投入总量中发生损耗的比例 | `0 <= loss_rate < 1` | `DATA_INCOMPLETE` ＋ Data Quality Issue | `BR-REQUIREMENT-001` |
+
+**`required_quantity` vs `ProductionQty` —— SEMANTIC AMBIGUITY（`DESIGN PENDING`）**
+
+现有 Design **没有可靠说明** `required_quantity` 与 `ProductionQty` 究竟是：
+
+- 同义
+- 父子关系
+- 还是**不同业务量**
+
+**不得猜测。**
+
+**明确：** `BR-REQUIREMENT-001` 当前确定使用的是：
+
+```
+ProductionQty × BOMComponentQty
+```
+
+**不得**因为 Data Dictionary 存在 `required_quantity` 就自动改用 `required_quantity`。
+
+#### 4.2.5 Inventory Fields
+
+| Field | Logical Type | Requiredness | Class | Business Semantic | Valid / Invalid Boundary | Missing Behavior | Rule(s) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `inventory_status` | `STATUS` | `REQUIRED` | `SOURCE` | 库存可用性状态 | 仅 `AVAILABLE` / `INSPECTION` / `FROZEN`（见 §4.2.14） | 未知 / 非法 → `DATA_INCOMPLETE`；**不得静默归类为 `AVAILABLE`** | `BR-INVENTORY-001` |
+| `on_hand_qty` | `DECIMAL_QUANTITY` | `REQUIRED` | `SOURCE` | 观测到的在手库存数量 | **不得** `clamp to 0`；`on_hand_qty < 0` 为**非法输入**（见 §2.2.8） | `DATA_INCOMPLETE` ＋ Data Quality Issue | `BR-INVENTORY-001` |
+| `inventory_snapshot_time` | `TIMESTAMP` | `REQUIRED` | `CONTEXT` | 库存观测时间点 | `NOT DEFINED` | `DATA_INCOMPLETE` | `BR-INVENTORY-001` |
+| `SafetyStock` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `POLICY_INPUT` | 业务配置的安全库存（Configured Safety Stock） | `SafetyStock >= 0` | `DATA_INCOMPLETE`；**不得默认成 0** | `BR-INVENTORY-001`、`BR-SHORTAGE-001` |
+
+> `warehouse ownership unresolved` 是 **Data Quality fail-safe 触发项**（见 §2.2.9）；
+> 但 **Warehouse 的 canonical role 仍为 `DESIGN PENDING`**（见 §4.2.16）。
+
+#### 4.2.6 Inbound Fields
+
+| Field | Logical Type | Requiredness | Class | Business Semantic | Valid / Invalid Boundary | Missing Behavior | Rule(s) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `ordered_qty` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `SOURCE` | 已订购数量 | `ordered_qty >= 0` | `DATA_INCOMPLETE` | `BR-INBOUND-001` |
+| `received_qty` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `SOURCE` | 已收货数量 | `received_qty >= 0`；`received_qty > ordered_qty` 为**非法** | `DATA_INCOMPLETE` ＋ Data Quality Issue | `BR-INBOUND-001` |
+| `effective_arrival_date` | `DATE` | `REQUIRED` | `SOURCE` | Inbound **真正可用于 shortage calculation** 的有效到货日 | `NOT DEFINED`；**source field `DESIGN PENDING`** | `DATA_INCOMPLETE` | `BR-INBOUND-001` |
+| inbound status / eligibility context | `STATUS` | `REQUIRED` | `SOURCE` | 判断该 inbound 是否可计入未来供给的状态 | 见 §2.6.3 的保守分类；未知 / 非法 → **不得猜测** | `DATA_INCOMPLETE` ＋ Data Quality Issue | `BR-INBOUND-001` |
+
+> `effective_arrival_date` 的 **source field 未决定**：**不得**自行认定它来自
+> `promised_date` / `confirmed_date` / `planned_delivery_date` / `ETA` 或其他字段（见 §4.2.16）。
+
+#### 4.2.7 Substitute Fields
+
+| Field | Logical Type | Requiredness | Class | Business Semantic | Valid / Invalid Boundary | Missing Behavior | Rule(s) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `target_material_code` | `IDENTIFIER` | `REQUIRED` | `SOURCE` | 被覆盖的 Target Material | `NOT DEFINED` | `DATA_INCOMPLETE` | `BR-SUBSTITUTE-001` |
+| `substitute_material_code` | `IDENTIFIER` | `REQUIRED` | `SOURCE` | 提供覆盖的 Substitute Material | `NOT DEFINED` | `DATA_INCOMPLETE` | `BR-SUBSTITUTE-001` |
+| `substitution_ratio` | `RATIO` | `REQUIRED` | `SOURCE` | 1 unit Substitute 可覆盖多少 unit Target Requirement（**substitute → target**） | `substitution_ratio > 0` | `DATA_INCOMPLETE` ＋ Data Quality Issue；**不得默认成 `1.0`** | `BR-SUBSTITUTE-001` |
+| `approval_status` | `STATUS` | `REQUIRED` | `SOURCE` | Substitute Relationship 的审批状态 | 仅 `APPROVED` 可参与计算（见 §4.2.14） | 缺失 / 无法判断 → `DATA_INCOMPLETE`；**不得由 LLM 自动批准** | `BR-SUBSTITUTE-001` |
+| `AllocatedSubstituteQty` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `SOURCE` | 明确分配给某 Target 的替代数量 | `AllocatedSubstituteQty >= 0`；`Σ AllocatedSubstituteQty <= EligibleSubstituteSupply` | `DATA_INCOMPLETE` ＋ Data Quality Issue / Allocation Conflict；**不得默认成 0** | `BR-SUBSTITUTE-001` |
+| effective demand context | `TEXT_CONTEXT` | `CONDITIONAL` | `CONTEXT` | allocation 对当前 `required_date` 有效的判定上下文 | `NOT DEFINED`；**关联机制 `DESIGN PENDING`** | `DATA_INCOMPLETE` | `BR-SUBSTITUTE-001` |
+
+#### 4.2.8 Supplier Fields
+
+| Field | Logical Type | Requiredness | Class | Business Semantic | Valid / Invalid Boundary | Missing Behavior | Rule(s) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `sourcing_status` | `STATUS` | `CONDITIONAL` | `SOURCE` | Supplier-Material relationship eligibility context | **vocabulary `DESIGN PENDING`** | 无法可靠确定 → Risk Evidence Status = `DATA_INCOMPLETE` | `BR-SUPPLIER-RISK-001` |
+| `standard_lead_time_days` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `SOURCE` | 标准供应周期（天） | `StandardLeadTimeDays >= 0` | `LeadTimeRisk = DATA_INCOMPLETE` | `BR-SUPPLIER-RISK-001` |
+| `PerformancePeriod` | `TEXT_CONTEXT`（observation window） | `REQUIRED` | `CONTEXT` | performance 的**统计窗口** | `NOT DEFINED`（period policy `DESIGN PENDING`） | `DeliveryRisk` / `QualityRisk` = `DATA_INCOMPLETE` | `BR-SUPPLIER-RISK-001` |
+| `PerformanceUpdatedAt` | `TIMESTAMP` | `CONDITIONAL` | `CONTEXT` | performance 记录更新时间 | `NOT DEFINED` | 不单独导致 `DATA_INCOMPLETE` | `BR-SUPPLIER-RISK-001` |
+| `DeliveryPerformance` | `PERCENTAGE` | `REQUIRED` | `SOURCE` | 交付绩效 | `0% ～ 100%` | `DeliveryRisk = DATA_INCOMPLETE`；**不得默认成 0** | `BR-SUPPLIER-RISK-001` |
+| `QualityPerformance` | `PERCENTAGE` | `REQUIRED` | `SOURCE` | 质量绩效 | `0% ～ 100%` | `QualityRisk = DATA_INCOMPLETE`；**不得默认成 0** | `BR-SUPPLIER-RISK-001` |
+
+> **必须保持：** `PerformancePeriod`（measurement period）**≠** `PerformanceUpdatedAt`。
+> `PerformanceUpdatedAt` **不能替代** measurement period。
+
+#### 4.2.9 Procurement Fields
+
+| Field | Logical Type | Requiredness | Class | Business Semantic | Valid / Invalid Boundary | Missing Behavior | Rule(s) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `RecommendationNeedDate` | `DATE` | `CONDITIONAL`（`Classification = SHORTAGE` 且 Procurement Recommendation applicable 时 `REQUIRED`） | `CONTEXT` | 采购建议所使用的 business need date | 当前 POC `= FirstShortageDate` | 见下方条件性说明 | `BR-PROCUREMENT-001` |
+| `ApplicableMOQ` | `NON_NEGATIVE_QUANTITY` | `CONDITIONAL`（`Classification = SHORTAGE` 时 `REQUIRED`） | `POLICY_INPUT` | 当前采购建议所适用的最小采购数量约束 | `ApplicableMOQ >= 0` | `DATA_INCOMPLETE`；**不得默认成 0** | `BR-PROCUREMENT-001` |
+
+> **`ApplicableMOQ` 的 Source Mapping = `DESIGN PENDING`。**
+> **不得**自行绑定 Supplier / Contract / ERP Purchasing Info Record（见 §4.2.16）。
+
+**`RecommendationNeedDate` 的条件性**
+
+`RecommendationNeedDate` 的 `Requiredness` 为 **`CONDITIONAL`**，仅当：
+
+```
+Classification = SHORTAGE
+且 Procurement Recommendation applicable
+```
+
+时 `REQUIRED`。
+
+如果：
+
+```
+Classification = NORMAL
+或
+Classification = BUFFER_BREACH
+```
+
+则 **No Purchase Recommendation**，因此 `RecommendationNeedDate` **可以 `not present by design`**。
+
+**这不是 `DATA_INCOMPLETE`。**
+
+如果 `Classification = SHORTAGE`，但 required recommendation inputs **无法可靠取得**，
+才进入 `DATA_INCOMPLETE`。
+
+#### 4.2.10 Derived Result Fields
+
+以下**全部**为 deterministic derived results，`Requiredness = DERIVED`、`Class = DERIVED`。
+**不得把 derived result 伪装成 source-system fact。**
+
+| Derived Result | Logical Type | Business Semantic | Produced By | Consumed By | Valid Boundary | Missing Behavior |
+| --- | --- | --- | --- | --- | --- | --- |
+| `BaseRequirement` | `NON_NEGATIVE_QUANTITY` | 未含损耗的净需求 | `BR-REQUIREMENT-001` | `GrossRequirement` | `= ProductionQty × BOMComponentQty` | `DATA_INCOMPLETE` |
+| `GrossRequirement` | `NON_NEGATIVE_QUANTITY` | 含损耗的毛需求 | `BR-REQUIREMENT-001` | `CumulativeGrossRequirement` | `= BaseRequirement / (1 - loss_rate)` | `DATA_INCOMPLETE` |
+| `CumulativeGrossRequirement` | `NON_NEGATIVE_QUANTITY` | 截至 `t` 的累计毛需求 | `BR-REQUIREMENT-001` | `ProjectedAvailable` | `Σ` where `required_date <= t` | `DATA_INCOMPLETE` |
+| `OpeningUsableInventory` | `NON_NEGATIVE_QUANTITY` | 允许状态的在手库存之和 | `BR-INVENTORY-001` | `ProjectedAvailable` | `= Σ EligibleOnHandQty`（**不得**用 `Book Inventory Total`；**不得**减 `SafetyStock`） | `DATA_INCOMPLETE` |
+| `RemainingInboundQty` | `NON_NEGATIVE_QUANTITY` | 未收货余量 | `BR-INBOUND-001` | `EffectiveInbound` | `= ordered_qty - received_qty`；`>= 0` | `DATA_INCOMPLETE` |
+| `EffectiveInbound` | `NON_NEGATIVE_QUANTITY` | 单笔 inbound 的有效供给量 | `BR-INBOUND-001` | `CumulativeEffectiveInbound` | eligible 且 `effective_arrival_date <= t`；否则 `0` | `DATA_INCOMPLETE` |
+| `CumulativeEffectiveInbound` | `NON_NEGATIVE_QUANTITY` | 截至 `t` 的累计有效在途 | `BR-INBOUND-001` | `ProjectedAvailable` | `Σ EffectiveInbound` | `DATA_INCOMPLETE` |
+| `EquivalentTargetQty` | `NON_NEGATIVE_QUANTITY` | 换算后的等效目标供给 | `BR-SUBSTITUTE-001` | `CumulativeApprovedSubstituteSupply` | `= AllocatedSubstituteQty × substitution_ratio` | `DATA_INCOMPLETE` |
+| `ApprovedSubstituteSupply` | `NON_NEGATIVE_QUANTITY` | 已批准替代供给（`0` 为**合法状态**） | `BR-SUBSTITUTE-001` | `CumulativeApprovedSubstituteSupply` | 无 Approved Substitute 时 `= 0` | `DATA_INCOMPLETE`（仅当 data 不可靠） |
+| `CumulativeApprovedSubstituteSupply` | `NON_NEGATIVE_QUANTITY` | 截至 `t` 的累计批准替代供给 | `BR-SUBSTITUTE-001` | `ProjectedAvailable` | `Σ EquivalentTargetQty` | `DATA_INCOMPLETE` |
+| `RemainingUnallocatedSourceSupply` | `NON_NEGATIVE_QUANTITY` | 未分配的可自由使用源供给 | `BR-SUBSTITUTE-001` | 供给守恒约束 | `= EligibleSubstituteSupply - Σ AllocatedSubstituteQty`；`>= 0` | `DATA_INCOMPLETE` |
+| `ProjectedAvailable` | `DECIMAL_QUANTITY` | 截至 `t` 的预计可用量 | `BR-SHORTAGE-001` | `Classification` / `ShortageQty` / `BufferGap` | `= OpeningUsableInventory + CumulativeEffectiveInbound + CumulativeApprovedSubstituteSupply - CumulativeGrossRequirement`；**可为负** | `DATA_INCOMPLETE` |
+| `Classification` | `STATUS` | 短缺分类 | `BR-SHORTAGE-001` | 下游全部 | 仅 `NORMAL` / `BUFFER_BREACH` / `SHORTAGE` / `DATA_INCOMPLETE` | `DATA_INCOMPLETE` |
+| `ShortageQty` | `NON_NEGATIVE_QUANTITY` | 实际缺口数量 | `BR-SHORTAGE-001` | `BasePurchaseNeed` | `= max(0, -ProjectedAvailable)` | `DATA_INCOMPLETE` |
+| `BufferGap` | `NON_NEGATIVE_QUANTITY` | Safety Stock buffer 缺口 | `BR-SHORTAGE-001` | 解释 / 展示 | `= max(0, SafetyStock - ProjectedAvailable)` | `DATA_INCOMPLETE` |
+| `FirstShortageDate` | `DATE` | 最早出现 `ProjectedAvailable < 0` 的日期 | `BR-SHORTAGE-001` | `RecommendationNeedDate` | 按 `required_date` ascending 取最早；从未满足时为 `null / not present`（**valid absence**） | 数据完整但整个 analysis horizon 从未满足 → **valid absence**（**不是** `DATA_INCOMPLETE`）；仅当 shortage calculation 因关键数据缺失 / invalid / unresolved 无法可靠执行 → `DATA_INCOMPLETE` |
+| `DaysUntilNeed` | `DECIMAL_QUANTITY` | 距需求日的天数 | `BR-SUPPLIER-RISK-001` | `LeadTimeRisk` | `= RecommendationNeedDate - AnalysisDate`；`>= 0` | `LeadTimeRisk = DATA_INCOMPLETE` |
+| `LeadTimeRisk` | `STATUS` | Lead Time 可行性风险 | `BR-SUPPLIER-RISK-001` | `OverallSupplierRisk` | 仅 `LOW` / `HIGH`（**本版本无 `MEDIUM`**） | `DATA_INCOMPLETE` |
+| `DeliveryRisk` | `STATUS` | 交付绩效风险 | `BR-SUPPLIER-RISK-001` | `OverallSupplierRisk` | 仅 `LOW` / `MEDIUM` / `HIGH` | `DATA_INCOMPLETE` |
+| `QualityRisk` | `STATUS` | 质量绩效风险 | `BR-SUPPLIER-RISK-001` | `OverallSupplierRisk` | 仅 `LOW` / `MEDIUM` / `HIGH` | `DATA_INCOMPLETE` |
+| `OverallSupplierRisk` | `STATUS` | 综合供应商风险 | `BR-SUPPLIER-RISK-001` | 决策支持 | `= max severity`（**非** weighted score）；`LOW < MEDIUM < HIGH` | 任一维度不可靠 → `DATA_INCOMPLETE` |
+| `BasePurchaseNeed` | `NON_NEGATIVE_QUANTITY` | 基础采购需求 | `BR-PROCUREMENT-001` | `RecommendedPurchaseQty` | `= ShortageQty at FirstShortageDate`；**不得**加 `BufferGap` | `NORMAL` / `BUFFER_BREACH` → **not produced by design**；`SHORTAGE` ＋ inputs reliable → numeric；`SHORTAGE` ＋ 关键输入不可靠 → `DATA_INCOMPLETE` / **No Numeric Recommendation** |
+| `MOQAdjustmentQty` | `NON_NEGATIVE_QUANTITY` | 为满足 MOQ 额外增加的数量 | `BR-PROCUREMENT-001` | 解释 / 展示 | `= RecommendedPurchaseQty - BasePurchaseNeed`；`>= 0`；**不是** `ShortageQty` | `NORMAL` / `BUFFER_BREACH` → **not produced by design**；`SHORTAGE` ＋ inputs reliable → numeric；`SHORTAGE` ＋ 关键输入不可靠 → `DATA_INCOMPLETE` / **No Numeric Recommendation** |
+| `RecommendedPurchaseQty` | `NON_NEGATIVE_QUANTITY` | 建议采购数量 | `BR-PROCUREMENT-001` | Procurement Request Draft | `= max(BasePurchaseNeed, ApplicableMOQ)`；保持 canonical quantity | `NORMAL` / `BUFFER_BREACH` → **not produced by design**；`SHORTAGE` ＋ inputs reliable → numeric；`SHORTAGE` ＋ 关键输入不可靠 → `DATA_INCOMPLETE` / **No Numeric Recommendation** |
+
+**Conditional Applicability of Procurement Derived Results**
+
+以下 derived results 具有 **conditional applicability**：
+
+- `BasePurchaseNeed`
+- `MOQAdjustmentQty`
+- `RecommendedPurchaseQty`
+
+它们**只在**：
+
+```
+Classification = SHORTAGE
+且 BR-PROCUREMENT-001 required inputs reliable
+```
+
+时产生 **numeric value**。
+
+| 情况 | 行为 |
+| --- | --- |
+| `Classification = NORMAL` 或 `BUFFER_BREACH` | 这些 procurement result **not produced by design** —— **不是** `DATA_INCOMPLETE` |
+| `Classification = SHORTAGE` 且 required inputs reliable | 产生 **numeric result** |
+| `Classification = SHORTAGE` 但 required input 不可靠（例如 `ApplicableMOQ` missing / invalid） | **`DATA_INCOMPLETE`** ＋ **No Numeric Recommendation** |
+
+**Valid Absence vs Missing Required Data**
+
+```
+valid absence
+  ≠ missing required data
+```
+
+- **valid absence** —— 该字段在当前业务状态下**本来就不适用**，或不产生；
+  属于**字段存在性语义**，**不得**解释成 `DATA_INCOMPLETE`。
+- **missing required data** —— 本来**需要**形成可靠结果，但关键数据缺失 / invalid / unresolved，
+  因此无法可靠计算 → **`DATA_INCOMPLETE`**。
+
+**不得新增** `NOT_APPLICABLE` / `N/A` / `NO_SHORTAGE` / `NO_RECOMMENDATION`
+等正式业务 enum / classification。
+
+#### 4.2.11 Time Semantics
+
+沿用 §4.1.6 的六类时间语义，并额外登记两项：
+
+| Field | 语义类别 | `Class` | 说明 |
+| --- | --- | --- | --- |
+| `required_date` | requirement time | `SOURCE` | 需求日期 |
+| `effective_arrival_date` | event time | `SOURCE` | 供给真正可用日 |
+| `inventory_snapshot_time` | observation time | `CONTEXT` | 库存观测时点 |
+| `PerformancePeriod` | observation window | `CONTEXT` | performance 统计窗口 |
+| `PerformanceUpdatedAt` | observation metadata | `CONTEXT` | performance 更新时间 |
+| `AnalysisDate` | analysis run time | `CONTEXT` | 分析运行日期 |
+| `FirstShortageDate` | **derived business date** | `DERIVED` | 由 `BR-SHORTAGE-001` 产生 |
+| `RecommendationNeedDate` | 采购建议使用的 **business need date** | `CONTEXT` | 当前 POC `= FirstShortageDate` |
+
+**必须明确：**
+
+```
+FirstShortageDate        = derived business date
+RecommendationNeedDate   = 采购建议使用的 business need date
+```
+
+当前 POC：
+
+```
+RecommendationNeedDate = FirstShortageDate
+```
+
+但**两个 canonical concepts 不得因为当前值相同就完全混为同一字段语义**。
+
+#### 4.2.12 Zero vs Missing
+
+集中记录**已经批准**的 `Zero ≠ Missing` 语义（**不得改变**）：
+
+| Field | `= 0` 的含义 | `missing` 的含义 |
+| --- | --- | --- |
+| `SafetyStock` | 业务明确配置为**无 Safety Stock buffer**，**合法值** | 必要配置缺失 → `DATA_INCOMPLETE`，**不得默认成 0** |
+| `loss_rate` | 业务明确配置为**无损耗**，**合法值** | 必要配置缺失 → `DATA_INCOMPLETE`，**不得默认成 0** |
+| `AllocatedSubstituteQty` | 该关系在本需求窗口内**未分配**任何数量，**合法值** | 必要 allocation 信息缺失 → `DATA_INCOMPLETE`，**不得默认成 0** |
+| `ApplicableMOQ` | 业务明确确认**不存在**最小采购数量约束，**合法值** | 必要 MOQ 信息缺失 → `DATA_INCOMPLETE`，**不得默认成 0** |
+| `DeliveryPerformance` | **合法但极差**的绩效 → `DeliveryRisk = HIGH` | 无法判断 → `DeliveryRisk = DATA_INCOMPLETE` |
+| `QualityPerformance` | **合法但极差**的绩效 → `QualityRisk = HIGH` | 无法判断 → `QualityRisk = DATA_INCOMPLETE` |
+
+**Valid Absence vs Missing Required Data**
+
+必须区分**两类完全不同的「字段不存在」**：
+
+| 语义 | 含义 | 是否 `DATA_INCOMPLETE` |
+| --- | --- | --- |
+| **valid absence / not applicable** | 该字段在当前业务状态下**本来就不适用**，或不产生 | **否** |
+| **missing required data** | 本来**需要**形成可靠结果，但关键数据缺失 / invalid / unresolved | **是** |
+
+必须保持 `DATA_INCOMPLETE` 的含义：
+
+```
+DATA_INCOMPLETE
+  = 本来需要形成可靠结果，
+    但关键数据缺失 / invalid / unresolved，
+    因此无法可靠计算
+```
+
+**不得**将「该字段在当前业务状态下本来就不适用」**错误解释成** `DATA_INCOMPLETE`。
+
+典型 valid absence 情形：
+
+- `FirstShortageDate` —— 数据完整且整个 analysis horizon **从未**出现 `ProjectedAvailable < 0` → `null / not present`
+- `RecommendationNeedDate` 与 procurement derived results —— `Classification` 为 `NORMAL` / `BUFFER_BREACH` 时 **not produced by design**
+
+> 以上均为**字段存在性语义**，**不是**新的业务 status / enum。
+
+#### 4.2.13 Quantity Constraints
+
+**从已有 Rule 引用，而非重新发明：**
+
+| Field / Result | Constraint | 依据 |
+| --- | --- | --- |
+| `ProductionQty` | `>= 0` | §2.4.3 |
+| `BOMComponentQty` | `>= 0` | §2.4.3 |
+| `loss_rate` | `0 <= loss_rate < 1` | §2.4.6 |
+| `SafetyStock` | `>= 0` | §2.2.5 |
+| `substitution_ratio` | `> 0` | §2.3.6 |
+| `AllocatedSubstituteQty` | `>= 0` | §2.3.7 |
+| `ordered_qty` | `>= 0` | §2.6.2 |
+| `received_qty` | `>= 0` | §2.6.2 |
+| `ApplicableMOQ` | `>= 0` | §2.5.7 |
+| `DeliveryPerformance` | `0% ～ 100%` | §2.7.16 |
+| `QualityPerformance` | `0% ～ 100%` | §2.7.16 |
+| `standard_lead_time_days` | `>= 0` | §2.7.16 |
+
+如果现有 Rule **未定义**某字段范围，则写：`NOT DEFINED`（**不得猜测**）。
+
+#### 4.2.14 Status Semantics
+
+对已有 status / classification **只引用现有 Rule**，**不得新增新的 status**：
+
+| Status Field | Vocabulary | 依据 |
+| --- | --- | --- |
+| `inventory_status` | `AVAILABLE` / `INSPECTION` / `FROZEN` | §2.2.3 |
+| Inbound status / eligibility context | 见 §2.6.3 的保守分类（含 `OPEN` / `CONFIRMED` / `PARTIALLY_RECEIVED` / `CANCELLED` / `CLOSED` / `COMPLETED`） | §2.6.3 |
+| `Classification` | `NORMAL` / `BUFFER_BREACH` / `SHORTAGE` / `DATA_INCOMPLETE` | §2.1.4 |
+| `approval_status` | 仅 `APPROVED` 可参与；`PENDING` / `REJECTED` / `UNKNOWN` 不得进入 | §2.3.5 |
+| `LeadTimeRisk` | `LOW` / `HIGH` | §2.7.5 |
+| `DeliveryRisk` / `QualityRisk` / `OverallSupplierRisk` | `LOW` / `MEDIUM` / `HIGH` / `DATA_INCOMPLETE` | §2.7.6 / §2.7.7 / §2.7.8 |
+| `sourcing_status` | **vocabulary `DESIGN PENDING`** —— 只登记 logical meaning | §2.7.24 |
+
+**特别注意 `sourcing_status`：**
+
+```
+logical meaning : Supplier-Material relationship eligibility context
+vocabulary      : DESIGN PENDING
+```
+
+**不得自行创造** `ACTIVE` / `APPROVED` / `QUALIFIED` / `BLOCKED` 等 enum。
+
+#### 4.2.15 Provenance Requirement
+
+- 所有 `SOURCE` / `POLICY_INPUT` 字段都**需要未来能够追溯 source provenance**。
+- 所有 `DERIVED` result 都**必须能追溯**：
+
+```
+input evidence
++ Rule ID
++ Analysis Run
+```
+
+**但本 Task 不设计**：provenance schema、`source_system_id`、lineage database、audit event format。
+
+#### 4.2.16 Open Semantic / Mapping Items
+
+以下项目**仍然开放**，**不得为了让 Data Dictionary 看起来「完整」而消灭**：
+
+| 项 | 状态 |
+| --- | --- |
+| `loss_rate` canonical owner / grain | **`UNKNOWN`** |
+| `required_quantity` vs `ProductionQty` | **`DESIGN PENDING` / SEMANTIC AMBIGUITY** |
+| Warehouse canonical role | `DESIGN PENDING` |
+| BOM version / validity selection | `DESIGN PENDING` |
+| `sourcing_status` vocabulary | `DESIGN PENDING` |
+| `effective_arrival_date` source field | `DESIGN PENDING` |
+| Allocation demand-window mapping | `DESIGN PENDING` |
+| `ApplicableMOQ` source | `DESIGN PENDING` |
+| Provenance carrier | `DESIGN PENDING` |
+
+> 以上条目**不影响** `Data Dictionary = DESIGN RESOLVED` ——
+> 它们属于 **source mapping / Master Data Mapping / Adapter Boundary / Data Validation** 的范围。
+>
+> **本 Task 不定义任何 source table / column**，因此**未被偷渡**任何 source mapping。
+
+#### 4.2.17 Status Semantics Boundary
+
+`Data Dictionary = DESIGN RESOLVED` **仅**表示：
+
+```
+canonical field semantics defined
+```
+
+**不表示**：source mapping complete、physical schema complete、import contract complete、
+data validated、implemented、tested。
 
 ---
 
