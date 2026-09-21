@@ -7691,6 +7691,10 @@ conceptual validation design complete
 | Final Master Data Mapping | `DESIGN PENDING` |
 
 > **`Master Data Mapping` overall 仍为 `DESIGN PENDING`。**
+>
+> `BOM Version / Validity Mapping` 的 **BOM Applicability Design Review** 结论为
+> **`INSUFFICIENT`（Blocking Finding / Canonical Model Conflict）** —— 见 **§4.5.7**；
+> **Human Decision Required**，本轮**不变更状态**。
 
 #### 4.5.1 Purpose & Scope
 
@@ -7850,6 +7854,413 @@ BOM version / validity selection = DESIGN PENDING
 
 如果 applicable BOM **无法可靠确定**：继承现有 Validation → **`DATA_INCOMPLETE`**。
 
+**BOM Applicability Design Review（Review Finding）**
+
+**Critical Scenario**
+
+```
+Plant-A / Parent MAT-A
+
+BOM Definition 1：valid before 2026-10-01
+  MAT-A → MAT-B × 2
+
+BOM Definition 2：valid from 2026-10-01
+  MAT-A → MAT-B × 3
+
+Requirement R1：required_date = 2026-09-25，ProductionQty = 100
+Requirement R2：required_date = 2026-10-10，ProductionQty = 100
+```
+
+**Question**
+
+当前 BOM Component canonical grain（`plant_id` + parent material + component `material_code`）
+如何**同时、无歧义**地表达：
+
+```
+R1 → BOMComponentQty = 2
+R2 → BOMComponentQty = 3
+```
+
+**Analysis**
+
+| 项目 | R1 | R2 |
+| --- | --- | --- |
+| applicable BOM definition | Definition 1 | Definition 2 |
+| requirement calculation grain（`§2.4.2`） | `Plant-A` + `MAT-B` + `2026-09-25` | `Plant-A` + `MAT-B` + `2026-10-10` |
+| required `BOMComponentQty` | **2** | **3** |
+| **BOM Component canonical grain（`§4.1.4 N`）** | `Plant-A` + `MAT-A` + `MAT-B` | `Plant-A` + `MAT-A` + `MAT-B` |
+
+R1 与 R2 映射到**同一个** BOM Component canonical grain key，
+却要求**两个互相冲突**的 `BOMComponentQty` 值。
+
+**必须明确区分两个不同的 grain：**
+
+| Grain | 定义位置 | 是否足以区分 R1 / R2 |
+| --- | --- | --- |
+| `plant_id` + `material_code` + `required_date`（calculation grain） | `§2.4.2` / `§2.4.3` | **足以** —— `required_date` 不同 |
+| `plant_id` + parent material + component `material_code`（BOM Component canonical grain） | `§4.1.3` / `§4.1.4 N` | **不足** —— 无 applicability carrier |
+
+即：
+
+> **`BR-REQUIREMENT-001` 的 requirement calculation grain 本身没有问题；
+> 不足的是 `§4.1` 中 BOM Component 这一 supporting canonical entity 的 grain。**
+
+`§4.1.4 N` 的 attributes 为「至少 `BOMComponentQty`、`material_code`」，
+**不含**任何 applicability context；且本节上文（`§4.5.7`）**明确禁止**设计
+`BOMVersion` / `ValidFrom` / `ValidTo`。
+
+**因此：Canonical Model has insufficient applicability grain.**
+
+**Canonical Model Compatibility Result**
+
+```
+B. INSUFFICIENT
+```
+
+**Blocking Finding**
+
+```
+现有 BOM Component canonical grain
+（plant_id + parent material + component material_code）
+无法无歧义表达 time-varying / version-varying BOM。
+```
+
+直接后果：
+
+- `§4.4.52` 要求 Production Requirement 可追溯到 **reliably resolved applicable BOM relationship** ——
+  但该 trace 的**目标本身不可唯一识别**（两个 definition 共享同一 grain key）
+- 因此 `BOM Version / Validity Mapping` **不能**在本轮标记为 `DESIGN RESOLVED`
+
+**Canonical Model Conflict**
+
+```
+§4.1 Canonical Data Model = DESIGN RESOLVED + Human-approved
+                       ≠
+BOM Applicability 所需的 applicability context
+```
+
+**不得**自行修改 `§4.1` / `§4.2` 中已批准的 grain 或 attributes。
+
+**Option Review**
+
+| Option | 内容 | 是否解决 grain collision | 是否违反既有 Design | 结论 |
+| --- | --- | --- | --- | --- |
+| **0** | 保持 BOM version / validity unresolved | 否（但**不产生错误结果**） | 否 | 可保留，但**长期阻塞可运行性** |
+| **1** | Latest BOM Wins | 否 —— 仍只有一个 grain key，且会**静默选错** | **是** —— 违反 business time ≠ package / snapshot time 与 `required_date` semantics | **拒绝** |
+| **2** | Source Pre-resolved Applicable BOM | **否** —— 解决了「谁决定 applicability」，**未解决**「模型在哪里承载 applicability」 | 否 | **必要但不充分** |
+| **3** | Temporal / Applicability Context in Canonical Model | **是** | 需要 Human 批准的 Canonical Model Change | **候选（Human Decision）** |
+| **4** | POC Constraint：一个 Analysis context 内同一 Plant + Parent 只允许一个 BOM definition | 条件成立时**是**（代价是禁止合法 evidence） | **无既有 Design 依据** —— 属于**新的 POC assumption** | **不予采用（无依据）** |
+
+**Option 0 —— 评估**
+
+保持未决**不会产生错误结果**（既有 fail-safe 返回 `DATA_INCOMPLETE`），
+但会在**任何存在 BOM 变更的场景**下长期阻塞 `BR-REQUIREMENT-001` 的**可运行性** ——
+BOM 变更在制造业属常态，因此该阻塞**不是边缘情况**。
+
+**Option 1 —— 拒绝依据**
+
+```
+business time  ≠  package / snapshot time
+```
+
+`§4.1.6 Time Semantics` 已明确 `required_date` 属 **requirement time**，
+与 snapshot / observation time **互不相同**。
+
+「按 snapshot / export / system current time 选择最新 BOM」会：
+
+- 用 **snapshot time** 替代 **requirement business time**
+- 使 R1（`2026-09-25`）被**错误地**按 Definition 2 计算（`3` 而非 `2`）
+- **违反** `§2.4` 既有的「不得猜 BOM ／ 不得自动选择 latest BOM」
+
+**Option 2 —— 必要但不充分**
+
+Source pre-resolution 是**必要的**（POC 不自行重新执行真实 ERP BOM selection），
+但**不足以**解决本 finding：即使 source 已可靠解析出
+「R1 → Definition 1、R2 → Definition 2」，
+当前 canonical grain **仍然无处承载**该区别。
+
+> 结论：Option 2 应作为**未来实现的组成部分**，但**不能单独**使
+> `BOM Version / Validity Mapping` 变为 `DESIGN RESOLVED`。
+
+**Option 3 —— 候选方向（Human Decision）**
+
+见下方 **Recommended Minimal Change Options**。
+
+**Option 4 —— 不予采用**
+
+- 这是**新的 POC business / data assumption**，**没有**现有 Design 依据
+- 它会**错误处理**跨 validity boundary 的 requirement ——
+  本 Review 的 **Critical Scenario**（R1 ＋ R2 同时存在）会被**直接禁止**
+- 它**只是为了避免修改 Model 而人为缩小现实问题**
+- 若采用，仍需 Validation 判定该约束是否被违反，而**违反时的业务后果未被任何既有 Rule 定义**
+
+> **没有充分依据，不得自动采用。**
+
+**Recommended Minimal Change Options（本轮不实施）**
+
+| # | 候选最小变更 | correctness | complexity | traceability | reversibility | 对 `§4.1` / `§4.2` / `§4.4` 的影响 |
+| --- | --- | --- | --- | --- | --- | --- |
+| **A** | 将 BOM relationship **显式关联**到 Production Requirement context | 高 | 中 | 最高（trace 目标唯一） | 中 | `§4.1` entity N 的 grain / relationship 需扩展；`§4.2` 可能新增 context field；`§4.4.52` 需强化 |
+| **B** | 增加 **conceptual BOM applicability identity / context**（不创建 BOM Header / Version Entity） | 高 | 中 | 高 | 中 | `§4.1` entity N grain 需扩展；`§4.2` / `§4.4` 需同步 |
+| **C** | 增加 **temporal validity context** | 高 | **高** | 高 | 中 | 影响最大 —— 需定义 overlap / open-ended validity 语义，风险最高 |
+| **D** | 限制 POC：一个 Analysis context 内同一 Plant + Parent 只允许单 BOM definition | **低**（拒绝合法 evidence） | 低 | 低 | 高 | `§4.1` 不变，但需新增 POC constraint ＋ 违反后果定义 |
+
+**推荐（供 Human 决定，非本 Agent 决定）：**
+
+优先评估 **Option A**（显式关联到 Production Requirement context）：
+
+- 直接消除 grain collision，且**不需要**引入 `BOMVersion` / `ValidFrom` / `ValidTo` 等字段
+- **不创建**新的 canonical entity（保持 `§4.5` 既有约束）
+- 与 `§2.4.2`「必须能够追溯到 Production Requirement ＋ BOM relationship」**方向一致**
+- **不需要** POC 人为缩小现实问题（优于 D）
+
+> 若 Human 选择 **C**，必须先定义 validity overlap / open-ended 语义，
+> 并明确 `required_date` 与 validity 边界的**包含 / 排除**规则。
+> 若 Human 选择 **D**，必须同时定义**违反该约束时的业务后果**。
+
+**Required Date as Applicability Anchor —— 候选 Policy（未生效）**
+
+如果 Human 批准扩展模型，**推荐**的 business-time anchor 为：
+
+```
+Production Requirement.required_date
+```
+
+**支持依据（既有 Design）：**
+
+- Production Requirement grain **包含** `required_date`（`§4.1.4` / `§4.2.4`）
+- `BR-REQUIREMENT-001` 的需求计算以 requirement context 为基础（`§2.4.2` / `§2.4.3`）
+- `§4.1.6` 已明确 `required_date` 属 **requirement time**，与 snapshot / observation time **互不相同**
+
+**但必须明确：这是一个新的 Design Decision，不是当前既有事实。**
+
+**不得**使用以下时间**替代** `required_date`，除非另有正式 Design：
+
+- Snapshot creation time
+- `AnalysisDate`
+- system current time
+- package / export time
+
+若未来采用，**必须**标记为：
+
+```
+SIMULATED POC Design Policy  +  Human-approved after merge
+```
+
+**不得**描述为**真实 CY 企业 BOM selection 规则**。
+
+> **本轮状态：candidate policy，未生效。** `BOM Version / Validity Mapping` 仍为 `DESIGN PENDING`。
+
+**Applicable BOM Definition（conceptual）**
+
+允许定义 conceptual：**Applicable BOM Definition** ——
+对于一个明确 Production Requirement context，能够唯一确定一组
+
+```
+parent Material → component Material → BOMComponentQty
+```
+
+的 BOM relationship set。
+
+这**只是 mapping / applicability concept**。
+
+**不得**据此自动创建新的 canonical entity：`BOM Header` / `BOM Version Entity` / `BOM ID`
+—— 除非 Human 后续批准（见上文 Recommended Minimal Change Options）。
+
+**One Definition, Multiple Components**
+
+必须明确：
+
+```
+exactly one applicable BOM  ≠  只有一条 BOM Component row
+```
+
+一个 applicable BOM definition **可以包含多个** component relationships。例如：
+
+```
+MAT-A BOM（一个 definition）：
+  MAT-B × 2
+  MAT-C × 1
+  MAT-D × 0.5
+```
+
+这是 **one applicable BOM definition with multiple components**。
+
+**不得**将 multiple components **误判**为 multiple BOM versions。
+
+**Zero Applicable BOM**
+
+如果 BOM evidence role **已提供**，但对于当前
+`Plant` + `Parent Material` + **requirement business-time context**
+**没有任何** BOM 能够可靠确定为 applicable：
+
+**不得**：
+
+- 使用任意 BOM
+- 使用 latest BOM
+- 使用 previous BOM
+- 使用 next BOM
+- 使用 default BOM
+
+结果：`BR-REQUIREMENT-001` → **`DATA_INCOMPLETE`**。
+
+Validation Issue 应使用 **`§4.4.80` / `§4.4.81`** 既有 taxonomy 表达具体 root condition。
+**不得创建**新的 Business Status。
+
+**Multiple Applicable BOM Definitions**
+
+如果同一 Production Requirement context **同时存在多个**候选 BOM definitions，
+且**没有** approved precedence / selection evidence：
+
+**不得**：
+
+- first wins
+- latest wins
+- highest version wins
+- lowest version wins
+- most recent update wins
+- LLM choose
+
+这是 **ambiguous applicability / consistency problem**。业务结果：**`DATA_INCOMPLETE`**。
+
+按具体 root condition 映射到既有 taxonomy：
+
+```
+SEMANTIC_UNRESOLVED   或   CONSISTENCY_CONFLICT
+```
+
+**不得创建**新的 Business enum（例如 `BOM_AMBIGUOUS`）。
+
+**Validity Evidence Boundary**
+
+如果 source system 提供 version / valid-from / valid-to / change-number /
+effectivity / production-version / alternative BOM 或类似信息，**本 Task 不定义真实字段名**。
+
+只能定义：**必须存在足够的 explicit applicability evidence**，
+使 mapping 能 **deterministic** 地判断某 BOM definition **是否适用于当前 requirement context**。
+
+**不得声称**真实 ERP **一定**拥有 `BOMVersion` / `ValidFrom` / `ValidTo`。
+
+**Version Identity vs Applicability**
+
+必须区分：
+
+```
+BOM version identity   ≠   BOM applicability
+```
+
+一个 version label **本身不能证明**它对当前 requirement 是 applicable：
+
+```
+Version V3 exists   ⇏   V3 automatically applies to required_date
+```
+
+同样：
+
+```
+higher version number   ⇏   more applicable
+```
+
+**Time Boundary**
+
+必须保持以下时间概念**分离**：
+
+- Package creation time
+- Snapshot time
+- `AnalysisDate`
+- `required_date`
+- BOM applicability time
+
+**不得**建立如下**隐式链路**：
+
+```
+latest package → latest BOM → applicable BOM
+```
+
+**Source Pre-resolution Boundary**
+
+如果采用 source-pre-resolved applicable BOM，必须明确：
+
+```
+"pre-resolved"  ≠  "trust blindly"
+```
+
+POC 仍需要 evidence 能说明**为什么**这组 relationship 对当前 Production Requirement applicable。
+
+至少必须：`deterministic` / `explicit` / `traceable` / `reproducible`，
+并**绑定当前** Snapshot Package ＋ requirement context。
+
+**Provenance**
+
+如果未来采用 applicability mapping，**必须未来能够追溯**：
+
+```
+Production Requirement
+→ applicability evidence
+→ selected BOM definition
+→ component relationships
+→ Snapshot Package
+```
+
+**但**：**provenance carrier 仍 `DESIGN PENDING`**。
+
+**不得创建**：BOM mapping table / JSON / CSV / DB schema / lineage DB。
+
+**Failure Blast Radius**
+
+一个 Parent Material / Production Requirement 的 BOM applicability unresolved
+**默认只影响**：
+
+```
+对应 requirement
+→ affected component requirements
+→ affected material shortage capability
+```
+
+**不得**：`one BOM ambiguity → entire Package invalid` ——
+除非同时构成 **Package Structural Failure**。
+
+**No BOM Explosion**
+
+本 Review **只处理**「哪个 BOM relationship set 对当前 Production Requirement applicable」。
+
+**不得设计**：multi-level BOM explosion / recursive BOM explosion / phantom assembly handling /
+co-product / by-product / routing / work center / alternative component optimization。
+
+```
+BOM explosion algorithm = DESIGN PENDING / OUTSIDE THIS TASK
+```
+
+**未修改已批准 Canonical Model**
+
+本轮**未修改**：
+
+- `§4.1` 的 BOM Component canonical grain
+- `§4.1.3` / `§4.1.4 N` 的 attributes
+- `§4.2.4` 的 `BOMComponentQty` 定义
+- `§4.4.52` 的 consistency rule
+- `§2.4` 的任何 Business Rule
+
+**Status**
+
+```
+BOM Version / Validity Mapping = DESIGN PENDING
+Master Data Mapping overall    = DESIGN PENDING
+```
+
+未决项数量**不减少**（仍为 **8 项**）。
+
+**Human Decision Required**
+
+必须由 Human 决定：
+
+1. 是否接受 **`Canonical Model Compatibility = INSUFFICIENT`** 这一 finding
+2. 采用哪个 **Recommended Minimal Change Option**（A / B / C / D）
+3. 若采用 A / B / C：是否授权**修改 `§4.1` Canonical Data Model**
+   （当前为 `DESIGN RESOLVED` ＋ Human-approved）
+4. 是否采用 `required_date` 作为 **BOM applicability business-time anchor**
+   （需标记 `SIMULATED POC Design Policy`）
+5. 是否接受 **8 项未决项保持不变**（本轮**不**减少 unresolved count）
 #### 4.5.8 Substitute Relationship Resolution
 
 **必须保持有方向：**
@@ -8445,6 +8856,10 @@ source evidence exists but canonical mapping unavailable
 | `ApplicableMOQ` source | `DESIGN PENDING` |
 | provenance carrier | `DESIGN PENDING` |
 
+> `BOM version / validity` 另有 **Blocking Finding**
+> （`Canonical Model Compatibility = INSUFFICIENT`，见 **§4.5.7**）；
+> 在 Human Decision 之前其状态**保持 `DESIGN PENDING`**，未决项数量**不减少**。
+
 本 Task **不以「Master Data Mapping」为名一次性消灭这些问题**。
 
 #### 4.5.22 Examples
@@ -8498,6 +8913,10 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 且**没有真实** ERP vendor / schema / field list / master-data specification。
 
 本轮只完成 **conceptual resolution boundary**。
+
+**Open Blocking Finding：** `BOM Version / Validity Mapping` **仍为 `DESIGN PENDING`** ——
+其 **BOM Applicability Design Review** 判定 `Canonical Model Compatibility = INSUFFICIENT`，
+需要 **Human Decision** 后才能继续（见 **§4.5.7**）。
 
 ---
 
