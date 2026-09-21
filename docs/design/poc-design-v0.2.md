@@ -8071,7 +8071,11 @@ conceptual validation design complete
 >
 > 本节已完成：Canonical Identity Resolution ＋ Relationship Resolution Boundary
 > ＋ **Warehouse Role Resolution**（**§4.5.12**）
-> ＋ **BOM Version / Validity Mapping**（**§4.5.7** ／ **§4.1.4 N**）。
+> ＋ **BOM Version / Validity Mapping**（**§4.5.7** ／ **§4.1.4 N**）
+> ＋ **Supplier Eligibility Vocabulary Mapping**（**§4.5.11**）
+> ＋ **Effective Arrival Date Source Mapping**（**§4.5.21**）。
+>
+> **仍为 `DESIGN PENDING` 的层级：** **Other Source-Semantic Mapping** ／ **Final Master Data Mapping**。
 
 **层级状态登记：**
 
@@ -10805,7 +10809,7 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 **Supplier Eligibility Vocabulary Mapping**（**§4.5.11**）
 与 **Effective Arrival Date Source Mapping**（**§4.5.21**）。
 
-`DESIGN RESOLVED` 的七个层级**仅**表示其 **conceptual resolution boundary 已定义**，
+`DESIGN RESOLVED` 的八个层级**仅**表示其 **conceptual resolution boundary 已定义**，
 **不表示**：
 
 - 真实 ERP mapping 已完成
