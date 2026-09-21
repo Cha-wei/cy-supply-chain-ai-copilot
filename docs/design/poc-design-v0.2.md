@@ -9021,7 +9021,8 @@ conceptual validation design complete
 > ＋ **BOM Version / Validity Mapping**（**§4.5.7** ／ **§4.1.4 N**）
 > ＋ **Supplier Eligibility Vocabulary Mapping**（**§4.5.11**）
 > ＋ **Effective Arrival Date Source Mapping**（**§4.5.21**）
-> ＋ **Allocation Demand-Window Mapping**（**§4.5.9**）。
+> ＋ **Allocation Demand-Window Mapping**（**§4.5.9**）
+> ＋ **Other Source-Semantic Mapping**（**§4.5.22**）。
 >
 > **仍为 `DESIGN PENDING` 的层级：** **Final Master Data Mapping**。
 
@@ -9087,9 +9088,13 @@ conceptual validation design complete
 > resolution contract = **exactly one applicable `ApplicableMOQ` or `unresolved`**），
 > unresolved count **2 → 1**。
 >
-> `provenance carrier` 的 **Provenance Carrier / Minimum Traceability Contract Design Review** 与
-> **Human Decision Record**（**Option D = APPROVED**）见 **§4.5.22** ——
-> 但 **Option D Implementation = NOT YET EXECUTED**，其状态**仍为 `DESIGN PENDING`**。
+> `provenance carrier` 的 **Option D semantic synchronization 已实施**
+> （见 **§4.5.22 Option D Implementation Record**）；**Layered Logical Provenance Contract** 已落地，
+> 因此其状态已变更为 **`DESIGN RESOLVED`**，unresolved count **1 → 0** ——
+> **`Other Source-Semantic Mapping` 现为 `DESIGN RESOLVED`**。
+>
+> **`Final Master Data Mapping` 仍为 `DESIGN PENDING`**（尚无 closure criteria，见 **§4.5.22** 决定 18 ／ 19）；
+> **`Master Data Mapping` overall 仍为 `DESIGN PENDING`**。
 
 #### 4.5.1 Purpose & Scope
 
@@ -11325,8 +11330,10 @@ POC Inventory Scope 的 membership 判定**必须**：
 **本 Task 不设计**：physical scope list、database table、warehouse whitelist file、
 configuration format、API、field name。
 
-> POC Inventory Scope 的**实际 membership 来源**仍属
-> **Other Source-Semantic Mapping / Final Master Data Mapping** 层，当前仍为 `DESIGN PENDING`。
+> POC Inventory Scope 的 **logical / source-semantic boundary** 已由现有 **Master Data Mapping** Design 解析
+> （**`Other Source-Semantic Mapping` 现为 `DESIGN RESOLVED`**，见 **§4.5.22 Option D Implementation Record**）；
+> 但 **physical membership evidence / source representation** 仍属**后续 source-specific /
+> physical mapping realization** —— **`Final Master Data Mapping` 仍为 `DESIGN PENDING`**。
 
 **两种可接受的 Source Evidence Shape**
 
@@ -15741,7 +15748,8 @@ Option E                          = IMPLEMENTED
 loss_rate canonical owner / grain = DESIGN RESOLVED
 owner                             = Requirement Calculation Context
 resolution contract               = exactly one applicable loss_rate or unresolved
-physical carrier                  = STILL UNRESOLVED（provenance carrier = DESIGN PENDING）
+Logical Provenance Carrier         = DESIGN RESOLVED
+Physical Carrier Realization       = DESIGN PENDING（§4.3 Field Carrier Mapping / Final Import Contract）
 unresolved count                  = 3 → 2
 ```
 
@@ -15753,7 +15761,7 @@ unresolved count                  = 3 → 2
 `GrossRequirement` engine implemented。
 
 **未新增**任何 Master Data Mapping layer —— 这是 **`Other Source-Semantic Mapping`
-内部 unresolved item 的关闭**，**不是**新的 resolved layer；`DESIGN RESOLVED` layer 数**仍为 9**。
+内部 unresolved item 的关闭**，**不是**新的 resolved layer；`DESIGN RESOLVED` layer 数现为 **10**（**`Final Master Data Mapping` 仍为 `DESIGN PENDING`**）。
 
 **Option D —— IMPLEMENTED：** `ApplicableMOQ` source / applicability **现为 `DESIGN RESOLVED`** ——
 其 **Option D**（Source-Specific Purchasing-Policy Resolution ＋ resolution-contract form）
