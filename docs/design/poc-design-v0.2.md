@@ -5325,6 +5325,630 @@ Accepted Package may be referenced by Analysis Run
 
 ---
 
+### 4.4 Data Validation —— Capability Readiness & Failure Semantics
+
+> **子章节整体状态：仍为 `DESIGN PENDING`。**
+>
+> 本节只完成其**第一层**。
+
+**层级状态登记：**
+
+| 层 | Status |
+| --- | --- |
+| Validation Layer Model | **`DESIGN RESOLVED`** |
+| Capability-to-Evidence Requirement | **`DESIGN RESOLVED`** |
+| Failure Semantics | **`DESIGN RESOLVED`** |
+| Dataset Absent vs Empty Semantics | **`DESIGN RESOLVED`** |
+| Failure Isolation Principle | **`DESIGN RESOLVED`** |
+| Detailed Field Validation | `DESIGN PENDING` |
+| Cross-Dataset Consistency Rules | `DESIGN PENDING` |
+| Validation Issue Taxonomy Finalization | `DESIGN PENDING` |
+| Final Data Validation Design | `DESIGN PENDING` |
+
+> **不得**提前将整个 `Data Validation` 标成 `DESIGN RESOLVED`。
+
+#### 4.4.1 Purpose & Scope
+
+本 Task 只回答：
+
+1. 一个 **Accepted Snapshot Package** 是否具备运行某个 P0 capability 所需 evidence？
+2. 数据缺失 / 非法时，应在**哪一层**失败？
+3. 一个数据问题应影响**整个 package**、**某 capability**，还是**某个具体 business grain**？
+
+**本 Task 不定义**：physical schema validation、JSON Schema、CSV parser、file parser、
+implementation validator、testing framework、retry mechanism、logging technology、
+database、API、adapter、source mapping。
+
+#### 4.4.2 Validation Layer Model
+
+定义四层 **conceptual validation**。
+
+**Layer 1 — Package Structural Validation**
+
+继承 `§4.3`。回答：Snapshot Package 自身是否**结构自洽**。
+
+例如：manifest unavailable、package identity inconsistent、
+declared included dataset artifact absent、artifact unreadable、integrity evidence unverifiable。
+
+可能导致：
+
+```
+Package = REJECTED / UNUSABLE
+```
+
+**如果 Package 未 `Accepted`：不得创建依赖它的正常 Analysis Run。**
+
+**Layer 2 — Canonical Evidence Validation**
+
+回答：已导入 evidence 是否符合 `§4.1 Canonical Data Model` ＋ `§4.2 Data Dictionary`。
+
+例如：logical type invalid、required field missing、quantity outside approved range、
+invalid status、unresolved plant / material mapping、missing canonical business context。
+
+这些**通常不自动使整个 Package structural invalid**，但可能使
+**affected evidence** 或 **affected business grain** 不可可靠使用。
+
+**Layer 3 — Capability Readiness Validation**
+
+回答：当前 Accepted Package 是否包含运行某个 capability 所需的 **logical evidence**。
+
+**注意：Capability Readiness 不是 Business Classification。**
+
+**不得**把 `capability unavailable` 加入 `NORMAL` / `BUFFER_BREACH` / `SHORTAGE` / `DATA_INCOMPLETE`
+等业务 enum。
+
+**Layer 4 — Business Rule Validation**
+
+在 capability 已拥有所需 evidence 后，由**既有 deterministic Business Rule** 执行业务判断。
+
+例如 `SafetyStock` missing / `ApplicableMOQ` missing / `PerformancePeriod` missing
+可导致既有 **`DATA_INCOMPLETE`**。
+
+**不得由 Data Validation 重新定义这些 Business Rules。**
+
+#### 4.4.3 Three Failure Meanings
+
+必须明确区分：
+
+**A. Package Structural Failure** —— Package 自身**不可信**。
+
+例如：Manifest says dataset included but artifact absent。
+
+结果：**Package may be `REJECTED` / `UNUSABLE`。**
+
+**B. Capability Evidence Unavailable** —— Package 是 `Accepted`，
+但**没有提供**运行某 capability 所需的 logical evidence role。
+
+例如：Supplier Performance dataset 没有在 Package 中声明提供，用户却请求 Supplier Risk。
+
+结果：**该 capability cannot execute reliably.**
+
+可以描述为：`Capability unavailable due to unavailable evidence.`
+
+**注意：这是 operational / capability condition，不是新的 Business Status enum。**
+
+**C. Business `DATA_INCOMPLETE`** —— Capability 所需 evidence **在逻辑上存在**，
+但当前 **business grain** 中的必要数据 missing / invalid / unresolved，
+导致 deterministic rule **无法可靠形成结果**。
+
+例如：Supplier Performance dataset 存在，但当前 supplier-material 的 `PerformancePeriod = missing`
+→ Supplier Risk Rule → **`DATA_INCOMPLETE`**。
+
+**Canonical Separation（不得互相提升或降级）**
+
+```
+Package Structural Failure
+  ≠ Capability Evidence Unavailable
+  ≠ Business DATA_INCOMPLETE
+```
+
+**Business Rule 返回 `DATA_INCOMPLETE` 仍说明：**
+
+```
+Business Rule execution reached a valid
+business outcome state.
+```
+
+**它不是 Capability Readiness failure。**
+
+反之：
+
+```
+Capability unavailable
+```
+
+表示 **Business Rule 没有获得足够的 logical evidence 进入可靠执行**。
+
+#### 4.4.4 Dataset Absent vs Explicitly Empty
+
+必须定义：
+
+```
+Dataset not included  ≠  Dataset included with zero records
+```
+
+**A. Dataset Not Included** —— Manifest **未声明**该 logical dataset role。
+
+表示：当前 Snapshot Package **没有提供这类 evidence**。
+
+**不得自动解释为**「业务上不存在任何记录」。
+
+例如：Inbound Supply dataset not included **不得**解释为 `EffectiveInbound = 0`。
+
+**B. Dataset Explicitly Included, Zero Records** —— Manifest 明确 `dataset included`，
+且 `record_count = 0`。
+
+表示：该 package 明确提供了一个 **structurally valid empty dataset**。
+
+是否能解释为「当前不存在该类业务记录」，**必须依据对应 Business Rule / dataset semantics**。
+
+**不得全局统一解释。**
+
+#### 4.4.5 Explicit Empty Semantics（P0 情形）
+
+**Inbound Supply** —— 如果 Inbound Supply dataset = `included` ＋ structurally valid ＋ 0 records，
+则可以作为当前 Snapshot Package 中「**没有已提供 inbound records**」的明确 evidence。
+
+对于对应 plant / material，**只有**在 dataset scope 与 mapping **能够可靠覆盖该分析范围**时，
+才允许 `CumulativeEffectiveInbound = 0`。
+
+**不得仅凭 `dataset absent` 得到 0。**
+
+**Substitute Relationship** —— 如果 Substitute Relationship dataset = `included` ＋
+structurally valid ＋ 0 applicable relationships，**且 scope 可可靠判断**，
+则允许依据 `BR-SUBSTITUTE-001`：`ApprovedSubstituteSupply = 0`。
+
+这是 **valid zero**，**不是** `DATA_INCOMPLETE`。
+
+**Substitute Allocation** —— 如果存在 `APPROVED` Substitute Relationship，
+则 allocation evidence **必须满足** `BR-SUBSTITUTE-001`。
+
+**不得**把 `allocation record absent` 自动解释成 `AllocatedSubstituteQty = 0` ——
+因为已有 Rule 明确 `0 ≠ missing`。
+
+**Supplier Performance** —— `dataset included + 0 records` **不意味着** supplier performance = 0%。
+
+对于被请求的 supplier-material：缺少 required performance evidence
+→ Risk capability 对该 grain **不能形成完整风险结论**；
+按既有 Rule，`OverallSupplierRisk` 可能为 **`DATA_INCOMPLETE`**。
+
+#### 4.4.6 Capability-to-Evidence Requirement
+
+**注意**：这里的 `REQUIRED` 表示**运行该 capability 所需的 logical evidence role**，
+**不表示**某个 physical file 永远必须存在。**不得定义 physical dataset filename。**
+
+**Capability A — Shortage Analysis**
+
+| Evidence role | Requirement |
+| --- | --- |
+| Plant / Material identity context | `REQUIRED` |
+| Production Requirement | `REQUIRED` |
+| BOM Component evidence | `REQUIRED` |
+| `loss_rate` evidence | `REQUIRED`（owner / grain 仍 `UNKNOWN`） |
+| Inventory Snapshot | `REQUIRED` |
+| Configured Safety Stock | `REQUIRED` |
+| Inbound Supply evidence role | `REQUIRED` |
+| Substitute Relationship evidence role | `REQUIRED` —— 必须能**可靠判断**：有 Approved Relationship，或**明确无** Approved Relationship |
+| Substitute Allocation | `CONDITIONAL` —— 当存在 Approved Substitute Relationship 且该关系参与当前需求窗口时需要 |
+| Supplier Performance | **不要求** |
+| Supplier Ranking / Selection | **不要求** |
+
+> `loss_rate` 为 `BR-REQUIREMENT-001` 所必需，但其 **owner / grain 仍 `UNKNOWN`** ——
+> 本 Task **不得**因此猜其 carrier。
+
+**Capability B — Procurement Recommendation**
+
+| Evidence role | Requirement |
+| --- | --- |
+| **Completed Shortage Analysis Outcome** | `REQUIRED` upstream capability result |
+| `ApplicableMOQ` | `CONDITIONAL` —— **仅当** `Classification = SHORTAGE` |
+
+**必须区分两种 upstream 情形：**
+
+**A. Shortage Analysis capability 无法运行** —— 例如 required logical evidence role **根本未提供**。
+
+则：
+
+```
+Shortage Analysis = capability unavailable
+        ↓
+Procurement Recommendation 也无法继续执行
+```
+
+这是 **Capability Evidence Unavailable**。
+
+**B. Shortage Analysis 已正常执行**，但 Business Rule 结果为 `Classification = DATA_INCOMPLETE`。
+
+这**不是** capability unavailable —— 这是一个**合法的 structured Business Rule Result**。
+
+Procurement Recommendation **必须继承** `BR-PROCUREMENT-001`：
+
+```
+Classification = DATA_INCOMPLETE
+        ↓
+No Numeric Recommendation
+```
+
+**不得**将其重新分类成 `Procurement Capability unavailable`。
+
+**Procurement Outcome 对照：**
+
+| `Classification` | 附加条件 | 结果 |
+| --- | --- | --- |
+| `NORMAL` | — | **not applicable by design** |
+| `BUFFER_BREACH` | — | **not applicable by design** |
+| `SHORTAGE` | `ApplicableMOQ` valid | **numeric recommendation** |
+| `SHORTAGE` | `ApplicableMOQ` missing / invalid | **Business `DATA_INCOMPLETE`** → No Numeric Recommendation |
+| `DATA_INCOMPLETE` | — | **Business `DATA_INCOMPLETE`** → No Numeric Recommendation |
+
+**必须保持：**
+
+```
+not applicable  ≠  capability unavailable  ≠  DATA_INCOMPLETE
+```
+
+**不得**因为没有 `ApplicableMOQ` 把 `NORMAL` / `BUFFER_BREACH` 变成 `DATA_INCOMPLETE`。
+
+**Capability C — Supplier Risk Evidence**
+
+针对明确的 `supplier_id` + `material_code`，至少需要：
+
+| Evidence role | Requirement |
+| --- | --- |
+| Supplier identity | `REQUIRED` |
+| Material identity | `REQUIRED` |
+| Supplier-Material Relationship | `REQUIRED` |
+| relationship eligibility context | `REQUIRED` |
+| `standard_lead_time_days` | `REQUIRED` |
+| `PerformancePeriod` | `REQUIRED` |
+| `DeliveryPerformance` | `REQUIRED` |
+| `QualityPerformance` | `REQUIRED` |
+| `RecommendationNeedDate` | `REQUIRED` |
+| `AnalysisDate` | `REQUIRED` |
+| `PerformanceUpdatedAt` | **不单独决定完整性** |
+| Supplier Ranking / Selection | **不要求** |
+
+> **不得**因为缺 `PerformanceUpdatedAt` 自动判 Overall `DATA_INCOMPLETE` ——
+> 除非既有 Rule 已要求。
+
+**Capability D — AI Explanation**
+
+AI Explanation **不直接以 raw dataset 存在性替代上游 Business Capability**。
+
+它需要：相关 **upstream structured deterministic result** ＋ **evidence** ＋ **uncertainty state**。
+
+AI Explanation **可以解释两类 structured upstream outcome**：
+
+**A. Business Capability Result** —— 例如 `SHORTAGE` / `BUFFER_BREACH` / `DATA_INCOMPLETE` /
+Supplier Risk Result / Procurement Recommendation。
+
+**B. Validation / Capability Readiness Result** —— 例如
+`Supplier Risk capability unavailable because Supplier Performance evidence role was not provided.`
+
+在这种情况下，AI **可以**解释：
+
+- 哪个 capability unavailable
+- 缺少哪类 logical evidence
+- 为什么不能可靠形成业务结论
+
+**但不得：**
+
+- 从 raw data 自行重建缺失结果
+- 猜业务事实
+- 把 `capability unavailable` 改成 `DATA_INCOMPLETE`
+- 把 `DATA_INCOMPLETE` 改成 `capability unavailable`
+
+如果 Shortage Analysis 本身 unavailable，**LLM 不得绕过它**直接从 raw data 自行重建 shortage result。
+
+**Capability E — Procurement Draft Generation**
+
+**只有**存在 **valid Procurement Recommendation** 时，
+才允许生成基于该 recommendation 的 Draft。
+
+必须保持：
+
+```
+Draft  ≠ Approval  ≠ ERP Purchase Request  ≠ Purchase Order
+```
+
+> 本 Task **不设计**完整 HITL。
+
+#### 4.4.7 Required Evidence vs Physical Carrier
+
+Capability Matrix 定义的是 **logical evidence requirement**，**不是 physical file requirement**。
+
+例如：Shortage Analysis requires `loss_rate` evidence，
+但 `loss_rate` **physical carrier 仍 `UNKNOWN`**。
+
+**不得**为了让 validation matrix 完整，把它强行放进某 dataset / file。
+
+#### 4.4.8 Scope Coverage Requirement
+
+一个 dataset **即使存在**，也**不自动意味着**它覆盖当前 Analysis Scope。
+
+必须能够判断其 **evidence scope** 是否覆盖当前 `Plant` / `Material` / `Supplier-Material`
+或其他相关 grain。
+
+例如：Inbound dataset `included` 但**只覆盖 Plant-B**，
+**不能**因此为 Plant-A 推断 `Inbound = 0`。
+
+**如果 coverage 无法可靠判断**：**不得**把「没有匹配记录」解释为**明确的 zero**。
+
+> 具体 physical scope metadata 留给后续 **Import Contract / Master Data Mapping**。
+
+#### 4.4.9 No Silent Exclusion
+
+定义：**Invalid evidence 不得为了让计算继续而被静默丢弃。**
+
+例如：
+
+- Inventory row `inventory_status = UNKNOWN` —— **不得**直接忽略该 row 然后继续输出 `NORMAL`
+- Inbound row status invalid —— **不得**直接排除该 PO 并假装结果完整
+
+**只有**已有 Rule 明确判定「该 record **合法但 ineligible**」时才允许正常排除。
+
+例如：
+
+```
+Inbound status = CANCELLED  → 合法记录 → EffectiveInbound = 0
+Inbound status = UNKNOWN    → 数据无法可靠判断 → DATA_INCOMPLETE
+```
+
+两者**必须区分**。
+
+#### 4.4.10 Failure Isolation
+
+Data Quality Issue **默认应尽可能限制 blast radius**。
+
+例如：`Plant-A / MAT-001` 存在 invalid `SafetyStock`，
+**不应**自动使 `Plant-B / MAT-999` 也无法分析。
+
+因此 validation 应能够关联：
+
+```
+issue → affected evidence → affected business grain → affected capability
+```
+
+而**不是**一律 `one bad record → reject whole Package`。
+
+**例外**：如果问题属于 **Package structural integrity**，仍可能 **reject entire Package**。
+
+#### 4.4.11 Cross-Record / Mapping Validation Boundary
+
+本 Task 只定义**原则**：dependent evidence **必须能够可靠解析**到其 canonical identity / grain。
+
+例如：`material_code` unresolved、`plant_id` unresolved、`supplier_id` unresolved、
+BOM component unresolved、substitute source / target unresolved、
+Supplier-Material relationship unresolved。
+
+**不得**：fuzzy match、LLM match、name similarity mapping、自动改编码。
+
+**处理原则**：affected capability / grain **不得获得正常结果**。
+
+> 详细 Master Data Mapping 留给后续章节。
+
+#### 4.4.12 Grain Conflict Principle
+
+**不得**仅因为出现多条记录就自动认为 duplicate。
+
+是否允许多记录**必须参考对应 Business Rule 与 canonical grain**。
+
+例如：同一 Plant 内多个 Inventory records 可能因**合法 aggregation** 而存在。
+
+但：如果多个记录在 canonical grain 上产生**无法解释的 conflicting values**，
+**且当前 Design 没有 aggregation / precedence rule**，**不得**：
+
+- 随机取第一条
+- last-write-wins
+- sum
+- average
+
+应视为 **unresolved data quality issue**，并影响相应 grain 的可靠性。
+
+#### 4.4.13 No Auto-Reconciliation
+
+以下行为**禁止**：
+
+- missing → 0
+- invalid → clamp
+- unknown status → `AVAILABLE`
+- unknown Supplier relationship → eligible
+- fuzzy Material mapping
+- 自动选最新值
+- 自动选最大值
+- 自动覆盖 conflicting record
+
+**除非既有 Business Rule 明确允许。**
+
+#### 4.4.14 `required_quantity` Ambiguity Boundary
+
+保持：
+
+```
+required_quantity  vs  ProductionQty
+= DESIGN PENDING / SEMANTIC AMBIGUITY
+```
+
+Data Validation **不得**：判断两者同义、自动互相填充、比较不一致后选其中一个。
+
+`BR-REQUIREMENT-001` **仍使用**：
+
+```
+ProductionQty × BOMComponentQty
+```
+
+在 ambiguity 正式解决前，`required_quantity` **不得成为替代 `ProductionQty` 的 fallback**。
+
+#### 4.4.15 `loss_rate` Boundary
+
+保持：
+
+```
+loss_rate semantic = defined
+owner / grain      = UNKNOWN
+```
+
+Data Validation **可以**要求：`BR-REQUIREMENT-001` 执行时**必须存在可靠 `loss_rate` evidence**。
+
+**但不得决定** `loss_rate` 来自哪个 Entity / Dataset / Source Field。
+
+#### 4.4.16 Validation Issue Concept
+
+定义 conceptual：**Validation Issue**，用于记录：
+
+- issue category
+- affected evidence
+- affected canonical grain
+- affected capability
+- relevant field / relationship
+- reason
+- referenced Business Rule
+
+**注意**：这只是 **conceptual output**。
+
+**不得设计**：DB table、JSON schema、event schema、logging framework。
+
+#### 4.4.17 Snapshot Validation Report Concept
+
+允许定义 conceptual：**Snapshot Validation Report**。
+
+它应能够回答：
+
+- Package structural result
+- 哪些 capabilities **可以可靠运行**
+- 哪些 capabilities **evidence unavailable**
+- 哪些 business grains **存在 Data Quality Issue**
+- 哪些 issues **会导致 `DATA_INCOMPLETE`**
+- validation **基于哪个 Snapshot Package**
+
+**必须可追溯到 `snapshot_package_id`。**
+
+**但本 Task 不定义**：report file format、storage、API。
+
+#### 4.4.18 Package Accepted ≠ All Capabilities Ready
+
+必须明确：
+
+```
+Package = ACCEPTED
+```
+
+**只表示**：Package structural boundary 已通过。
+
+**不代表**：Shortage Analysis ready、Procurement Recommendation ready、
+Supplier Risk ready、AI Explanation ready。
+
+一个 Accepted Package **可以**出现：
+
+```
+Shortage Analysis = available
+Supplier Risk     = unavailable
+```
+
+这是**合法状态**。
+
+#### 4.4.19 Capability Unavailable ≠ Package Invalid
+
+例如：Supplier Performance dataset **未包含**在 Package 中。
+
+如果 Package manifest 与实际 artifact **完全一致**：
+
+Package **可以 `ACCEPTED`**，但 Supplier Risk capability **可能 unavailable**。
+
+**不得因此自动 `REJECT` package。**
+
+#### 4.4.20 Business `DATA_INCOMPLETE` Granularity
+
+`DATA_INCOMPLETE` **应尽可能作用于**对应 **business grain / result**。
+
+例如：
+
+```
+MAT-A SafetyStock missing  →  MAT-A shortage result → DATA_INCOMPLETE
+MAT-B 数据完整             →  仍允许正常计算
+```
+
+**不得默认**：一个 material 缺字段 → 整个 analysis run 全部失败。
+
+**除非**共享 evidence 本身使**所有结果**都无法可靠解释。
+
+#### 4.4.21 Valid Zero Preservation
+
+继续继承：
+
+```
+0  ≠  missing
+```
+
+至少包括：`SafetyStock` / `loss_rate` / `AllocatedSubstituteQty` / `ApplicableMOQ` /
+`DeliveryPerformance` / `QualityPerformance`。
+
+**Validation Layer 不得把合法 `0` 转换成 missing / error。**
+
+#### 4.4.22 Valid Absence Preservation
+
+继续继承：
+
+```
+valid absence  ≠  missing required evidence
+```
+
+例如：
+
+- `FirstShortageDate` not present because **no shortage** —— **不是** validation failure
+- Procurement results not produced because `NORMAL` / `BUFFER_BREACH` —— **不是** validation failure
+
+#### 4.4.23 Capability Outcome Examples
+
+以下为 **conceptual examples**。
+
+**Example A — Missing `SafetyStock` field（Business `DATA_INCOMPLETE`，非 capability unavailable）**
+
+| 项 | 值 |
+| --- | --- |
+| Snapshot Package | `ACCEPTED` |
+| Configured Safety Stock evidence role | `included` |
+| `Plant-A / MAT-A` | `SafetyStock = missing` |
+
+**Expected：**
+
+- Shortage Analysis capability：**available to execute**
+- `BR-SHORTAGE-001` result：**`DATA_INCOMPLETE`**
+
+**不是** `Shortage capability unavailable`。
+
+**Example B — Configured Safety Stock evidence role not provided（Capability Unavailable）**
+
+| 项 | 值 |
+| --- | --- |
+| Snapshot Package | `ACCEPTED` |
+| Configured Safety Stock evidence role | **not provided by Package** |
+
+**Expected：**
+
+- Shortage Analysis：**capability unavailable**
+
+**不得**执行 Rule 之后**伪造** `DATA_INCOMPLETE`。
+
+#### 4.4.24 Status Boundary
+
+`Data Validation` **整体仍为 `DESIGN PENDING`**。
+
+本 Task **仅**完成其第一层：Validation Layer Model、Capability-to-Evidence Requirement、
+Failure Semantics、Dataset Absent vs Empty Semantics、Failure Isolation Principle。
+
+`DESIGN RESOLVED` 的五个层级**仅**表示其 **conceptual boundary 已定义**，
+**不表示**：
+
+- detailed field validation designed
+- cross-dataset consistency rules defined
+- validation issue taxonomy finalized
+- validator implemented
+- data validated
+- tested
+
+---
+
 ## 5. AI / Tool Boundary
 
 **Backlog:** `VB-28`
