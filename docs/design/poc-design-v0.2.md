@@ -3987,9 +3987,9 @@ conceptual boundary 已定义
 | H | **Supplier** | supplier identity | `supplier_id` | `BR-SUPPLIER-RISK-001` |
 | I | **Supplier-Material Relationship** | 供应商—物料关系与 eligibility context | `supplier_id` + `material_code` | `BR-SUPPLIER-RISK-001` |
 | J | **Supplier Performance** | performance 观测（含 measurement period） | `supplier_id` + `material_code` + `PerformancePeriod` | `BR-SUPPLIER-RISK-001` |
-| K | **Procurement Recommendation** | 采购数量建议 | `plant_id` + `material_code` + `RecommendationNeedDate` | `BR-PROCUREMENT-001` |
+| K | **Procurement Recommendation** | 采购数量建议 | 业务 grain：`plant_id` + `material_code` + `RecommendationNeedDate`；**observation context：** Analysis Run ＋ 上述 grain | `BR-PROCUREMENT-001` |
 | L | **Procurement Request Draft** | POC 内 Draft | 由 K 派生（POC 内） | `§3`、`§5` |
-| M | **Analysis Run** | 一次分析运行的上下文 | analysis run identity ＋ `AnalysisDate` | `BR-SHORTAGE-001`、`BR-PROCUREMENT-001`、`BR-SUPPLIER-RISK-001` |
+| M | **Analysis Run** | 一次分析运行的上下文 | canonical identity：analysis run identity；temporal context：`AnalysisDate` | `BR-SHORTAGE-001`、`BR-PROCUREMENT-001`、`BR-SUPPLIER-RISK-001` |
 
 **支撑性 canonical concepts**（由既有 Rule 直接要求，不属最低 A–M 清单）：
 
@@ -4125,8 +4125,21 @@ conceptual boundary 已定义
 **K. Procurement Recommendation**
 
 - **Purpose：** 支撑 `BR-PROCUREMENT-001`。
-- **Canonical identity / grain：** `plant_id` + `material_code` + `RecommendationNeedDate`
+- **Business grain：** `plant_id` + `material_code` + `RecommendationNeedDate`
+- **Canonical observation context：**
+  ```
+  Analysis Run
+    + plant_id
+    + material_code
+    + RecommendationNeedDate
+  ```
+  **每一条 Procurement Recommendation 必须属于一个明确的 Analysis Run。**
+  > 这里**不是**定义 database primary key，也**不是** UUID 设计。
+  > 目的是区分：**同一个 material / plant / need date 在不同 analysis runs 中产生的 recommendation。**
+- **Traceability：** Procurement Recommendation **必须可以追溯**到产生它的 Analysis Run，
+  以便未来区分同一业务 grain 在**不同 snapshot / analysis time** 下得到的不同 recommendation。
 - **Attributes：** 至少
+  - analysis run → 所属 Analysis Run
   - plant → `plant_id`
   - material → `material_code`
   - `RecommendationNeedDate`
@@ -4158,8 +4171,11 @@ conceptual boundary 已定义
   - `§2.5.3` 以「**一次 shortage analysis run**」为建议生成边界；
   - `§2.7.4` / `§3` 使用 `AnalysisDate`；
   - `§2.1.2` 的累计计算依赖「截至 `t`」的观测口径。
-- **Canonical identity：** analysis run identity ＋ `AnalysisDate`
+- **Canonical identity：** analysis run identity
+- **Attribute / temporal context：** `AnalysisDate`
 - **结论：** 现有 Design **足以支持**该概念，因此**予以实体化**。
+- **不得设计：** UUID format、database key、ID generation algorithm。
+- **不得**把 `AnalysisDate` 与 identity **混成一个复合主键概念**。
 
 **N. BOM Component（支撑性）**
 
@@ -4206,8 +4222,12 @@ Supplier
 Supplier-Material Relationship
   → Supplier Performance
 
-Shortage Result
-  → Procurement Recommendation
+Analysis Run
+  → produces deterministic Shortage Result
+     (derived result, not an independently modeled canonical entity in this Task)
+
+Analysis Run
+  → produces Procurement Recommendation
 
 Procurement Recommendation
   → Procurement Request Draft
@@ -4222,6 +4242,24 @@ Material
 **不得因为画关系就创造未批准业务流程。**
 
 > 上述关系仅表达**既有 Rule 已依赖的关联**，**不新增**任何流程、审批或自动化能力。
+
+**关于 `Shortage Result`（不额外实体化）：**
+
+`Shortage Result` 是 **`BR-SHORTAGE-001` 的 deterministic derived result**，
+**本 Task 不把它额外实体化** —— 它**不在** canonical entity catalog 中。
+
+因此本 Task **不新增** `P` / `Q` 等实体，也**不**为 `Shortage Result` 定义独立身份或属性。
+
+`Procurement Recommendation` 与 `Shortage Result` 的关系由 **Analysis Run** 承载：
+
+```
+Analysis Run
+  → produces deterministic Shortage Result   (derived)
+  → produces Procurement Recommendation
+```
+
+> 说明来源：`BR-SHORTAGE-001` 产出的 `Classification` / `ShortageQty` / `FirstShortageDate` 等
+> 均为该规则的**计算结果**，其 canonical 定义仍归 `§2.1`，**不因本 Model 而迁移**。
 
 #### 4.1.6 Time Semantics
 
