@@ -150,7 +150,7 @@ AI 不应成为确定性核心业务能力的唯一执行路径。
 
 1. **确认 repository root 与 working directory** —— 二者可能不同，不得假定相同。
 2. **读取 `AGENTS.md`** —— 已被自动注入时无需重复读取全文。
-3. **如果 `CONTRIBUTING.md` 存在**，读取与当前 Task 有关的规范（见下）。
+3. **`CONTRIBUTING.md`** —— 如果它存在、当前 Task 涉及其规范领域（见下）、且相关规则**尚未在当前 Context 中可靠可用**，则读取其相关章节。
 4. **识别当前 Task 所需的 active canonical documents** —— 只识别与当前 Task 有关的文档。
 5. **检查必要的 Git state** —— current branch、working tree、recent relevant commits。
 6. **如果当前 Task 与 GitHub PR / CI 有关**，检查 relevant PR / CI state。
@@ -175,9 +175,9 @@ Context Recovery **不等于**每次新 Session 都无差别读取整个仓库�
 
 ### CONTRIBUTING.md
 
-`CONTRIBUTING.md` **不会**作为 workspace instruction 自动注入，必须由 Agent 主动读取。
+**不得假定** `CONTRIBUTING.md` 已作为 workspace instruction 自动注入。
 
-如果 `CONTRIBUTING.md` 存在，且当前 Task 涉及以下任一领域，Agent 应读取其**相关章节**并遵守：
+如果当前 Task 涉及以下任一规范领域，Agent **必须确保相关规则在当前 Context 中可靠可用**；如果尚未加载，则读取 `CONTRIBUTING.md` 的**相关章节**并遵守：
 
 - workflow
 - Git / GitHub
