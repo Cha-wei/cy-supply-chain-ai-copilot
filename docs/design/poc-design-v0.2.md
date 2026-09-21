@@ -5434,6 +5434,31 @@ invalid status、unresolved plant / material mapping、missing canonical busines
 例如：Supplier Performance dataset 存在，但当前 supplier-material 的 `PerformancePeriod = missing`
 → Supplier Risk Rule → **`DATA_INCOMPLETE`**。
 
+**Canonical Separation（不得互相提升或降级）**
+
+```
+Package Structural Failure
+  ≠ Capability Evidence Unavailable
+  ≠ Business DATA_INCOMPLETE
+```
+
+**Business Rule 返回 `DATA_INCOMPLETE` 仍说明：**
+
+```
+Business Rule execution reached a valid
+business outcome state.
+```
+
+**它不是 Capability Readiness failure。**
+
+反之：
+
+```
+Capability unavailable
+```
+
+表示 **Business Rule 没有获得足够的 logical evidence 进入可靠执行**。
+
 #### 4.4.4 Dataset Absent vs Explicitly Empty
 
 必须定义：
@@ -5515,15 +5540,54 @@ structurally valid ＋ 0 applicable relationships，**且 scope 可可靠判断*
 
 | Evidence role | Requirement |
 | --- | --- |
-| successful / reliable Shortage Result | `REQUIRED` |
+| **Completed Shortage Analysis Outcome** | `REQUIRED` upstream capability result |
 | `ApplicableMOQ` | `CONDITIONAL` —— **仅当** `Classification = SHORTAGE` |
 
-如果 `NORMAL` / `BUFFER_BREACH`：**Procurement Recommendation not applicable by design**。
+**必须区分两种 upstream 情形：**
+
+**A. Shortage Analysis capability 无法运行** —— 例如 required logical evidence role **根本未提供**。
+
+则：
+
+```
+Shortage Analysis = capability unavailable
+        ↓
+Procurement Recommendation 也无法继续执行
+```
+
+这是 **Capability Evidence Unavailable**。
+
+**B. Shortage Analysis 已正常执行**，但 Business Rule 结果为 `Classification = DATA_INCOMPLETE`。
+
+这**不是** capability unavailable —— 这是一个**合法的 structured Business Rule Result**。
+
+Procurement Recommendation **必须继承** `BR-PROCUREMENT-001`：
+
+```
+Classification = DATA_INCOMPLETE
+        ↓
+No Numeric Recommendation
+```
+
+**不得**将其重新分类成 `Procurement Capability unavailable`。
+
+**Procurement Outcome 对照：**
+
+| `Classification` | 附加条件 | 结果 |
+| --- | --- | --- |
+| `NORMAL` | — | **not applicable by design** |
+| `BUFFER_BREACH` | — | **not applicable by design** |
+| `SHORTAGE` | `ApplicableMOQ` valid | **numeric recommendation** |
+| `SHORTAGE` | `ApplicableMOQ` missing / invalid | **Business `DATA_INCOMPLETE`** → No Numeric Recommendation |
+| `DATA_INCOMPLETE` | — | **Business `DATA_INCOMPLETE`** → No Numeric Recommendation |
+
+**必须保持：**
+
+```
+not applicable  ≠  capability unavailable  ≠  DATA_INCOMPLETE
+```
 
 **不得**因为没有 `ApplicableMOQ` 把 `NORMAL` / `BUFFER_BREACH` 变成 `DATA_INCOMPLETE`。
-
-如果 `SHORTAGE` ＋ `ApplicableMOQ` missing / invalid：继承 `BR-PROCUREMENT-001`
-→ **`DATA_INCOMPLETE`** → **No Numeric Recommendation**。
 
 **Capability C — Supplier Risk Evidence**
 
@@ -5552,6 +5616,27 @@ structurally valid ＋ 0 applicable relationships，**且 scope 可可靠判断*
 AI Explanation **不直接以 raw dataset 存在性替代上游 Business Capability**。
 
 它需要：相关 **upstream structured deterministic result** ＋ **evidence** ＋ **uncertainty state**。
+
+AI Explanation **可以解释两类 structured upstream outcome**：
+
+**A. Business Capability Result** —— 例如 `SHORTAGE` / `BUFFER_BREACH` / `DATA_INCOMPLETE` /
+Supplier Risk Result / Procurement Recommendation。
+
+**B. Validation / Capability Readiness Result** —— 例如
+`Supplier Risk capability unavailable because Supplier Performance evidence role was not provided.`
+
+在这种情况下，AI **可以**解释：
+
+- 哪个 capability unavailable
+- 缺少哪类 logical evidence
+- 为什么不能可靠形成业务结论
+
+**但不得：**
+
+- 从 raw data 自行重建缺失结果
+- 猜业务事实
+- 把 `capability unavailable` 改成 `DATA_INCOMPLETE`
+- 把 `DATA_INCOMPLETE` 改成 `capability unavailable`
 
 如果 Shortage Analysis 本身 unavailable，**LLM 不得绕过它**直接从 raw data 自行重建 shortage result。
 
@@ -5813,7 +5898,39 @@ valid absence  ≠  missing required evidence
 - `FirstShortageDate` not present because **no shortage** —— **不是** validation failure
 - Procurement results not produced because `NORMAL` / `BUFFER_BREACH` —— **不是** validation failure
 
-#### 4.4.23 Status Boundary
+#### 4.4.23 Capability Outcome Examples
+
+以下为 **conceptual examples**。
+
+**Example A — Missing `SafetyStock` field（Business `DATA_INCOMPLETE`，非 capability unavailable）**
+
+| 项 | 值 |
+| --- | --- |
+| Snapshot Package | `ACCEPTED` |
+| Configured Safety Stock evidence role | `included` |
+| `Plant-A / MAT-A` | `SafetyStock = missing` |
+
+**Expected：**
+
+- Shortage Analysis capability：**available to execute**
+- `BR-SHORTAGE-001` result：**`DATA_INCOMPLETE`**
+
+**不是** `Shortage capability unavailable`。
+
+**Example B — Configured Safety Stock evidence role not provided（Capability Unavailable）**
+
+| 项 | 值 |
+| --- | --- |
+| Snapshot Package | `ACCEPTED` |
+| Configured Safety Stock evidence role | **not provided by Package** |
+
+**Expected：**
+
+- Shortage Analysis：**capability unavailable**
+
+**不得**执行 Rule 之后**伪造** `DATA_INCOMPLETE`。
+
+#### 4.4.24 Status Boundary
 
 `Data Validation` **整体仍为 `DESIGN PENDING`**。
 
