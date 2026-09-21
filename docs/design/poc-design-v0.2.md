@@ -7973,6 +7973,11 @@ conceptual validation design complete
 > 与 **Human Decision Record**（**Option B APPROVED**）见 **§4.5.11**；
 > 其 `§4.1` / `§4.2` / `§4.4` semantic synchronization **已实施**，
 > 因此现为 **`DESIGN RESOLVED`**，unresolved count **7 → 6**。
+>
+> `effective_arrival_date` source mapping 的
+> **Effective Arrival Date Source Mapping Design Review** 已产生
+> **Review Finding ＋ Human Decision Gate** —— 见 **§4.5.21**；
+> `Other Source-Semantic Mapping` 状态**仍为 `DESIGN PENDING`**，unresolved count **仍为 6**。
 
 #### 4.5.1 Purpose & Scope
 
@@ -7991,7 +7996,7 @@ Plant / Material / Supplier 以及关键业务 relationship **必须满足什么
 - mapping provenance requirement
 - mapping failure blast radius
 
-> 后续 Task 已追加 **Warehouse Role Resolution**（见 **§4.5.12**）、**BOM Version / Validity Mapping**（见 **§4.5.7**）与 **Supplier Eligibility Vocabulary Mapping**（见 **§4.5.11**）。
+> 后续 Task 已追加 **Warehouse Role Resolution**（见 **§4.5.12**）、**BOM Version / Validity Mapping**（见 **§4.5.7**）、**Supplier Eligibility Vocabulary Mapping**（见 **§4.5.11**）与 **Effective Arrival Date Source Mapping**（见 **§4.5.21**）。
 
 **不得定义**：ERP vendor / ERP version / source table / source column / CSV column / JSON path /
 SQL / mapping code / fuzzy matching algorithm / MDM product / database / API / Adapter implementation。
@@ -9727,7 +9732,7 @@ Warehouse 永远不会成为 canonical entity
 
 **Preserve Other Pending Items（Warehouse Task 时点）**
 
-该 Task **只**解决 Warehouse Role；当时其余未决项**继续保持**（见 **§4.5.21**）：
+该 Task **只**解决 Warehouse Role；当时其余未决项**继续保持**（见 **§4.5.22**）：
 
 - `loss_rate` owner / grain
 - `required_quantity` semantic
@@ -9917,7 +9922,333 @@ source evidence exists but canonical mapping unavailable
 
 它**只记录**已有 Design 要求的 relationship resolution。
 
-#### 4.5.21 Preserve Unresolved Items
+#### 4.5.21 Effective Arrival Date Source Mapping
+
+**Effective Arrival Date Source Mapping Design Review（Review Finding）**
+
+**Evidence Boundary**
+
+现有 `FROZEN` / Human-approved evidence 与既有 Design 支持：
+
+| 事实 | 来源 |
+| --- | --- |
+| Purchase Order / Inbound 数据可得且具备最低必要结构 | `VR-005`（SC-DATA-001，Human-approved `SIMULATED`）§D |
+| 最低概念属性中存在 `promised_date` 与 `expected_arrival_date` | `VR-005` §D |
+| 数据能够表达 **Promised Date** 与 **Expected Arrival Date** | `VR-005` §D |
+| `effective_arrival_date` 的 **canonical business semantic** | `§2.6.4`（`BR-INBOUND-001`） |
+| 只有 `effective_arrival_date <= t` 的 eligible inbound 进入累计 | `§2.6.5` ／ `§2.6.6` |
+| `effective_arrival_date` **missing / invalid** → `DATA_INCOMPLETE`（**不得**默认任何日期） | `§2.6.5` |
+| **source-field mapping 留给后续 Data Dictionary ＋ Adapter Contract** | `§2.6.4` |
+
+**`VR-005` 没有批准**：
+
+```
+promised_date          = effective_arrival_date
+expected_arrival_date  = effective_arrival_date
+```
+
+**也没有批准** `expected > promised` 或 `promised > expected` 的 **precedence**。
+
+因此：**不得**把任何一个字段直接声明为**全局 canonical source**。
+
+**Semantic Distinction Review**
+
+必须明确评估 `promised_date` 与 `expected_arrival_date` **是否可以安全假定为同一个 semantic**。
+
+**默认：不得假定。**
+
+| 字段 | 可能的**解释**（possible interpretation，**非**企业事实） |
+| --- | --- |
+| `promised_date` | supplier / PO **commitment** context |
+| `expected_arrival_date` | 当前**预计实际到达** context |
+
+> 当前项目**没有真实 ERP / SRM semantic evidence** ——
+> 以上只是 **possible interpretations**，**不得**写成**真实 CY 企业事实**。
+
+**Option Review**
+
+| Option | 内容 | 现有证据是否支持 | 结论 |
+| --- | --- | --- | --- |
+| **0** | 保持 mapping unresolved（要求 `effective_arrival_date` 必须可可靠取得，否则 `DATA_INCOMPLETE`） | 支持（安全） | **安全但长期阻塞** |
+| **A** | Always use `promised_date` | **不支持** —— `VR-005` 未赋予其 canonical precedence | **拒绝** |
+| **B** | Always use `expected_arrival_date` | **不支持** —— 同上 | **拒绝** |
+| **C** | Global deterministic precedence（例如 `expected` fallback `promised`） | **不支持** —— 无任何 Human-approved evidence 支持 precedence | **拒绝** |
+| **D** | **source-specific mapping → canonical `effective_arrival_date`** | 支持 —— 只要求存在 explicit deterministic mapping evidence | **推荐方向（待 Human Decision）** |
+| **E** | Take earliest / latest candidate date（`min` / `max`） | **不支持** —— 会**创造新的业务算法** | **拒绝** |
+
+**Option 0 —— 评估**
+
+不发明 source semantics（优点），但 `Effective Inbound` **长期无法可靠执行**；
+`§2.6.5` 已为 fail-safe 定义了 `DATA_INCOMPLETE` 路径，
+因此 Option 0 **只是安全但长期阻塞**，**不是**设计终点。
+
+**Option A / B —— 拒绝依据**
+
+`VR-005` 只确认两个字段**存在**且可表达，**未**赋予任何一方 canonical precedence。
+选定其一等于**发明 source semantic**。
+
+**Option C —— 拒绝依据**
+
+建立**全局** precedence 需要 Human-approved evidence；
+当前**没有任何** evidence 支持 `expected > promised` 或 `promised > expected`。
+
+**Option E —— 拒绝依据**
+
+`min` / `max` **不是** mapping，而是**新的业务算法** ——
+它会在没有业务依据的情况下**改变**有效供给的日期口径。
+
+**Recommended Direction（Option D）**
+
+```
+source-specific arrival-date evidence
+        ↓
+explicit deterministic mapping
+        ↓
+canonical effective_arrival_date
+```
+
+该 contract 的目标是统一：
+
+```
+business semantic
+```
+
+而**不是**统一：
+
+```
+source field name
+```
+
+不同 source system **可以**拥有不同的 arrival-date semantics；未来 Adapter **可以**明确声明：
+
+```
+Source A: field X → effective_arrival_date
+Source B: field Y → effective_arrival_date
+```
+
+或：
+
+```
+source-specific approved precedence → one canonical date
+```
+
+**但本层不定义真实 source field / precedence。**
+
+> **与当前架构一致**：canonical semantic 属于本 Design；
+> 具体 field 解析属于 **future source-specific Adapter mapping**（见下方 **Adapter Boundary**）。
+
+**Canonical Outcome**
+
+canonical side **只需要**：
+
+```
+effective_arrival_date   （一个已解析的 DATE business value）
+```
+
+**不得创建**：`ArrivalDateSourceType` / `ArrivalDatePriority` / `PromisedOrExpected` /
+`ArrivalConfidence` 等**新 canonical fields** —— 除非未来 Human 另行批准。
+
+**Exactly One Resolved Date per Inbound Context**
+
+对一个需要参与 `BR-INBOUND-001` 判断的 inbound context，最终**必须**能够得到：
+
+```
+exactly one reliably resolved effective_arrival_date
+            或
+unresolved
+```
+
+**不得**让 deterministic business rule 同时面对 `promised_date` ＋ `expected_arrival_date`
+然后**临时自行选择**。
+
+```
+source semantic resolution 必须发生在进入 BR-INBOUND-001 之前
+```
+
+**Multiple Candidate Dates**
+
+如果 source context 中 `promised_date` ＋ `expected_arrival_date` **同时存在且不同**，
+但**没有** source-specific approved mapping / precedence evidence：
+
+**不得**：
+
+- choose `promised_date`
+- choose `expected_arrival_date`
+- earliest wins
+- latest wins
+- newest `updated_at` wins
+- average
+- LLM choose
+
+结果：
+
+```
+effective_arrival_date = unresolved
+```
+
+当前 capability 需要 inbound 时：**`DATA_INCOMPLETE`**，
+并使用**既有 Validation Taxonomy** 表达 root cause。
+
+**Single Candidate Does Not Automatically Mean Canonical**
+
+即使 source record **只有一个**日期字段存在，**也不得**仅因为「只有它有值」
+就自动认为它 `= effective_arrival_date`。
+
+**必须先有 approved source-specific semantic mapping。** 例如：
+
+```
+promised_date exists  ＋  expected_arrival_date missing
+   ≠  promised_date automatically canonical
+```
+
+**Missing Value vs Unresolved Mapping**
+
+必须区分：
+
+| # | 情形 | 处理 |
+| --- | --- | --- |
+| **A** | **approved mapping 已存在**，但 mapped source value **missing** | `FIELD_VALUE` / `MISSING` 或既有适用 reason |
+| **B** | source value **存在**，但**不知道哪个 source semantic** 应映射到 `effective_arrival_date` | `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED` |
+
+**不得**把两者都写成 `effective_arrival_date missing`。
+
+**Invalid Date Boundary**
+
+如果 approved mapping **已确定**（`Source Field X → effective_arrival_date`），
+但值本身**无法解析成合法 `DATE`**，属于：
+
+```
+FIELD_VALUE / INVALID_TYPE
+```
+
+或既有适用 Field Validation reason。
+
+**不得** fallback 到另一个**未批准**字段。
+
+**Date Conflict Is Not Automatically Data Error**
+
+```
+promised_date  ≠  expected_arrival_date
+```
+
+**本身不一定是** `CONSISTENCY_CONFLICT` —— 它们可能本来就具有**不同 business semantic**。
+
+**只有**当前 approved source-specific mapping **明确要求**它们满足某 consistency relation，
+才能判断 conflict。**当前没有该 relation。**
+
+因此**不得**：`dates differ → Data Quality Issue` 自动成立。
+
+**`updated_at` Boundary**
+
+**不得**使用 `updated_at` **替代** `effective_arrival_date`。
+
+也**不得**建立 `latest updated record wins` ——
+除非 future **Adapter Design** 明确批准 source-specific precedence。
+
+`updated_at` 仍**只是** record update context。
+
+**Status Boundary**
+
+Inbound status（`OPEN` / `CONFIRMED` / `PARTIALLY_RECEIVED` / `CANCELLED` / `CLOSED` / `COMPLETED`）
+与 **arrival-date mapping** 是**两个不同维度**。
+
+**不得**：`CONFIRMED → use confirmed_date` ——
+因为当前 Design **没有** approved `confirmed_date` field，也**没有**该 mapping rule。
+
+**不得**从 status 推导 source-date precedence。
+
+**`promised_date` / `expected_arrival_date` Boundary**
+
+`VR-005` 中 `promised_date` 与 `expected_arrival_date` 仍是
+**`SIMULATED` conceptual source attributes**。
+
+它们**不是** POC canonical fields 的**强制 persisted representation**。
+
+未来 Adapter **可以**：
+
+- 使用其中之一
+- 使用 ERP-specific field
+- 使用明确批准的 deterministic source-specific rule
+
+只要最终能够可靠产生 `effective_arrival_date`。
+
+**Provenance Requirement**
+
+每个 resolved `effective_arrival_date` **必须未来能够追溯**：
+
+```
+source inbound context
+→ source date evidence
+→ source-specific mapping basis
+→ canonical effective_arrival_date
+→ Snapshot Package
+```
+
+**但**：**provenance carrier 仍 `DESIGN PENDING`**。
+
+**不得创建**：lineage DB / mapping table / JSON metadata /
+`source_field_name` persisted field 等 **physical design**。
+
+**Cross-Package Boundary**
+
+**不得**：`Inbound from Package P1` 使用 `Package P2 的 arrival-date mapping evidence`
+静默产生 `effective_arrival_date`。
+
+必须继承：
+
+```
+Analysis Run → exactly one accepted Snapshot Package
+```
+
+与 **`PROVENANCE_MISMATCH`** 边界。
+
+**Adapter Boundary**
+
+具体 `source value / field → effective_arrival_date` 属于
+**future source-specific Adapter mapping**。
+
+**但是**：**canonical semantic contract 属于当前 Design**。
+Adapter **不得**自行重新定义 `effective_arrival_date` 是什么意思。
+
+**Canonical Model / Business Rule Impact**
+
+```
+BR-INBOUND-001 semantic                 = 未修改
+effective_arrival_date <= required_date = 未修改
+missing / invalid → DATA_INCOMPLETE     = 未修改
+Inbound canonical grain                 = 未修改
+```
+
+本 Review **未**发现需要修改 `§2.6` / `§4.1.4 E` / `§4.2.6` 的理由。
+
+**No Technology / Implementation**
+
+本 Review **未创建**：source field precedence code、Adapter、mapping table、schema、SQL、JSON、
+API、fallback algorithm、source enum、date confidence score、test、fixture、ADR。
+
+**未选择技术。**
+
+**Status**
+
+```
+effective_arrival_date source mapping = DESIGN PENDING    ← 本 Review 不改变
+unresolved count                      = 仍为 6
+```
+
+**Human Decision Required**
+
+请 Human 决定：
+
+1. 是否**拒绝**建立**全局 source-field precedence**
+2. 是否采用 **Option D**（source-specific mapping → canonical `effective_arrival_date`）
+3. 是否确认：每个 applicable inbound context **必须**解析成
+   **exactly one `effective_arrival_date`** 或 **unresolved**
+4. 是否确认：`promised_date ≠ expected_arrival_date` **本身不构成** Data Quality Issue
+5. 是否授权后续 **`§4.2` / `§4.4` / `§4.5`** 必要的最小 consistency synchronization
+
+**Human Approval 后**，下一 Task 才正式实施。
+
+#### 4.5.22 Preserve Unresolved Items
 
 以下未决项本轮**必须继续保持**（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**、`sourcing_status` vocabulary **已由 §4.5.11 解析**）：
 
@@ -9940,10 +10271,14 @@ source evidence exists but canonical mapping unavailable
 > `sourcing_status` vocabulary 的 **Option B semantic synchronization 已实施**
 > （见 **§4.5.11 Option B Implementation Record**）；
 > 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **7 → 6**。
+>
+> `effective_arrival_date` source mapping 另有 **Human Decision Gate**
+> （**§4.5.21** Effective Arrival Date Source Mapping Design Review）；
+> 在 Human Decision 之前其状态**保持 `DESIGN PENDING`**，未决项数量**不减少**。
 
 本 Task **不以「Master Data Mapping」为名一次性消灭这些问题**。
 
-#### 4.5.22 Examples
+#### 4.5.23 Examples
 
 以下为 **conceptual examples**。
 
@@ -9973,7 +10308,7 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 
 > `Warehouse Role Resolution` 的 acceptance examples（**Example A ～ Example F**）见 **§4.5.12**。
 
-#### 4.5.23 Status Boundary
+#### 4.5.24 Status Boundary
 
 `Master Data Mapping` overall **仍为 `DESIGN PENDING`** ——
 本节已完成 Canonical Identity Resolution、Relationship Resolution Boundary、
@@ -10025,6 +10360,12 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 - mapping configuration exists
 - Supplier Risk implemented
 - tested
+
+**Open Human Decision Gate：** `effective_arrival_date` source mapping
+（`Other Source-Semantic Mapping`）**仍为 `DESIGN PENDING`** ——
+其 **Effective Arrival Date Source Mapping Design Review** 已判定推荐方向为 **Option D**
+（source-specific mapping → canonical `effective_arrival_date`），
+但**须经 Human Decision** 后才能实施（见 **§4.5.21**）。
 
 ---
 
