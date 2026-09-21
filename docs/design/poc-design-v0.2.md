@@ -4509,7 +4509,7 @@ Canonical model **不得通过默认值隐藏缺失**。
 | `sourcing_status` enum / vocabulary | **`DESIGN RESOLVED`** | **不建立全局 source enum** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.1.4 I** ／ **§4.5.11** |
 | **`effective_arrival_date` source mapping policy** | **`DESIGN RESOLVED`** | **不建立 global source field** —— concrete source field = **`SOURCE-SPECIFIC` / Adapter-defined**；canonical mapping contract 见 **§4.2.6** ／ **§4.5.21**；**真实 ERP field 当前仍未知**（**未知 ≠ Design Pending**） |
 | Allocation 与 demand window 的关联机制 | **`DESIGN RESOLVED`** | 已由 **§4.5.9** 解析为 **canonical allocation applicability mapping contract**（**Target Applicability** ＋ **Source Reservation Overlap**）；concrete source evidence = **`SOURCE-SPECIFIC` / Adapter-defined**；**未新增** canonical field |
-| `ApplicableMOQ` 的来源 | **`DESIGN PENDING`** | §2.5.5 留给 Data Dictionary / Adapter Design |
+| `ApplicableMOQ` 的来源 | **`DESIGN RESOLVED`** | canonical applicability resolution 由 **§4.5.22 Option D Implementation Record** 解析：owner = **exact Procurement Recommendation Context**（`plant_id` + `material_code` + `RecommendationNeedDate`）；source semantic role = **`SOURCE-SPECIFIC` purchasing-policy evidence**；resolution contract = **exactly one applicable `ApplicableMOQ` or `unresolved`**；**未新增** canonical field / entity，**未**修改 Recommendation grain；physical carrier **仍 SOURCE-SPECIFIC / not yet defined**（**§4.2.9** ／ **§4.4.67**） |
 | Provenance 的具体承载方式 | **`DESIGN PENDING`** | 见 §4.1.8 |
 
 > 以上条目**不影响** `Canonical Data Model = DESIGN RESOLVED` ——
@@ -4552,6 +4552,28 @@ Canonical model **不得通过默认值隐藏缺失**。
 > owner = **exact Requirement Calculation Context**，
 > resolution contract = **exactly one applicable `loss_rate` or `unresolved`**。
 > 本项**不再属于未决项**，未决项数量 **3 → 2**。
+>
+> **`ApplicableMOQ` 的来源** 已由 **Human-authorized Design Change** **解析** ——
+> **Human Decision Record** 与 **Option D Implementation Record** 见 **§4.5.22**；
+> owner = **exact Procurement Recommendation Context**，
+> source semantic role = **`SOURCE-SPECIFIC` purchasing-policy evidence**，
+> resolution contract = **exactly one applicable `ApplicableMOQ` or `unresolved`**。
+> 本项**不再属于未决项**，未决项数量 **2 → 1**。
+>
+> **Clarification（`§4.1` 最小澄清 —— 未新增 canonical field ／ entity ／ identity component）：**
+> 现有 **Procurement Recommendation** 已经具有**足够的 canonical applicability context**
+> 来承载 `ApplicableMOQ` resolution —— 其 business grain
+> （`plant_id` + `material_code` + `RecommendationNeedDate`）与 Analysis Run observation context **不变**，
+> 且 **`ApplicableMOQ` 仍为 `§4.1.4 K` 的既有 attribute**。
+>
+> **不得**把 `supplier_id` ／ `contract_id` ／ `policy_id` ／ `purchasing_info_record_id`
+> 加入 canonical grain；**不得**引入 Supplier Selection result 或 Contract identity。
+>
+> ```
+> Analysis Run  ≠  MOQ business owner
+> ```
+>
+> Analysis Run **只**是 **observation / traceability context**。
 
 ---
 
@@ -5377,13 +5399,22 @@ database field / API enum / ranking / selection result）。
 | `RecommendationNeedDate` | `DATE` | `CONDITIONAL`（`Classification = SHORTAGE` 且 Procurement Recommendation applicable 时 `REQUIRED`） | `CONTEXT` | 采购建议所使用的 business need date | 当前 POC `= FirstShortageDate` | 见下方条件性说明 | `BR-PROCUREMENT-001` |
 | `ApplicableMOQ` | `NON_NEGATIVE_QUANTITY` | `CONDITIONAL`（`Classification = SHORTAGE` 时 `REQUIRED`） | `POLICY_INPUT` | 当前采购建议所适用的最小采购数量约束 | `ApplicableMOQ >= 0` | `DATA_INCOMPLETE`；**不得默认成 0** | `BR-PROCUREMENT-001` |
 
-> **`ApplicableMOQ` 的 Source Mapping = `DESIGN PENDING`。**
-> **不得**自行绑定 Supplier / Contract / ERP Purchasing Info Record（见 §4.2.16）。
+> **`ApplicableMOQ` 仍是原有 canonical attribute** —— **未新增** Data Dictionary field row。
 >
-> **ApplicableMOQ Source / Applicability Design Review（Review Finding）** 与
-> **Human Decision Record** 见 **§4.5.22** —— **Option D = APPROVED**；
-> 但 **Option D Implementation = NOT YET EXECUTED**，
-> 因此 source mapping **仍为 `DESIGN PENDING`**（**未变**）；**未**推进 provenance carrier。
+> **Canonical Applicability Contract = `DESIGN RESOLVED`**（**§4.5.22 Option D Implementation Record**）：
+>
+> ```
+> Canonical Applicability Context = exact Procurement Recommendation Context
+>                                   （plant_id + material_code + RecommendationNeedDate）
+> Source Semantic Role            = SOURCE-SPECIFIC purchasing-policy evidence
+> Resolution Contract             = exactly one applicable ApplicableMOQ
+>                                   或 unresolved
+> Physical Carrier                = NOT YET DEFINED（provenance carrier = DESIGN PENDING）
+> ```
+>
+> **不得**把 Supplier ／ Contract ／ ERP Purchasing Info Record 声明为真实来源 ——
+> 它们只能是 **possible source forms**（见 **§4.2.16**）。
+> **不得**为解析 MOQ 而执行 Supplier Selection（见 **§4.4.67**）。
 
 **`RecommendationNeedDate` 的条件性**
 
@@ -5619,7 +5650,6 @@ input evidence
 | 项 | 状态 |
 | --- | --- |
 | Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
-| `ApplicableMOQ` source | `DESIGN PENDING` —— **ApplicableMOQ Source / Applicability Design Review（Review Finding）** 与 **Human Decision Record**（**Option D = APPROVED**）见 **§4.5.22**；**Implementation = NOT YET EXECUTED**，本表状态**未变** |
 | Provenance carrier | `DESIGN PENDING` |
 
 > 以上条目**不影响** `Data Dictionary = DESIGN RESOLVED` ——
@@ -6121,7 +6151,7 @@ controlled export provenance
 - `sourcing_status` vocabulary —— **已由 §4.5.11 解析**（source-specific → canonical eligibility condition）
 - `effective_arrival_date` source mapping —— **已由 §4.5.21 解析**（source-specific → canonical mapping contract）
 - allocation demand-window mapping —— **已由 §4.5.9 解析**（Target Applicability ＋ Source Reservation Overlap）
-- `ApplicableMOQ` source —— **ApplicableMOQ Source / Applicability Design Review（Review Finding）** 与 **Human Decision Record**（**Option D = APPROVED**）见 **§4.5.22**（**Implementation = NOT YET EXECUTED**，本 Task **未**推进）
+- `ApplicableMOQ` source —— **已由 §4.5.22 Option D Implementation Record 解析**（Procurement Recommendation Context ＋ exactly-one-or-unresolved resolution contract）
 - provenance carrier
 
 因此本 Task **不得为了完成 Snapshot Contract** 擅自决定这些字段属于哪个
@@ -7274,7 +7304,7 @@ allocation demand-window mapping 已于 **§4.5.9** 解析，此处保留历史�
 - `sourcing_status` vocabulary —— **已由 §4.5.11 解析**（本 Task 未推进）
 - `effective_arrival_date` source mapping —— **已由 §4.5.21 解析**（本 Task 未推进）
 - allocation demand-window mapping —— **已由 §4.5.9 解析**（本 Task 未推进）
-- `ApplicableMOQ` source —— **ApplicableMOQ Source / Applicability Design Review（Review Finding）** 与 **Human Decision Record**（**Option D = APPROVED**）见 **§4.5.22**（**Implementation = NOT YET EXECUTED**，本 Task **未**推进）
+- `ApplicableMOQ` source —— **已由 §4.5.22 Option D Implementation Record 解析**（当时本 Task 未推进；解析由后续 **Human-authorized Design Change** 实施）
 - provenance carrier
 
 **Field Validation 不能成为解决这些设计问题的后门。**
@@ -7956,14 +7986,21 @@ context 一致。
 
 #### 4.4.67 `ApplicableMOQ` Boundary
 
-`ApplicableMOQ` 必须属于当前 Procurement Recommendation 的**可靠业务上下文**。但其：
+`ApplicableMOQ` 必须属于当前 Procurement Recommendation 的**可靠业务上下文**。
+
+现行状态（**Option D semantic synchronization 已实施**）：
 
 ```
-source mapping = DESIGN PENDING
+ApplicableMOQ canonical applicability resolution = DESIGN RESOLVED
+Canonical Applicability Context = exact Procurement Recommendation Context
+                                  （plant_id + material_code + RecommendationNeedDate）
+Resolution Contract             = exactly one applicable ApplicableMOQ
+                                  或 unresolved
+Physical Carrier                = NOT YET DEFINED（provenance carrier = DESIGN PENDING）
 ```
 
 因此**不得自行决定** `Supplier` / `Contract` / `Purchasing Info Record` / `Material Master`
-谁是它的来源。
+谁是它的**真实来源** —— 这些只能是 **possible source forms**。
 
 如果 `SHORTAGE` 但当前 recommendation 无法可靠取得适用 MOQ，继承：
 
@@ -7973,11 +8010,53 @@ BR-PROCUREMENT-001
     → No Numeric Recommendation
 ```
 
-**`ApplicableMOQ` source / applicability resolution** 的
-**ApplicableMOQ Source / Applicability Design Review（Review Finding）** 与
-**Human Decision Record**（**Option D = APPROVED**）见 **§4.5.22** ——
-**Option D Implementation = NOT YET EXECUTED**，因此 `source mapping` **仍为 `DESIGN PENDING`**；
-并且必须区分 **missing** ／ **unresolved** ／ **invalid** ／ **explicit zero**（见该处）。
+**必须区分 root condition（不得统一写成「MOQ 不可用」）：**
+
+| # | Root condition | 判定 | 结果 |
+| --- | --- | --- | --- |
+| **A** | applicability mapping 已可靠确定，但 required MOQ value **missing** | `FIELD_VALUE` ／ `MISSING` | `DATA_INCOMPLETE` |
+| **B** | MOQ evidence **存在**，但**无法可靠判断哪个适用于当前 Procurement Recommendation Context** | `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED` | `DATA_INCOMPLETE` |
+| **C** | applicable MOQ 已解析，但 `ApplicableMOQ < 0` | 继承既有 `FIELD_VALUE` ／ `OUT_OF_DEFINED_RANGE` | `DATA_INCOMPLETE` |
+| **D** | `ApplicableMOQ = 0` | **VALID explicit no MOQ constraint** | 正常参与 `max(BasePurchaseNeed, 0)` |
+
+**不得**把 **A ／ B** 默认成 **D**。
+
+**Supplier-Dependent Validation Path：**
+
+- 若 supplier-dependent MOQ evidence 的 Supplier **已被独立可靠确定**
+  （且该 determination **不是**为了拿到 MOQ 而执行的隐藏 Supplier Selection），
+  则**可以**继续解析 `ApplicableMOQ`。
+- 若 Supplier **尚未**被独立可靠确定，且唯一性**只能靠从 eligible Supplier 中挑一个**达成，
+  则 → **`SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`** → **`DATA_INCOMPLETE`**。
+
+**必须明确：这不是 Supplier Risk Issue，也不是 Supplier Eligibility Issue ——
+这是 `ApplicableMOQ` applicability resolution failure。**
+
+**不得**为了拿到 MOQ 而**反向实现** Supplier Selection。
+
+**Multiple Policy Source Validation：**
+
+```
+Contract MOQ = 80
+PIR      MOQ = 100
+```
+
+同时存在且冲突、且**没有 approved precedence** 时 →
+**`SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`**。
+
+**不得**自动归类为 `CONSISTENCY_CONFLICT` —— 除非既有语义明确说明这些 records
+在**同一 canonical policy context** 本应一致；**当前没有该 Rule**。
+
+**不得**：`Contract wins` ／ `PIR wins` ／ `latest wins` ／ `most specific wins` ／
+`min` ／ `max` ／ `average` ／ `first wins`。
+
+**未新增**任何 Validation Reason（`§4.4.81` 的 **11 个 canonical reason** 未变）。
+
+**Valid Absence Boundary：** `Classification = NORMAL` 或 `BUFFER_BREACH` 时
+**No Purchase Recommendation**，因此 `ApplicableMOQ` **not present by design**
+是 **valid absence**，**不是** validation failure。
+
+> **Human Decision Record** 与 **Option D Implementation Record** 见 **§4.5.22**。
 
 #### 4.4.68 Analysis Run ↔ Snapshot Package Consistency
 
@@ -8124,7 +8203,7 @@ affected evidence → affected grain → affected capability
 | `sourcing_status` vocabulary | **`DESIGN RESOLVED`** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.5.11** |
 | `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** —— source mapping = **source-specific / Adapter-defined**；canonical mapping contract 见 **§4.5.21** |
 | allocation demand-window mapping | **`DESIGN RESOLVED`** —— canonical allocation applicability mapping contract 见 **§4.5.9** |
-| `ApplicableMOQ` source | `DESIGN PENDING` —— **ApplicableMOQ Source / Applicability Design Review（Review Finding）** 与 **Human Decision Record**（**Option D = APPROVED**）见 **§4.5.22**；**Implementation = NOT YET EXECUTED**，本表状态**未变** |
+| `ApplicableMOQ` source | **`DESIGN RESOLVED`** —— owner = **exact Procurement Recommendation Context**；source semantic role = **`SOURCE-SPECIFIC` purchasing-policy evidence**；resolution contract = **exactly one applicable `ApplicableMOQ` or `unresolved`**（**§4.5.22 Option D Implementation Record**）；physical carrier **仍 SOURCE-SPECIFIC / not yet defined** |
 | provenance carrier | `DESIGN PENDING` |
 
 > 表中 `Warehouse canonical role`（**§4.5.12**）、`BOM version / validity`（**§4.5.7** ／ **§4.1.4 N**）、
@@ -8137,6 +8216,9 @@ affected evidence → affected grain → affected capability
 >
 > `loss_rate` owner / grain **已由 §4.5.22 Option E Implementation Record 解析**
 > （owner = **exact Requirement Calculation Context**），**保留登记以便追溯**。
+>
+> `ApplicableMOQ` source **已由 §4.5.22 Option D Implementation Record 解析**
+> （owner = **exact Procurement Recommendation Context**），**保留登记以便追溯**。
 
 **Consistency Validation 不得成为解决这些问题的后门。**
 
@@ -8558,7 +8640,7 @@ Risk vocabulary **保持现有定义**。
 
 #### 4.4.99 Pending Design Preservation
 
-必须继续保持以下未决项（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**、`sourcing_status` vocabulary **已由 §4.5.11 解析**、`effective_arrival_date` source mapping **已由 §4.5.21 解析**、allocation demand-window mapping **已由 §4.5.9 解析**、`loss_rate` owner / grain **已由 §4.5.22 Option E Implementation Record 解析**；`required_quantity` semantic 则已由 **PR #38 Human Decision** **移除该字段**，保留登记以便追溯）：
+必须继续保持以下未决项（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**、`sourcing_status` vocabulary **已由 §4.5.11 解析**、`effective_arrival_date` source mapping **已由 §4.5.21 解析**、allocation demand-window mapping **已由 §4.5.9 解析**、`loss_rate` owner / grain **已由 §4.5.22 Option E Implementation Record 解析**、`ApplicableMOQ` source **已由 §4.5.22 Option D Implementation Record 解析**；`required_quantity` semantic 则已由 **PR #38 Human Decision** **移除该字段**，保留登记以便追溯）：
 
 | 未决项 | 状态 |
 | --- | --- |
@@ -8568,7 +8650,7 @@ Risk vocabulary **保持现有定义**。
 | `sourcing_status` vocabulary | **`DESIGN RESOLVED`** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.5.11** |
 | `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** —— source mapping = **source-specific / Adapter-defined**；canonical mapping contract 见 **§4.5.21** |
 | allocation demand-window mapping | **`DESIGN RESOLVED`** —— canonical allocation applicability mapping contract 见 **§4.5.9** |
-| `ApplicableMOQ` source | `DESIGN PENDING` —— **ApplicableMOQ Source / Applicability Design Review（Review Finding）** 与 **Human Decision Record**（**Option D = APPROVED**）见 **§4.5.22**；**Implementation = NOT YET EXECUTED**，本表状态**未变** |
+| `ApplicableMOQ` source | **`DESIGN RESOLVED`** —— owner = **exact Procurement Recommendation Context**；source semantic role = **`SOURCE-SPECIFIC` purchasing-policy evidence**；resolution contract = **exactly one applicable `ApplicableMOQ` or `unresolved`**（**§4.5.22 Option D Implementation Record**）；physical carrier **仍 SOURCE-SPECIFIC / not yet defined** |
 | provenance carrier | `DESIGN PENDING` |
 
 **Validation Issue Taxonomy 不得解决这些问题。**
@@ -8741,7 +8823,7 @@ physical schema / architecture / technology / ADR。
 Design DoD = PASS（17 / 17）
 ```
 
-**Upstream Design Items（2 项未决 ＋ 6 项已解析 ＋ 1 项已移除）—— 不阻塞本 closure**
+**Upstream Design Items（1 项未决 ＋ 7 项已解析 ＋ 1 项已移除）—— 不阻塞本 closure**
 
 这 9 项**阻止的是**「某些 capability 当前能够实际运行」，
 **不是**「Data Validation conceptual design 已经定义清楚」。
@@ -8758,7 +8840,7 @@ Design DoD = PASS（17 / 17）
 | 5 | `sourcing_status` vocabulary | **`DESIGN RESOLVED`** | 已由 **§4.5.11** 解析为 source-specific → canonical eligibility condition mapping contract（`§4.4.62`） |
 | 6 | `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** | 已由 **§4.5.21** 解析为 source-specific → canonical mapping contract（`§4.4.49`） |
 | 7 | allocation demand-window mapping | **`DESIGN RESOLVED`** | 已由 **§4.5.9** 解析为 canonical allocation applicability mapping contract（`§4.4.58` / `§4.4.60`） |
-| 8 | `ApplicableMOQ` source | `DESIGN PENDING` | 无法可靠取得 → `DATA_INCOMPLETE` → No Numeric Recommendation（`§4.4.67`） |
+| 8 | `ApplicableMOQ` source | **`DESIGN RESOLVED`** | 已由 **§4.5.22 Option D Implementation Record** 解析为 **Procurement Recommendation Context ＋ exactly-one-or-unresolved**；physical carrier 仍 `SOURCE-SPECIFIC` / not yet defined（`§4.4.67`） |
 | 9 | provenance carrier | `DESIGN PENDING` | 只提出 requirement，不设计 carrier（`§4.4.15` / `§4.4.93`） |
 
 > 第 3 项 `Warehouse canonical role` 已由 **§4.5.12 Warehouse Role Resolution**
@@ -8786,7 +8868,10 @@ Design DoD = PASS（17 / 17）
 > 第 1 项 `loss_rate` owner / grain 已由 **Human-authorized Design Change** 解析
 > （**Option E**：`Requirement Calculation Context` ＋ **exactly-one-or-unresolved**，
 > 见 **§4.5.22 Option E Implementation Record**）；该行**保留登记以便追溯**。
-> 剩余 **2 项**未决：`ApplicableMOQ` source、provenance carrier。
+> 第 8 项 `ApplicableMOQ` source 已由 **Human-authorized Design Change** 解析
+> （**Option D**：`Procurement Recommendation Context` ＋ **exactly-one-or-unresolved**，
+> 见 **§4.5.22 Option D Implementation Record**）；该行**保留登记以便追溯**。
+> 剩余 **1 项**未决：provenance carrier。
 
 > 三者均明确禁止 Validation 反向解决这些设计问题：
 > `Consistency Validation 不得成为解决这些问题的后门。` /
@@ -8885,7 +8970,7 @@ conceptual validation design complete
 > unresolved count **6 → 5**。
 >
 > **但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
-> 其中仍存在 `ApplicableMOQ` source、provenance carrier。
+> 其中仍存在 provenance carrier。
 >
 > `allocation demand-window mapping` 的
 > **Substitute Allocation Demand-Window Mapping Design Review** 与 **Option B Implementation Record**
@@ -8905,9 +8990,11 @@ conceptual validation design complete
 > resolution contract = **exactly one applicable `loss_rate` or `unresolved`**，
 > unresolved count **3 → 2**。
 >
-> `ApplicableMOQ` source 的 **ApplicableMOQ Source / Applicability Design Review** 与
-> **Human Decision Record**（**Option D = APPROVED**）见 **§4.5.22** ——
-> 但 **Option D Implementation = NOT YET EXECUTED**，其状态**仍为 `DESIGN PENDING`**。
+> `ApplicableMOQ` source 的 **Option D semantic synchronization 已实施**
+> （见 **§4.5.22 Option D Implementation Record**）；其 **canonical applicability resolution**
+> 现为 **`DESIGN RESOLVED`**（owner = **exact Procurement Recommendation Context**；
+> resolution contract = **exactly one applicable `ApplicableMOQ` or `unresolved`**），
+> unresolved count **2 → 1**。
 
 #### 4.5.1 Purpose & Scope
 
@@ -12194,7 +12281,7 @@ Master Data Mapping overall    = 仍 DESIGN PENDING
 
 #### 4.5.22 Preserve Unresolved Items
 
-以下未决项本轮**必须继续保持**（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**、`sourcing_status` vocabulary **已由 §4.5.11 解析**、`effective_arrival_date` source mapping **已由 §4.5.21 解析**、allocation demand-window mapping **已由 §4.5.9 解析**、`loss_rate` owner / grain **已由 §4.5.22 Option E Implementation Record 解析**）：
+以下未决项本轮**必须继续保持**（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**、`sourcing_status` vocabulary **已由 §4.5.11 解析**、`effective_arrival_date` source mapping **已由 §4.5.21 解析**、allocation demand-window mapping **已由 §4.5.9 解析**、`loss_rate` owner / grain **已由 §4.5.22 Option E Implementation Record 解析**、`ApplicableMOQ` source **已由 §4.5.22 Option D Implementation Record 解析**）：
 
 | 未决项 | 状态 |
 | --- | --- |
@@ -12204,7 +12291,7 @@ Master Data Mapping overall    = 仍 DESIGN PENDING
 | `sourcing_status` vocabulary | **`DESIGN RESOLVED`** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.5.11** |
 | `effective_arrival_date` source mapping | **`DESIGN RESOLVED`** —— source mapping = **source-specific / Adapter-defined**；canonical mapping contract 见 **§4.5.21** |
 | allocation demand-window mapping | **`DESIGN RESOLVED`** —— canonical allocation applicability mapping contract 见 **§4.5.9** |
-| `ApplicableMOQ` source | `DESIGN PENDING` —— **ApplicableMOQ Source / Applicability Design Review（Review Finding）** 与 **Human Decision Record**（**Option D = APPROVED**）见 **§4.5.22**；**Implementation = NOT YET EXECUTED**，本表状态**未变** |
+| `ApplicableMOQ` source | **`DESIGN RESOLVED`** —— owner = **exact Procurement Recommendation Context**；source semantic role = **`SOURCE-SPECIFIC` purchasing-policy evidence**；resolution contract = **exactly one applicable `ApplicableMOQ` or `unresolved`**（**§4.5.22 Option D Implementation Record**）；physical carrier **仍 SOURCE-SPECIFIC / not yet defined** |
 | provenance carrier | `DESIGN PENDING` |
 
 > `BOM version / validity` 的 **Blocking Finding**（`Canonical Model Compatibility = INSUFFICIENT`）
@@ -12233,6 +12320,12 @@ Master Data Mapping overall    = 仍 DESIGN PENDING
 > owner = **exact Requirement Calculation Context**，
 > resolution contract = **exactly one applicable `loss_rate` or `unresolved`**；
 > 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **3 → 2**。
+>
+> `ApplicableMOQ` source 的 **Option D semantic synchronization 已实施**
+> （见下方 **Option D Implementation Record**）；
+> owner = **exact Procurement Recommendation Context**，
+> resolution contract = **exactly one applicable `ApplicableMOQ` or `unresolved`**；
+> 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **2 → 1**。
 
 本 Task **不以「Master Data Mapping」为名一次性消灭这些问题**。
 
@@ -13980,6 +14073,212 @@ provenance carrier                   = DESIGN PENDING
 unresolved count                     = 2
 ```
 
+**Option D Implementation Record（Human-authorized Design Change）**
+
+**Human Authorization Source**
+
+```
+PR #42 Human Decision — Human-approved
+  → Canonical Model Compatibility    = COMPATIBLE（Option D resolution-contract form only）
+  → Option D                         = APPROVED
+  → Exactly-One-or-Unresolved        = APPROVED
+  → Supplier Eligibility ≠ Supplier Selection = CONFIRMED
+  → supplier-dependent MOQ boundary  = APPROVED
+  → ApplicableMOQ = 0                = valid explicit no MOQ
+  → Source / Applicability / Carrier = separated（A ＋ B approved；C not resolved）
+  → minimal §4.1/§4.2/§4.4/§4.5 sync = AUTHORIZED
+```
+
+**Implementation Result**
+
+```
+source-specific purchasing-policy evidence
+        ↓
+explicit deterministic resolution
+        ↓
+exact Procurement Recommendation Context
+        ↓
+exactly one applicable canonical ApplicableMOQ
+        or unresolved
+        ↓
+BR-PROCUREMENT-001
+```
+
+**Procurement Recommendation Context（正式使用，**不改变 grain**）**
+
+```
+plant_id
++ material_code
++ RecommendationNeedDate
+```
+
+**observation / traceability context：** Analysis Run。
+
+**必须保持：**
+
+```
+Analysis Run  ≠  MOQ business owner
+```
+
+**Canonical applicability resolution（正式落地）**
+
+```
+Canonical Applicability Context = exact Procurement Recommendation Context
+Source Semantic Role            = SOURCE-SPECIFIC purchasing-policy evidence
+Resolution Contract             = exactly one applicable ApplicableMOQ
+                                  或 unresolved
+Physical Carrier                = NOT YET DEFINED（provenance carrier = DESIGN PENDING）
+```
+
+`ApplicableMOQ` **仍是** `§4.1.4 K` Procurement Recommendation 的**既有 canonical attribute**。
+
+**本 Task 未创建：** `supplier_id` 到 canonical grain ／ `contract_id` ／ `policy_id` ／
+`purchasing_info_record_id` ／ `MOQPolicy` entity ／ policy identity ／ Supplier Selection result ／
+任何 canonical field ／ identity component。
+
+**Exactly-One-or-Unresolved Contract（正式落地）**
+
+对于每一个 `Classification = SHORTAGE` **且需要生成 numeric Procurement Recommendation** 的 context，
+**在进入 `BR-PROCUREMENT-001` 数量计算之前**必须得到：
+
+```
+exactly one applicable canonical ApplicableMOQ
+或
+unresolved
+```
+
+**不得**让多个 candidate MOQ 进入 deterministic formula ——
+`ApplicableMOQ` **不是**由 `BR-PROCUREMENT-001` 临时选择出来的。
+
+**不创建任何 precedence：** `lowest wins` ／ `highest wins` ／ `min` ／ `max` ／ `average` ／
+`latest wins` ／ `first wins` ／ `most specific wins` ／ `Contract wins` ／ `PIR wins` ／
+`LLM choose` ／ `silent fallback` —— **全部不采用**。
+
+**Supplier Eligibility ≠ Supplier Selection（正式保持）**
+
+```
+Supplier-Material Relationship Eligibility
+  ≠ Supplier Ranking  ≠ Supplier Selection  ≠ Supplier Recommendation
+```
+
+`eligible` supplier **不能自动贡献** `ApplicableMOQ`；
+多个 eligible suppliers 存在时，eligibility **不能**解决唯一性。
+
+**Supplier-Dependent MOQ Boundary（正式同步）**
+
+| 情形 | 允许性 |
+| --- | --- |
+| **A** Supplier 已由**独立可靠**业务上下文唯一确定（且该 determination **不是**为了拿到 MOQ 而执行的隐藏 Supplier Selection），且对应 MOQ evidence 可可靠解析 | **允许**继续 resolution |
+| **B** Supplier 只能通过「从多个 eligible Supplier 中挑一个」才能确定 MOQ | **不允许** → `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED` → `DATA_INCOMPLETE` |
+
+**不得**为了 MOQ **反向实现** Supplier Selection。
+
+**Missing ／ Unresolved ／ Invalid ／ Explicit Zero（正式同步）**
+
+| # | 情形 | 判定 | 结果 |
+| --- | --- | --- | --- |
+| **A** | applicability mapping 已可靠确定，但 required MOQ value **missing** | `FIELD_VALUE` ／ `MISSING` | `DATA_INCOMPLETE` |
+| **B** | MOQ evidence 存在，但**无法可靠判断哪个适用于当前 Procurement Recommendation Context** | `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED` | `DATA_INCOMPLETE` |
+| **C** | applicable MOQ 已解析，但 `ApplicableMOQ < 0` | 继承既有 `FIELD_VALUE` ／ `OUT_OF_DEFINED_RANGE` | `DATA_INCOMPLETE` |
+| **D** | `ApplicableMOQ = 0` | **VALID explicit no MOQ constraint** | 正常参与 `max(BasePurchaseNeed, 0)` |
+
+**不得**把 **A ／ B** 默认成 **D**；
+**不得** `0 → missing` ／ `0 → unresolved` ／ `0 → invalid` ／ `0 → fallback`。
+
+**未新增**任何 Validation Reason ／ Business Status ／ Error Code（`§4.4.80` ／ `§4.4.81` 未变）。
+
+**Multiple Policy Source Boundary（正式同步）**
+
+```
+Contract MOQ = 80
+PIR      MOQ = 100
+```
+
+在**没有** Human-approved precedence 时 → **`SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`**。
+
+**不得**自动归类为 `CONSISTENCY_CONFLICT` —— 除非既有语义明确说明这些 records
+在**同一 canonical policy context** 本应一致；**当前没有该 Rule**。
+
+**不建立任何 source precedence。**
+
+**Time Applicability（正式同步）**
+
+**不得**声明 `ApplicableMOQ` 永久固定，**也不得**声明每个 `RecommendationNeedDate` 一定不同。
+若 source-specific policy 存在时间有效性，mapping **必须**可靠确定哪个 evidence 适用于
+当前 `RecommendationNeedDate`；若无法判断 → **`SEMANTIC_UNRESOLVED`**。
+
+**不得**：`latest wins` ／ `current date wins` ／ `AnalysisDate wins`。
+
+**Valid Absence（保持）**
+
+`Classification = NORMAL` 或 `BUFFER_BREACH` → **No Purchase Recommendation**，
+因此 `ApplicableMOQ` **not present by design** 是 **valid absence** ——
+**不是** `missing`、**不是** `unresolved`、**不是** `DATA_INCOMPLETE`。
+
+**只有** `SHORTAGE` ＋ numeric recommendation required 时，resolution 才成为 **Required**。
+
+**Physical Source Boundary（保持）**
+
+**不得**声称 `ApplicableMOQ` 一定来自 Supplier-Material Master ／ Contract ／
+Purchasing Info Record ／ Material Master ／ Supplier Master ／ Purchasing Organization config ／
+ERP proprietary object —— 这些只能是 **possible source forms**。
+
+**`§4.1` / `§4.2` / `§4.4` / `§4.5` Synchronization Result**
+
+| 章节 | 同步内容 |
+| --- | --- |
+| **`§4.1`** | `§4.1.12` open item → **`DESIGN RESOLVED`**；**仅**澄清现有 Procurement Recommendation Context 已足以承载 `ApplicableMOQ` resolution；**未**修改 Recommendation grain，**未**新增 entity ／ field ／ identity component |
+| **`§4.2`** | `§4.2.9` 邻接说明同步为 **Canonical Applicability Contract `DESIGN RESOLVED`**（`ApplicableMOQ` **仍是原有 attribute**，**未新增** field row）；`§4.2.16` 将该 open item 移出 |
+| **`§4.4`** | `§4.4.67` 同步 applicability resolution、resolution contract 与四类 root condition；并写明 **supplier-dependent** 与 **multiple policy source** 两条 unresolved path；**未新增** Validation Reason |
+| **`§4.5`** | 本节记录 Option D implementation；同步 current status 与 unresolved count |
+
+**未修改 `§2` Business Rules**（**byte-semantically identical**）：
+`RecommendedPurchaseQty = max(BasePurchaseNeed, ApplicableMOQ)` 与
+`MOQAdjustmentQty = RecommendedPurchaseQty - BasePurchaseNeed` **未变**。
+
+**Meaning of `DESIGN RESOLVED`**
+
+`ApplicableMOQ` source / applicability = **`DESIGN RESOLVED`** **只**表示
+**canonical applicability ＋ source semantic resolution contract 概念设计完成**，
+**不表示**：
+
+- real ERP source known
+- Supplier selected
+- Contract known
+- PIR known
+- mapping config exists
+- Adapter implemented
+- source data validated
+- procurement engine implemented
+- tested
+- production-ready
+
+**执行状态（本 Task 完成时点）**
+
+```
+Human Decision                       = RECORDED
+Option D                             = IMPLEMENTED
+ApplicableMOQ source / applicability = DESIGN RESOLVED
+unresolved count                     = 2 → 1
+Other Source-Semantic Mapping        = 仍 DESIGN PENDING
+Master Data Mapping overall          = 仍 DESIGN PENDING
+```
+
+**未新增**任何 Master Data Mapping layer —— 这是 **`Other Source-Semantic Mapping`
+内部 unresolved item 的关闭**，`DESIGN RESOLVED` layer 数**仍为 9**。
+
+**剩余未决项（1 项）**
+
+```
+1. provenance carrier = DESIGN PENDING
+```
+
+**`Other Source-Semantic Mapping` 保持 `DESIGN PENDING`** —— 因其仍有 `provenance carrier`
+未解决；**不得**提前标成 `DESIGN RESOLVED`。
+
+**`Master Data Mapping` overall 保持 `DESIGN PENDING`** —— **不得**因
+`unresolved count = 1` 就提前 closure。
+
 #### 4.5.23 Examples
 
 以下为 **conceptual examples**。
@@ -14072,7 +14371,7 @@ exactly one canonical `effective_arrival_date` 或 `unresolved`）
 （见 **§4.5.21 Option D Implementation Record**）。
 
 **但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
-其中仍存在 `ApplicableMOQ` source、provenance carrier。
+其中仍存在 provenance carrier。
 
 `DESIGN RESOLVED` **只**表示 **canonical source-mapping contract 概念设计完成**，
 **不表示** real ERP field known / Adapter implemented / mapping tested / `Effective Inbound` implemented。
@@ -14084,7 +14383,7 @@ canonical **Target Applicability** ＋ **Source Reservation Overlap**）
 （见 **§4.5.9 Option B Implementation Record**）。
 
 **但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
-其中仍存在 `ApplicableMOQ` source、provenance carrier。
+其中仍存在 provenance carrier。
 
 `DESIGN RESOLVED` **只**表示 **canonical allocation applicability mapping contract 概念设计完成**，
 **不表示** real ERP allocation evidence known / reservation source field known / Adapter implemented /
@@ -14123,7 +14422,7 @@ unresolved count                  = 3 → 2
 ```
 
 **但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
-其中仍存在 `ApplicableMOQ` source、provenance carrier（**不**因 `loss_rate` 解析而提前关闭）。
+其中仍存在 provenance carrier（**不**因 `loss_rate` ／ `ApplicableMOQ` 解析而提前关闭）。
 
 `DESIGN RESOLVED` **只**表示 **canonical owner / applicability grain / resolution contract 概念设计完成**，
 **不表示** real ERP source known / source field known / Adapter implemented / tested /
@@ -14132,26 +14431,33 @@ unresolved count                  = 3 → 2
 **未新增**任何 Master Data Mapping layer —— 这是 **`Other Source-Semantic Mapping`
 内部 unresolved item 的关闭**，**不是**新的 resolved layer；`DESIGN RESOLVED` layer 数**仍为 9**。
 
-**`ApplicableMOQ` source —— Review 已提出 ＋ Human Decision 已记录，Status 未变：**
-
-**ApplicableMOQ Source / Applicability Design Review（Review Finding）** 与
-**Human Decision Record** 见 **§4.5.22** ——
-**Option D**（Source-Specific Purchasing-Policy Resolution）已获 **Human Approval**，
-`Canonical Model Compatibility = COMPATIBLE`（**不**引入 Supplier Selection）。
+**Option D —— IMPLEMENTED：** `ApplicableMOQ` source / applicability **现为 `DESIGN RESOLVED`** ——
+其 **Option D**（Source-Specific Purchasing-Policy Resolution ＋ resolution-contract form）
+已由 **Human-authorized Design Change** 实施，`§4.1` ／ `§4.2` ／ `§4.4` ／ `§4.5`
+已完成最小 semantic synchronization（见 **§4.5.22 Option D Implementation Record**）。
 
 ```
-Human Decision          = RECORDED
-Option D                = APPROVED
-Supplier Selection      = NOT INTRODUCED
-ApplicableMOQ source    = DESIGN PENDING   ← 未变
-provenance carrier      = DESIGN PENDING   ← 未变
-unresolved count        = 2                ← 未变
-Option D Implementation = NOT YET EXECUTED
+Human Decision                       = RECORDED
+Option D                             = IMPLEMENTED
+ApplicableMOQ source / applicability = DESIGN RESOLVED
+owner                                = Requirement Calculation Context（Procurement Recommendation Context）
+resolution contract                  = exactly one applicable ApplicableMOQ or unresolved
+Supplier Selection                   = NOT INTRODUCED
+unresolved count                     = 2 → 1
 ```
 
-**Human Decision 已记录**，但 **Option D Implementation = NOT YET EXECUTED**，
-因此本 PR **不实施** Option D semantic synchronization，**不**减少 unresolved count；
-`Other Source-Semantic Mapping` **仍为 `DESIGN PENDING`**。
+**但 `Other Source-Semantic Mapping` 整体仍为 `DESIGN PENDING`** ——
+其中仍存在 provenance carrier（**不**因 `ApplicableMOQ` 解析而提前关闭）。
+
+`DESIGN RESOLVED` **只**表示 **canonical applicability ＋ source semantic resolution contract
+概念设计完成**，**不表示** real ERP source known / Supplier selected / Contract known /
+PIR known / Adapter implemented / procurement engine implemented / tested。
+
+**未新增**任何 Master Data Mapping layer —— 这是 **`Other Source-Semantic Mapping`
+内部 unresolved item 的关闭**，**不是**新的 resolved layer；`DESIGN RESOLVED` layer 数**仍为 9**。
+
+**`Master Data Mapping` overall 仍为 `DESIGN PENDING`** —— 因 `provenance carrier` 未解决，
+**不得**因 `unresolved count = 1` 而提前 closure。
 
 ---
 
