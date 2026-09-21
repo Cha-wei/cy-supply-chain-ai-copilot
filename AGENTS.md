@@ -2,19 +2,29 @@
 
 ## Project Context
 
-项目：Yunnan CY Group Supply Chain AI Copilot
+**项目身份：** Yunnan CY Group Supply Chain AI Copilot
 
-当前阶段：
+**继承的 FROZEN business baseline：**
 
-`Discovery / Project Foundation`
+`docs/discovery/discovery-brief-v0.1.1.md`（`FROZEN`）
 
-当前业务基线：
+该 baseline 是**已冻结的继承事实**，**不是**本项目唯一的「当前工作文档」，也不代表当前项目阶段。
 
-`docs/discovery/discovery-brief-v0.1.1.md`
+### 动态状态不得硬编码
 
-该文档状态：
+以下内容属于**动态项目状态**，会随项目演进而变化：
 
-`FROZEN`
+- 当前项目阶段
+- active design document 与其他 canonical documents
+- 当前 backlog 及其状态
+- open PR / branch / CI 状态
+- implementation state
+
+这些**不得**作为长期 Agent instruction 硬编码在本文件中。
+
+本文件只保留**稳定**内容：项目身份、继承的 `FROZEN` baseline、治理规则。
+
+动态状态必须由 Agent **从 Repository 恢复**，方法见下方 `## Context Recovery`。
 
 ---
 
@@ -120,6 +130,78 @@
 单个模块、外部服务或 AI 能力发生故障时，应尽可能限制故障影响范围，并在合理情况下提供 Graceful Degradation。
 
 AI 不应成为确定性核心业务能力的唯一执行路径。
+
+---
+
+## Context Recovery
+
+### 适用情形
+
+在以下情况下，Agent **不得依赖之前的聊天记忆**：
+
+- fresh Session；
+- Context reset，或 conversation history 被压缩、截断、替换；
+- conversation history 不可用；
+- Agent 对当前项目状态不确定。
+
+**Conversation history 不是恢复项目状态的必需依赖。Repository 是 durable project memory。**
+
+### 恢复顺序
+
+1. **确认 repository root 与 working directory** —— 二者可能不同，不得假定相同。
+2. **读取 `AGENTS.md`** —— 已被自动注入时无需重复读取全文。
+3. **`CONTRIBUTING.md`** —— 如果它存在、当前 Task 涉及其规范领域（见下）、且相关规则**尚未在当前 Context 中可靠可用**，则读取其相关章节。
+4. **识别当前 Task 所需的 active canonical documents** —— 只识别与当前 Task 有关的文档。
+5. **检查必要的 Git state** —— current branch、working tree、recent relevant commits。
+6. **如果当前 Task 与 GitHub PR / CI 有关**，检查 relevant PR / CI state。
+7. **从上述来源重建** —— current phase、applicable decisions、unresolved work、current Task boundary。
+
+### Minimum Necessary Context
+
+Context Recovery **不等于**每次新 Session 都无差别读取整个仓库。
+
+**不要求**：
+
+- 读取全部 Git history；
+- 读取所有 docs；
+- 读取全部 closed PR；
+- 扫描全部代码。
+
+只读取**足以可靠恢复当前 Task 状态**的内容。
+
+不确定某项内容是否必要时，先不读取；确实需要时再读取。
+
+该原则的 Canonical Definition 见 `CONTRIBUTING.md` 第 4 节「Context & Delegation」，本文件不重复其内容。
+
+### CONTRIBUTING.md
+
+**不得假定** `CONTRIBUTING.md` 已作为 workspace instruction 自动注入。
+
+如果当前 Task 涉及以下任一规范领域，Agent **必须确保相关规则在当前 Context 中可靠可用**；如果尚未加载，则读取 `CONTRIBUTING.md` 的**相关章节**并遵守：
+
+- workflow
+- Git / GitHub
+- DoR / DoD
+- testing
+- documentation
+- architecture decision
+- rule conflict
+- context / delegation
+
+本文件**只建立引用关系，不复制** `CONTRIBUTING.md` 的内容。
+
+二者关系与冲突处理由 `CONTRIBUTING.md` 第 1 节「规则优先级（Rule Precedence）」及「与 AGENTS.md 的关系」定义，本文件不重复该规则。
+
+### Fresh Context Continuation
+
+如果 Repository 已能**可靠恢复**当前状态，Agent **不应仅因为「这是新 Context」**就要求 Human 重新解释整个项目。
+
+对于**已经明确授权且仍然有效**的 Task：
+
+- 如果该授权可以从**当前 Task 输入**或 **Repository 状态**可靠确定，应**继续执行**；
+- 只有在**无法确定当前授权是否仍然有效**时，才请求 Human clarification。
+
+如果恢复出的 Repository 状态与预期不一致，应**先明确指出差异**，而不是自行假定某一方正确。
 
 ---
 
