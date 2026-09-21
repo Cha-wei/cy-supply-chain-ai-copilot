@@ -8592,16 +8592,20 @@ Business consequence: BR-SUBSTITUTE-001 → DATA_INCOMPLETE
 | **A** provenance reference **缺失** | 视缺失对象而定 —— 若 **required evidence role 本身未提供** → `EVIDENCE_ROLE_NOT_PROVIDED`；若 **canonical field value 缺失** → `FIELD_VALUE` ／ `MISSING` |
 | **B** provenance reference **存在**，但指向**错误 Package / Analysis Context** | **`PROVENANCE` ／ `PROVENANCE_MISMATCH`** |
 
-> **Validation Taxonomy Limitation（已由 PR #44 Human Decision 裁定）：**
+> **Validation Taxonomy Limitation（已由 PR #44 Human Decision 裁定；独立 Review 已完成）：**
 > 「evidence **存在**，但其 **provenance reference 缺失 ／ package scope 无法确定**」这一情形，
 > 当前 **`PROVENANCE_MISMATCH` 无法精确表达**（它语义上是 *mismatch*，不是 *absence*）。
 >
-> **Human Decision：** **DO NOT EXTEND** `PROVENANCE_MISMATCH` 覆盖此情形；
-> **不新增** `PROVENANCE_MISSING` ／ `LINEAGE_MISSING` 等 reason。
-> 该 taxonomy gap **保持 `OPEN`**，**须由独立的 Validation Taxonomy Design Review 评估**
+> **PR #44 Human Decision：** **DO NOT EXTEND** `PROVENANCE_MISMATCH` 覆盖此情形；
+> **不新增** `PROVENANCE_MISSING` ／ `LINEAGE_MISSING` 等 reason
 > （见 **§4.5.22 Human Decision Record** 决定 13 ／ 14）。
 >
-> 在该独立 Review 完成前，**`PROVENANCE_MISMATCH` 语义保持不变**；
+> **独立 Review 已完成**：**Missing Provenance Reference — Validation Taxonomy Gap Design Review
+> （Review Finding）** 见 **§4.5.22**；其结论
+> **`Current Taxonomy Compatibility = INSUFFICIENT`**，推荐新增 **`PROVENANCE_UNRESOLVED`**
+> （`PROVENANCE` category）—— **结论待 Human Decision，本 Task 未实施 taxonomy 变更**。
+>
+> 因此该 taxonomy gap **保持 `OPEN`**；**`PROVENANCE_MISMATCH` 语义保持不变**；
 > 且该情形**不得**被误分类为 `PACKAGE_STRUCTURE`。
 
 **Structural vs Business Provenance（不得误分类）**
@@ -15602,12 +15606,388 @@ Validation Taxonomy Limitation       = OPEN / SEPARATE REVIEW REQUIRED
 1. Validation Taxonomy Review
      问题：evidence exists + required provenance reference missing /
            package scope cannot be determined 应如何进入 canonical taxonomy
-     —— 本 Task 未实施该 Review
+     —— **Review Finding 已记录**（见本节 **Missing Provenance Reference —
+        Validation Taxonomy Gap Design Review（Review Finding）**）；
+        结论 **`Current Taxonomy Compatibility = INSUFFICIENT`**，
+        推荐新增 **`PROVENANCE_UNRESOLVED`** —— **待 Human Decision，taxonomy 未变更**
 
 2. Master Data Mapping Closure Review
      —— 必须在 provenance implementation 完成后独立执行
      —— 本 Task 未定义 closure criteria，也未宣布 overall closure
 ```
+
+**Missing Provenance Reference — Validation Taxonomy Gap Design Review（Review Finding）**
+
+**Review Question**
+
+本 Review **只回答一个问题**：
+
+> 当 **source / canonical evidence 本身存在**、但 **required provenance reference 缺失**
+> （或因此无法确定该 evidence 属于哪个 Snapshot Package / Analysis provenance context）时，
+> 现有 **Category ＋ Reason** taxonomy **是否足以准确表达该 gap**？
+
+**不得直接修改 Final Canonical Reason Set；不得在本 PR 新增 reason。**
+
+**Existing Taxonomy Baseline（完整复核，未改变）**
+
+**§4.4.80 —— 8 个正式 Category：**
+
+```
+PACKAGE_STRUCTURE ／ EVIDENCE_AVAILABILITY ／ FIELD_VALUE ／ IDENTITY_RESOLUTION
+SCOPE_COVERAGE ／ SEMANTIC_RESOLUTION ／ CONSISTENCY ／ PROVENANCE
+```
+
+**§4.4.81 —— 11 个正式 Reason（本 Review 未修改）：**
+
+| # | Reason | Category |
+| --- | --- | --- |
+| 1 | `STRUCTURAL_INCONSISTENCY` | `PACKAGE_STRUCTURE` |
+| 2 | `EVIDENCE_ROLE_NOT_PROVIDED` | `EVIDENCE_AVAILABILITY` |
+| 3 | `MISSING` | `FIELD_VALUE` |
+| 4 | `INVALID_TYPE` | `FIELD_VALUE` |
+| 5 | `OUT_OF_DEFINED_RANGE` | `FIELD_VALUE` |
+| 6 | `INVALID_DEFINED_STATUS` | `FIELD_VALUE` |
+| 7 | `UNRESOLVED_IDENTITY` | `IDENTITY_RESOLUTION` |
+| 8 | `UNRESOLVED_SCOPE` | `SCOPE_COVERAGE` |
+| 9 | `SEMANTIC_UNRESOLVED` | `SEMANTIC_RESOLUTION` |
+| 10 | `CONSISTENCY_CONFLICT` | `CONSISTENCY` |
+| 11 | `PROVENANCE_MISMATCH` | `PROVENANCE` |
+
+**明确：** 旧 interim seed list **不构成**第二套 canonical taxonomy，本 Review 不引用、不复活。
+
+**Exact Gap Scenario（Case G1）**
+
+```
+Snapshot Package         = 已 ACCEPTED
+required logical dataset role = 已提供
+source evidence record   = 存在
+canonical business value = 可读取
+
+例如 Inventory evidence：
+  plant_id      = Plant-A
+  material_code = MAT-X
+  on_hand_qty   = 100
+
+但：
+  Stable Source Evidence Locator /
+  required package-scoped provenance reference = 缺失
+
+因此：
+  不能可靠证明该记录属于当前 accepted Package P1
+```
+
+**这不是** `artifact missing`，**也不是** `business field on_hand_qty missing`。
+
+**Neighboring Condition Comparison（必须逐项证明不同）**
+
+| 邻接情形 | 既有判定 | Case G1 是否适用 | 理由 |
+| --- | --- | --- | --- |
+| **A. PACKAGE_STRUCTURE** | `STRUCTURAL_INCONSISTENCY`（manifest 声明 Inventory included，但 artifact absent） | **不适用** | Case G1 中 **artifact / evidence 本身存在**；不得误归 `PACKAGE_STRUCTURE` |
+| **B. EVIDENCE_AVAILABILITY** | `EVIDENCE_ROLE_NOT_PROVIDED`（Supplier Performance role 根本未提供） | **不适用** | Case G1 中 **logical evidence role 已提供** |
+| **C. FIELD_VALUE** | `MISSING`（`SafetyStock` 字段本应存在但缺失） | **不可复用** | `§4.4.80` 已明确 `MISSING = 字段本应存在，但不存在`，且**不得**用于 valid absence ／ not applicable ／ dataset role not provided。Case G1 中 **business value 本身存在**，缺的是 **provenance metadata / reference** —— 复用会让 `SafetyStock missing` 与 `provenance reference missing` **共享一个过宽 reason**，构成 semantic distortion |
+| **D. SCOPE_COVERAGE** | `UNRESOLVED_SCOPE`（dataset 存在，但无法确认 coverage 是否覆盖 Plant-A） | **不可复用** | 需判断 **business scope coverage** 与 **package provenance scope** 是否同一 root condition —— **不是**。`UNRESOLVED_SCOPE` 回答「这份 data 覆盖不覆盖当前分析范围」；Case G1 回答「这条 evidence **属于哪个 Package**」。**不得**只因为都含 "scope" 就自动复用 |
+| **E. SEMANTIC_RESOLUTION** | `SEMANTIC_UNRESOLVED`（value 存在但业务语义无法解释） | **不适用** | Case G1 中 business semantic 可能**完全明确**，问题是 **provenance linkage 缺失** |
+| **F. PROVENANCE** | `PROVENANCE_MISMATCH`（reference 存在，但 Run→P1 而 reference→P2） | **不适用** | Case G1 中 **reference 不存在 / package scope 无法建立**；**absence ≠ mismatch**（PR #44 Human Decision 已裁定） |
+| （补充）`UNRESOLVED_IDENTITY` | identity 无法解析到 canonical identity | **不适用** | Case G1 中 `plant_id` / `material_code` **可解析** |
+
+**结论：Case G1 与全部 11 个既有 reason 的 root condition 均不同。**
+
+**Root-Cause Principle（Reason ≠ Outcome）**
+
+Validation Reason 描述**最接近根因的失败条件**（即「**为什么** evidence 不可靠」），
+**不是**「最终造成的能力失败」（`§4.4.82`）。
+
+因此以下**均不得**作为新 Reason：
+
+```
+DATA_INCOMPLETE
+CAPABILITY_UNAVAILABLE
+REJECTED
+UNUSABLE
+```
+
+**Missing vs Unresolvable vs Mismatch（P1 ～ P4）**
+
+| # | 情形 | 判定 |
+| --- | --- | --- |
+| **P1** | provenance reference **完全缺失** | 见下 |
+| **P2** | provenance reference **存在**，但**无法解析为 package-scoped evidence locator** | 见下 |
+| **P3** | provenance reference **可以解析**，但对应**错误 Package / Analysis Context** | **`PROVENANCE` ／ `PROVENANCE_MISMATCH`**（已明确，**不变**） |
+| **P4** | provenance metadata **存在**，但**不完整到无法建立 package scope** | 见下 |
+
+**判断：P1 ／ P2 ／ P4 应共享同一个 Reason。**
+
+理由：三者的 root condition 在语义上**同属一类** ——
+「**required provenance linkage 无法可靠建立**」；
+区别只在**表现形式**（完全缺失 ／ 存在但无法解析 ／ 不完整），
+而**不是**不同的失败根因。为三者各设一个 reason 会造成 **reason explosion**，
+与 `§4.4.81` 的「不得引入 catch-all」精神及本 Task 的「优先避免 reason explosion」要求相悖。
+
+**P3 与它们的分界是根本性的：** P3 的 linkage **已经建立**，只是**指向了错误的 context** ——
+所以 P3 保持 `PROVENANCE_MISMATCH`，而 P1 ／ P2 ／ P4 需要一个**并列**的 reason。
+
+**Provenance Completeness Impact**
+
+继承 **PR #45**：canonical input `provenance complete` 至少能回答——
+
+```
+1. Snapshot Package
+2. Logical Dataset Role
+3. specific Source Evidence
+4. Mapping / Resolution Basis（when applicable）
+5. Analysis / business context
+```
+
+**逐层缺失的判定：**
+
+| 缺失层 | root condition | 应使用 |
+| --- | --- | --- |
+| **Layer 2 —— logical evidence role 本身未提供** | evidence availability | **`EVIDENCE_ROLE_NOT_PROVIDED`**（已明确，**不新增**） |
+| **Layer 1 / Layer 3 / Layer 4 / Layer 5 缺失**，或 **linkage 无法可靠建立** | provenance linkage 无法建立 | **本 Review 建议的同一个新 provenance reason** |
+
+**判断：** 除「evidence role 本身未提供」这一既有情形外，
+**其余任一 required provenance layer 缺失都共享同一个 reason** ——
+**优先避免 reason explosion**；**不**按 layer 拆分多个 reason。
+
+**Dataset-Level Reference Boundary**
+
+`dataset-level provenance reference` **存在**，但**具体 `Stable Source Evidence Locator` 缺失**时，
+**仍可能无法达到 canonical input `provenance complete`**。
+
+**不得**因为 dataset-level provenance reference 存在就宣布 **provenance valid**。
+
+**Evidence Locator Boundary（不重开 semantic design）**
+
+继承 **PR #45** 已正式采用的 **`Stable Source Evidence Locator`**（package-scoped conceptual locator）：
+
+| 情形 | 归属 |
+| --- | --- |
+| Locator **缺失** | **provenance taxonomy** |
+| Locator **存在但无法解析** | **provenance taxonomy** |
+| Locator **正确解析**，但与当前 Analysis Run 的 Package **不一致** | **`PROVENANCE_MISMATCH`** |
+
+**本 Review 不重开** `Stable Source Evidence Locator` 的 semantic design。
+
+**Derived Result Scenario**
+
+```
+RecommendedPurchaseQty = 100
+Analysis Run           = 存在
+BR-PROCUREMENT-001     = 存在
+但 upstream ShortageQty reference 缺失
+  → 无法从 recommendation 追溯到 upstream canonical input
+```
+
+**结论：该场景与「source evidence provenance reference missing」应使用同一个 canonical Reason。**
+
+理由：两者的 root condition 相同 ——「**required provenance linkage 无法可靠建立**」，
+只是一个发生在 **source → canonical fact** 方向，另一个发生在 **derived → upstream canonical input** 方向。
+**方向不同不构成不同根因。**
+
+**不得**为此新增 `DERIVATION_LINEAGE_MISSING` ／ `UPSTREAM_REFERENCE_MISSING` 等细碎 reason ——
+**无充分必要性**。
+
+**Package Acceptance Boundary（Failure Isolation）**
+
+**`provenance reference` missing 不得必然导致整个 Snapshot Package `REJECTED`。**
+
+必须继续遵守既有 **Failure Isolation** ＋ **minimum blast radius**：
+
+如果问题只影响
+
+```
+一条 canonical fact ／ 一个 relationship ／ 一个 derived result ／ 一个 capability
+```
+
+则**只**在对应范围形成 Validation Issue。
+
+**只有**当 **package-level provenance integrity 无法信任**
+且**现有 Design 支持** structural / package consequence 时，才允许升级更大范围。
+
+**Blast Radius & Business Outcome Mapping**
+
+新 reason（若被采用）必须能配合既有 **Issue Impact** 表达（`§4.4.79`）：
+
+```
+Dataset ／ Record / Field ／ Relationship ／ Canonical Grain ／ Analysis Run ／ Capability
+```
+
+**不得新增** `HIGH` ／ `MEDIUM` ／ `LOW` severity。
+
+**Business Outcome 影响（既有路径，不新增分类）：**
+
+| 场景 | 后果 |
+| --- | --- |
+| Shortage calculation 必需的 Inventory evidence provenance 无法建立 | affected grain → **`DATA_INCOMPLETE`**（**不是**整个 Package 自动失败） |
+| Supplier Risk 的某条 evidence provenance 无法建立 | 只影响对应 Risk capability / evidence scope |
+
+**不得创建**新的 Business Classification `PROVENANCE_ERROR`。
+
+**AI Explanation Boundary**
+
+如果 AI Explanation 引用一个**没有可靠 provenance linkage** 的事实，
+**不得**把它作为 **Evidence** 输出。
+
+必须保持 **No Unsupported Fact** ＋ **Evidence Fidelity**。
+
+**本 Review 只判断 taxonomy，不修改 AI / Tool Boundary。**
+
+**Option Review**
+
+| Option | 内容 | 判定 |
+| --- | --- | --- |
+| **0** | Keep Taxonomy Gap Open（不生成 canonical Validation Issue，只由 readiness / validation gate 阻止使用） | **安全但不可接受为终点** —— 见下 |
+| **A** | Reuse `FIELD_VALUE` ／ `MISSING` | **拒绝** —— 与 `§4.4.80` `MISSING` 既有定义冲突；会让 `SafetyStock missing` 与 `provenance reference missing` 共享过宽 reason |
+| **B** | Reuse `SCOPE_COVERAGE` ／ `UNRESOLVED_SCOPE` | **拒绝** —— root cause 不同（business coverage vs provenance linkage）；不得仅因最终「scope unknown」就误分类 |
+| **C** | Reuse `PROVENANCE_MISMATCH` | **明确拒绝** —— 违反 **PR #44 Human Decision**「**DO NOT EXTEND `PROVENANCE_MISMATCH`**」 |
+| **D** | Add New `PROVENANCE` Reason | **推荐**（命名见 Naming Review） |
+| **E** | Split `PROVENANCE` into Two Reasons（`PROVENANCE_UNRESOLVED` ＋ `PROVENANCE_MISMATCH`） | **推荐（作为 Option D 的正式形式）** |
+
+**Option 0 评估：** 优点是不改 taxonomy；**缺点**是一个明确的
+**data quality / traceability failure 无法结构化记录**，直接影响：
+
+- **audit** —— 无法记录「哪条 evidence、因何 provenance 原因未被采用」
+- **blast radius** —— 无法表达 affected grain / capability
+- **explanation** —— 无法向业务解释为何该 evidence 未被使用
+- **reproducibility** —— 无法重现「同一 Package 下为何结果不同」
+
+且与 `§4.4.90`「**不得只记录** `Data Quality Issue` 而**没有具体 reason**」及
+`§4.4.79` 要求的 Issue dimensions **直接冲突**。
+
+**Option D 与 Option E 的关系：** 二者实质相同（新增 **一个**、与 `PROVENANCE_MISMATCH` **并列**的
+`PROVENANCE` reason）。**Option E 的表述更准确** —— 它把 `PROVENANCE` category 明确定义为
+「**linkage 无法建立**」vs「**linkage 已建立但指向错误 context**」的**对称二分**，
+从而覆盖 P1 ／ P2 ／ P4，而 `PROVENANCE_MISSING` 式的命名只能覆盖 P1。
+
+**Option E 需检查的命名歧义：** `PROVENANCE_UNRESOLVED` 与既有
+`SEMANTIC_UNRESOLVED` ／ `UNRESOLVED_SCOPE` ／ `UNRESOLVED_IDENTITY` 共享 `UNRESOLVED` 语素 ——
+这**既是优点**（命名风格一致）**也是风险**（可能被误用）。
+必须靠 **root condition 定义**区分：provenance linkage ≠ business semantic ≠ business scope ≠ identity。
+
+**Naming Review**
+
+| 候选名 | 准确覆盖 P1 | P2 / P4 | 过窄？ | 过宽？ | 命名风格 | 适用 source evidence ＋ derived lineage | 与既有 reason 混淆风险 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `PROVENANCE_MISSING` | ✅ | ❌ **否** | **过窄** | 否 | 与 `MISSING` 同语素 | 否（derived lineage 不是 "missing"） | **高** —— 直接与 `FIELD_VALUE` ／ `MISSING` 混淆 |
+| `PROVENANCE_REFERENCE_MISSING` | ✅ | ❌ **否** | **过窄** | 否 | 冗长 | 否 | **高** —— 仍含 `MISSING` |
+| `UNRESOLVED_PROVENANCE` | ✅ | ✅ | 否 | 否 | 与既有 `UNRESOLVED_*` **词序相反** | ✅ | 中 —— 语素重叠但词序不同 |
+| **`PROVENANCE_UNRESOLVED`** | ✅ | ✅ | 否 | 否 | 与 `PROVENANCE_MISMATCH` **前缀对称** | ✅ | 中 —— 需靠定义区分 `SEMANTIC_UNRESOLVED` |
+
+**最终推荐：`PROVENANCE_UNRESOLVED`**
+
+理由：
+
+- **与 `PROVENANCE_MISMATCH` 对称** —— 同一 category 前缀 `PROVENANCE_`，语义二分清晰；
+- **覆盖 P1 ／ P2 ／ P4** —— 「required provenance linkage 无法可靠建立」，
+  **不**局限于「reference 不存在」；
+- **对 source evidence 与 derived lineage 同样适用**；
+- **不**含 `MISSING` 语素，**避免**与 `FIELD_VALUE` ／ `MISSING` 混淆；
+- **不用** `UNRESOLVED_PROVENANCE` 的词序（与既有 `UNRESOLVED_IDENTITY` / `UNRESOLVED_SCOPE` 相反），
+  避免让人以为它是 `UNRESOLVED_*` 家族的同构成员；
+- 对未来实现足够稳定。
+
+**Category Review**
+
+**继续使用既有 `PROVENANCE` category，不创建新 Category。**
+
+但必须明确一处**最小措辞问题**：`§4.4.80` 现有 `PROVENANCE` category 描述为
+「evidence / derived result 来源上下文与当前 Analysis Context **不一致**」——
+该措辞**只覆盖 mismatch**，**不完全覆盖**「无法建立」。
+若 Human 批准新增 reason，则该 category 描述需要**最小扩宽**为
+「…**不一致，或无法可靠建立**」。
+**本 Review 不实施该修改**（属后续 authorized taxonomy synchronization）。
+
+**Current Taxonomy Compatibility Result**
+
+```
+Current Taxonomy Compatibility = INSUFFICIENT
+```
+
+依据：**没有任何既有 reason 能准确表达 Case G1 的 root condition**，
+且逐个复用均会造成 **semantic distortion**：
+
+| 复用对象 | 造成的 distortion |
+| --- | --- |
+| `MISSING` | 把「provenance metadata 缺失」与「business field 缺失」混为一类 |
+| `UNRESOLVED_SCOPE` | 把「package provenance scope」与「business scope coverage」混为一类 |
+| `SEMANTIC_UNRESOLVED` | 把「provenance linkage 缺失」与「business semantic 无法解释」混为一类 |
+| `PROVENANCE_MISMATCH` | 把 **absence** 伪装成 **mismatch**（已被 PR #44 Human Decision 明确禁止） |
+| `EVIDENCE_ROLE_NOT_PROVIDED` | Case G1 中 role **已提供** |
+| `STRUCTURAL_INCONSISTENCY` | Case G1 中 artifact **存在** |
+
+**不得**因为「勉强能塞进去」就判 `SUFFICIENT`。
+
+**Master Data Mapping Boundary**
+
+本 Taxonomy Review **不关闭**：
+
+```
+Final Master Data Mapping  = 仍 DESIGN PENDING
+Master Data Mapping overall = 仍 DESIGN PENDING
+```
+
+**也不定义** `Final Master Data Mapping` closure criteria ——
+这些属于后续 **Master Data Mapping Closure Review**。
+
+**Snapshot / Import Contract Boundary**
+
+**不推进**：
+
+```
+Serialization Format ／ Physical Dataset Layout ／ Field Carrier Mapping ／ Final Import Contract
+```
+
+保持：
+
+```
+Snapshot / Import Contract overall = DESIGN PENDING
+```
+
+**Known Risks（本 Review 识别，未消除）**
+
+| # | Risk | 说明 | 当前状态 |
+| --- | --- | --- | --- |
+| 1 | **`UNRESOLVED` 语素误用** | `PROVENANCE_UNRESOLVED` 与 `SEMANTIC_UNRESOLVED` ／ `UNRESOLVED_SCOPE` ／ `UNRESOLVED_IDENTITY` 可能被误用 | **已设边界** —— 必须靠 root condition 定义区分 |
+| 2 | **Category 描述需最小扩宽** | `§4.4.80` `PROVENANCE` 现措辞只覆盖 mismatch | **已报告** —— 属后续 authorized synchronization |
+| 3 | **reason count 由 11 → 12** | 唯一新增，非 explosion；但仍是 taxonomy 变更 | **待 Human Decision** |
+| 4 | **既有 examples 可能受影响** | 实施时须检查既有 canonical examples 的 authoritative result 是否需同步 | **未评估** —— 本 Review **未修改**任何 example |
+| 5 | **若选 Option 0** | audit ／ blast radius ／ explanation ／ reproducibility 缺口持续 | **未消除** |
+| 6 | **不影响既有已解析设计** | 本 Review 不触碰 Warehouse ／ BOM ／ sourcing ／ arrival ／ allocation ／ `loss_rate` ／ `ApplicableMOQ` ／ provenance carrier 的既有决定 | **已设边界** |
+
+**Status（本 Review 时点）**
+
+```
+§4.4.80 Canonical Issue Categories      = UNCHANGED（8 categories）
+§4.4.81 Final Canonical Reason Set      = UNCHANGED（11 reasons）
+PROVENANCE_MISMATCH semantic            = UNCHANGED
+new canonical reason                    = NOT CREATED
+Category Model                          = UNCHANGED
+Validation Taxonomy Limitation          = OPEN
+Final Master Data Mapping               = DESIGN PENDING
+Master Data Mapping overall             = DESIGN PENDING
+Snapshot / Import Contract overall      = DESIGN PENDING
+```
+
+本 Review **只记录 Review Finding**，**未**新增 reason ／ category，
+**未**修改 reason count，**未**重命名 `PROVENANCE_MISMATCH`，
+**未**修改任何既有 example 的 authoritative result，
+**未**创建 error code ／ enum ／ API error object ／ test ／ schema。
+
+**Human Decision Required**
+
+1. 是否接受 **`Current Taxonomy Compatibility = INSUFFICIENT`**？
+2. 是否接受 **provenance absence ／ unresolvable provenance linkage 需要独立 canonical Reason**？
+3. 是否确认 **`PROVENANCE_MISMATCH` 保持原语义不变**（reference exists but wrong / incompatible context）？
+4. 是否采用推荐的新 Reason 名称 **`PROVENANCE_UNRESOLVED`**
+   （备选：`PROVENANCE_MISSING` ／ `PROVENANCE_REFERENCE_MISSING` ／ `UNRESOLVED_PROVENANCE`）？
+5. 是否确认新 Reason 属于既有 **`PROVENANCE`** category（**不**创建新 Category）？
+6. 是否确认 **missing / unresolved provenance ≠ `FIELD_VALUE` / `MISSING`
+   ≠ `UNRESOLVED_SCOPE` ≠ `SEMANTIC_UNRESOLVED`**？
+7. 是否授权后续 **`§4.4` 必要的最小 taxonomy synchronization**
+   （含 `§4.4.80` category 描述的**最小扩辞**与 `§4.4.81` 新增第 12 个 reason）？
+
+**若 Human 判定 `Current Taxonomy Compatibility = SUFFICIENT`**，
+则**必须**明确复用哪一个既有 reason，并**证明不改变其既有 semantic**。
 
 #### 4.5.23 Examples
 
