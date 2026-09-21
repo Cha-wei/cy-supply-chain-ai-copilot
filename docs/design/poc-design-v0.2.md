@@ -1065,15 +1065,65 @@ MAT-B AVAILABLE = 100
 
 则**已分配的 60 不得同时**：
 
-- 再提供给 `MAT-C`；
-- 再作为**未分配** Substitute Supply；
-- 被多个 shortage **同时重复消费**。
+- 分配给其他 Target（例如 `MAT-C`）；
+- 作为**未分配** Substitute Supply；
+- 被多个 shortage **同时重复消费**；
+- 继续作为 `MAT-B` **自身可自由使用的完整** Available Supply。
 
 如果约束被违反（例如 `60 → MAT-A` 且 `50 → MAT-C`，合计 `110 > 100`）：
 
 **处理：** `DATA_INCOMPLETE` ＋ **Allocation Conflict**
 
 **不得 silently over-allocate。**
+
+**Supply Conservation / Reservation Constraint**
+
+一旦 `AllocatedSubstituteQty` 被分配给某 Target Material，该数量**必须**从 Source Material 在**相同有效需求窗口**内仍可自由使用的 **Eligible Supply Pool** 中**保留 / 扣除**。
+
+因此，**已分配数量不得同时**：
+
+- 分配给其他 Target；
+- 作为**未分配** Substitute Supply；
+- 被多个 shortage **重复消费**；
+- 继续作为 Source Material 自身**可自由使用的完整** Available Supply。
+
+定义：
+
+```
+RemainingUnallocatedSourceSupply
+  = EligibleSubstituteSupply
+  - Σ AllocatedSubstituteQty
+```
+
+要求：
+
+```
+RemainingUnallocatedSourceSupply >= 0
+```
+
+> 这**只是 supply-conservation invariant**，**不是**新的 optimization / allocation algorithm。
+
+**与 `BR-INVENTORY-001` 的关系**
+
+`BR-INVENTORY-001` 定义的是**原始 eligible inventory baseline**（见 §2.2）。
+
+本规则**不修改** `BR-INVENTORY-001` 的原始定义。
+
+但当某部分 `AVAILABLE` inventory **已形成有效 Substitute Allocation** 时，后续 shortage evaluation **不得**继续把该**已分配数量**视为 Source Material 的 **uncommitted supply**。
+
+本节只建立 **`BR-SUBSTITUTE-001` 的 allocation reservation constraint**，**不重新定义** `BR-INVENTORY-001`。
+
+**时间边界（Demand Window）**
+
+该 reservation **只作用于 allocation 有效的 demand window**。
+
+由于本 Task **不设计复杂 allocation timing engine**：
+
+如果**无法可靠判断** allocation 与 Source Material **自身需求窗口是否重叠**：
+
+**处理：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**
+
+**不得同时把 supply 计入两边。**
 
 > 本 Task **只定义约束**。**不得设计**：
 >
@@ -1235,6 +1285,27 @@ Approved relationship exists，但 `substitution_ratio` **missing**。
 - ＋ **Allocation Conflict**
 
 **不得 silently over-allocate。**
+
+**Example H — Source supply conservation**
+
+| 字段 | 值 |
+| --- | --- |
+| MAT-B AVAILABLE | 100 |
+| Allocation | 60 MAT-B → MAT-A |
+| `substitution_ratio` | 1.0 |
+
+**Expected：**
+
+- `MAT-A ApprovedSubstituteSupply = 60`
+- `RemainingUnallocatedSourceSupply(MAT-B) = 40`
+
+对于**同一有效需求窗口**：
+
+- `MAT-B` **不得继续按 `100` 作为完全未承诺 supply 使用**。
+
+如果**无法可靠判断** allocation 与 `MAT-B` **自身需求窗口是否重叠**：
+
+- `DATA_INCOMPLETE`
 
 #### 2.3.14 AI Boundary
 
