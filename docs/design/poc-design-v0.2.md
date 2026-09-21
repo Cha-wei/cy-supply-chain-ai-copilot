@@ -4472,7 +4472,7 @@ Canonical model **不得通过默认值隐藏缺失**。
 | `loss_rate` 的 canonical owner / grain | **`UNKNOWN`** | §2.4 只定义其语义与公式，**未定义**其归属实体与粒度 |
 | Warehouse 是否为 canonical attribute | **`DESIGN RESOLVED`** | **不是** canonical attribute —— Warehouse 是 source / mapping / scope context（**§4.5.12**）；§2.2.1 的 grain **不含** warehouse |
 | `sourcing_status` enum / vocabulary | **`DESIGN RESOLVED`** | **不建立全局 source enum** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.1.4 I** ／ **§4.5.11** |
-| `effective_arrival_date` 的 source field | **`DESIGN PENDING`** | §2.6.4 留给 Data Dictionary |
+| **`effective_arrival_date` source mapping policy** | **`DESIGN RESOLVED`** | **不建立 global source field** —— concrete source field = **`SOURCE-SPECIFIC` / Adapter-defined**；canonical mapping contract 见 **§4.2.6** ／ **§4.5.21**；**真实 ERP field 当前仍未知**（**未知 ≠ Design Pending**） |
 | Allocation 与 demand window 的关联机制 | **`DESIGN PENDING`** | §2.3.12 明确不设计 timing engine |
 | `ApplicableMOQ` 的来源 | **`DESIGN PENDING`** | §2.5.5 留给 Data Dictionary / Adapter Design |
 | Provenance 的具体承载方式 | **`DESIGN PENDING`** | 见 §4.1.8 |
@@ -4493,6 +4493,24 @@ Canonical model **不得通过默认值隐藏缺失**。
 > （PR #32 Human Decision ／ Option B）** 解析 —— **不建立全局 source enum**，
 > 而是 **source-specific vocabulary → canonical eligibility condition** 的 **mapping contract**
 > （见 **§4.1.4 I** ／ **§4.5.11 Option B Implementation Record**）。
+>
+> **`effective_arrival_date` source mapping policy** 已由 **Human-authorized
+> documentation/status alignment（PR #34 ／ PR #35）** 同步为 **`DESIGN RESOLVED`** ——
+> **不建立 global source field**；具体 source field 由 **source-specific Adapter mapping** 提供；
+> canonical mapping contract 见 **§4.2.6** ／ **§4.5.21**。
+>
+> **必须明确：**
+>
+> ```
+> DESIGN RESOLVED  ≠  real ERP field known
+> DESIGN RESOLVED  ≠  Adapter implemented
+> DESIGN RESOLVED  ≠  mapping tested
+> ```
+>
+> 当前解决的是 **canonical source-mapping policy**，
+> 而**不是** **具体 source-system field selection**。
+>
+> **真实 ERP field 当前仍未知** —— **真实 ERP field 未知 ≠ Design Pending**。
 
 ---
 
@@ -6378,9 +6396,14 @@ RemainingInboundQty = ordered_qty - received_qty
 > 已定义 Business Rule  ≠  本 Task 新增 constraint
 > ```
 
-**`effective_arrival_date`** —— source field mapping **仍 `DESIGN PENDING`**。
+**`effective_arrival_date`** —— **canonical mapping contract = `DESIGN RESOLVED`**
+（见 **§4.2.6** ／ **§4.5.21**）；**source mapping = `SOURCE-SPECIFIC` / Adapter-defined**。
 
-**不得决定**它来自 `promised_date` / `confirmed_date` / `ETA` 等。
+**不得**把 `promised_date` / `confirmed_date` / `ETA` 等中的**任何一个**声明为**全局 source**；
+**不得**建立 global source-field precedence。
+
+Field validation **只**要求：进入本 Rule 前 `effective_arrival_date` 已是
+**exactly one resolved** 或 **unresolved**（见 **§4.4.49**）。
 
 **Inbound status** —— 现有 Design 支持：`OPEN` / `CONFIRMED` / `PARTIALLY_RECEIVED` /
 `CANCELLED` / `CLOSED` / `COMPLETED`。
@@ -10676,14 +10699,18 @@ JSON metadata / `source_field_name` persisted field / physical lineage schema。
 - `§4.4.95` —— 新增 arrival-date semantic unresolved 示例，并明确
   「**没有 global source-field precedence**」**本身不是错误**，而是**正式设计选择**
 
-**§4.1 未修改（授权边界）**
+**§4.1 的最小 status synchronization（已获额外授权）**
 
-`§4.1 Canonical Data Model` **未被修改**，`Inbound` entity grain 与
-`effective_arrival_date` 的 canonical semantic **均未改变**。
+`§4.1 Canonical Data Model` 的 **entity grain / attributes / Inbound canonical model 均未修改**；
+`effective_arrival_date` 的 **canonical semantic** 亦**未改变**。
 
-`§4.1.12` 的 `effective_arrival_date 的 source field` 条目**保留原文** ——
-其口径是「**具体 source field**」，与本 Task 解析的 **canonical mapping contract** 不是同一对象；
-如需统一表述，须**另行 Human 授权**。
+**仅**对 `§4.1.12 Open Items` 中与 `effective_arrival_date` **相关的那一条**做了
+**最小 consistency synchronization** —— 另经
+**Human-authorized documentation/status alignment（PR #34 ／ PR #35）** 授权；
+这**不是**新的 Business Decision，也**不是**重新打开 `§4.1 Canonical Data Model`。
+
+同步后 `§4.1.12` 登记：**`effective_arrival_date` source mapping policy = `DESIGN RESOLVED`**，
+并明确 **`DESIGN RESOLVED` ≠ real ERP field known ≠ Adapter implemented ≠ mapping tested**。
 
 **Meaning of `DESIGN RESOLVED`**
 
