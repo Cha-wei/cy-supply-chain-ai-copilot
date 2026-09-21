@@ -7975,9 +7975,9 @@ conceptual validation design complete
 > 因此现为 **`DESIGN RESOLVED`**，unresolved count **7 → 6**。
 >
 > `effective_arrival_date` source mapping 的
-> **Effective Arrival Date Source Mapping Design Review** 已产生
-> **Review Finding ＋ Human Decision Gate** —— 见 **§4.5.21**；
-> `Other Source-Semantic Mapping` 状态**仍为 `DESIGN PENDING`**，unresolved count **仍为 6**。
+> **Effective Arrival Date Source Mapping Design Review** —— 见 **§4.5.21**；
+> 其 **Human Decision 已记录**（**Option D APPROVED**），但 **semantic synchronization 尚未实施**，
+> 因此 `Other Source-Semantic Mapping` 状态**仍为 `DESIGN PENDING`**，unresolved count **仍为 6**。
 
 #### 4.5.1 Purpose & Scope
 
@@ -10228,7 +10228,7 @@ API、fallback algorithm、source enum、date confidence score、test、fixture�
 
 **未选择技术。**
 
-**Status**
+**Status（PR #34 Review 时点）**
 
 ```
 effective_arrival_date source mapping = DESIGN PENDING    ← 本 Review 不改变
@@ -10246,7 +10246,150 @@ unresolved count                      = 仍为 6
 4. 是否确认：`promised_date ≠ expected_arrival_date` **本身不构成** Data Quality Issue
 5. 是否授权后续 **`§4.2` / `§4.4` / `§4.5`** 必要的最小 consistency synchronization
 
-**Human Approval 后**，下一 Task 才正式实施。
+**Human Decision Record —— `SIMULATED POC Design Policy` ＋ `Human-approved`**
+
+> 以下为 Human 对上述 5 项的**正式回复**（本 Review 由 **PR #34** 提交）。
+> 本节**只记录决定**；**未**执行 `§4.2` / `§4.4` / `§4.5` 的 semantic synchronization。
+
+| # | 决定项 | Human Decision |
+| --- | --- | --- |
+| 1 | 是否建立 **global source-field precedence** | **NOT ADOPTED** |
+| 2 | 是否采用 **Option D**（source-specific mapping → canonical `effective_arrival_date`） | **APPROVED** |
+| 3 | **Exactly-one-or-unresolved** contract | **APPROVED** |
+| 4 | `promised_date ≠ expected_arrival_date` 是否自动构成 Data Quality Issue | **不构成**（APPROVED） |
+| 5 | `§4.2` / `§4.4` / `§4.5` 最小 consistency synchronization | **AUTHORIZED** |
+
+**决定 1 —— Global Source-Field Precedence = NOT ADOPTED**
+
+当前 POC **不建立**全局规则，例如：
+
+- `promised_date` always wins
+- `expected_arrival_date` always wins
+- `expected` fallback `promised`
+- `promised` fallback `expected`
+- earliest wins
+- latest wins
+- newest `updated_at` wins
+
+原因：当前 Human-approved `SIMULATED` evidence **没有提供**这些 precedence 的**业务依据**。
+
+**不得**为了让 `Effective Inbound` 可运行而**发明 global precedence**。
+
+**决定 2 —— Option D = APPROVED**
+
+```
+source-specific arrival-date evidence
+        ↓
+explicit deterministic mapping
+        ↓
+canonical effective_arrival_date
+```
+
+该 **mapping contract** 是当前 POC 的**正式设计方向**。
+
+目标是统一 **canonical business semantic**，**不是** **source field name**。
+
+不同 source system **可以**采用不同 source-specific mapping，
+但**必须** `explicit` / `deterministic` / `traceable` ——
+**不得**由 LLM 或 runtime business rule **临时选择**。
+
+**决定 3 —— Exactly-One Resolution Contract = APPROVED**
+
+对于每一个需要参与 `BR-INBOUND-001` 判断的 applicable inbound context，
+**进入 deterministic business rule 之前**必须得到：
+
+```
+exactly one reliably resolved effective_arrival_date
+            或
+unresolved
+```
+
+**不得**让 `BR-INBOUND-001` 同时面对 `promised_date` / `expected_arrival_date` / `ETA`
+或**多个候选日期**，然后**自行决定**。
+
+**必须保持：**
+
+```
+source semantic resolution 发生在 deterministic business rule 之前
+```
+
+**决定 4 —— `promised_date ≠ expected_arrival_date` 本身不构成 Data Quality Issue**
+
+正式确认：两个日期值**不同**，**不自动**意味着：
+
+- `CONSISTENCY_CONFLICT`
+- Data Quality Issue
+- invalid evidence
+
+因为当前 Design **没有批准**「两者必须相等」或「必须满足某个先后关系」。
+
+**只有**未来某个 **approved source-specific mapping contract** 明确要求某种 consistency relation，
+且该 relation **被违反**时，才能形成对应 Validation Issue。
+
+**决定 5 —— Minimal Consistency Synchronization = AUTHORIZED（授权边界）**
+
+后续专门的 **Design Change Task** 被授权对 `§4.2` / `§4.4` / `§4.5` 执行必要的最小同步。
+
+**授权范围仅包括：**
+
+- `effective_arrival_date` **source semantic / mapping status**
+- **source-specific mapping contract**
+- **exactly-one-or-unresolved boundary**
+- **missing mapped value** vs **unresolved semantic mapping**
+- **multiple source dates** 的处理边界
+- **provenance / cross-package boundary**
+- **stale `DESIGN PENDING` wording synchronization**
+
+**不得借此**：
+
+- 修改 `BR-INBOUND-001`
+- 修改 `effective_arrival_date` business semantic
+- 创建 **global source-field precedence**
+- 创建 **fallback algorithm**
+- 创建 `ArrivalDateSourceType`
+- 创建 `ArrivalDatePriority`
+- 创建 `ArrivalConfidence`
+- 创建新的 **Business Status**
+- 创建新的 **Validation Reason**
+- 修改 **Inbound grain**
+- 选择**真实 ERP field**
+
+**继续确认的边界（详见上方 Review Finding）**
+
+**Missing vs Unresolved Boundary：**
+
+| # | 情形 | 处理 |
+| --- | --- | --- |
+| **A** | approved mapping 已存在，但 mapped source value **missing** | `FIELD_VALUE` / `MISSING` 或既有适用 Validation Reason |
+| **B** | source value **存在**，但**无法可靠判断**如何映射成 `effective_arrival_date` | `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED`；capability 需要该 inbound 时 → **`DATA_INCOMPLETE`** |
+
+**不得**把 A / B 混为一类。
+
+**Invalid Value Boundary** —— approved mapping 已存在，但 mapped source value
+**无法解析成合法 `DATE`** → `FIELD_VALUE` / `INVALID_TYPE`；
+**不得** fallback 到另一个**未经批准**的 source date。
+
+**Adapter Responsibility Boundary** —— 未来 Adapter **可以**定义
+`Source A: field X → effective_arrival_date`、`Source B: field Y → effective_arrival_date`，
+或 **source-specific approved precedence → one canonical `effective_arrival_date`**；
+
+**但 Adapter 不得重新定义** `effective_arrival_date` 的 **canonical semantic** ——
+canonical semantic **继续由 `BR-INBOUND-001` 定义**。
+
+**执行状态（PR #34 时点）**
+
+```
+Human Decision                 = RECORDED
+Option D                       = APPROVED
+Semantic Synchronization       = NOT YET IMPLEMENTED
+effective_arrival_date mapping = DESIGN PENDING
+unresolved count               = 仍为 6
+```
+
+**本 PR 不实施** `§4.2` / `§4.4` / `§4.5` 的正式 semantic synchronization。
+
+`effective_arrival_date` source mapping **保持 `DESIGN PENDING`**，unresolved count **仍为 6**，
+**直到 follow-up Design Change 实施并通过 Review**。
 
 #### 4.5.22 Preserve Unresolved Items
 
@@ -10272,9 +10415,9 @@ unresolved count                      = 仍为 6
 > （见 **§4.5.11 Option B Implementation Record**）；
 > 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **7 → 6**。
 >
-> `effective_arrival_date` source mapping 另有 **Human Decision Gate**
-> （**§4.5.21** Effective Arrival Date Source Mapping Design Review）；
-> 在 Human Decision 之前其状态**保持 `DESIGN PENDING`**，未决项数量**不减少**。
+> `effective_arrival_date` source mapping 的 **Human Decision 已记录**
+> （**Option D APPROVED**，见 **§4.5.21**）；但在 approved **semantic synchronization**
+> 完成并通过 Review 之前，其状态**保持 `DESIGN PENDING`**，未决项数量**不减少**。
 
 本 Task **不以「Master Data Mapping」为名一次性消灭这些问题**。
 
@@ -10361,11 +10504,12 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 - Supplier Risk implemented
 - tested
 
-**Open Human Decision Gate：** `effective_arrival_date` source mapping
+**Open Pending Sync：** `effective_arrival_date` source mapping
 （`Other Source-Semantic Mapping`）**仍为 `DESIGN PENDING`** ——
-其 **Effective Arrival Date Source Mapping Design Review** 已判定推荐方向为 **Option D**
-（source-specific mapping → canonical `effective_arrival_date`），
-但**须经 Human Decision** 后才能实施（见 **§4.5.21**）。
+其 **Effective Arrival Date Source Mapping Design Review** 的 **Option D 已获 Human Approval**
+（source-specific mapping → canonical `effective_arrival_date`，见 **§4.5.21**），
+但 **`§4.2` / `§4.4` / `§4.5` 的 semantic synchronization 尚未实施**，
+须待 follow-up Design Change 完成并通过 Review。
 
 ---
 
