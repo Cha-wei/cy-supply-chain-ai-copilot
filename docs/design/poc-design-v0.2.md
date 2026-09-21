@@ -4833,9 +4833,14 @@ Options
 - `VB-14` ～ `VB-18` → **P0 Business Rules**
 - `VB-27` → **Supplier Risk / Risk Evidence**
 - `VB-28` → **AI Explanation / User Questions**
-- `VB-29` → 后续根据 `FROZEN` Validation 中的**原定义**映射，**不得猜测或改写其含义**。
+- `VB-29` → **POC Integration Boundary**；设计结论见 **§3 System Boundary** 与 **§7 Read / Write Boundary**；
+  下方 `FROZEN` 原定义**仅作为历史 Validation baseline 引用**，**不修改其原始内容**。
 
-> **`VB-29` 的 FROZEN 原定义（逐字引用，未改写）**：
+> **`VB-29` 的 `FROZEN` 原定义（历史 Validation baseline，逐字引用，未改写）**：
+>
+> 以下引文**保持原始记录不变** —— 其中 `Current Evidence Status`（`HYPOTHESIS` / `H7`）与
+> `Status`（`NOT STARTED`）**属于 `FROZEN` baseline 的历史状态**，
+> **不得因为本 PR 已完成 Design Resolution 而改写**。
 >
 > `FROZEN` 源文件：`docs/discovery/discovery-validation-v0.1.md`
 >
