@@ -4003,7 +4003,7 @@ conceptual boundary 已定义
 
 | # | Concept | Purpose | Canonical identity / grain | 依据 |
 | --- | --- | --- | --- | --- |
-| N | **BOM Component** | 物料需求展开来源 | `plant_id` + parent material + component `material_code` | §2.4.2、§2.4.3 |
+| N | **BOM Component** | requirement-scoped applicable BOM relationship | `Production Requirement context` + component `material_code`<br>（= `plant_id` + parent / requirement `material_code` + `required_date` + component `material_code`） | §2.4.2、§2.4.3；**Human-approved amendment（PR #30 ／ Option A）** |
 | O | **Configured Safety Stock** | 业务配置的安全库存 | `plant_id` + `material_code` | §2.2.5 |
 
 > `N` / `O` **不是**本 Task 新引入的能力，而是 §2 已 `DESIGN RESOLVED` 规则**直接引用**的输入；
@@ -4188,14 +4188,69 @@ conceptual boundary 已定义
 **N. BOM Component（支撑性）**
 
 - **Purpose：** 表达物料需求展开来源，支撑 `BR-REQUIREMENT-001`。
-- **Canonical identity / grain：** `plant_id` + parent material + component `material_code`
-- **Attributes：** 至少 `BOMComponentQty`、`material_code`
-- **DESIGN PENDING（本 Task 明确不设计）：**
-  - BOM version selection
-  - BOM validity selection
+- **Canonical identity / grain：** `Production Requirement context` + component `material_code`
+
+  其中：
+
+  ```
+  Production Requirement context
+    = plant_id
+    + parent / requirement material_code
+    + required_date
+  ```
+
+  展开后的概念等价形式为：
+
+  ```
+  plant_id
+  + parent / requirement material_code
+  + required_date
+  + component material_code
+  ```
+
+  > 这里**不是**定义 physical composite key / database primary key；
+  > 而是表达 **grain** —— 即「哪个 requirement context 下的哪一条 component relationship」。
+- **Relationship role clarification（不新增字段）：** 在 BOM relationship context 中，
+  `Production Requirement.material_code` 扮演 **parent / produced material** 角色。
+
+  这是 **contextual role clarification** —— **不** rename 全局 `material_code`、
+  **不**新增 `parent_material_code` canonical field、
+  **不**修改 Entity C `Production Requirement` 的 grain。
+- **Attributes：** 至少
+  - `BOMComponentQty`
+  - component material identity（`material_code`）
+- **`BOMComponentQty` 的 canonical meaning：** **只**在其所属 **Production Requirement context**
+  中具有 canonical meaning。**不得**把同一 `Plant` + `Parent` + `Component` 跨 `required_date`
+  视作**同一个** BOM Component grain —— 它们在 canonical model 中是**彼此独立**的
+  requirement-scoped relationships。
+- **Applicability anchor（`SIMULATED POC Design Policy` ＋ `Human-approved`）：**
+
+  ```
+  Production Requirement.required_date
+    = BOM applicability business-time anchor
+  ```
+
+  **不得**描述为**真实 CY 企业 BOM selection rule**。
+  **不得**使用 Snapshot creation time / Package export time / `AnalysisDate` /
+  system current time **替代** `required_date` 来选择 applicable BOM。
+- **Applicable BOM Definition（conceptual，非 canonical entity）：**
+  对一个明确的 Production Requirement context 能够**唯一确定**的一组
+  `parent Material → component Material → BOMComponentQty` relationships 的
+  **conceptual grouping**。它**不是**新的 canonical entity。
+- **约束：** 无法可靠确定适用 BOM → `DATA_INCOMPLETE`。
+- **仍然 `DESIGN PENDING`（本 Task 不设计）：**
   - BOM explosion algorithm
   - ERP source-field mapping
-- **约束：** 无法可靠确定适用 BOM → `DATA_INCOMPLETE`。
+  - `BOMVersion` / `ValidFrom` / `ValidTo` / `Change Number` / `Production Version` /
+    `Alternative BOM` / `BOM Header` entity / `BOM Version` entity / `BOM ID`
+- **Human-authorized Canonical Model Amendment：**
+  本节 grain 由 **PR #30 Human Decision（Option A）** 授权修改，
+  用于消除 **time-varying / version-varying BOM** 的 **applicability grain collision**。
+
+  授权范围**仅限**该问题；**未**改动其他 canonical entities、其他 Rule 的 calculation grain、
+  `loss_rate` owner / grain、`required_quantity` semantic，也**未**改动 `§2` Business Rules。
+
+  该修改**不**表示真实 ERP BOM mapping 已实现。
 
 **O. Configured Safety Stock（支撑性）**
 
@@ -4241,7 +4296,8 @@ Procurement Recommendation
   → Procurement Request Draft
 
 Production Requirement
-  → BOM Component（来源关系）
+  → has applicable BOM Component relationships
+     （requirement-scoped；这些 relationships 属于该 Production Requirement context）
 
 Material
   → Configured Safety Stock
@@ -4381,7 +4437,6 @@ Canonical model **不得通过默认值隐藏缺失**。
 | --- | --- | --- |
 | `loss_rate` 的 canonical owner / grain | **`UNKNOWN`** | §2.4 只定义其语义与公式，**未定义**其归属实体与粒度 |
 | Warehouse 是否为 canonical attribute | **`DESIGN RESOLVED`** | **不是** canonical attribute —— Warehouse 是 source / mapping / scope context（**§4.5.12**）；§2.2.1 的 grain **不含** warehouse |
-| BOM version / validity selection | **`DESIGN PENDING`** | §2.4.3 明确不由该规则设计 |
 | `sourcing_status` enum / vocabulary | **`DESIGN PENDING`** | §2.7.24 明确不定义 |
 | `effective_arrival_date` 的 source field | **`DESIGN PENDING`** | §2.6.4 留给 Data Dictionary |
 | Allocation 与 demand window 的关联机制 | **`DESIGN PENDING`** | §2.3.12 明确不设计 timing engine |
@@ -4394,6 +4449,11 @@ Canonical model **不得通过默认值隐藏缺失**。
 >
 > `Warehouse 是否为 canonical attribute` 已由 **§4.5.12 Warehouse Role Resolution** 解析 ——
 > 结论是**不是** canonical attribute。
+>
+> `BOM version / validity selection` **已从本表移出** ——
+> 它已由 **Human-authorized Canonical Model Amendment（PR #30 Human Decision ／ Option A）** 解析；
+> 结论见 **§4.1.4 N**（BOM Component grain 现携带 Production Requirement context）
+> 与 **§4.5.7 Option A Implementation Record**。
 
 ---
 
@@ -4499,6 +4559,40 @@ JSON structure、file columns、source table / column、serialization format。
 | `ProductionQty` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `SOURCE` | 生产数量 | `ProductionQty >= 0` | `DATA_INCOMPLETE` | `BR-REQUIREMENT-001` |
 | `BOMComponentQty` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `SOURCE` | 单位父项所需组件数量 | `BOMComponentQty >= 0`；必须来自**可靠解析的 applicable BOM relationship** | `DATA_INCOMPLETE` | `BR-REQUIREMENT-001` |
 | `loss_rate` | `RATIO` | `REQUIRED`（for `BR-REQUIREMENT-001`） | `POLICY_INPUT` | 预计投入总量中发生损耗的比例 | `0 <= loss_rate < 1` | `DATA_INCOMPLETE` ＋ Data Quality Issue | `BR-REQUIREMENT-001` |
+
+**`BOMComponentQty` Context Boundary（consistency sync；**未**改变其 quantity semantic）**
+
+`BOMComponentQty` **不是**一个脱离 requirement applicability 即可全局复用的
+`Plant` + `Parent` + `Component` 固定值。
+
+它属于：
+
+```
+Production Requirement context
++
+component Material
+```
+
+其中：
+
+```
+Production Requirement context = plant_id + parent / requirement material_code + required_date
+```
+
+因此：即使 `Plant` / `Parent Material` / `Component Material` **完全相同**，
+不同 `required_date` 的 requirement context **不得默认共享** `BOMComponentQty`。
+
+**Applicability anchor（`SIMULATED POC Design Policy` ＋ `Human-approved`）：**
+
+```
+Production Requirement.required_date
+```
+
+**不得**用 Snapshot creation time / Package export time / `AnalysisDate` /
+system current time **替代**。
+
+**本 Task 未新增** `BOMVersion` / `ValidFrom` / `ValidTo` / `BOM ID` /
+`ProductionVersion` / `AlternativeBOM` / `Change Number` 等 canonical fields。
 
 **`required_quantity` vs `ProductionQty` —— SEMANTIC AMBIGUITY（`DESIGN PENDING`）**
 
@@ -4810,7 +4904,6 @@ input evidence
 | `loss_rate` canonical owner / grain | **`UNKNOWN`** |
 | `required_quantity` vs `ProductionQty` | **`DESIGN PENDING` / SEMANTIC AMBIGUITY** |
 | Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
-| BOM version / validity selection | `DESIGN PENDING` |
 | `sourcing_status` vocabulary | `DESIGN PENDING` |
 | `effective_arrival_date` source field | `DESIGN PENDING` |
 | Allocation demand-window mapping | `DESIGN PENDING` |
@@ -4822,6 +4915,14 @@ input evidence
 >
 > `Warehouse canonical role` 已由 **§4.5.12** 解析 ——
 > Warehouse 是 **source / mapping / scope context**，**不进入** Data Dictionary 的 canonical field 集合。
+>
+> `BOM version / validity selection` **已从本表移出** ——
+> 已由 **Human-authorized Canonical Model Amendment（PR #30 ／ Option A）** 解析为
+> **requirement-scoped BOM applicability**（见 **§4.1.4 N** / **§4.5.7**）；
+> `BOMComponentQty` 的 context boundary 见 **§4.2.4**。
+>
+> **未新增** `BOMVersion` / `ValidFrom` / `ValidTo` / `BOM ID` / `ProductionVersion` /
+> `AlternativeBOM` / `Change Number` 等 canonical fields。
 >
 > **本 Task 不定义任何 source table / column**，因此**未被偷渡**任何 source mapping。
 
@@ -5245,12 +5346,13 @@ controlled export provenance
 #### 4.3.17 Unresolved Carrier Boundary
 
 以下项**仍未完全确定**（见 §4.2.16）——
-其中 `Warehouse canonical role` **已由 §4.5.12 解析**，**不再属于未决项**：
+其中 `Warehouse canonical role`（**§4.5.12**）与 `BOM version / validity`（**§4.5.7** ／ **§4.1.4 N**）
+**已被解析**，**不再属于未决项**：
 
 - `loss_rate` owner / grain
 - `required_quantity` vs `ProductionQty`
 - Warehouse canonical role —— **已由 §4.5.12 解析**（source / mapping / scope context）
-- BOM version / validity
+- BOM version / validity —— **已由 §4.5.7 ／ §4.1.4 N 解析**（requirement-scoped BOM applicability）
 - `sourcing_status` vocabulary
 - `effective_arrival_date` source mapping
 - allocation demand-window mapping
@@ -6361,12 +6463,13 @@ SafetyStock missing     vs     SafetyStock = -10
 #### 4.4.41 Unknown Semantic Items
 
 以下项目**不得在本 Task 中推进**
-（`Warehouse canonical role` 已于后续 **§4.5.12** 解析，此处保留历史约束记录）：
+（`Warehouse canonical role` 已于 **§4.5.12**、`BOM version / validity` 已于 **§4.5.7** ／ **§4.1.4 N**
+解析，此处保留历史约束记录）：
 
 - `loss_rate` owner / grain
 - `required_quantity` semantic
 - Warehouse canonical role —— **已由 §4.5.12 解析**（本 Task 未推进）
-- BOM version / validity
+- BOM version / validity —— **已由 §4.5.7 ／ §4.1.4 N 解析**（本 Task 未推进）
 - `sourcing_status` vocabulary
 - `effective_arrival_date` source mapping
 - allocation demand-window mapping
@@ -6600,13 +6703,26 @@ Production Requirement
 reliably resolved applicable BOM relationship
 ```
 
-用于计算的 BOM Component 必须能够可靠解析到：当前 Plant context ＋ canonical component Material。
+用于计算的 BOM Component relationships **必须属于同一个 Production Requirement context**，
+且 applicability anchor **`required_date` 必须一致**。
+
+```
+Production Requirement context
+  = plant_id
+  + parent / requirement material_code
+  + required_date
+```
+
+**不得**：requirement `R1` 使用 `R2` 的 BOM Component relationship。
 
 如果出现以下任一情况：
 
 - BOM relationship unresolved
 - component Material unresolved
 - Plant context inconsistent
+- **BOM Component relationship 不属于当前 Production Requirement context**
+- **applicability anchor `required_date` 不一致**
+- **applicable BOM definition 不唯一（zero 或多个）且无 approved applicability evidence**
 
 则：`Gross Requirement` → **`DATA_INCOMPLETE`**。
 
@@ -6616,14 +6732,32 @@ reliably resolved applicable BOM relationship
 - 选任意 BOM
 - 自动选最新 BOM
 - fuzzy match component
+- first wins / latest wins / highest version / lowest version / newest update / LLM choose
+  （多个 applicable definition 竞争时）
 
-**必须保持：**
+**已解析（Human-authorized Canonical Model Amendment，PR #30 ／ Option A）：**
 
 ```
-BOM version / validity selection = DESIGN PENDING
+BOM version / validity selection = DESIGN RESOLVED
+  → requirement-scoped BOM applicability（见 §4.1.4 N / §4.5.7）
 ```
 
-本 Task **不解决**该设计问题。
+**Cross-Requirement Reuse Boundary：**
+
+即使 `Plant` / `Parent Material` / `Component Material` **完全相同**，
+不同 `required_date` 的 Production Requirement context **不得默认共享** `BOMComponentQty`。
+
+只有 mapping evidence **独立证明**相同 BOM definition 对两个 requirement context **均 applicable**，
+才能得到相同 quantity。**不得**通过 `copy previous` / `latest wins` / `cache reuse` 自行推导。
+
+**Applicability anchor（`SIMULATED POC Design Policy` ＋ `Human-approved`）：**
+
+```
+Production Requirement.required_date
+```
+
+**不得**用 Snapshot creation time / Package export time / `AnalysisDate` /
+system current time **替代**。
 
 #### 4.4.53 `required_quantity` Boundary
 
@@ -7022,12 +7156,15 @@ affected evidence → affected grain → affected capability
 | `loss_rate` owner / grain | **`UNKNOWN`** |
 | `required_quantity` semantic | `DESIGN PENDING` |
 | Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
-| BOM version / validity | `DESIGN PENDING` |
+| BOM version / validity | **`DESIGN RESOLVED`** —— requirement-scoped BOM applicability（**§4.5.7** ／ **§4.1.4 N**） |
 | `sourcing_status` vocabulary | `DESIGN PENDING` |
 | `effective_arrival_date` source mapping | `DESIGN PENDING` |
 | allocation demand-window mapping | `DESIGN PENDING` |
 | `ApplicableMOQ` source | `DESIGN PENDING` |
 | provenance carrier | `DESIGN PENDING` |
+
+> 表中 `Warehouse canonical role`（**§4.5.12**）与 `BOM version / validity`（**§4.5.7** ／ **§4.1.4 N**）
+> 已由后续 Human-approved Design 解析，保留登记以便追溯。
 
 **Consistency Validation 不得成为解决这些问题的后门。**
 
@@ -7413,14 +7550,14 @@ Risk vocabulary **保持现有定义**。
 
 #### 4.4.99 Pending Design Preservation
 
-必须继续保持以下未决项（`Warehouse canonical role` **已由 §4.5.12 解析**，保留登记以便追溯）：
+必须继续保持以下未决项（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**，保留登记以便追溯）：
 
 | 未决项 | 状态 |
 | --- | --- |
 | `loss_rate` owner / grain | **`UNKNOWN`** |
 | `required_quantity` semantic | `DESIGN PENDING` |
 | Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
-| BOM version / validity | `DESIGN PENDING` |
+| BOM version / validity | **`DESIGN RESOLVED`** —— requirement-scoped BOM applicability（**§4.5.7** ／ **§4.1.4 N**） |
 | `sourcing_status` vocabulary | `DESIGN PENDING` |
 | `effective_arrival_date` source mapping | `DESIGN PENDING` |
 | allocation demand-window mapping | `DESIGN PENDING` |
@@ -7596,7 +7733,7 @@ physical schema / architecture / technology / ADR。
 Design DoD = PASS（17 / 17）
 ```
 
-**Upstream Design Items（8 项未决 ＋ 1 项已解析）—— 不阻塞本 closure**
+**Upstream Design Items（7 项未决 ＋ 2 项已解析）—— 不阻塞本 closure**
 
 这 9 项**阻止的是**「某些 capability 当前能够实际运行」，
 **不是**「Data Validation conceptual design 已经定义清楚」。
@@ -7609,16 +7746,19 @@ Design DoD = PASS（17 / 17）
 | 1 | `loss_rate` owner / grain | **`UNKNOWN`** | 要求可靠关联当前计算上下文，否则 `DATA_INCOMPLETE`（`§4.4.54`） |
 | 2 | `required_quantity` semantic | `DESIGN PENDING` | **不产生** runtime issue；`BR-REQUIREMENT-001` 不依赖它（`§4.4.53` / `§4.4.95`） |
 | 3 | Warehouse canonical role | **`DESIGN RESOLVED`** | 已由 **§4.5.12** 解析为 source / mapping / scope context（`§4.4.50`） |
-| 4 | BOM version / validity | `DESIGN PENDING` | 无法可靠确定适用 BOM → `DATA_INCOMPLETE`（`§4.4.52`） |
+| 4 | BOM version / validity | **`DESIGN RESOLVED`** | 已由 **§4.5.7** ／ **§4.1.4 N** 解析为 requirement-scoped BOM applicability（`§4.4.52`） |
 | 5 | `sourcing_status` vocabulary | `DESIGN PENDING` | eligibility 无法可靠确定 → `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED`（`§4.4.62` / `§4.4.95`） |
 | 6 | `effective_arrival_date` source mapping | `DESIGN PENDING` | 按既有 Rule 处理 missing / invalid（`§4.4.49`） |
 | 7 | allocation demand-window mapping | `DESIGN PENDING` | 无法判断重叠 → `DATA_INCOMPLETE` ＋ Data Quality Issue（`§4.4.60`） |
 | 8 | `ApplicableMOQ` source | `DESIGN PENDING` | 无法可靠取得 → `DATA_INCOMPLETE` → No Numeric Recommendation（`§4.4.67`） |
 | 9 | provenance carrier | `DESIGN PENDING` | 只提出 requirement，不设计 carrier（`§4.4.15` / `§4.4.93`） |
 
-> 第 3 项 `Warehouse canonical role` 已由后续 **§4.5.12 Warehouse Role Resolution**
-> 解析为 **source / mapping / scope context**，因此**不再属于未决项**；
-> 该行保留登记以便追溯。剩余 **8 项**未决。
+> 第 3 项 `Warehouse canonical role` 已由 **§4.5.12 Warehouse Role Resolution**
+> 解析为 **source / mapping / scope context**；
+> 第 4 项 `BOM version / validity` 已由 **§4.5.7** ／ **§4.1.4 N** 解析为
+> **requirement-scoped BOM applicability**
+> （**Human-authorized Canonical Model Amendment**，PR #30 ／ Option A）。
+> 两者均**不再属于未决项**；对应行保留登记以便追溯。剩余 **7 项**未决。
 
 > 三者均明确禁止 Validation 反向解决这些设计问题：
 > `Consistency Validation 不得成为解决这些问题的后门。` /
@@ -7674,7 +7814,8 @@ conceptual validation design complete
 > **子章节整体状态：仍为 `DESIGN PENDING`。**
 >
 > 本节已完成：Canonical Identity Resolution ＋ Relationship Resolution Boundary
-> ＋ **Warehouse Role Resolution**（**§4.5.12**）。
+> ＋ **Warehouse Role Resolution**（**§4.5.12**）
+> ＋ **BOM Version / Validity Mapping**（**§4.5.7** ／ **§4.1.4 N**）。
 
 **层级状态登记：**
 
@@ -7685,17 +7826,17 @@ conceptual validation design complete
 | Mapping Conflict / Failure Boundary | **`DESIGN RESOLVED`** |
 | Mapping Provenance Requirement | **`DESIGN RESOLVED`** |
 | Warehouse Role Resolution | **`DESIGN RESOLVED`** |
-| BOM Version / Validity Mapping | `DESIGN PENDING` |
+| BOM Version / Validity Mapping | **`DESIGN RESOLVED`** |
 | Supplier Eligibility Vocabulary Mapping | `DESIGN PENDING` |
 | Other Source-Semantic Mapping | `DESIGN PENDING` |
 | Final Master Data Mapping | `DESIGN PENDING` |
 
 > **`Master Data Mapping` overall 仍为 `DESIGN PENDING`。**
 >
-> `BOM Version / Validity Mapping` 的 **BOM Applicability Design Review** 结论为
+> `BOM Version / Validity Mapping` 的 **BOM Applicability Design Review** 曾判定
 > **`INSUFFICIENT`（Blocking Finding / Canonical Model Conflict）** —— 见 **§4.5.7**；
-> **Human Decision 已记录**（**Option A** 已批准），但 **Canonical Model Change 尚未实施**，
-> 因此本轮**不变更状态**。
+> 该冲突已由 **Human-approved Option A ＋ Canonical Model Amendment** **RESOLVED**，
+> 因此现为 **`DESIGN RESOLVED`**。
 
 #### 4.5.1 Purpose & Scope
 
@@ -7714,7 +7855,7 @@ Plant / Material / Supplier 以及关键业务 relationship **必须满足什么
 - mapping provenance requirement
 - mapping failure blast radius
 
-> 后续 Task 已追加 **Warehouse Role Resolution**（见 **§4.5.12**）。
+> 后续 Task 已追加 **Warehouse Role Resolution**（见 **§4.5.12**）与 **BOM Version / Validity Mapping**（见 **§4.5.7**）。
 
 **不得定义**：ERP vendor / ERP version / source table / source column / CSV column / JSON path /
 SQL / mapping code / fuzzy matching algorithm / MDM product / database / API / Adapter implementation。
@@ -7834,24 +7975,26 @@ Supplier Performance 以及 Supplier-Material Relationship **必须**可靠解�
 BOM evidence **必须**能够可靠解析：
 
 ```
-Plant context + parent Material + component Material
+Production Requirement context + component Material
+（= plant_id + parent / requirement material_code + required_date + component material_code）
 ```
 
 才能供 **`BR-REQUIREMENT-001`** 使用。
 
-**但必须保持：**
+**已解析（Human-authorized Canonical Model Amendment，PR #30 ／ Option A）：**
 
 ```
-BOM version / validity selection = DESIGN PENDING
+BOM version / validity selection = DESIGN RESOLVED
+  → requirement-scoped BOM applicability
 ```
 
-因此本 Task **只定义** identity / relationship resolution，**不得设计**：
+**不得设计**（仍然 `DESIGN PENDING`，超出本 POC canonical model 所需）：
 
 - `BOMVersion`
 - `ValidFrom`
 - `ValidTo`
 - latest BOM wins
-- version selection algorithm
+- version selection algorithm（作为真实 ERP BOM selection engine）
 
 如果 applicable BOM **无法可靠确定**：继承现有 Validation → **`DATA_INCOMPLETE`**。
 
@@ -8232,9 +8375,9 @@ co-product / by-product / routing / work center / alternative component optimiza
 BOM explosion algorithm = DESIGN PENDING / OUTSIDE THIS TASK
 ```
 
-**未修改已批准 Canonical Model**
+**未修改已批准 Canonical Model（PR #30 Review 时点）**
 
-本轮**未修改**：
+该 Review **当时未修改**：
 
 - `§4.1` 的 BOM Component canonical grain
 - `§4.1.3` / `§4.1.4 N` 的 attributes
@@ -8242,14 +8385,17 @@ BOM explosion algorithm = DESIGN PENDING / OUTSIDE THIS TASK
 - `§4.4.52` 的 consistency rule
 - `§2.4` 的任何 Business Rule
 
-**Status**
+**Status（PR #30 Review 时点）**
 
 ```
 BOM Version / Validity Mapping = DESIGN PENDING
 Master Data Mapping overall    = DESIGN PENDING
 ```
 
-未决项数量**不减少**（仍为 **8 项**）。
+未决项数量**不减少**（当时仍为 **8 项**）。
+
+> 以上为**历史记录**。后续 **Human-authorized Canonical Model Amendment** 已实施并变更该状态 ——
+> 见下方 **Option A Implementation Record**。
 
 **Human Decision Required**
 
@@ -8326,7 +8472,7 @@ SIMULATED POC Design Policy  ＋  Human-approved
 - `AnalysisDate`
 - system current time
 
-**执行状态**
+**执行状态（PR #30 时点）**
 
 ```
 Human Decision                 = RECORDED
@@ -8338,6 +8484,110 @@ unresolved count               = 仍为 8 项
 
 `BOM Version / Validity Mapping` **保持 `DESIGN PENDING`**，
 直到 approved Canonical Model Change **完成并通过 Review** 为止。
+
+**Option A Implementation Record（Human-authorized Canonical Model Amendment）**
+
+**授权来源**
+
+```
+PR #30 Human Decision
+  → Finding ACCEPTED（Canonical Model Compatibility = INSUFFICIENT）
+  → Option A APPROVED
+  → §4.1 minimal Canonical Model Change AUTHORIZED
+  → required_date applicability anchor APPROVED
+```
+
+**Before / After canonical grain**
+
+| | BOM Component canonical grain |
+| --- | --- |
+| **Before** | `plant_id` + parent material + component `material_code` |
+| **After** | `Production Requirement context` + component `material_code`<br>（= `plant_id` + parent / requirement `material_code` + `required_date` + component `material_code`） |
+
+**关键变化：** `required_date` applicability context 现由所属 **Production Requirement context** 承载，
+因此两个不同 `required_date` 可以合法拥有**不同**的 `BOMComponentQty`。
+
+**Canonical Model Conflict：`RESOLVED BY` Human-approved Option A ＋ Canonical Model Amendment。**
+
+**BOM applicability mapping（正式定义）**
+
+```
+Production Requirement context
++ required_date business-time anchor
+→ exactly one applicable BOM definition
+→ component relationships（可多个）
+```
+
+- **exactly one applicable BOM definition** **不表示**只有一条 component row ——
+  一个 definition **可以**包含多个 components
+  （例如 `MAT-B × 2` / `MAT-C × 1` / `MAT-D × 0.5` 属于**同一个** definition）
+- **Applicable BOM Definition** **不是**新的 canonical entity，
+  只是 requirement-scoped applicable BOM relationships 的 **conceptual grouping**
+- **exactly one** 指 **definition 层面**唯一，**不**限制 component 数量
+
+**Critical Scenario —— 现已可无歧义表达**
+
+| Requirement context | applicable BOM definition | `BOMComponentQty`（MAT-B） |
+| --- | --- | --- |
+| `R1` = `Plant-A` + `MAT-A` + `2026-09-25` | Definition 1 | **2** |
+| `R2` = `Plant-A` + `MAT-A` + `2026-10-10` | Definition 2 | **3** |
+
+```
+R1 Context + MAT-B → BOMComponentQty = 2
+R2 Context + MAT-B → BOMComponentQty = 3
+```
+
+**两者不再发生 grain collision** —— `required_date` 已成为 canonical grain 的组成部分。
+
+**§4.1 内对应变更**
+
+- `§4.1.3` Entity N 的 `Canonical identity / grain` 已替换为 requirement-scoped grain
+- `§4.1.4 N` 的 grain / attributes / context boundary 已更新
+- `§4.1.5` relationship model 已强化为 `Production Requirement → has applicable BOM Component relationships`
+- Entity C `Production Requirement` 的 grain **未修改**（仍为 `plant_id` + `material_code` + `required_date`）
+- `§4.1` 仍为 **`DESIGN RESOLVED`** —— 本次为 **Human-authorized Canonical Model Amendment**，
+  **不是** Agent 自行更正已批准模型
+
+**继续继承的既有边界（本 Task 未变更）**
+
+- **Zero Applicable Definition** —— 无任何 BOM 可可靠确定为 applicable →
+  `BR-REQUIREMENT-001` → **`DATA_INCOMPLETE`**；**不得**使用 default / previous / next / latest /
+  arbitrary BOM；使用**既有** Validation Taxonomy 表达 root condition，**不得创建**新 Business Status
+- **Multiple Applicable Definitions** —— 多定义竞争且无 approved applicability evidence →
+  `DATA_INCOMPLETE`；按 root condition 映射到既有 **`SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED`**
+  或 **`CONSISTENCY` / `CONSISTENCY_CONFLICT`**；**不得创建** `BOM_AMBIGUOUS` 等新 enum
+- **Source Applicability Evidence** —— POC **不**自行重新实现真实 ERP version-selection engine；
+  evidence 必须 `deterministic` / `explicit` / `traceable` / `reproducible`；
+  `"pre-resolved" ≠ "trust blindly"`
+- **Snapshot Boundary** —— applicability evidence 必须属于当前 Analysis Run 绑定的
+  **accepted Snapshot Package**；跨 Package 继续继承 **`PROVENANCE_MISMATCH`**
+- **Failure Blast Radius** —— 单个 Production Requirement 的 applicability unresolved
+  默认只影响该 requirement → its component requirements → affected shortage grains；
+  **不得** `one BOM issue → entire Package rejected`，除非同时构成 **Package Structural Failure**
+- **Provenance** —— 必须未来可追溯 `Production Requirement → applicability evidence →
+  applicable BOM relationship set → component relationship → Snapshot Package`；
+  **provenance carrier 仍 `DESIGN PENDING`**；**不得**创建 lineage DB / JSON schema / mapping table
+- **No BOM Explosion** —— `BOM explosion algorithm = DESIGN PENDING / OUTSIDE THIS TASK`
+
+**Terminology Clarification**
+
+`BOM Version / Validity Mapping` 在 POC v0.2 中**不要求**保存 ERP BOM version number。
+
+它解决的是 **BOM applicability** —— 即：对于当前 Production Requirement context，
+**哪组 BOM relationships applicable**。
+
+真实 source 的 version / validity / effectivity mechanism 由**后续 Adapter / source mapping**
+转换成这个 canonical applicability result。
+
+**执行状态（本 Task 完成时点）**
+
+```
+Human Decision                 = RECORDED
+Canonical Model Change         = IMPLEMENTED（Human-authorized Option A）
+BOM Version / Validity Mapping = DESIGN RESOLVED
+Master Data Mapping overall    = DESIGN PENDING
+unresolved count               = 8 → 7
+```
 
 #### 4.5.8 Substitute Relationship Resolution
 
@@ -8729,9 +8979,9 @@ Warehouse 永远不会成为 canonical entity
 
 它只表示：**POC v0.2 当前范围内不需要**。
 
-**Preserve Other Pending Items**
+**Preserve Other Pending Items（Warehouse Task 时点）**
 
-本轮**只**解决 Warehouse Role。其余未决项**继续保持**（见 **§4.5.21**）：
+该 Task **只**解决 Warehouse Role；当时其余未决项**继续保持**（见 **§4.5.21**）：
 
 - `loss_rate` owner / grain
 - `required_quantity` semantic
@@ -8741,6 +8991,9 @@ Warehouse 永远不会成为 canonical entity
 - allocation demand-window mapping
 - `ApplicableMOQ` source
 - provenance carrier
+
+> 其中 `BOM version / validity` 已由后续 **§4.5.7** ／ **§4.1.4 N** 解析
+> （**Human-authorized Canonical Model Amendment**，PR #30 ／ Option A）。
 
 **Warehouse Acceptance Examples（A–F）**
 
@@ -8909,7 +9162,7 @@ source evidence exists but canonical mapping unavailable
 
 允许 conceptual 表达 **relationship mapping**，至少包括：
 
-- BOM parent → component
+- BOM parent → component（requirement-scoped；见 **§4.1.4 N**）
 - Substitute source → target
 - Supplier ↔ Material
 - Warehouse → Plant / scope context
@@ -8920,24 +9173,23 @@ source evidence exists but canonical mapping unavailable
 
 #### 4.5.21 Preserve Unresolved Items
 
-以下未决项本轮**必须继续保持**（`Warehouse canonical role` **已由本 Task §4.5.12 解析**）：
+以下未决项本轮**必须继续保持**（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**）：
 
 | 未决项 | 状态 |
 | --- | --- |
 | `loss_rate` owner / grain | **`UNKNOWN`** |
 | `required_quantity` semantic | `DESIGN PENDING` |
 | Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
-| BOM version / validity | `DESIGN PENDING` |
+| BOM version / validity | **`DESIGN RESOLVED`** —— requirement-scoped BOM applicability（**§4.5.7** ／ **§4.1.4 N**） |
 | `sourcing_status` vocabulary | `DESIGN PENDING` |
 | `effective_arrival_date` source mapping | `DESIGN PENDING` |
 | allocation demand-window mapping | `DESIGN PENDING` |
 | `ApplicableMOQ` source | `DESIGN PENDING` |
 | provenance carrier | `DESIGN PENDING` |
 
-> `BOM version / validity` 另有 **Blocking Finding**
-> （`Canonical Model Compatibility = INSUFFICIENT`，见 **§4.5.7**）；
-> 在 approved **Canonical Model Change** 完成并通过 Review 之前，
-> 其状态**保持 `DESIGN PENDING`**，未决项数量**不减少**。
+> `BOM version / validity` 的 **Blocking Finding**（`Canonical Model Compatibility = INSUFFICIENT`）
+> 已由 **Human-approved Option A ＋ Canonical Model Amendment** **RESOLVED**（见 **§4.5.7**）；
+> 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **8 → 7**。
 
 本 Task **不以「Master Data Mapping」为名一次性消灭这些问题**。
 
@@ -8974,10 +9226,11 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 #### 4.5.23 Status Boundary
 
 `Master Data Mapping` overall **仍为 `DESIGN PENDING`** ——
-本节已完成 Canonical Identity Resolution、Relationship Resolution Boundary
-与 **Warehouse Role Resolution**（**§4.5.12**）。
+本节已完成 Canonical Identity Resolution、Relationship Resolution Boundary、
+**Warehouse Role Resolution**（**§4.5.12**）
+与 **BOM Version / Validity Mapping**（**§4.5.7** ／ **§4.1.4 N**）。
 
-`DESIGN RESOLVED` 的五个层级**仅**表示其 **conceptual resolution boundary 已定义**，
+`DESIGN RESOLVED` 的六个层级**仅**表示其 **conceptual resolution boundary 已定义**，
 **不表示**：
 
 - 真实 ERP mapping 已完成
@@ -8993,10 +9246,19 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 
 本轮只完成 **conceptual resolution boundary**。
 
-**Open Blocking Finding：** `BOM Version / Validity Mapping` **仍为 `DESIGN PENDING`** ——
-其 **BOM Applicability Design Review** 判定 `Canonical Model Compatibility = INSUFFICIENT`；
-**Human Decision 已记录**（**Option A** 已批准，见 **§4.5.7**），
-但 **Canonical Model Change 尚未实施**，须待其完成并通过 Review 后才能继续。
+**Blocking Finding —— RESOLVED：** `BOM Version / Validity Mapping` **现为 `DESIGN RESOLVED`** ——
+其 **BOM Applicability Design Review** 曾判定 `Canonical Model Compatibility = INSUFFICIENT`；
+该冲突已由 **Human-approved Option A ＋ Canonical Model Amendment** 解决
+（见 **§4.5.7 Option A Implementation Record** ／ **§4.1.4 N**）。
+
+`DESIGN RESOLVED` **只**表示 **POC canonical applicability mapping 概念设计已完成**，
+**不表示**：
+
+- real ERP BOM mapping implemented
+- ERP version fields known
+- BOM selection code exists
+- BOM explosion implemented
+- tested
 
 ---
 
