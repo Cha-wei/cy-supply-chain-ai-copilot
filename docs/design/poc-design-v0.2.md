@@ -6076,16 +6076,32 @@ SafetyStock missing    → DATA_INCOMPLETE
 | `effective_arrival_date` | 必须为有效 `DATE` |
 | inbound status | 只允许既有 Rule 已定义的合法 vocabulary |
 
-**本 Task 不得新增：**
+**跨字段关系（已由既有 Rule 定义，本层不重复实现）：**
 
 ```
 received_qty <= ordered_qty
 ```
 
-因为真实业务可能存在 over-delivery / quantity adjustment / source-system semantics，
-**且当前 Design 未批准该约束**。
+该约束**已经**由 **`BR-INBOUND-001` / `§2.6.2`** 明确定义：
 
-这类关系属于 **Cross-Dataset / Cross-Field Consistency**，后续处理。
+```
+RemainingInboundQty = ordered_qty - received_qty
+要求 RemainingInboundQty >= 0
+```
+
+因此 `received_qty > ordered_qty` 已被既有 Business Rule 定义为
+**`DATA_INCOMPLETE`** ＋ **Data Quality Issue**；`§4.2.6` Data Dictionary 也已同步记录。
+
+但它是 **cross-field consistency rule** ——
+本 **Detailed Field Validation** Task **不重复实现**其 validation enforcement；
+将在后续 **Cross-Dataset / Cross-Field Consistency** 设计中**正式登记与执行**。
+
+> **重要边界**：这是 **recognize existing approved rule ＋ defer its validation enforcement
+> to the correct validation layer** —— **不是**新增 constraint。
+>
+> ```
+> 已定义 Business Rule  ≠  本 Task 新增 constraint
+> ```
 
 **`effective_arrival_date`** —— source field mapping **仍 `DESIGN PENDING`**。
 
