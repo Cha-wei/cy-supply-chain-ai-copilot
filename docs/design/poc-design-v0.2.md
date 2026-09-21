@@ -7655,6 +7655,475 @@ conceptual validation design complete
 
 ---
 
+### 4.5 Master Data Mapping
+
+> **子章节整体状态：仍为 `DESIGN PENDING`。**
+>
+> 本节只完成其**第一层**：Canonical Identity Resolution ＋ Relationship Resolution Boundary。
+
+**层级状态登记：**
+
+| 层 | Status |
+| --- | --- |
+| Identity Resolution Boundary | **`DESIGN RESOLVED`** |
+| Relationship Resolution Boundary | **`DESIGN RESOLVED`** |
+| Mapping Conflict / Failure Boundary | **`DESIGN RESOLVED`** |
+| Mapping Provenance Requirement | **`DESIGN RESOLVED`** |
+| Warehouse Role Resolution | `DESIGN PENDING` |
+| BOM Version / Validity Mapping | `DESIGN PENDING` |
+| Supplier Eligibility Vocabulary Mapping | `DESIGN PENDING` |
+| Other Source-Semantic Mapping | `DESIGN PENDING` |
+| Final Master Data Mapping | `DESIGN PENDING` |
+
+> **`Master Data Mapping` overall 仍为 `DESIGN PENDING`。**
+
+#### 4.5.1 Purpose & Scope
+
+本 Task 定义：Controlled Snapshot 中的 **source evidence** 在进入 canonical business model 时，
+Plant / Material / Supplier 以及关键业务 relationship **必须满足什么条件**，
+才能被认为 **reliably resolved**。
+
+**本 Task 只定义：**
+
+- canonical identity resolution principle
+- Plant identity resolution
+- Material identity resolution
+- Supplier identity resolution
+- relationship resolution
+- unresolved / conflicting mapping behavior
+- mapping provenance requirement
+- mapping failure blast radius
+
+**不得定义**：ERP vendor / ERP version / source table / source column / CSV column / JSON path /
+SQL / mapping code / fuzzy matching algorithm / MDM product / database / API / Adapter implementation。
+
+**本 Task 不设计真实 ERP mapping。**
+
+#### 4.5.2 Core Principle
+
+正式定义：
+
+```
+Source Identifier  ≠  Canonical Identity
+```
+
+只有经过**可靠 mapping** 后，source evidence 才能作为 **canonical business evidence** 使用。
+
+Mapping **必须**：
+
+```
+deterministic
+explicit
+traceable
+reproducible
+```
+
+**不得依赖**：
+
+- LLM guess
+- name similarity
+- fuzzy matching
+- human-name intuition
+- silent normalization
+
+#### 4.5.3 Identity Resolution Outcomes
+
+**不创建新的 Business Enum。**
+
+只描述 **conceptual mapping condition**：
+
+| # | Condition | 含义 |
+| --- | --- | --- |
+| **A** | **Reliably Resolved** | source identity 能够**唯一、明确、可追溯**地对应**一个** canonical identity |
+| **B** | **Unresolved** | **无法可靠确定** canonical identity |
+| **C** | **Conflicting / Ambiguous** | 同一 source context 能对应**多个互相冲突**的 canonical identity，**且不存在已批准 precedence rule** |
+
+**B / C 均不得**：
+
+- 随机选择
+- first wins
+- latest wins
+- LLM choose
+
+应按既有 **Validation Taxonomy** 影响对应 **evidence / grain / capability**。
+
+#### 4.5.4 Plant Mapping
+
+**Canonical identity：** `plant_id`
+
+任何需要 Plant grain 的 source evidence（**Inventory** / **Requirement** / **Inbound** /
+**Substitute** / **Safety Stock**）**必须**能够可靠解析：
+
+```
+source Plant context → canonical plant_id
+```
+
+**不得**：
+
+- 把未知 Plant 自动映射到默认 Plant
+- 跨 Plant fallback
+- 按名称相似度匹配
+- 把 missing Plant 当作当前 Plant
+
+无法解析 → **`UNRESOLVED_IDENTITY`** → affected grain **不得形成正常结果**。
+
+#### 4.5.5 Material Mapping
+
+**Canonical identity：** `material_code`
+
+以下 source evidence **均必须**解析至 canonical Material：
+
+- Production Requirement
+- BOM parent material
+- BOM component material
+- Inventory
+- Inbound
+- Substitute target
+- Substitute source
+- Supplier-Material Relationship
+- Supplier Performance
+- Procurement context
+
+**不得**：
+
+- 自动改 Material code
+- fuzzy match Material name
+- alias guessing
+- 用 description 代替 identity
+
+如果未来需要 **alias / cross-system code mapping**：**必须**作为**明确 mapping evidence**，
+而**不是** LLM inference。
+
+> 本 Task **不设计** alias table 的 physical form。
+
+#### 4.5.6 Supplier Mapping
+
+**Canonical identity：** `supplier_id`
+
+Supplier Performance 以及 Supplier-Material Relationship **必须**可靠解析到 canonical `supplier_id`。
+
+**不得**：
+
+- `supplier name similarity → supplier_id`
+- 同名 Supplier → 自动认为相同实体
+
+#### 4.5.7 BOM Relationship Resolution
+
+BOM evidence **必须**能够可靠解析：
+
+```
+Plant context + parent Material + component Material
+```
+
+才能供 **`BR-REQUIREMENT-001`** 使用。
+
+**但必须保持：**
+
+```
+BOM version / validity selection = DESIGN PENDING
+```
+
+因此本 Task **只定义** identity / relationship resolution，**不得设计**：
+
+- `BOMVersion`
+- `ValidFrom`
+- `ValidTo`
+- latest BOM wins
+- version selection algorithm
+
+如果 applicable BOM **无法可靠确定**：继承现有 Validation → **`DATA_INCOMPLETE`**。
+
+#### 4.5.8 Substitute Relationship Resolution
+
+**必须保持有方向：**
+
+```
+substitute → target
+```
+
+mapping **必须**能够可靠解析：`plant_id` / `target_material_code` / `substitute_material_code`。
+
+**不得**：
+
+- 自动反向
+- 因两个 Materials 都存在而**创建**替代关系
+- 跨 Plant 创建关系
+- 用 LLM 判断可替代性
+
+Relationship approval semantic **继续继承现有 Rule**。
+
+#### 4.5.9 Substitute Allocation Resolution
+
+Allocation evidence **必须**能够解析到：
+
+```
+对应 Substitute Relationship + target context + source substitute context
+```
+
+**但：**
+
+```
+allocation demand-window mapping = DESIGN PENDING
+```
+
+因此**不得创建** `demand_window_id` / `requirement_id` / `allocation_period` 等字段。
+
+本 Task **只定义**：allocation relationship identity **必须可追溯且不可猜测**。
+
+#### 4.5.10 Supplier-Material Relationship
+
+**必须明确：**
+
+```
+Supplier exists + Material exists
+  ≠
+Supplier-Material Relationship exists
+```
+
+Supplier Risk evidence **必须**能够解析到：
+
+```
+supplier_id + material_code + relationship context
+```
+
+**不得**：Supplier Master 有该 Supplier → 自动认为其**可供应所有 Material**。
+
+#### 4.5.11 `sourcing_status` Boundary
+
+保持：
+
+```
+sourcing_status semantic
+  = Supplier-Material relationship eligibility context
+```
+
+**但：**
+
+```
+vocabulary = DESIGN PENDING
+```
+
+因此 Mapping **可以**保证：source value 与对应 relationship **被保留并可追溯**；
+但**不得自行解释** `ACTIVE` / `APPROVED` / `QUALIFIED` / `BLOCKED` 等值。
+
+如果 capability 需要 eligibility，但 semantic **无法可靠解释**，继承：
+
+```
+SEMANTIC_RESOLUTION / SEMANTIC_UNRESOLVED
+```
+
+#### 4.5.12 Warehouse Boundary
+
+保持：
+
+```
+Warehouse canonical role = DESIGN PENDING
+```
+
+本 Task **不创建** Warehouse canonical entity。
+
+只定义：如果 source inventory 带有 Warehouse context，则**必须**能够可靠判断：
+
+```
+Warehouse → belongs to which Plant
+          + whether inside current POC inventory scope
+```
+
+才能执行 Plant-level aggregation。
+
+**不得**：未知 Warehouse → 默认属于当前 Plant。
+
+> 具体 Warehouse canonical role 留待后续 **Master Data Mapping Design**。
+
+#### 4.5.13 Cross-System Identifier Boundary
+
+当前 POC **可以**存在 source-specific identifier 与 canonical identifier **不同**的情况。
+
+**但是：** 两者之间**必须有 explicit mapping evidence**。
+
+**不得**要求它们字符串**完全一致**。
+
+同时**不得允许**：没有 mapping evidence，却通过 `trim` / case conversion / prefix removal /
+substring / name similarity 等方式**自行推断**相同实体。
+
+任何 **normalization policy**，如果未来需要，**必须显式设计**。
+
+#### 4.5.14 Mapping Provenance
+
+每个成功 mapping **必须未来可追溯**：
+
+```
+source identity context
+  → canonical identity
+  → mapping evidence
+  → Snapshot Package
+```
+
+**但：**
+
+```
+provenance carrier = DESIGN PENDING
+```
+
+本 Task **不设计**：mapping table / lineage DB / JSON object / `source_system_id` schema。
+
+#### 4.5.15 Snapshot Consistency
+
+Mapping **必须属于**当前 Analysis Run 所绑定的 **accepted Snapshot Package context**。
+
+**不得：**
+
+```
+Package P1 的 business evidence
++
+Package P2 的 identity mapping
+```
+
+静默组成**同一个** Analysis Run。
+
+如果跨 Package mapping 未来被允许：**必须作为新 Design**。
+
+#### 4.5.16 Mapping Conflict
+
+如果**同一 source identity** 在**同一有效 mapping context** 中指向**多个不同** canonical identities，
+且**无既有 precedence rule**，**不得**：
+
+- first wins
+- latest wins
+- choose smallest ID
+- choose most frequent
+- LLM decide
+
+应视为 **unresolved identity / consistency issue**，并限制到：
+
+```
+affected evidence → grain → capability
+```
+
+**不得默认** reject entire Package —— **除非**同时破坏 **Package structural integrity**。
+
+#### 4.5.17 Missing Mapping
+
+必须区分：
+
+```
+source evidence absent
+与
+source evidence exists but canonical mapping unavailable
+```
+
+后者是 **identity / relationship resolution problem**。
+
+**不得** `mapping missing → business value = 0`。
+
+例如：**Inbound Material 无法解析** **不得**解释成「该 Material 没有 Inbound」。
+
+#### 4.5.18 No Silent Canonicalization
+
+**禁止：**
+
+- `source Material = "MAT-001 "` 自动变成 `MAT-001`
+- `source Supplier name` 自动变成 `supplier_id`
+- `source Plant nickname` 自动变成 `plant_id`
+
+**除非**未来批准**明确 normalization / mapping rule**。
+
+本 Task **不设计**这些规则。
+
+#### 4.5.19 Mapping Registry Concept
+
+允许定义 conceptual：**Master Data Mapping Registry**，用于表达：
+
+- Source Identity Context
+- Canonical Entity Type
+- Canonical Identity
+- Mapping Evidence / Basis
+- Snapshot / provenance context
+- resolution condition
+
+**但不得设计**：DB schema / CSV / JSON / table name / mapping service / API。
+
+#### 4.5.20 Relationship Mapping Registry
+
+允许 conceptual 表达 **relationship mapping**，至少包括：
+
+- BOM parent → component
+- Substitute source → target
+- Supplier ↔ Material
+- Warehouse → Plant / scope context
+
+**但不得创建新的 Business Relationship。**
+
+它**只记录**已有 Design 要求的 relationship resolution。
+
+#### 4.5.21 Preserve Unresolved Items
+
+本轮**必须继续保持**：
+
+| 未决项 | 状态 |
+| --- | --- |
+| `loss_rate` owner / grain | **`UNKNOWN`** |
+| `required_quantity` semantic | `DESIGN PENDING` |
+| Warehouse canonical role | `DESIGN PENDING` |
+| BOM version / validity | `DESIGN PENDING` |
+| `sourcing_status` vocabulary | `DESIGN PENDING` |
+| `effective_arrival_date` source mapping | `DESIGN PENDING` |
+| allocation demand-window mapping | `DESIGN PENDING` |
+| `ApplicableMOQ` source | `DESIGN PENDING` |
+| provenance carrier | `DESIGN PENDING` |
+
+本 Task **不以「Master Data Mapping」为名一次性消灭这些问题**。
+
+#### 4.5.22 Examples
+
+以下为 **conceptual examples**。
+
+**Example A — Material Resolved** —— source evidence 含 material identity；
+explicit mapping evidence `Source Material X → canonical MAT-A`
+→ **resolved**，usable in canonical context。
+
+**Example B — Material Ambiguous** —— `Source Material X` 可映射到 `MAT-A` **或** `MAT-B`，
+**no approved precedence** → **`UNRESOLVED_IDENTITY`**；**不得选择一个**。
+
+**Example C — Supplier Name Only** —— source 为「云南某供应商」，
+没有可靠 supplier identity mapping → **不得仅按名字**创建 canonical `supplier_id`。
+
+**Example D — BOM Component Unresolved** —— Parent Material resolved；
+Component Material **cannot be resolved** → `Gross Requirement` cannot form normal result
+→ **`DATA_INCOMPLETE`**。
+
+**Example E — Supplier Exists but Relationship Missing** —— `Supplier-A` exists、`MAT-A` exists，
+但无 reliably resolved Supplier-Material Relationship → **不得假定** `Supplier-A` can supply `MAT-A`。
+
+**Example F — Warehouse Unknown** —— Inventory record 的 Plant context 因 Warehouse ownership
+unclear 而 unresolved → **不得**将 inventory 计入当前 Plant aggregation。
+
+**Example G — Cross-Package Mapping** —— Analysis Run R1 绑定 Package P1；
+business evidence 来自 P1，但 Material mapping 取自 P2
+→ **`PROVENANCE_MISMATCH`**；**不得静默使用**。
+
+#### 4.5.23 Status Boundary
+
+`Master Data Mapping` overall **仍为 `DESIGN PENDING`** —— 本节只完成**第一层**。
+
+`DESIGN RESOLVED` 的四个层级**仅**表示其 **conceptual resolution boundary 已定义**，
+**不表示**：
+
+- 真实 ERP mapping 已完成
+- source table / column 已确定
+- mapping implementation exists
+- data validated
+- tested
+
+**Important Non-Resolution：**
+
+**不得声称**真实 ERP Mapping 已完成。因为当前项目是 **`SIMULATED` POC**，
+且**没有真实** ERP vendor / schema / field list / master-data specification。
+
+本轮只完成 **conceptual resolution boundary**。
+
+---
+
 ## 5. AI / Tool Boundary
 
 **Backlog:** `VB-28`
