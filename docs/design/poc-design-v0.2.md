@@ -6375,10 +6375,11 @@ missing  = cannot assume zero
 Supplier-Material relationship eligibility context
 ```
 
-但：
+**当前状态（PR #33 实施后）：**
 
 ```
-vocabulary = DESIGN PENDING
+source vocabulary                      = SOURCE-SPECIFIC / Adapter-defined
+canonical eligibility mapping contract = DESIGN RESOLVED
 ```
 
 因此 Field Validation **不得建立 enum allowlist**。
@@ -6386,12 +6387,16 @@ vocabulary = DESIGN PENDING
 如果值存在，**只能**确认：
 
 ```
-value is present as unresolved source / canonical context
+value is present as source-specific eligibility evidence context
 ```
 
-**不得判断** `ACTIVE` / `APPROVED` / `QUALIFIED` 等是否有效。
+**不得判断** `ACTIVE` / `APPROVED` / `QUALIFIED` 等是否有效
+（**不得**因为缺少全局 vocabulary 就判定无效）。
 
-Relationship eligibility **仍需后续 Master Data Mapping / Design**。
+Relationship eligibility 由 **`source value → eligibility condition`** 的
+**explicit deterministic mapping evidence** 决定；
+若当前 capability 需要该 relationship 而该 mapping **无法可靠完成** →
+`SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED`（见 **§4.4.62** / **§4.4.95**）。
 
 #### 4.4.34 Supplier Performance Fields
 
@@ -7588,9 +7593,21 @@ Business consequence: BR-SUBSTITUTE-001 → DATA_INCOMPLETE
 - 当前 capability **确实需要**解释一个 business value / relationship；
 - 但当前 **approved Design** 无法可靠解释其 semantic。
 
-例如 `sourcing_status` value 存在，但 **vocabulary 尚未定义**，
-且当前 Supplier Risk 需要确定 relationship eligibility：
+例如 `sourcing_status` source evidence **存在**，
+但 `source value → conceptual eligibility condition`
+**缺少足够可靠的 explicit deterministic mapping evidence**，
+且当前 Supplier Risk **确实需要**该 relationship：
 → `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED`。
+
+> **必须明确**：「**没有全局 source vocabulary**」**本身不是** Validation Issue ——
+> 按 Human-approved **Option B**，source vocabulary **本来就是 `SOURCE-SPECIFIC`**。
+> 真正的问题是 **eligibility mapping 无法可靠完成**（见 **§4.4.62** / **§4.5.11**）。
+
+如果当前 Supplier Risk capability **确实需要**该 relationship：
+
+```
+Risk Evidence → DATA_INCOMPLETE
+```
 
 **但**：`required_quantity` semantic 仍未决，
 如果当前 `BR-REQUIREMENT-001` **完全不使用** `required_quantity`，
@@ -8772,21 +8789,41 @@ sourcing_status semantic
   = Supplier-Material relationship eligibility context
 ```
 
-**但：**
+**当前 authoritative state（PR #33 实施后）：**
 
 ```
-vocabulary = DESIGN PENDING
+source vocabulary                      = SOURCE-SPECIFIC / Adapter-defined
+canonical eligibility mapping contract = DESIGN RESOLVED
+specific source value → eligibility condition
+                                       = 仍由未来 Adapter / source-specific mapping 提供
 ```
+
+`SOURCE-SPECIFIC` 是**设计描述**，**不得**创建成 runtime enum。
 
 因此 Mapping **可以**保证：source value 与对应 relationship **被保留并可追溯**；
 但**不得自行解释** `ACTIVE` / `APPROVED` / `QUALIFIED` / `BLOCKED` 等值。
 
-如果 capability 需要 eligibility，但 semantic **无法可靠解释**，继承：
+如果 capability 需要 eligibility，但 **`source value → eligibility condition` 缺少足够可靠的
+explicit deterministic mapping evidence**，继承：
 
 ```
 SEMANTIC_RESOLUTION / SEMANTIC_UNRESOLVED
 ```
+
+> **注意**：「**没有全局 source vocabulary**」**本身不是** Validation Issue ——
+> 按 Human-approved **Option B**，source vocabulary **本来就是 `SOURCE-SPECIFIC`**。
+> 真正的问题是 **eligibility mapping 无法可靠完成**。
+>
+> **PR #32 Review 时点**的 `vocabulary = DESIGN PENDING` 表述属于**历史记录**
+> （见下方 Review Finding 与 Human Decision Record），
+> **不再**作为本节 authoritative boundary。
+
 **Supplier Eligibility Mapping Design Review（Review Finding）**
+
+> **Historical record —— PR #32 Review 时点。**
+> 本节中的「推荐方向（待 Human Approval）」等表述均为**该时点状态**；
+> Human Decision 见下方 **Human Decision Record**，
+> 实施结果见 **Option B Implementation Record**。
 
 **Evidence Boundary**
 
@@ -9075,7 +9112,7 @@ canonical eligibility mapping contract = DESIGN RESOLVED
 eligibility 无法可靠确定 → semantic unresolved → Risk Evidence DATA_INCOMPLETE
 ```
 
-**本 Review 补充结论（待 Human Approval 后同步）：**
+**本 Review 补充结论（PR #32 Review 时点；已由 `§4.4.62` 实施）：**
 
 ```
 explicitly ineligible  ≠  semantic unresolved
