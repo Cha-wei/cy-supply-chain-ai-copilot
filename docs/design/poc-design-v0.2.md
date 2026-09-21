@@ -4104,12 +4104,46 @@ conceptual boundary 已定义
 **I. Supplier-Material Relationship**
 
 - **Purpose：** 支撑 `BR-SUPPLIER-RISK-001`。
-- **Canonical identity / grain：** `supplier_id` + `material_code`
+- **Canonical identity / grain：** `supplier_id` + `material_code`（**未改变**）
 - **Attributes：** 至少
   - supplier → `supplier_id`
   - material → `material_code`
   - relationship eligibility context → `sourcing_status`
-- **约束：** **不得自行定义** `sourcing_status` enum / vocabulary。
+    （**source / mapping eligibility evidence context**）
+- **Relationship Eligibility Condition（conceptual mapping outcome，非 canonical field）：**
+
+  `sourcing_status` 作为 **source-specific evidence**，通过 **explicit deterministic mapping**
+  形成 conceptual **Relationship Eligibility Condition**：
+
+  ```
+  source-specific sourcing_status
+          ↓
+  explicit deterministic mapping evidence
+          ↓
+  Relationship Eligibility Condition
+          ↓
+  eligible  /  ineligible  /  unresolved
+  ```
+
+  `eligible` / `ineligible` / `unresolved` **只是 conceptual mapping conditions** ——
+  **不是** source-system enum、canonical persisted enum、Business Status、Supplier Risk level、
+  database field、API enum、ranking 或 selection result。
+
+  **不得**把该 tri-state 登记为**新的 canonical persisted field**。
+- **Source vocabulary policy：** `source sourcing_status vocabulary = SOURCE-SPECIFIC`。
+  具体 `source value → eligibility condition` 映射由**未来 Adapter / source-specific mapping** 明确提供。
+  `SOURCE-SPECIFIC` 是**设计描述**，**不得**创建成 runtime enum value。
+- **约束：** **不得自行定义** `sourcing_status` enum / vocabulary；**不得**建立全局
+  `APPROVED` / `ACTIVE` / `QUALIFIED` / `BLOCKED` / `INACTIVE` 等 source enum。
+- **Relationship Existence Boundary：**
+
+  ```
+  Supplier exists + Material exists        ≠  Supplier-Material Relationship exists
+  Supplier-Material Relationship exists    ≠  relationship eligible
+  ```
+
+  必须经过 **eligibility mapping evidence**；**不得** `relationship exists → 默认 eligible`。
+- **不得创建** `is_eligible` / `SupplierEligibilityStatus` 等 canonical field。
 - **不得**因为 Supplier Master 中存在某 Supplier 就推断其可供应任意 Material。
 
 **J. Supplier Performance**
@@ -4437,7 +4471,7 @@ Canonical model **不得通过默认值隐藏缺失**。
 | --- | --- | --- |
 | `loss_rate` 的 canonical owner / grain | **`UNKNOWN`** | §2.4 只定义其语义与公式，**未定义**其归属实体与粒度 |
 | Warehouse 是否为 canonical attribute | **`DESIGN RESOLVED`** | **不是** canonical attribute —— Warehouse 是 source / mapping / scope context（**§4.5.12**）；§2.2.1 的 grain **不含** warehouse |
-| `sourcing_status` enum / vocabulary | **`DESIGN PENDING`** | §2.7.24 明确不定义 |
+| `sourcing_status` enum / vocabulary | **`DESIGN RESOLVED`** | **不建立全局 source enum** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.1.4 I** ／ **§4.5.11** |
 | `effective_arrival_date` 的 source field | **`DESIGN PENDING`** | §2.6.4 留给 Data Dictionary |
 | Allocation 与 demand window 的关联机制 | **`DESIGN PENDING`** | §2.3.12 明确不设计 timing engine |
 | `ApplicableMOQ` 的来源 | **`DESIGN PENDING`** | §2.5.5 留给 Data Dictionary / Adapter Design |
@@ -4454,6 +4488,11 @@ Canonical model **不得通过默认值隐藏缺失**。
 > 它已由 **Human-authorized Canonical Model Amendment（PR #30 Human Decision ／ Option A）** 解析；
 > 结论见 **§4.1.4 N**（BOM Component grain 现携带 Production Requirement context）
 > 与 **§4.5.7 Option A Implementation Record**。
+>
+> `sourcing_status` enum / vocabulary 已由 **Human-authorized Design Change
+> （PR #32 Human Decision ／ Option B）** 解析 —— **不建立全局 source enum**，
+> 而是 **source-specific vocabulary → canonical eligibility condition** 的 **mapping contract**
+> （见 **§4.1.4 I** ／ **§4.5.11 Option B Implementation Record**）。
 
 ---
 
@@ -4652,7 +4691,7 @@ ProductionQty × BOMComponentQty
 
 | Field | Logical Type | Requiredness | Class | Business Semantic | Valid / Invalid Boundary | Missing Behavior | Rule(s) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `sourcing_status` | `STATUS` | `CONDITIONAL` | `SOURCE` | Supplier-Material relationship eligibility context | **vocabulary `DESIGN PENDING`** | 无法可靠确定 → Risk Evidence Status = `DATA_INCOMPLETE` | `BR-SUPPLIER-RISK-001` |
+| `sourcing_status` | `STATUS` | `CONDITIONAL` | `SOURCE` | Supplier-Material relationship eligibility context | **source vocabulary = `SOURCE-SPECIFIC` / Adapter-defined**；**canonical eligibility mapping contract = `DESIGN RESOLVED`**（**§4.5.11**）；**不得**列举任何真实 source enum | eligibility 无法可靠映射 → `SEMANTIC_UNRESOLVED`；capability 需要时 Risk Evidence Status = `DATA_INCOMPLETE` | `BR-SUPPLIER-RISK-001` |
 | `standard_lead_time_days` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `SOURCE` | 标准供应周期（天） | `StandardLeadTimeDays >= 0` | `LeadTimeRisk = DATA_INCOMPLETE` | `BR-SUPPLIER-RISK-001` |
 | `PerformancePeriod` | `TEXT_CONTEXT`（observation window） | `REQUIRED` | `CONTEXT` | performance 的**统计窗口** | `NOT DEFINED`（period policy `DESIGN PENDING`） | `DeliveryRisk` / `QualityRisk` = `DATA_INCOMPLETE` | `BR-SUPPLIER-RISK-001` |
 | `PerformanceUpdatedAt` | `TIMESTAMP` | `CONDITIONAL` | `CONTEXT` | performance 记录更新时间 | `NOT DEFINED` | 不单独导致 `DATA_INCOMPLETE` | `BR-SUPPLIER-RISK-001` |
@@ -4661,6 +4700,23 @@ ProductionQty × BOMComponentQty
 
 > **必须保持：** `PerformancePeriod`（measurement period）**≠** `PerformanceUpdatedAt`。
 > `PerformanceUpdatedAt` **不能替代** measurement period。
+
+**`sourcing_status` —— source vocabulary / mapping contract（PR #32 Human-approved Option B）**
+
+```
+source vocabulary              = SOURCE-SPECIFIC / Adapter-defined
+canonical eligibility mapping  = DESIGN RESOLVED
+```
+
+具体 source values **当前仍未知** —— 但这**不阻塞** conceptual mapping contract 被 `DESIGN RESOLVED`。
+
+**Valid / Invalid Boundary 不得列举任何真实 source enum。**
+
+conceptual mapping outcome：`eligible` / `ineligible` / `unresolved`
+（**只是 conceptual mapping conditions** —— 不是 source enum / Business Status / Supplier Risk level /
+database field / API enum / ranking / selection result）。
+
+**不得创建** `is_eligible` / `SupplierEligibilityStatus` 等 canonical field。
 
 #### 4.2.9 Procurement Fields
 
@@ -4871,16 +4927,20 @@ DATA_INCOMPLETE
 | `approval_status` | 仅 `APPROVED` 可参与；`PENDING` / `REJECTED` / `UNKNOWN` 不得进入 | §2.3.5 |
 | `LeadTimeRisk` | `LOW` / `HIGH` | §2.7.5 |
 | `DeliveryRisk` / `QualityRisk` / `OverallSupplierRisk` | `LOW` / `MEDIUM` / `HIGH` / `DATA_INCOMPLETE` | §2.7.6 / §2.7.7 / §2.7.8 |
-| `sourcing_status` | **vocabulary `DESIGN PENDING`** —— 只登记 logical meaning | §2.7.24 |
+| `sourcing_status` | **source vocabulary = `SOURCE-SPECIFIC` / Adapter-defined**（**不建立全局 source enum**） | §2.7.24；**§4.5.11** |
 
 **特别注意 `sourcing_status`：**
 
 ```
-logical meaning : Supplier-Material relationship eligibility context
-vocabulary      : DESIGN PENDING
+logical meaning    : Supplier-Material relationship eligibility context
+source vocabulary  : SOURCE-SPECIFIC / Adapter-defined
+canonical mapping  : DESIGN RESOLVED（explicit deterministic mapping → eligibility condition）
 ```
 
-**不得自行创造** `ACTIVE` / `APPROVED` / `QUALIFIED` / `BLOCKED` 等 enum。
+**不得自行创造** `ACTIVE` / `APPROVED` / `QUALIFIED` / `BLOCKED` / `INACTIVE` 等 source enum。
+
+**不得**把 `eligible` / `ineligible` / `unresolved` 加入本状态词表 ——
+它们**不是** `sourcing_status` 的 source values，而是 **canonical mapping outcome**。
 
 #### 4.2.15 Provenance Requirement
 
@@ -4904,7 +4964,6 @@ input evidence
 | `loss_rate` canonical owner / grain | **`UNKNOWN`** |
 | `required_quantity` vs `ProductionQty` | **`DESIGN PENDING` / SEMANTIC AMBIGUITY** |
 | Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
-| `sourcing_status` vocabulary | `DESIGN PENDING` |
 | `effective_arrival_date` source field | `DESIGN PENDING` |
 | Allocation demand-window mapping | `DESIGN PENDING` |
 | `ApplicableMOQ` source | `DESIGN PENDING` |
@@ -4920,6 +4979,17 @@ input evidence
 > 已由 **Human-authorized Canonical Model Amendment（PR #30 ／ Option A）** 解析为
 > **requirement-scoped BOM applicability**（见 **§4.1.4 N** / **§4.5.7**）；
 > `BOMComponentQty` 的 context boundary 见 **§4.2.4**。
+>
+> `sourcing_status` vocabulary **已从本表移出** ——
+> **Supplier eligibility mapping contract** 已由 **PR #32 Human-approved Option B** 解析为
+> **source-specific vocabulary → canonical eligibility condition** 的 mapping contract
+> （见 **§4.1.4 I** / **§4.2.8** / **§4.5.11**）。
+>
+> **真实 source vocabulary 与具体 `source value → eligibility condition` 映射**
+> 仍由 **Adapter / source-specific mapping** 承担 ——
+> 这**不再属于** **Master Data Mapping unresolved semantic**。
+>
+> 因此 **unresolved count `7 → 6`**。
 >
 > **未新增** `BOMVersion` / `ValidFrom` / `ValidTo` / `BOM ID` / `ProductionVersion` /
 > `AlternativeBOM` / `Change Number` 等 canonical fields。
@@ -5346,14 +5416,14 @@ controlled export provenance
 #### 4.3.17 Unresolved Carrier Boundary
 
 以下项**仍未完全确定**（见 §4.2.16）——
-其中 `Warehouse canonical role`（**§4.5.12**）与 `BOM version / validity`（**§4.5.7** ／ **§4.1.4 N**）
-**已被解析**，**不再属于未决项**：
+其中 `Warehouse canonical role`（**§4.5.12**）、`BOM version / validity`（**§4.5.7** ／ **§4.1.4 N**）
+与 `sourcing_status` vocabulary（**§4.5.11**）**已被解析**，**不再属于未决项**：
 
 - `loss_rate` owner / grain
 - `required_quantity` vs `ProductionQty`
 - Warehouse canonical role —— **已由 §4.5.12 解析**（source / mapping / scope context）
 - BOM version / validity —— **已由 §4.5.7 ／ §4.1.4 N 解析**（requirement-scoped BOM applicability）
-- `sourcing_status` vocabulary
+- `sourcing_status` vocabulary —— **已由 §4.5.11 解析**（source-specific → canonical eligibility condition）
 - `effective_arrival_date` source mapping
 - allocation demand-window mapping
 - `ApplicableMOQ` source
@@ -6463,14 +6533,14 @@ SafetyStock missing     vs     SafetyStock = -10
 #### 4.4.41 Unknown Semantic Items
 
 以下项目**不得在本 Task 中推进**
-（`Warehouse canonical role` 已于 **§4.5.12**、`BOM version / validity` 已于 **§4.5.7** ／ **§4.1.4 N**
-解析，此处保留历史约束记录）：
+（`Warehouse canonical role` 已于 **§4.5.12**、`BOM version / validity` 已于 **§4.5.7** ／ **§4.1.4 N**、
+`sourcing_status` vocabulary 已于 **§4.5.11** 解析，此处保留历史约束记录）：
 
 - `loss_rate` owner / grain
 - `required_quantity` semantic
 - Warehouse canonical role —— **已由 §4.5.12 解析**（本 Task 未推进）
 - BOM version / validity —— **已由 §4.5.7 ／ §4.1.4 N 解析**（本 Task 未推进）
-- `sourcing_status` vocabulary
+- `sourcing_status` vocabulary —— **已由 §4.5.11 解析**（本 Task 未推进）
 - `effective_arrival_date` source mapping
 - allocation demand-window mapping
 - `ApplicableMOQ` source
@@ -6912,21 +6982,55 @@ Supplier Performance / Risk Evidence **不得只依据** `Supplier exists` ＋ `
 
 #### 4.4.62 `sourcing_status` Boundary
 
-Relationship eligibility 必须能够**可靠判断**。但：
+Relationship eligibility 必须能够**可靠判断**。
 
 ```
-sourcing_status vocabulary = DESIGN PENDING
+source vocabulary             = source-specific
+eligibility mapping contract  = DESIGN RESOLVED
 ```
 
-因此本 Task **不得创建** `APPROVED` / `ACTIVE` / `QUALIFIED` / `BLOCKED` 等 source enum。
+（**PR #32 Human-approved Option B** —— 见 **§4.1.4 I** / **§4.2.8** / **§4.5.11**。）
 
-如果 relationship 存在，但 eligibility **无法可靠确定**：
+因此**不得创建**全局 `APPROVED` / `ACTIVE` / `QUALIFIED` / `BLOCKED` / `INACTIVE` 等 source enum。
+
+**三条 canonical 路径：**
+
+**A. `eligible`**
+
+```
+valid relationship
+→ eligible for Supplier Risk evaluation
+→ NO Validation Issue
+```
+
+**B. explicitly `ineligible`**
+
+```
+valid but ineligible
+→ excluded from candidate evaluation
+→ NO Validation Issue
+→ NO DATA_INCOMPLETE
+```
+
+**C. `unresolved`**
+
+```
+SEMANTIC_RESOLUTION / SEMANTIC_UNRESOLVED
+```
+
+当 Supplier Risk capability **需要该 relationship** 时：
 
 ```
 Risk Evidence Status → DATA_INCOMPLETE
 ```
 
-**不得由 LLM 猜测资格。**
+**必须保持：**
+
+```
+explicitly ineligible  ≠  semantic unresolved
+```
+
+**不得由 LLM 猜测资格**；也**不得**默认 eligible ／ 默认 ineligible。
 
 #### 4.4.63 Supplier Performance Relationship Consistency
 
@@ -7157,7 +7261,7 @@ affected evidence → affected grain → affected capability
 | `required_quantity` semantic | `DESIGN PENDING` |
 | Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
 | BOM version / validity | **`DESIGN RESOLVED`** —— requirement-scoped BOM applicability（**§4.5.7** ／ **§4.1.4 N**） |
-| `sourcing_status` vocabulary | `DESIGN PENDING` |
+| `sourcing_status` vocabulary | **`DESIGN RESOLVED`** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.5.11** |
 | `effective_arrival_date` source mapping | `DESIGN PENDING` |
 | allocation demand-window mapping | `DESIGN PENDING` |
 | `ApplicableMOQ` source | `DESIGN PENDING` |
@@ -7390,9 +7494,16 @@ missing  ≠  present but invalid
 | inbound status `CANCELLED` | valid record → ineligible supply |
 | `effective_arrival_date > required_date` | valid record → not eligible before that need date |
 | Substitute Relationship `PENDING` | valid known state → not Approved Substitute Supply |
+| Supplier-Material Relationship `sourcing_status` → **`ineligible`** | valid record ＋ evidence 可可靠解释 → **not eligible for Supplier Risk candidate evaluation** |
 
 **不得**把 **business ineligible** 错误分类成 `INVALID_DEFINED_STATUS` / `CONSISTENCY_CONFLICT`
 或 **Data Quality Issue**。
+
+> **不得**机械声称上述各情形是**同一种业务状态** ——
+> 它们的**共同点只是**：`record valid` ＋ `not eligible for current calculation / evaluation`。
+>
+> **特别注意**：Supplier-Material Relationship 的 `ineligible` **不得**被压平为 `unresolved`，
+> 反之亦然（见 **§4.4.62**）。
 
 #### 4.4.90 Data Quality Issue Boundary
 
@@ -7558,7 +7669,7 @@ Risk vocabulary **保持现有定义**。
 | `required_quantity` semantic | `DESIGN PENDING` |
 | Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
 | BOM version / validity | **`DESIGN RESOLVED`** —— requirement-scoped BOM applicability（**§4.5.7** ／ **§4.1.4 N**） |
-| `sourcing_status` vocabulary | `DESIGN PENDING` |
+| `sourcing_status` vocabulary | **`DESIGN RESOLVED`** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.5.11** |
 | `effective_arrival_date` source mapping | `DESIGN PENDING` |
 | allocation demand-window mapping | `DESIGN PENDING` |
 | `ApplicableMOQ` source | `DESIGN PENDING` |
@@ -7733,7 +7844,7 @@ physical schema / architecture / technology / ADR。
 Design DoD = PASS（17 / 17）
 ```
 
-**Upstream Design Items（7 项未决 ＋ 2 项已解析）—— 不阻塞本 closure**
+**Upstream Design Items（6 项未决 ＋ 3 项已解析）—— 不阻塞本 closure**
 
 这 9 项**阻止的是**「某些 capability 当前能够实际运行」，
 **不是**「Data Validation conceptual design 已经定义清楚」。
@@ -7747,7 +7858,7 @@ Design DoD = PASS（17 / 17）
 | 2 | `required_quantity` semantic | `DESIGN PENDING` | **不产生** runtime issue；`BR-REQUIREMENT-001` 不依赖它（`§4.4.53` / `§4.4.95`） |
 | 3 | Warehouse canonical role | **`DESIGN RESOLVED`** | 已由 **§4.5.12** 解析为 source / mapping / scope context（`§4.4.50`） |
 | 4 | BOM version / validity | **`DESIGN RESOLVED`** | 已由 **§4.5.7** ／ **§4.1.4 N** 解析为 requirement-scoped BOM applicability（`§4.4.52`） |
-| 5 | `sourcing_status` vocabulary | `DESIGN PENDING` | eligibility 无法可靠确定 → `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED`（`§4.4.62` / `§4.4.95`） |
+| 5 | `sourcing_status` vocabulary | **`DESIGN RESOLVED`** | 已由 **§4.5.11** 解析为 source-specific → canonical eligibility condition mapping contract（`§4.4.62`） |
 | 6 | `effective_arrival_date` source mapping | `DESIGN PENDING` | 按既有 Rule 处理 missing / invalid（`§4.4.49`） |
 | 7 | allocation demand-window mapping | `DESIGN PENDING` | 无法判断重叠 → `DATA_INCOMPLETE` ＋ Data Quality Issue（`§4.4.60`） |
 | 8 | `ApplicableMOQ` source | `DESIGN PENDING` | 无法可靠取得 → `DATA_INCOMPLETE` → No Numeric Recommendation（`§4.4.67`） |
@@ -7757,8 +7868,11 @@ Design DoD = PASS（17 / 17）
 > 解析为 **source / mapping / scope context**；
 > 第 4 项 `BOM version / validity` 已由 **§4.5.7** ／ **§4.1.4 N** 解析为
 > **requirement-scoped BOM applicability**
-> （**Human-authorized Canonical Model Amendment**，PR #30 ／ Option A）。
-> 两者均**不再属于未决项**；对应行保留登记以便追溯。剩余 **7 项**未决。
+> （**Human-authorized Canonical Model Amendment**，PR #30 ／ Option A）；
+> 第 5 项 `sourcing_status` vocabulary 已由 **§4.5.11** 解析为
+> **source-specific → canonical eligibility condition** 的 mapping contract
+> （**Human-authorized Design Change**，PR #32 ／ Option B）。
+> 三者均**不再属于未决项**；对应行保留登记以便追溯。剩余 **6 项**未决。
 
 > 三者均明确禁止 Validation 反向解决这些设计问题：
 > `Consistency Validation 不得成为解决这些问题的后门。` /
@@ -7827,7 +7941,7 @@ conceptual validation design complete
 | Mapping Provenance Requirement | **`DESIGN RESOLVED`** |
 | Warehouse Role Resolution | **`DESIGN RESOLVED`** |
 | BOM Version / Validity Mapping | **`DESIGN RESOLVED`** |
-| Supplier Eligibility Vocabulary Mapping | `DESIGN PENDING` |
+| Supplier Eligibility Vocabulary Mapping | **`DESIGN RESOLVED`** |
 | Other Source-Semantic Mapping | `DESIGN PENDING` |
 | Final Master Data Mapping | `DESIGN PENDING` |
 
@@ -7839,9 +7953,9 @@ conceptual validation design complete
 > 因此现为 **`DESIGN RESOLVED`**。
 >
 > `Supplier Eligibility Vocabulary Mapping` 的 **Supplier Eligibility Mapping Design Review**
-> 已产生 **Review Finding**，且 **Human Decision 已记录**（**Option B APPROVED**，见 **§4.5.11**）；
-> 但 **semantic synchronization 尚未实施**，因此其状态**仍为 `DESIGN PENDING`**，
-> unresolved count **仍为 7**。
+> 与 **Human Decision Record**（**Option B APPROVED**）见 **§4.5.11**；
+> 其 `§4.1` / `§4.2` / `§4.4` semantic synchronization **已实施**，
+> 因此现为 **`DESIGN RESOLVED`**，unresolved count **7 → 6**。
 
 #### 4.5.1 Purpose & Scope
 
@@ -7860,7 +7974,7 @@ Plant / Material / Supplier 以及关键业务 relationship **必须满足什么
 - mapping provenance requirement
 - mapping failure blast radius
 
-> 后续 Task 已追加 **Warehouse Role Resolution**（见 **§4.5.12**）与 **BOM Version / Validity Mapping**（见 **§4.5.7**）。
+> 后续 Task 已追加 **Warehouse Role Resolution**（见 **§4.5.12**）、**BOM Version / Validity Mapping**（见 **§4.5.7**）与 **Supplier Eligibility Vocabulary Mapping**（见 **§4.5.11**）。
 
 **不得定义**：ERP vendor / ERP version / source table / source column / CSV column / JSON path /
 SQL / mapping code / fuzzy matching algorithm / MDM product / database / API / Adapter implementation。
@@ -8935,9 +9049,9 @@ Supplier-Material Relationship grain = supplier_id + material_code   （保持�
 Eligibility mapping **不应改变**该 relationship grain。
 本 Review **未**发现需要修改 `§4.1` 的理由。
 
-**Data Dictionary Impact Review**
+**Data Dictionary Impact Review（PR #32 Review 时点）**
 
-`§4.2.8` / `§4.2.14` / `§4.2.16` 当前登记：
+`§4.2.8` / `§4.2.14` / `§4.2.16` 当时登记：
 
 ```
 sourcing_status vocabulary = DESIGN PENDING
@@ -9157,10 +9271,111 @@ Supplier Eligibility Vocabulary Mapping = DESIGN PENDING
 unresolved count                        = 仍为 7
 ```
 
-**本 PR 不实施** `§4.1` / `§4.2` / `§4.4` 的 semantic synchronization。
+**PR #32 当时不实施** `§4.1` / `§4.2` / `§4.4` 的 semantic synchronization；
+`Supplier Eligibility Vocabulary Mapping` 当时**保持 `DESIGN PENDING`**，unresolved count 当时**仍为 7**。
 
-`Supplier Eligibility Vocabulary Mapping` **保持 `DESIGN PENDING`**，unresolved count **仍为 7**，
-**直到 follow-up Design Change 实施并通过 Review**。
+> 以上为**历史记录**。后续 **Human-authorized Option B Implementation** 已实施并变更该状态 ——
+> 见下方 **Option B Implementation Record**。
+
+**Option B Implementation Record（Human-authorized Design Change）**
+
+**Human Authorization Source**
+
+```
+PR #32 Human Decision
+  → source global enum      = NOT ADOPTED
+  → Option B                = APPROVED
+  → conceptual tri-state    = APPROVED
+  → explicitly ineligible   = APPROVED（valid but ineligible）
+  → minimal synchronization = AUTHORIZED（§4.1 / §4.2 / §4.4）
+```
+
+**已实施的设计**
+
+```
+source-specific sourcing_status
+        ↓
+explicit deterministic mapping evidence
+        ↓
+conceptual Relationship Eligibility Condition
+        ↓
+eligible  /  ineligible  /  unresolved
+```
+
+**Source Vocabulary Policy（正式关闭错误前提）**
+
+「需要定义全局 `sourcing_status` vocabulary」这一前提**已被正式关闭**。
+
+```
+source sourcing_status vocabulary = SOURCE-SPECIFIC
+```
+
+具体 `source value → eligibility condition` 映射由**未来 Adapter / source-specific mapping** 明确提供。
+`SOURCE-SPECIFIC` 是**设计描述**，**不得**创建成 runtime enum value。
+
+**不得建立**全局 `APPROVED` / `ACTIVE` / `QUALIFIED` / `BLOCKED` / `INACTIVE` 等 source enum。
+
+**Tri-state Semantics（正式定义）**
+
+| Condition | 含义 | Business 后果 |
+| --- | --- | --- |
+| **`eligible`** | 该 relationship 具有**足够可靠的 eligibility evidence** | **允许进入** `BR-SUPPLIER-RISK-001` Risk Evidence evaluation |
+| **`ineligible`** | relationship 存在 ＋ 可识别 ＋ evidence 可可靠解释，但明确不属于当前可评估 candidate relationship | **valid but ineligible** —— 不进入 candidate evaluation；**NO Validation Issue**、**NO `DATA_INCOMPLETE`** |
+| **`unresolved`** | relationship 存在，但当前 evidence **无法可靠判断**其 eligibility | `SEMANTIC_RESOLUTION` / `SEMANTIC_UNRESOLVED`；capability 需要评估时 → Risk Evidence **`DATA_INCOMPLETE`** |
+
+**必须保持：**
+
+```
+explicitly ineligible  ≠  invalid relationship
+explicitly ineligible  ≠  semantic unresolved
+```
+
+**`eligible` 不表示：** supplier selected / supplier recommended / supplier best /
+purchase should be placed / Procurement Recommendation belongs to that supplier。
+
+**多个 eligible relationships 可以同时存在**（该边界见上方 **Human Decision Record**）。
+
+**§4.1 / §4.2 / §4.4 同步结果**
+
+- `§4.1.4 I` —— `sourcing_status` 明确为 **source / mapping eligibility evidence context**；
+  补充 conceptual Relationship Eligibility Condition；**grain 未改变**（`supplier_id` + `material_code`）
+- `§4.2.8` / `§4.2.14` / `§4.2.16` —— `sourcing_status` 的
+  **source-vocabulary / canonical mapping-contract status** 已同步；`§4.2.16` 的 stale open item 已移除
+- `§4.4.62` —— 三条路径（`eligible` / `ineligible` / `unresolved`）已同步，
+  并补充 `explicitly ineligible ≠ semantic unresolved`
+- `§4.4.89` —— `valid but ineligible` 原则已扩展覆盖 explicitly ineligible Supplier-Material Relationship
+
+**不得**创建 `is_eligible` / `SupplierEligibilityStatus` 等 canonical field。
+**未创建**任何 source enum、persisted eligibility field、schema、mapping table、Adapter、API、ADR。
+
+**Supplier Selection Boundary（未改变）**
+
+```
+Relationship Eligibility  ≠  Supplier Ranking
+Relationship Eligibility  ≠  Supplier Selection
+Supplier Risk             ≠  Supplier Recommendation
+```
+
+**Supplier Risk 不得自动改变** `RecommendedPurchaseQty`。
+
+**Rename Interpretation Clarification**
+
+本项名称 `Supplier Eligibility Vocabulary Mapping` 容易被误读为「定义一个统一 vocabulary」。
+
+**本项被解析的方式恰恰是：不建立统一 source vocabulary** ——
+而是建立 **source-specific vocabulary → canonical eligibility condition** 的 **mapping contract**。
+
+**Status**
+
+```
+Supplier Eligibility Vocabulary Mapping = DESIGN RESOLVED
+Master Data Mapping overall             = 仍 DESIGN PENDING
+unresolved count                        = 7 → 6
+```
+
+`DESIGN RESOLVED` **只**表示 **POC canonical eligibility mapping contract 概念设计已完成**，
+**不表示**：actual source values known / ERP · SRM vocabulary known /
+Adapter mapping implemented / mapping configuration exists / Supplier Risk implemented / tested。
 
 #### 4.5.12 Warehouse Role Resolution
 
@@ -9667,7 +9882,7 @@ source evidence exists but canonical mapping unavailable
 
 #### 4.5.21 Preserve Unresolved Items
 
-以下未决项本轮**必须继续保持**（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**）：
+以下未决项本轮**必须继续保持**（`Warehouse canonical role` **已由 §4.5.12 解析**、`BOM version / validity` **已由 §4.5.7 ／ §4.1.4 N 解析**、`sourcing_status` vocabulary **已由 §4.5.11 解析**）：
 
 | 未决项 | 状态 |
 | --- | --- |
@@ -9675,7 +9890,7 @@ source evidence exists but canonical mapping unavailable
 | `required_quantity` semantic | `DESIGN PENDING` |
 | Warehouse canonical role | **`DESIGN RESOLVED`** —— source / mapping / scope context（**§4.5.12**） |
 | BOM version / validity | **`DESIGN RESOLVED`** —— requirement-scoped BOM applicability（**§4.5.7** ／ **§4.1.4 N**） |
-| `sourcing_status` vocabulary | `DESIGN PENDING` |
+| `sourcing_status` vocabulary | **`DESIGN RESOLVED`** —— source vocabulary = **`SOURCE-SPECIFIC`**；canonical eligibility mapping contract 见 **§4.5.11** |
 | `effective_arrival_date` source mapping | `DESIGN PENDING` |
 | allocation demand-window mapping | `DESIGN PENDING` |
 | `ApplicableMOQ` source | `DESIGN PENDING` |
@@ -9685,9 +9900,9 @@ source evidence exists but canonical mapping unavailable
 > 已由 **Human-approved Option A ＋ Canonical Model Amendment** **RESOLVED**（见 **§4.5.7**）；
 > 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **8 → 7**。
 >
-> `sourcing_status` vocabulary 的 **Human Decision 已记录**
-> （**Option B APPROVED**，见 **§4.5.11**）；但在 approved **semantic synchronization**
-> 完成并通过 Review 之前，其状态**保持 `DESIGN PENDING`**，未决项数量**不减少**。
+> `sourcing_status` vocabulary 的 **Option B semantic synchronization 已实施**
+> （见 **§4.5.11 Option B Implementation Record**）；
+> 因此其状态已变更为 **`DESIGN RESOLVED`**，未决项数量 **7 → 6**。
 
 本 Task **不以「Master Data Mapping」为名一次性消灭这些问题**。
 
@@ -9725,10 +9940,11 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 
 `Master Data Mapping` overall **仍为 `DESIGN PENDING`** ——
 本节已完成 Canonical Identity Resolution、Relationship Resolution Boundary、
-**Warehouse Role Resolution**（**§4.5.12**）
-与 **BOM Version / Validity Mapping**（**§4.5.7** ／ **§4.1.4 N**）。
+**Warehouse Role Resolution**（**§4.5.12**）、
+**BOM Version / Validity Mapping**（**§4.5.7** ／ **§4.1.4 N**）
+与 **Supplier Eligibility Vocabulary Mapping**（**§4.5.11**）。
 
-`DESIGN RESOLVED` 的六个层级**仅**表示其 **conceptual resolution boundary 已定义**，
+`DESIGN RESOLVED` 的七个层级**仅**表示其 **conceptual resolution boundary 已定义**，
 **不表示**：
 
 - 真实 ERP mapping 已完成
@@ -9758,11 +9974,20 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 - BOM explosion implemented
 - tested
 
-**Open Pending Sync：** `Supplier Eligibility Vocabulary Mapping` **仍为 `DESIGN PENDING`** ——
-其 **Supplier Eligibility Mapping Design Review** 的 **Option B 已获 Human Approval**
-（source-specific `sourcing_status` → conceptual eligibility condition，见 **§4.5.11**），
-但 **`§4.1` / `§4.2` / `§4.4` 的 semantic synchronization 尚未实施**，
-须待 follow-up Design Change 完成并通过 Review。
+**Option B —— IMPLEMENTED：** `Supplier Eligibility Vocabulary Mapping` **现为 `DESIGN RESOLVED`** ——
+其 **Option B**（source-specific `sourcing_status` → conceptual eligibility condition）
+已由 **Human-authorized Design Change** 实施，`§4.1` / `§4.2` / `§4.4` 已完成最小 semantic synchronization
+（见 **§4.5.11 Option B Implementation Record**）。
+
+`DESIGN RESOLVED` **只**表示 **POC canonical eligibility mapping contract 概念设计已完成**，
+**不表示**：
+
+- actual source values known
+- ERP / SRM vocabulary known
+- Adapter mapping implemented
+- mapping configuration exists
+- Supplier Risk implemented
+- tested
 
 ---
 
