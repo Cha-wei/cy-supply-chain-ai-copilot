@@ -2784,6 +2784,7 @@ supplier_id
 - `standard_lead_time_days`
 - `delivery_performance`
 - `quality_performance`
+- `period`
 - `updated_at`
 
 并使用：
@@ -2794,6 +2795,22 @@ RecommendationNeedDate
 
 作为 **Lead Time Feasibility** 的需求时间基准。
 
+**必须保留 `period`** —— **不得只记录 performance value 而丢失 measurement period**。
+
+因此：
+
+```
+delivery_performance
+与
+quality_performance
+```
+
+**必须对应一个可可靠识别的**：
+
+```
+PerformancePeriod
+```
+
 **不得自行定义真实**：
 
 - ERP / SRM schema
@@ -2801,6 +2818,9 @@ RecommendationNeedDate
 - API contract
 
 这些属于后续 **Data Dictionary / Adapter Design**。
+
+> `period` 的完整性要求见 **§2.7.23 Performance Period Context**。
+> Supplier-Material relationship eligibility 要求见 **§2.7.24 Supplier-Material Relationship Eligibility**。
 
 #### 2.7.4 DaysUntilNeed
 
@@ -3034,6 +3054,8 @@ DeliveryRisk = DATA_INCOMPLETE
 - `DaysUntilNeed`
 - `StandardLeadTimeDays`
 - `LeadTimeRisk`
+- `PerformancePeriod`
+- `PerformanceUpdatedAt`
 - `DeliveryPerformance`
 - `DeliveryRisk`
 - `QualityPerformance`
@@ -3129,6 +3151,34 @@ Supplier A should be selected
 Supplier A ranks #1
 ```
 
+**Example C — Performance period missing**
+
+| 字段 | 值 |
+| --- | --- |
+| `supplier_id` | `SUP-A` |
+| `material_code` | `MAT-A` |
+| `DeliveryPerformance` | 97% |
+| `QualityPerformance` | 99% |
+| `period` | missing |
+
+**Expected：**
+
+- `DeliveryRisk = DATA_INCOMPLETE`
+- `QualityRisk = DATA_INCOMPLETE`
+- `OverallSupplierRisk = DATA_INCOMPLETE`
+
+**不得**因为 `97%` / `99%` 数值看起来很好就输出 `LOW`。
+
+**Example D — Relationship unresolved**
+
+Supplier exists；Material exists；但 **Supplier-Material Relationship 无法可靠确认**。
+
+**Expected：**
+
+- Risk Evidence Status = `DATA_INCOMPLETE`
+
+**不得自动**把该 Supplier 视为此 Material 的候选供应商。
+
 #### 2.7.14 Boundary with Supplier Selection
 
 即使同一个 Material 存在多个 Supplier：
@@ -3197,6 +3247,8 @@ SupplierRisk = HIGH
 | `QualityPerformance` missing / invalid | `QualityRisk = DATA_INCOMPLETE` |
 | `QualityPerformance < 0%` | `QualityRisk = DATA_INCOMPLETE` |
 | `QualityPerformance > 100%` | `QualityRisk = DATA_INCOMPLETE` |
+| `period` missing / invalid（而 performance value 存在） | `DeliveryRisk` / `QualityRisk` = `DATA_INCOMPLETE` |
+| Supplier-Material Relationship 无法可靠确定 | Risk Evidence Status = `DATA_INCOMPLETE` |
 
 `OverallSupplierRisk`：**`DATA_INCOMPLETE`**
 
@@ -3339,6 +3391,140 @@ Design resolution
 **只是 canonical business meaning**。
 
 其 **source mapping** 进入后续 **Data Dictionary / Adapter Design**。
+
+#### 2.7.23 Performance Period Context
+
+`VR-006` 的 Supplier Performance baseline 中已存在：
+
+- `supplier_id`
+- `period`
+- `delivery_performance`
+- `quality_performance`
+- `updated_at`
+
+因此 `delivery_performance` 与 `quality_performance` **必须对应一个可可靠识别的**：
+
+```
+PerformancePeriod
+```
+
+**它可能代表某个明确的统计窗口，但本 Task 不决定**：
+
+- 30 days
+- 90 days
+- 12 months
+- rolling window
+- fiscal period
+
+这些真实 **period policy** 留给后续 **Data Mapping / Business Rule refinement**。
+
+**本 Task 不得自行发明固定统计周期。**
+
+**Performance Evidence Completeness**
+
+如果：
+
+```
+delivery_performance 有值
+但对应 period 无法可靠确定
+```
+
+则：
+
+```
+DeliveryRisk = DATA_INCOMPLETE
+```
+
+如果：
+
+```
+quality_performance 有值
+但对应 period 无法可靠确定
+```
+
+则：
+
+```
+QualityRisk = DATA_INCOMPLETE
+```
+
+**不得**把：
+
+```
+"97% but period unknown"
+```
+
+视为**完整可靠**的 Risk Evidence。
+
+`updated_at` **不能替代** performance measurement period。
+
+> 本 Task **不定义** performance freshness threshold / maximum age / rolling window。
+> 这些仍属于后续 Design。
+
+#### 2.7.24 Supplier-Material Relationship Eligibility
+
+`VR-006` 已存在：
+
+```
+Supplier-Material Relationship
+```
+
+以及：
+
+```
+sourcing_status
+```
+
+因此补充一个 **eligibility boundary**：
+
+Risk Evidence 的业务上下文**必须能够确认** `supplier_id` 与 `material_code` **存在可可靠识别的
+Supplier-Material Relationship**。
+
+**不得**因为 Supplier Master 中存在某 Supplier，就**自动认为**其可以供应任意 Material。
+
+`sourcing_status` 用于判断该 relationship 是否属于**当前可评估的 candidate relationship**。
+
+本 Task **不定义**具体 `sourcing_status` enum / vocabulary。
+
+**不得自行发明** `APPROVED` / `ACTIVE` / `QUALIFIED` 等真实 source status。
+
+只定义：如果 **relationship eligibility 无法可靠确定**：
+
+```
+Risk Evidence Status = DATA_INCOMPLETE
+```
+
+**不得由 LLM 猜测供应资格。**
+
+**Important Boundary**
+
+Relationship eligibility：
+
+```
+≠ Supplier Ranking
+≠ Supplier Selection
+≠ Supplier Recommendation
+```
+
+它**只回答**：
+
+> 「这个 supplier-material relationship 是否具有足够可靠的业务上下文进入 Risk Evidence evaluation。」
+
+即使**两个 relationship 都 eligible**：
+
+```
+Supplier A = LOW
+Supplier B = HIGH
+```
+
+仍然：
+
+- **不得自动排名**
+- **不得自动选择**
+- **不得绑定到采购建议**
+
+> 本 Task **不定义** supplier qualification workflow。
+> 这些仍属于后续 Design。
 
 ---
 
