@@ -3928,8 +3928,8 @@ conceptual boundary 已定义
 > 继承约束（不重新定义）：Integration Pattern = **Controlled Export / Snapshot**。具体文件格式（CSV / JSON / Parquet）与 Adapter Contract 属本阶段待设计事项，**本轮未决定**。
 >
 > **current-state 更新：** `Serialization Format` 已由 **PR #51 Human Decision** 登记为 **JSON**
-> （single JSON strategy；manifest = independent artifact ＋ JSON），见 **§4.3.22**；
-> 但 conditional closure gate = **`FAIL`**，因此该项**仍为 `DESIGN PENDING`**。
+> （single JSON strategy；manifest = independent artifact ＋ JSON），并经
+> **PR #52 Closure Re-run = `PASS`** 后**现为 `DESIGN RESOLVED`**（见 **§4.3.22**）。
 > `Physical Dataset Layout` ／ `Field Carrier Mapping` ／ `Final Import Contract` 与 **Adapter Contract**
 > 仍待设计。
 
@@ -5763,7 +5763,10 @@ data validated、implemented、tested。
 
 > **子章节整体状态：仍为 `DESIGN PENDING`。**
 >
-> 本节只完成其**第一层**。
+> 本节已完成**第一层**（Package Envelope ／ Atomicity Boundary ／ Immutability Boundary ／
+> Analysis Run Linkage）**与 `Serialization Format`**（**PR #51 Human Decision** ＋
+> **PR #52 Closure Re-run = `PASS`**，见 **§4.3.22**）；
+> `Physical Dataset Layout` ／ `Field Carrier Mapping` ／ `Final Import Contract` **仍为 `DESIGN PENDING`**。
 
 **层级状态登记：**
 
@@ -5773,7 +5776,7 @@ data validated、implemented、tested。
 | Atomicity Boundary | **`DESIGN RESOLVED`** |
 | Immutability Boundary | **`DESIGN RESOLVED`** |
 | Analysis Run Linkage | **`DESIGN RESOLVED`** |
-| Serialization Format | `DESIGN PENDING` |
+| Serialization Format | **`DESIGN RESOLVED`** |
 | Physical Dataset Layout | `DESIGN PENDING` |
 | Field Carrier Mapping | `DESIGN PENDING` |
 | Final Import Contract | `DESIGN PENDING` |
@@ -5813,8 +5816,9 @@ concrete filenames、physical schema、API contract、Adapter implementation。
 Serialization Format = DESIGN PENDING
 ```
 
-**current status：`Serialization Format` 仍为 `DESIGN PENDING`** ——
-conditional closure gate = **`FAIL`**（见 **Serialization Format Implementation Record**）。
+**current status：`Serialization Format` 现为 `DESIGN RESOLVED`** ——
+**PR #51 Human Decision** 登记 JSON strategy；**PR #52 Closure Re-run** = **`PASS`**
+（见 **§4.3.22** ／ **Serialization Format Closure Re-run Record**）。
 
 #### 4.3.2 Snapshot Package Concept
 
@@ -6005,7 +6009,7 @@ Package Identity
 > **`Snapshot Manifest ≠ business dataset`** 保持。
 > 但 `manifest filename` ／ `path` ／ `directory` ／ `package container` ／ `archive`
 > **仍未定义**，属 **`Physical Dataset Layout`**。
-> `Serialization Format` 本身**仍为 `DESIGN PENDING`**（conditional closure gate = **`FAIL`**）。
+> `Serialization Format` 本身**现为 `DESIGN RESOLVED`**（**PR #52 Closure Re-run = `PASS`**，见 **§4.3.22**）。
 
 #### 4.3.9 SIMULATED Boundary
 
@@ -7482,26 +7486,321 @@ POC Design v0.2                     = DRAFT
 | 3 | 是否确认 **`G-S1` 为 blocking**，因而 `Serialization Format` **保持 `DESIGN PENDING`**？ |
 | 4 | 是否授权在补充 `IDENTIFIER` ／ `ANALYSIS_RUN_ID` representation rule 后，**重新执行** conditional closure gate？ |
 
+**Human Decision Record —— `SIMULATED POC Design Policy` ＋ `Human-approved`（`G-S1` 补充决定）**
+
+> 本节是对 **PR #52 第一次 Serialization Format Closure Gate `FAIL`**（`G-S1`）的 **Human Decision**。
+>
+> 上方 **Serialization Format Implementation Record** 中的
+> `G-S1 = BLOCKING` ／ `R-2 = FAIL` ／ `R-3 = FAIL` ／
+> `Conditional Closure Gate = FAIL` ／ `Serialization Format = DESIGN PENDING`
+> **全部保留，未删除、未改写** —— 它们属于 **first closure attempt time-point record**。
+
+**决定 1 —— `G-S1` = VALID BLOCKING GAP（CONFIRMED）**
+
+正式确认 `G-S1` 为**有效 blocking gap**；
+
+```
+第一次 conditional closure Gate = FAIL   ← 历史结果，保持
+```
+
+该历史结果**不得修改**。
+
+**决定 2 —— `IDENTIFIER` ／ `ANALYSIS_RUN_ID` Representation = `JSON string`（APPROVED）**
+
+正式授权：
+
+```
+IDENTIFIER       = JSON string
+ANALYSIS_RUN_ID  = JSON string
+```
+
+其 representation semantic = **exact opaque string** —— **必须保持原始 identity value**。
+
+**禁止：**
+
+```
+numeric coercion
+trim
+case conversion
+Unicode normalization used as semantic fix-up
+leading-zero removal
+numeric interpretation
+synonym conversion
+```
+
+例如：
+
+```
+"00123"  ≠  "123"
+"A01"    ≠  "a01"
+```
+
+**不得**把 `1001` 作为 canonical `IDENTIFIER` ／ `ANALYSIS_RUN_ID` 的 JSON representation。
+
+**决定 3 —— `snapshot_package_id` = `JSON string`（CONFIRMED）**
+
+`snapshot_package_id` 属于 **transport-level identity concept**（**不是** canonical business field），
+但**必须**具有**稳定、opaque** 的 identity representation：
+
+```
+snapshot_package_id = JSON string
+```
+
+同样要求 **exact string**；**禁止**：
+
+```
+numeric coercion
+trim
+case conversion
+leading-zero removal
+```
+
+本决定**不定义** `snapshot_package_id` 的**生成算法**；仍**不得规定**：
+
+```
+UUID
+hash
+sequence
+timestamp-based ID
+regex
+length
+prefix
+```
+
+**决定 4 —— `TEXT_CONTEXT` = `JSON string`（APPROVED，显式登记）**
+
+正式授权显式登记：
+
+```
+TEXT_CONTEXT = JSON string
+```
+
+**必须**保持 **exact textual value**，使用 **standard JSON string escaping**。
+
+**不得：**
+
+```
+silent trim
+silent case conversion
+silent Unicode normalization
+numeric coercion
+```
+
+本决定**仅**固定 **JSON scalar representation**，**不新增**任何 business semantic。
+
+**决定 5 —— 新增 `C-10` = Identity ／ Text Scalar Representation（REGISTERED）**
+
+`C-10` 已在 **`§4.3.22 C`** 正式登记。`C-1` ～ `C-9` 的 semantic **未修改**。
+
+**决定 6 —— Historical Preservation = CONFIRMED**
+
+**不得回写**：
+
+```
+PR #51 Serialization Format Review Finding
+PR #51 Human Decision Record
+PR #52 第一次 Serialization Format Implementation Record
+```
+
+**决定 7 —— Explicit Non-Authorization**
+
+本 Human Decision **不授权**：
+
+```
+identifier regex
+identifier length
+identifier prefix
+numeric-only identifier constraint
+UUID requirement
+identifier generation algorithm
+source-system identifier format
+JSON Schema
+parser
+sample JSON
+dataset envelope
+concrete JSON property name
+directory ／ filename
+decimal precision
+quantity rounding policy
+business timezone policy
+```
+
+**执行状态（`G-S1` 补充决定时点）**
+
+```
+G-S1                            = RESOLVED BY HUMAN DECISION
+IDENTIFIER                      = JSON string（exact opaque）
+ANALYSIS_RUN_ID                 = JSON string（exact opaque）
+TEXT_CONTEXT                    = JSON string（exact textual）
+snapshot_package_id             = JSON string（transport-level，exact）
+C-10                            = REGISTERED
+C-1 ～ C-9                       = UNCHANGED
+Serialization Format            = DESIGN PENDING   ← 待重新执行 conditional closure Gate
+```
+
+**Serialization Format Closure Re-run Record（Human-authorized Conditional Closure Gate Re-run）**
+
+**Authorization Source**
+
+```
+PR #52 第一次 conditional closure Gate = FAIL（G-S1 = BLOCKING）
+  → G-S1 补充 Human Decision（决定 1 ～ 7）
+  → 决定 5：C-10 = REGISTERED
+  → 重新执行 conditional closure Gate
+```
+
+**Representation Completeness Re-Audit（逐 logical type ＋ transport identity）**
+
+| 项 | Representation rule | 判定 |
+| --- | --- | --- |
+| **`IDENTIFIER`** | **`C-10`**：JSON string（exact opaque） | **COVERED** |
+| **`ANALYSIS_RUN_ID`** | **`C-10`**：JSON string（exact opaque） | **COVERED** |
+| **`TEXT_CONTEXT`** | **`C-10`**：JSON string（exact textual） | **COVERED** |
+| `DATE` | `C-3`：`YYYY-MM-DD` | **COVERED** |
+| `TIMESTAMP` | `C-4`：RFC 3339 compatible ＋ explicit offset ／ `Z` | **COVERED** |
+| `DECIMAL_QUANTITY` | `C-5`：base-10 decimal string | **COVERED** |
+| `NON_NEGATIVE_QUANTITY` | `C-5`：base-10 decimal string | **COVERED** |
+| `RATIO` | `C-5`：base-10 decimal string | **COVERED** |
+| `PERCENTAGE` | `C-5`：base-10 decimal string | **COVERED** |
+| `STATUS` | `C-7`：exact canonical literal string | **COVERED** |
+| `BOOLEAN` | `C-6`：`NOT APPLICABLE`（canonical model 无此 logical type） | **N/A** |
+| **transport identity**：`snapshot_package_id` | **`C-10`**：JSON string（transport-level，exact opaque） | **COVERED** |
+
+```
+representation gap remaining = NONE
+```
+
+**不得**为达成 `PASS` 新增任何其他未授权 representation rule —— 本次**未**新增。
+
+**R-1 ～ R-10 Re-run Result**
+
+| # | Criterion | First Run | Re-run |
+| --- | --- | --- | --- |
+| **R-1** | Deterministic Parsing | PASS | **PASS** |
+| **R-2** | Stable Field Representation | **FAIL** | **PASS**（`C-10`） |
+| **R-3** | Logical Type Preservation | **FAIL** | **PASS**（`C-10`） |
+| **R-4** | Missing ≠ Present-with-Default | PASS | **PASS** |
+| **R-5** | Dataset-Level Absence Expressible | PASS | **PASS** |
+| **R-6** | Manifest Metadata Carriage | PASS | **PASS** |
+| **R-7** | Integrity Evidence Carriage | PASS | **PASS** |
+| **R-8** | Reproducibility | PASS | **PASS** |
+| **R-9** | Contract Version Expressibility | PASS | **PASS** |
+| **R-10** | Adapter Neutrality | PASS | **PASS** |
+
+```
+R-1 ～ R-10（re-run） = ALL PASS
+```
+
+**R-11 ／ R-12 Assessment（POC DESIGN OBJECTIVES，非 hard blocker）**
+
+```
+R-11 Human Inspectability       = SATISFIED
+R-12 Implementation Simplicity  = SATISFIED
+```
+
+**New Blocking Contradiction Audit**
+
+```
+G-S1（first run）               = RESOLVED BY HUMAN DECISION（historical record 保留）
+其他新增 blocking contradiction   = NONE
+downstream contradiction         = NONE
+```
+
+**Conditional Closure Result（re-run）**
+
+```
+R-1 ～ R-10                  = ALL PASS
+C-1 ～ C-10                  = FULLY REGISTERED
+New Blocking Contradiction   = NONE
+  → conditional closure gate  = PASS
+```
+
+因此执行 conditional closure：
+
+```
+Serialization Format   DESIGN PENDING → DESIGN RESOLVED
+```
+
+**Current-State Synchronization**
+
+| 位置 | 同步内容 |
+| --- | --- |
+| `§4` 子领域表 | `Snapshot / Import Contract` **仍为 `DESIGN PENDING`**（未整体关闭） |
+| `§4` 继承约束 current-state 注 | `Serialization Format` → `DESIGN RESOLVED` |
+| `§4.3` 子章节状态块 | 已完成层加入 `Serialization Format`；子章节整体**仍为 `DESIGN PENDING`** |
+| `§4.3` 层级状态登记表 | `Serialization Format` → **`DESIGN RESOLVED`** |
+| `§4.3.1` | current status → **`DESIGN RESOLVED`** |
+| `§4.3.8` | manifest 部分 current-state 注 → **`DESIGN RESOLVED`** |
+| `§4.3.21` | `四个层级` → **`五个层级`**；`serialization format determined` 移出「不表示」清单 |
+| `§4.3.22` | 新增 **`C-10`**；`C-1` ～ `C-10` = **`REGISTERED`** |
+
+**Historical Preservation（未回写）**
+
+- **PR #51 Serialization Format Review Finding**
+- **PR #51 Human Decision Record**
+- **PR #52 第一次 Serialization Format Implementation Record** —— 其中
+  `G-S1 = BLOCKING` ／ `R-2 = FAIL` ／ `R-3 = FAIL` ／
+  `Conditional Closure Gate = FAIL` ／ `Serialization Format = DESIGN PENDING` **全部保留**
+
+**Downstream Boundary（保持）**
+
+```
+Physical Dataset Layout            = DESIGN PENDING
+Field Carrier Mapping              = DESIGN PENDING
+Final Import Contract              = DESIGN PENDING
+Snapshot / Import Contract overall = DESIGN PENDING
+Adapter Boundary                   = DESIGN PENDING
+```
+
+**Final Current State（Closure Re-run 完成时点）**
+
+```
+Package Envelope                    = DESIGN RESOLVED
+Atomicity Boundary                  = DESIGN RESOLVED
+Immutability Boundary               = DESIGN RESOLVED
+Analysis Run Linkage                = DESIGN RESOLVED
+Serialization Format                = DESIGN RESOLVED   ← re-run Gate = PASS
+Physical Dataset Layout             = DESIGN PENDING
+Field Carrier Mapping               = DESIGN PENDING
+Final Import Contract               = DESIGN PENDING
+Snapshot / Import Contract overall  = DESIGN PENDING
+Adapter Boundary                    = DESIGN PENDING
+POC Design v0.2                     = DRAFT
+```
+
 #### 4.3.21 Status Boundary
 
 `Snapshot / Import Contract` **整体仍为 `DESIGN PENDING`**。
 
 本 Task **仅**完成其第一层：Package Envelope、Import Atomicity、Immutability、Analysis Run linkage。
 
-`DESIGN RESOLVED` 的四个层级**仅**表示其 **conceptual boundary 已定义**，
+`DESIGN RESOLVED` 的**五个**层级**仅**表示其 **conceptual boundary 已定义**，
 **不表示**：
 
-- serialization format determined
 - physical dataset layout determined
 - field carrier mapping determined
 - import implementation exists
 - data validated
 - tested
 
+> **current-state 更新：** `Serialization Format` 已由 **PR #51 Human Decision** 登记 JSON strategy、
+> 并经 **PR #52 Closure Re-run = `PASS`** 后为 **`DESIGN RESOLVED`**（见 **§4.3.22**），
+> 因此 `serialization format determined` 已**移出**上述「不表示」清单。
+> `Physical Dataset Layout` ／ `Field Carrier Mapping` ／ `Final Import Contract` **仍为 `DESIGN PENDING`**。
+
 #### 4.3.22 Serialization Format Design（Registered Strategy & Representation Policy）
 
 **Registration Status：`REGISTERED`** ——
 依据 **PR #51 Human Decision**（决定 2 ／ 4 ／ 5 ／ 6 ／ 7 ～ 15），见上方 **Human Decision Record**。
+
+**补充登记（`C-10`）：** 依据 **`G-S1` 补充 Human Decision**（决定 5），见上方
+**Human Decision Record（`G-S1` 补充决定）** 与 **Serialization Format Closure Re-run Record**。
+
+**current representation policy：**
+
+```
+C-1 ～ C-10 = REGISTERED
+```
 
 **A. Serialization Strategy（正式登记）**
 
@@ -7569,6 +7868,16 @@ R-12  Implementation Simplicity           = POC DESIGN OBJECTIVE
 | **C-7** | Canonical enum ／ status | 既有 canonical literal 的 **exact string representation**；**case-sensitive**；无 silent normalization ／ trim-based semantic conversion ／ synonym mapping；source-specific vocabulary **仍保持 source-specific**；尤其 `sourcing_status` **不得**被 serializer 自动 canonical 化 |
 | **C-8** | Empty dataset | `dataset not included` **≠** `dataset included with zero records`；Manifest 是 dataset presence 的 **authoritative package-level evidence**；`included ＋ record_count = 0` = **structurally valid empty dataset**；**exact dataset envelope 不由本小节定义** |
 | **C-9** | JSON parsing ／ escaping | **strict parse**；**禁止** duplicate object keys ／ comments ／ trailing comma ／ `NaN` ／ `Infinity` ／ implementation-specific extension；standard JSON escaping；**object member order 不得具有 business semantic**；**禁止** import fix-up：silent trim ／ silent case conversion ／ silent Unicode normalization ／ silent numeric coercion |
+| **C-10** | Identity ／ text scalar representation | `IDENTIFIER` = **JSON string**；`ANALYSIS_RUN_ID` = **JSON string**；`TEXT_CONTEXT` = **JSON string**；transport-level `snapshot_package_id` = **JSON string**；**所有 identity value treated as opaque string**；**必须保持原始 identity value**；**禁止** semantic coercion ／ normalization（numeric coercion ／ trim ／ case conversion ／ leading-zero removal ／ numeric interpretation ／ synonym conversion ／ 作为 semantic fix-up 的 Unicode normalization）；`TEXT_CONTEXT` **必须**保持 **exact textual value** 并使用 standard JSON string escaping；**不得定义** identifier `regex` ／ `length` ／ `prefix` ／ numeric-only 约束 ／ UUID 要求 ／ generation algorithm ／ source-system identifier format |
+
+> **`C-10`（Identity ／ Text Scalar Representation）** 由 **`G-S1` 补充 Human Decision**（决定 5）授权登记，
+> 用于关闭 PR #52 第一次 Closure Gate 的 `G-S1`；**`C-1` ～ `C-9` 的 semantic 未修改**。
+> `C-10` **仅**固定 JSON scalar representation，**不新增**任何 business semantic，
+> 也**不**新增任何 identifier business constraint。
+
+```
+C-1 ～ C-10 = REGISTERED
+```
 
 **D. Determinism Boundary（正式登记）**
 
