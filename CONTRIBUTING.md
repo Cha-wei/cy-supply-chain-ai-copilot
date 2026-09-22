@@ -2,7 +2,7 @@
 
 **项目：** Yunnan CY Group Supply Chain AI Copilot
 **文档版本：** v0.2
-**文档状态：** `APPROVED`（当前已批准 baseline = `v0.1`；`v0.2` 待 Human Merge Gate，见 Document Control）
+**文档状态：** `APPROVED`
 **生效范围：** 本项目日常工程协作流程
 
 > 本文档定义本项目日常工程协作的一般默认流程。
@@ -743,12 +743,11 @@ DRAFT → REVIEW → APPROVED → FROZEN → DEPRECATED
 **Version:** v0.2
 **Status:** `APPROVED`
 
-本文档的**当前已批准 baseline** 为 **`v0.1`**（文档级状态 `APPROVED`，**未** `FROZEN`）。
-**`v0.2`** 是**当前 Governance revision**，其最终生效取决于承载该修订的 PR 的 **Human Review ／ Merge Gate**。
+本文档的**当前已批准 baseline** 为 **`v0.2`**（文档级状态 `APPROVED`）。
+**`v0.1`** 为其**此前**的已批准 baseline。
 
-- **`v0.1`：** 已完成实际文件 Review 并获 `APPROVAL`，构成本项目**此前已批准**的工程协作基线。
-- **`v0.2`：** 经**明确授权的 Governance Task** 新增第 4 节 `### Multi-Agent Execution` 与第 5 节 `### Workspace ／ Worktree Isolation`，并在第 11 节增加一个**条件性** `Write Owner` 字段；**未**修改 Human Approval、DoR、DoD、Required Gate、Git / PR 规则、Rule Precedence 或 Governance Protection；**未**新增 governance artifact；`AGENTS.md` **未修改**。
-- **`v0.2` 的生效：** 在承载该修订的 PR 通过 **Human Review ／ Merge Gate** 并被 merge **之前**，`v0.2` **不是**已批准的正式 baseline；**merge 后**该修订成为**新的 `APPROVED` baseline**。
+- **`v0.1`：** 此前已批准的工程协作基线（已完成实际文件 Review 并获 `APPROVAL`）；**不再**是 current baseline。
+- **`v0.2`：** 经**明确授权的 Governance Task** 引入第 4 节 `### Multi-Agent Execution` 与第 5 节 `### Workspace ／ Worktree Isolation`，并在第 11 节增加一个**条件性** `Write Owner` 字段；已随 **PR #54 merge** 生效，**现为 current `APPROVED` baseline**。**未**修改 Human Approval、DoR、DoD、Required Gate、Git / PR 规则、Rule Precedence 或 Governance Protection；**未**新增 governance artifact；`AGENTS.md` **未修改**。
 - 本文档**尚未** `FROZEN`，因此仍可通过治理 Task 修订。
 - 实质修改需通过明确授权的 Governance Task，并按第 12 节处理冲突。
 - 非实质修正（typo、坏链接、格式）可直接修正，无需扩大为架构决策。
