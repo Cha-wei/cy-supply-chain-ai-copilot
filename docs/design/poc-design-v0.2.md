@@ -8716,7 +8716,7 @@ Status Change  = NONE
 | `K-13` | **不得**要求每个 Snapshot Package 包含所有 logical datasets | `§4.3.14` |
 | `K-14` | integrity evidence **required**；**算法**（hash ／ checksum ／ signature）属 `Final Import Contract` | `§4.3.15` |
 | `K-15` | `Physical Dataset Layout` 已关闭：`L-1` ～ `L-11` = **ALL `PASS`** | `§4.3.24` |
-| `K-16` | **已批准的 provenance cardinality 与 completeness（不得收窄）**：**必须**支持 `multiple source evidence → one canonical fact` 与 `one source evidence → multiple canonical outputs`；**不得**强制 `one canonical fact = exactly one source evidence`，**不得**假定 `one source row = one canonical field`；`Stable Source Evidence Locator` **必须**支撑**具体 canonical observation ／ context**；`Mapping / Resolution Basis` **必须** identifiable and reproducible；provenance complete **至少**可回答 Snapshot Package ／ logical dataset role ／ 具体 source evidence ／ mapping ／ resolution basis ／ Analysis ／ business context | `§4.5.22`（决定 10 ／ 11）／ `§4.3.16` |
+| `K-16` | **已批准的 provenance cardinality 与 completeness（不得收窄）**：**必须**支持 `multiple source evidence → one canonical fact` 与 `one source evidence → multiple canonical outputs`；**不得**强制 `one canonical fact = exactly one source evidence`，**不得**假定 `one source row = one canonical field`；`Stable Source Evidence Locator` **必须**支撑**具体 canonical observation ／ context**；`Mapping / Resolution Basis` **必须** identifiable and reproducible —— **`when applicable`**：**仅当发生 semantic mapping ／ resolution 时**才需要回答（与 `K-8` 一致）；provenance complete **至少**可回答 Snapshot Package ／ logical dataset role ／ 具体 source evidence ／ **（若发生 semantic mapping）** mapping ／ resolution basis ／ Analysis ／ business context | `§4.5.22`（决定 10 ／ 11）／ `§4.3.16` |
 
 ---
 
@@ -8899,7 +8899,7 @@ Status Change  = NONE
 - **必须**同期登记 **deterministic field-position ／ order contract**（position ↔ canonical field 完整对应）；
 - **必须**明确 optional ／ omitted value 在该 branch 下如何保持 `C-2`
   （`null` = explicit missing；position 缺失 ／ 不可区分 **不得**自动等同于 valid absence）；
-- **必须**明确该 branch 下**可用**的 provenance ／ basis carrier 组合（见 option dependency）。
+- **必须**明确该 branch 下**可用**的 provenance ／ basis carrier 组合（见 **`RF-X6`** branch dependency ／ compatibility）。
 
 **共同硬约束（含 `F-P`）：** **不得**改变 canonical field semantic；
 **不得**因 naming ／ position 引入 numeric ／ case ／ trim coercion（`K-10` ／ `K-12`）。
@@ -9084,10 +9084,19 @@ schema validation implementation **全部**留给 **`Final Import Contract`**。
 （**注意：** integrity evidence 的 **carrier 位置与 grouping boundary** **不属于**此类 —— 见 `RF-X5` ／ `CS-12a`。）
 
 **`RF-X4`（一致性风险）**
-若各 option 被**独立**裁定而缺少跨选择一致性检查，可能出现**组合冲突** —— 例如
-「dataset-level metadata 被要求与 records 同 artifact 顶层，而 canonical source 又指定 Manifest 为其来源」，
-或「选择 `R-B` 但 field carrier 仍只登记 property-addressed policy」。
-**建议** Human 以**组合**方式裁定，并**要求** `F-14` 实际检查 `RF-X1` 三轴与 `R-*` ／ `F-*` 的登记组合约束。
+若各 option 被**独立**裁定而缺少跨选择一致性检查，可能出现**组合冲突** —— 例如：
+
+- Human **#4** 要求 dataset-level metadata **必须存在于 business artifact 顶层**，但 **#3** 同时选择
+  `B-A` bare record array（**无** envelope 可承载）；
+- **#5** 选择 `R-B` positional，但 **#7** 只登记 property-addressed policy（**未**登记 `F-P`）；
+- positional branch 下选择按 **`RF-X6`** 判定**不成立**的 record-level carrier（如 `P-B` ／ `MB-B`）。
+
+**注意：** 「同一 metadata 同时存在于 Manifest 与 business artifact」**本身不是**冲突 ——
+它**可以**通过 duplication ＋ 显式 association ／ consistency relation 成立（见 `RF-X1`）；
+其 runtime 冲突处理**仍属** `Final Import Contract`。
+
+**建议** Human 以**组合**方式裁定，并**要求** `F-14` 实际检查 `RF-X1` 三轴、`RF-X6` branch dependency
+与 `R-*` ／ `F-*` 的登记组合约束。
 
 **`RF-X5`（carrier structure vs runtime policy —— 层级划分）**
 必须区分两个问题：
@@ -9099,6 +9108,40 @@ schema validation implementation **全部**留给 **`Final Import Contract`**。
    runtime 的 reject ／ ignore ／ tolerate 行为及验证方式；这属 **`Final Import Contract`**。
 
 **不得**把第 1 类问题推给 `Final Import Contract`；**也不得**由本层擅自裁定第 2 类问题。
+
+**`RF-X6`（branch dependency ／ compatibility —— 供 Human 组合裁定）**
+
+下表**只**登记**已知**的 branch dependency 与**可判定性**，**不选择** object vs positional，
+**不新增** carrier family。判定基于**当前候选定义**（`R-*` ／ `F-*` ／ `P-*` ／ `MB-*`），
+**不得**被解读为对 `R-A` ／ `R-B` 的取舍。
+
+| option | object-record branch（`R-A` ／ `R-C`） | positional-record branch（`R-B`，**须** `F-P`） |
+| --- | --- | --- |
+| `F-A` ／ `F-B` ／ `F-C` | **可用** —— canonical field → JSON **property name** | **不适用** —— 其定义即为 property name；该 branch 由 `F-P` 承担 |
+| `P-A`（record-level nested provenance object） | **可用** | **需 wrapper** —— 须先由 `F-P` 保留一个 position 承载该 sub-object；否则**不成立** |
+| `P-B`（record-level flat 属性） | **可用** | **不成立** —— 「flat 属性」以 property name 为前提，positional record **无** property name。若欲成立**必须新增**候选形态（本 Review **不新增**） |
+| `P-C`（以 record identity 关联的 parallel structure） | **可用**（需稳定 record identity） | **可用**，**前提**是 `F-P` 显式指定 identity position；否则属**需 Human 子裁定** |
+| `P-D`（dataset-level object ＋ per-record locator 数组） | **可用** | **可用** —— linkage 以 deterministic positional index（受 `F-P` 约束）表达 |
+| `MB-A`（与 provenance 同一 nested 结构） | **可用**（跟随所选 `P-*`） | **跟随 `P-*`** —— 所选为 `P-A` 则**需 wrapper**；为 `P-B` 则**不成立** |
+| `MB-B`（record-level sibling property） | **可用** | **不成立** —— 同 `P-B` 理由 |
+| `MB-C`（manifest-declared basis table） | **可用** | **可用** —— 不依赖 record 形态；linkage 经 role ＋ position ／ identity |
+
+**`C-2` 在 positional branch 下的可判定性**
+
+| 语义 | object-record branch | positional-record branch |
+| --- | --- | --- |
+| **explicit missing** | `null` | **可表达** —— 该 position 存在且值为 `null` |
+| **field not serialized ／ omission**（`valid absence` **允许** omission） | **可表达** —— property omission（语义仍由 requiredness ＋ applicability ＋ validation semantic 判断） | **`UNRESOLVED` —— requires Human sub-decision** |
+
+**`UNRESOLVED` 的理由：** positional array **不能**省略中间 field 而不改变其后所有 position；
+而 current candidate set 内的替代方案**均不成立** ——
+① 全部 position 均发出并统一用 `null` → **压平** absence ／ missing（违反 `K-9` ／ `F-12`）；
+② 以 sentinel token 表达「未产生」→ 须**新增** carrier 形态，且**不得**使用 `0` ／ `false` ／ `""` ／ `"UNKNOWN"`（`C-2`）；
+③ out-of-band presence 结构 → 属**未枚举**的 carrier 形态。
+
+**因此：** `R-B` **仅**在「可表达 explicit missing，且**不需要** field-not-serialized 语义」的场景下可**安全组合**；
+若 Human 需要完整 `C-2` 语义，现行候选集**不足以**表达 —— 必须作为 **positional branch 的 Human 子裁定**处理，
+或改为选择 object-record branch。**本 Review 不代替 Human 作出该选择。**
 
 ---
 
@@ -9119,7 +9162,7 @@ schema validation implementation **全部**留给 **`Final Import Contract`**。
 | `F-11` | `Mapping / Resolution Basis` 的 carrier 已登记（when applicable），**且能确定性表达 basis ↔ canonical input 的关联**（同一 record 内多 basis 时） | MANDATORY CLOSURE CRITERION |
 | `F-12` | carrier 层**不压平** `valid absence` ／ `missing` ／ `not applicable` 的语义：`property omission` **不自动等于** `valid absence`，且 `null` **不得**被 `0` ／ `false` ／ `""` ／ sentinel string 替代（`C-2` ／ `K-11`；`N-B` ／ `N-C` 类方案被排除） | MANDATORY CLOSURE CRITERION |
 | `F-13` | carrier 层**无** silent fix-up（trim ／ case conversion ／ numeric coercion ／ Unicode normalization） | MANDATORY CLOSURE CRITERION |
-| `F-14` | **已知** option combination 的 dependency ／ incompatibility **已显式登记**（含 positional-record branch 下**可用**的 field ／ provenance ／ basis 组合，以及 `RF-X1` 三轴 X1-A ／ X1-B ／ X1-C 的组合约束），且**无未登记的跨选择冲突**（见 `RF-X4`） | MANDATORY CLOSURE CRITERION |
+| `F-14` | **已知** option combination 的 dependency ／ incompatibility **已显式登记**（含 positional-record branch 下**可用**的 field ／ provenance ／ basis 组合，以及 `RF-X1` 三轴 X1-A ／ X1-B ／ X1-C 的组合约束），且**无未登记的跨选择冲突**（见 `RF-X4` ／ **`RF-X6`**） | MANDATORY CLOSURE CRITERION |
 | `F-15` | Human Inspectability（carrier 可被人直接检视） | POC DESIGN OBJECTIVE |
 | `F-16` | Implementation Simplicity（carrier 结构最小化） | POC DESIGN OBJECTIVE |
 | `F-17` | **integrity evidence** 的 physical carrier（package-level ／ dataset-entry-level 的位置与 grouping boundary）已登记，且不与 business field 混淆（**算法**仍属 `Final Import Contract`） | MANDATORY CLOSURE CRITERION |
@@ -9154,11 +9197,11 @@ schema validation implementation **全部**留给 **`Final Import Contract`**。
 | 2 | **dataset entries 的 collection 形态**：`D-A` array ／ `D-B` role-keyed object ／ `D-C` flat？（须保持 **role-entry cardinality ／ uniqueness invariant**，见 `F-2`） | `Q2` ／ `RF-X2` ／ `RF-2` |
 | 3 | **business dataset top-level carrier**：`B-A` bare record array ／ `B-B` object envelope？ | `Q3` ／ `RF-X1` |
 | 4 | **【轴 X1-A】** dataset-level metadata **是否还**需要与 records 同 artifact 顶层承载？（`§4.3.8` 已要求 Manifest 承载 dataset-level provenance；若两处并存，FCM **须**定义 association ／ consistency relation） | `Q3` ／ `RF-X1` |
-| 5 | **record carrier**：是否**强制**每个 record 为 JSON object（`R-A` ／ `R-C`），还是保留 positional（`R-B`）？**（本项与 #7 属同一组依赖裁定）** | `Q4` ／ `RF-4` |
+| 5 | **record carrier**：是否**强制**每个 record 为 JSON object（`R-A` ／ `R-C`），还是保留 positional（`R-B`）？**（本项与 #7 属同一组依赖裁定；组合可判定性见 `RF-X6`）** | `Q4` ／ `RF-4` ／ `RF-X6` |
 | 6 | **【轴 X1-B】** **record-level** carrier metadata 是否允许混入 business record？（**独立于** #4；作用域为 **record**，**不是**整个 business artifact） | `Q4` ／ `RF-X1` |
-| 7 | **canonical field carrier**：object-record branch → `F-A` 直接 ／ `F-B` ＋ mapping table ／ `F-C` source-specific ＋ mapping？**若** #5 保留 positional record，则**须同期**裁定 field-position ／ order contract（`F-P`）—— **#5 与 #7 属同一组依赖裁定** | `Q5` ／ `RF-5` |
-| 8 | **【轴 X1-C】** **`Stable Source Evidence Locator` 的 carrier 形态**：`P-A` ／ `P-B` ／ `P-C` ／ `P-D`？（**须满足 `K-16`** 的 evidence ↔ canonical observation ／ context 关联与 cardinality） | `Q7` ／ `RF-7` ／ `CS-13` |
-| 9 | **【轴 X1-C】** **`Mapping / Resolution Basis` 的 carrier 形态**：`MB-A` ／ `MB-B` ／ `MB-C`？（**须满足** basis ↔ canonical input 的确定性关联） | `Q8` ／ `RF-8` |
+| 7 | **canonical field carrier**：object-record branch → `F-A` 直接 ／ `F-B` ＋ mapping table ／ `F-C` source-specific ＋ mapping？**若** #5 保留 positional record，则**须同期**裁定 field-position ／ order contract（`F-P`），其 dependency ／ `C-2` 可判定性见 `RF-X6` —— **#5 与 #7 属同一组依赖裁定** | `Q5` ／ `RF-5` ／ `RF-X6` |
+| 8 | **【轴 X1-C】** **`Stable Source Evidence Locator` 的 carrier 形态**：`P-A` ／ `P-B` ／ `P-C` ／ `P-D`？（**须满足 `K-16`** 的 evidence ↔ canonical observation ／ context 关联与 cardinality；**须与 #5 的 branch 选择相容**，见 `RF-X6`） | `Q7` ／ `RF-7` ／ `CS-13` ／ `RF-X6` |
+| 9 | **【轴 X1-C】** **`Mapping / Resolution Basis` 的 carrier 形态**：`MB-A` ／ `MB-B` ／ `MB-C`？（**须满足** basis ↔ canonical input 的确定性关联；**须与 #5 的 branch 选择相容**，见 `RF-X6`） | `Q8` ／ `RF-8` ／ `RF-X6` |
 | 10 | **missing ／ omission policy**：是否确认**沿用已登记的 `C-2`**（`null` = explicit missing；`property omission` = field not serialized，语义由 requiredness ＋ applicability ＋ validation semantic 判断，**不自动等于** valid absence）？ | `Q9` ／ `F-12` |
 | 11 | 是否接受 **`F-1` ～ `F-14` ＋ `F-17`** 作为 `Field Carrier Mapping` 的 minimum closure criteria？ | `Q10` ／ `RF-10` |
 | 12 | 是否授权后续**独立** `Field Carrier Mapping` Design Change ／ Implementation PR（登记选择 ＋ 同步 current-state），并在满足 closure criteria 时允许 `DESIGN PENDING → DESIGN RESOLVED`？ | follow-up |
