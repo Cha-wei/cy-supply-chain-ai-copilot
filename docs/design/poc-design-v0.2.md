@@ -8259,6 +8259,416 @@ POC Design v0.2                    = DRAFT
 **本 Review 不作出上述任何决定。** 后续必须由 **Human Decision** 裁定；
 **不得**由 Agent 自行选择最终 layout。
 
+**Human Decision Record —— `SIMULATED POC Design Policy` ＋ `Human-approved`**
+
+**Human Authority**
+
+```
+Human = Decision Authority
+  （针对 PR #53 `Human Decision Required` #1 ～ #10 的 Decision Analysis 已由 Human 完成）
+```
+
+**Decision Source**
+
+Human 已审阅：
+
+- **PR #53 Physical Dataset Layout Design Review（Review Finding）** —— 含 Review Questions `Q1` ～ `Q15`、
+  Required Layout Properties `L-1` ～ `L-11`、Option Review（Option 0 ／ A ／ B ／ C ／ D）、
+  Option Comparison、Review Conclusion 与 `Human Decision Required` #1 ～ #10；
+- 针对 `Human Decision Required` #1 ～ #10 的**独立 Decision Analysis**。
+
+以下为**正式 Human Decision**，但**不是** `Physical Dataset Layout` implementation。
+**本 Record 不修改** PR #53 Review Finding 的任何一个字 ——
+Review 当时**未选择任何 Option**；**Flat Directory 是本 Human Decision 之后才作出的选择。**
+
+**决定 1 —— Package Container = Flat Directory Package（APPROVED）**
+
+正式选择：
+
+```
+Package Container = Flat Directory Package
+```
+
+定义：一个 Snapshot Package 以**单个 package root** 作为当前 POC 的**物理边界**。
+
+**不选择**：
+
+```
+Structured Directory Package
+Archive Package
+其他特殊 container
+```
+
+**理由：** 当前 POC **不存在**必须引入额外目录层级或 archive tooling 的证据；
+`Flat Directory` 在 **fixed manifest entry ＋ explicit `role → artifact` association** 成立时，
+**可以**满足 deterministic discovery，且保持当前 implementation complexity 最低。
+
+**必须明确：** `Flat Directory` **本身不保证**：
+
+```
+runtime atomicity
+runtime immutability
+integrity verification
+```
+
+这些**不得**被本决定偷偷实现。
+
+**决定 2 —— Artifact Granularity = one included logical dataset → one independent JSON artifact（APPROVED）**
+
+```
+one included logical dataset = one independent JSON artifact
+```
+
+**不采用** aggregated business data artifact；**不引入** dataset sharding。
+
+**原因：**
+
+- 保持 dataset boundary 清晰；
+- 避免跨 dataset internal addressing；
+- **不提前依赖** dataset envelope；
+- **不提前推进** `Field Carrier Mapping`；
+- 降低 blast radius；
+- 保持 inspectability。
+
+**必须明确：**
+
+```
+one artifact per logical dataset  ≠  partial package acceptance
+```
+
+任何**单个** artifact 的问题是否导致**整个** package reject，
+**仍由后续 `Final Import Contract` 定义**。
+
+**决定 3 —— Manifest Placement = package root（APPROVED）**
+
+```
+Snapshot Manifest = package root
+```
+
+即 Manifest 与 business dataset artifacts **均位于同一个 package root**。
+
+**不得**放入 fixed manifest subdirectory；**也不采用** external entry-point locator 作为当前 POC 方案。
+
+**决定 4 —— Manifest Filename = `manifest.json`（APPROVED）**
+
+```
+Snapshot Manifest filename = manifest.json
+```
+
+该名称**仅**表示 **technical package entry point**；**不得**承载：
+
+```
+business identity
+business status
+dataset role
+scope semantic
+provenance semantic
+snapshot_package_id semantic
+```
+
+因此：
+
+```
+manifest.json = technical filename contract
+              ≠ business semantic source
+```
+
+**决定 5 —— Dataset Artifact Naming = 最低 physical naming requirements（APPROVED）**
+
+**不定义**：
+
+```
+role-derived mandatory filename template
+opaque filename generation algorithm
+dataset ID generation rule
+```
+
+当前 POC **最低 physical naming requirements**：
+
+- business dataset artifact 位于 **package root**；
+- filename **必须在当前 package 内唯一**；
+- serialization extension = **`.json`**；
+- **不得**使用保留名称 **`manifest.json`**。
+
+具体 filename **可以**是可读名称，也**可以**是 technical name，
+但 **filename 本身不得成为 `logical dataset role` 的 authoritative source**。
+
+正式确认：
+
+```
+Manifest-declared artifact reference = authoritative physical association
+filename                             = physical convenience only
+```
+
+**决定 6 —— `logical dataset role` → physical artifact association = REQUIRED（APPROVED）**
+
+`Snapshot Manifest` **必须显式建立**：
+
+```
+logical dataset role → physical artifact reference
+```
+
+该关联 **REQUIRED**。**不得**依赖：
+
+```
+filename inference
+directory name inference
+file ordering
+filesystem discovery heuristic
+```
+
+来判断 `logical dataset role`。
+
+同时确认：`filename` ／ `artifact path` **不得**作为以下内容的 authoritative source：
+
+```
+logical dataset role
+business status
+scope
+provenance
+Stable Source Evidence Locator semantic
+```
+
+**本层只决定 association MUST EXIST**；**不得定义** Manifest 中具体 JSON property name ／
+nested structure ／ schema representation —— 这些属于 **`Field Carrier Mapping`**。
+
+**决定 7 —— Included Empty Dataset = artifact REQUIRED（APPROVED）**
+
+```
+dataset = included 且 record_count = 0  →  对应 JSON artifact REQUIRED
+dataset = not included                  →  对应 artifact NOT REQUIRED
+```
+
+**必须保持：**
+
+```
+not included  ≠  included with zero records
+```
+
+**本决定不定义** empty dataset 的 JSON body；**不得决定** `[]` ／ `{}` ／ `{"records":[]}`
+或任何其他 dataset envelope —— 这些属于 **`Field Carrier Mapping`**。
+
+**决定 8 —— Nested Directories = NOT ALLOWED（POC v0.2）（APPROVED）**
+
+POC v0.2 Snapshot Package 内部：
+
+```
+nested directories = NOT ALLOWED
+```
+
+因此当前 package layout：
+
+```
+single package root
++ manifest.json
++ root-level business JSON artifacts
+```
+
+**此限制只针对 Snapshot Package 内部的 physical layout**；
+**不限制** Snapshot Package 在**宿主 filesystem 中的外部存放位置**。
+
+未来如果出现**真实需求**：**可以**通过**新的明确 Design Decision** 重新评估 nested directory。
+
+**决定 9 —— `L-1` ～ `L-11` = minimum closure criteria（APPROVED）**
+
+正式批准 `L-1` ～ `L-11` 作为 `Physical Dataset Layout` 的 **minimum closure criteria**：
+
+```
+L-1   Package Boundary Unambiguous
+L-2   Manifest Discoverability
+L-3   Dataset Artifact Discoverability
+L-4   Logical / Physical Separation
+L-5   Presence Semantics Preservation
+L-6   Package Atomicity Compatibility
+L-7   Package Immutability Compatibility
+L-8   Reproducibility
+L-9   Serialization Compatibility
+L-10  Downstream Neutrality
+L-11  Path Scope Integrity
+```
+
+**`L-6` ／ `L-7` Boundary —— 只验证 DESIGN COMPATIBILITY**
+
+`L-6` ／ `L-7` 在 `Physical Dataset Layout` 层验证的是 **DESIGN COMPATIBILITY**，
+**不是** runtime mechanism completion。即 layout **不得**：
+
+```
+要求 cross-package composition
+要求 silent mixing
+依赖 package 外 mutable artifact
+要求 partial overwrite
+破坏 accepted-package immutability semantic
+```
+
+但本层**不得实现**：
+
+```
+transaction
+locking
+atomic filesystem move
+storage engine
+object storage semantics
+upload protocol
+runtime immutability enforcement
+```
+
+—— 这些属于**后续层**。
+
+**`L-11` Boundary —— 只定义合法 path scope**
+
+正式定义：**`L-11` Path Scope Integrity** —— 所有 physical artifact reference **必须**：
+
+```
+relative to package root
+```
+
+且其 **logical resolved target** **必须**位于**当前 Snapshot Package boundary 内**。
+
+因此合法 layout **不得**依赖：
+
+```
+absolute path
+external path / URI
+package-external artifact
+```
+
+**同时：** `Physical Dataset Layout` **只定义合法 boundary**。以下**仍属于 `Final Import Contract`**，
+**不得**在本 Human Decision 实现：
+
+```
+path normalization algorithm
+traversal detection algorithm
+`..` rejection mechanism
+symlink resolution algorithm
+symlink rejection timing
+platform-specific path parser
+runtime rejection behavior
+```
+
+即：
+
+```
+Layout                = defines valid path scope
+Final Import Contract = validates / rejects violations
+```
+
+**不得**让 `L-11` 演变成 **Security Implementation**。
+
+**决定 10 —— Follow-up Implementation Authorization = AUTHORIZED（条件性）**
+
+正式授权后续**独立** `Physical Dataset Layout` Design Change ／ Implementation PR，
+其任务**可以**：
+
+- 正式登记本 Human Decision；
+- 建立 authoritative current design；
+- 同步 current-state references；
+- 正式登记 `L-1` ～ `L-11`；
+- 执行 `Physical Dataset Layout` closure validation。
+
+**只有当**：
+
+```
+Human-approved layout decisions = fully registered
+且 L-1 ～ L-11 = ALL PASS
+且 New Blocking Contradiction = NONE
+```
+
+**才允许**：
+
+```
+Physical Dataset Layout   DESIGN PENDING → DESIGN RESOLVED
+```
+
+**本 PR 不执行上述任何一项。**
+
+**Explicit Non-Authorization**
+
+本 Human Decision **不授权**：
+
+```
+创建真实 package directory
+创建 JSON sample
+创建 manifest.json 实际文件
+创建 dataset artifact 实际文件
+创建 ZIP / archive
+创建 JSON Schema
+创建 parser
+创建 runtime validator
+创建 Adapter
+```
+
+**不授权定义**：
+
+```
+Manifest JSON property name
+dataset envelope
+record envelope
+business record structure
+source field → JSON property mapping
+canonical field → JSON property mapping
+Stable Source Evidence Locator physical carrier
+hash algorithm
+checksum algorithm
+signature algorithm
+byte-level canonicalization
+archive algorithm
+runtime acceptance algorithm
+contract compatibility policy
+path validation implementation
+```
+
+**不得修改**：canonical entity ／ canonical field ／ `BR-*` ／ Validation Taxonomy ／
+Master Data Mapping ／ Serialization Format policy。
+
+**Downstream Boundary（保持）**
+
+```
+Field Carrier Mapping              = DESIGN PENDING
+Final Import Contract              = DESIGN PENDING
+Snapshot / Import Contract overall = DESIGN PENDING
+Adapter Boundary                   = DESIGN PENDING
+POC Design v0.2                    = DRAFT
+```
+
+**Historical Preservation**
+
+**PR #53 Physical Dataset Layout Design Review（Review Finding）必须完整保留**，尤其**不得回写**：
+
+```
+Option Review
+Option Comparison
+Review Conclusion
+Current Status（Review time-point）
+Human Decision Required
+L-1 ～ L-11 Review working-set history
+```
+
+**不得**把历史表述「**本 Review 不选择任何 Option。**」改写成「Review 选择 Flat Directory」——
+**Review 没有选；Human 后来才选。**
+
+**执行状态（PR #53 Human Decision 时点）**
+
+```
+Physical Dataset Layout            = DESIGN PENDING
+Human Decision                     = RECORDED
+Selected Container                 = Flat Directory
+Artifact Granularity               = one included logical dataset → one JSON artifact
+Manifest Placement                 = package root
+Manifest Filename                  = manifest.json
+Nested Directories                 = NOT ALLOWED FOR POC v0.2
+L-1 ～ L-11                         = HUMAN APPROVED FOR IMPLEMENTATION
+Implementation                     = NOT YET EXECUTED
+Physical Dataset Layout Closure    = NOT YET EXECUTED
+
+Field Carrier Mapping              = DESIGN PENDING
+Final Import Contract              = DESIGN PENDING
+Snapshot / Import Contract overall = DESIGN PENDING
+Adapter Boundary                   = DESIGN PENDING
+```
+
+**本 PR 只记录 Human Decision。** **未**实施 `Physical Dataset Layout`，
+**未**修改 `Physical Dataset Layout` status，**未**推进下游三层。
+
 #### 4.3.21 Status Boundary
 
 `Snapshot / Import Contract` **整体仍为 `DESIGN PENDING`**。
