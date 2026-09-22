@@ -6199,7 +6199,7 @@ Snapshot Package
 
 #### 4.3.17 Unresolved Carrier Boundary
 
-以下项**仍未完全确定**（见 §4.2.16）——
+以下项在**本 Task 时点**「仍未完全确定」（见 §4.2.16）——
 其中 `Warehouse canonical role`（**§4.5.12**）、`BOM version / validity`（**§4.5.7** ／ **§4.1.4 N**）、
 `sourcing_status` vocabulary（**§4.5.11**）、`effective_arrival_date` source mapping（**§4.5.21**）
 与 allocation demand-window mapping（**§4.5.9**）**已被解析**，**不再属于未决项**；
@@ -6213,7 +6213,23 @@ Snapshot Package
 - `effective_arrival_date` source mapping —— **已由 §4.5.21 解析**（source-specific → canonical mapping contract）
 - allocation demand-window mapping —— **已由 §4.5.9 解析**（Target Applicability ＋ Source Reservation Overlap）
 - `ApplicableMOQ` source —— **已由 §4.5.22 Option D Implementation Record 解析**（Procurement Recommendation Context ＋ exactly-one-or-unresolved resolution contract）
-- provenance carrier
+- provenance carrier —— **logical carrier 已由 §4.5.22 Option D Implementation Record 解析**
+  （**Layered Logical Provenance Contract**，`DESIGN RESOLVED`）；
+  **physical carrier realization** 仍属 **§4.3 `Field Carrier Mapping` ／ `Final Import Contract`** 后续设计
+
+**因此（current-state boundary）：**
+
+```
+Logical Provenance Carrier       = DESIGN RESOLVED
+Physical Carrier Realization     = DESIGN PENDING
+  （属 §4.3 Field Carrier Mapping ／ Final Import Contract）
+
+logical provenance contract  ≠  physical carrier realization
+```
+
+`provenance carrier` **不再**是未分类的 unresolved item ——
+它是 **logical provenance contract（`DESIGN RESOLVED`）** 与
+**physical carrier realization（`DESIGN PENDING`）** 的合称，两者**必须分开解读**。
 
 因此本 Task **不得为了完成 Snapshot Contract** 擅自决定这些字段属于哪个
 **physical dataset / file**。
@@ -6222,7 +6238,10 @@ Snapshot Package
 
 **不得**自行挂到 Production Requirement / Material / BOM Component / Plant-Material 之一。
 
-这些**必须继续保持原状态**。
+这些**在 physical 层面必须继续保持未决定状态** ——
+`physical dataset / file / field representation` **仍属**
+**`§4.3 Field Carrier Mapping` ＋ `Final Import Contract`**，
+且 **`Snapshot / Import Contract` overall 仍为 `DESIGN PENDING`**。
 
 #### 4.3.18 Import Fail-Closed Principle
 
@@ -7366,7 +7385,7 @@ allocation demand-window mapping 已于 **§4.5.9** 解析，此处保留历史�
 - `effective_arrival_date` source mapping —— **已由 §4.5.21 解析**（本 Task 未推进）
 - allocation demand-window mapping —— **已由 §4.5.9 解析**（本 Task 未推进）
 - `ApplicableMOQ` source —— **已由 §4.5.22 Option D Implementation Record 解析**（当时本 Task 未推进；解析由后续 **Human-authorized Design Change** 实施）
-- provenance carrier
+- provenance carrier —— **logical provenance carrier 已由 §4.5.22 Option D Implementation Record 解析**（**Layered Logical Provenance Contract**，`DESIGN RESOLVED`；当时本 Task 未推进，解析由后续 **Human-authorized Design Change** 实施）；**physical carrier realization** 仍属 **§4.3** 后续 design（**`DESIGN PENDING`**）
 
 **Field Validation 不能成为解决这些设计问题的后门。**
 
