@@ -7768,6 +7768,497 @@ Adapter Boundary                    = DESIGN PENDING
 POC Design v0.2                     = DRAFT
 ```
 
+**Physical Dataset Layout Design Review（Review Finding）**
+
+**Review Authority / Scope**
+
+```
+Snapshot / Import Contract 层级状态：
+  Package Envelope        = DESIGN RESOLVED
+  Atomicity Boundary      = DESIGN RESOLVED
+  Immutability Boundary   = DESIGN RESOLVED
+  Analysis Run Linkage    = DESIGN RESOLVED
+  Serialization Format    = DESIGN RESOLVED   ← 已关闭（PR #51 HD ＋ PR #52 Closure Re-run = PASS）
+  Physical Dataset Layout = DESIGN PENDING    ← 本 Review 对象
+  Field Carrier Mapping   = DESIGN PENDING
+  Final Import Contract   = DESIGN PENDING
+```
+
+本 Review **只**产出 Review Finding：
+
+- **不**实施 `Physical Dataset Layout`；
+- **不**选择最终 package layout；
+- **不**推进 `Field Carrier Mapping` ／ `Final Import Contract`；
+- **不**设计 Adapter；
+- **不**创建任何 physical artifact（directory ／ JSON ／ ZIP ／ sample package）；
+- **不**写 Human Decision。
+
+**Fixed Upstream Decisions（已关闭；不得重新打开）**
+
+| 项 | 已确定 | 来源 |
+| --- | --- | --- |
+| Serialization Strategy | **single JSON serialization strategy** | PR #51 Human Decision 决定 2 |
+| Snapshot Manifest | **independent artifact ＋ JSON serialization** | PR #51 Human Decision 决定 5 |
+| Business datasets | **JSON serialization** | PR #51 Human Decision 决定 5 |
+| `JSONL` ／ `CSV` ／ `Parquet` ／ `Hybrid` | **`NOT SELECTED`** | PR #51 Human Decision 决定 3 |
+| 单一 format 边界 | **不得**由 logical dataset 自选 format | PR #51 Human Decision 决定 4 |
+| Representation policy | **`C-1` ～ `C-10` = `REGISTERED`** | PR #51 HD ＋ PR #52 `G-S1` HD ／ Re-run |
+| Determinism boundary | `Deterministic Parsing ≠ Byte-for-byte Canonical JSON Encoding` | PR #51 Human Decision 决定 16 |
+| `Serialization Format` | **`DESIGN RESOLVED`** | PR #52 Closure Re-run = `PASS` |
+
+**必须保持的上游语义（不得被 layout 破坏）：**
+
+```
+Snapshot Manifest                  ≠  business dataset
+Snapshot Package                   ≠  Analysis Run
+snapshot_package_id                =  transport-level identity ＋ JSON string ＋ exact opaque
+logical dataset role               ≠  physical filename
+dataset-level provenance reference ≠  Stable Source Evidence Locator
+dataset not included               ≠  dataset included with zero records
+```
+
+**Review Questions**
+
+**Q1 —— package container 应采用什么 conceptual form（directory ／ archive ／ 其他）？**
+
+- `§4.3.1` 明确本子章节**当时不得定义** `directory layout`；`§4.3.8` 明确**不决定** manifest 物理实现。
+- **判定：** `directory` 与 `archive` 两种 conceptual form **在技术上都不违反**现有 Design；
+  第三类（例如以单一 JSON document 兼作 container）**不足以**满足 L-1 ／ L-5（见 Q2 ／ Q8 分析）。
+- **本 Review 不选择** —— 属 **Human Decision**。
+
+**Q2 —— `one logical dataset = one JSON artifact`，还是允许多个 logical dataset 聚合到同一 business data artifact？**
+
+- `§4.3.10` 定义 **logical dataset role**；`§4.3.8` 要求 manifest 表达
+  `included logical datasets` 与 **`dataset-level record count / integrity evidence`**；
+  `§4.4.4` 要求区分 `not included` 与 `included with zero records`。
+- **判定（技术可行性）：** 两种方案**都技术可行**。
+  - **one-per-artifact**：`dataset-level` 语义与 artifact 边界**一一对应**；blast radius 天然局部化；
+    但 artifact 数量随 dataset 数增长。
+  - **aggregated**：artifact 数量少；但 `dataset-level` 语义**必须**改由 artifact **内部结构**承载 ——
+    而该内部结构（dataset envelope ／ record envelope ／ property 结构）属 **`Field Carrier Mapping`**。
+    在 FCM 尚未设计的情况下采用 aggregated，会**提前依赖**未设计的下游层（见 L-10）。
+- **本 Review 不选择** —— 属 **Human Decision**。
+
+**Q3 —— Snapshot Manifest 应位于 package root、固定 subdirectory，还是只要求可由 package entry point 定位？**
+
+- `§4.3.8` 只要求 manifest 表达 8 项**语义**，**未**要求位置模型。
+- **判定：** 「**必须能够 deterministic locate**」是**必须**的（`L-2`）；
+  **具体位置模型**（root ／ 固定 subdirectory ／ entry-point 可定位）属**本层可决定范围** ——
+  但**本 Review 不选择**，属 **Human Decision**。
+- **注意：** 若采用「固定 subdirectory」，则该 subdirectory 名称本身**不得**承载 business semantic（`L-4`）。
+
+**Q4 —— 是否需要固定 manifest filename？**
+
+- 现有 Design **未**要求固定 filename。
+- **判定：** deterministic discovery 需要**某种**确定性定位方式 ——
+  **固定 filename** 与 **manifest-locator 规则**都能满足 `L-2`。
+  若引入固定 filename，它**不得**成为 business semantic source（`L-4`）。
+- **本 Review 不选择** —— 属 **Human Decision**。
+
+**Q5 —— business dataset artifact 是否需要固定 naming convention？**
+
+- `§4.3.10` 明确：**logical dataset role ≠ physical filename**。
+- **判定：** naming convention **可以**存在（便于定位），但**不得**成为 role 的
+  **authoritative 来源**；`role → artifact` 的权威关联**必须**由 manifest 显式建立（见 Q7 ／ `L-3`）。
+- **本 Review 不选择** —— 属 **Human Decision**。
+
+**Q6 —— physical filename 应否直接由 logical dataset role 推导？如何避免 filename 成为隐式 semantic source？**
+
+- **风险：** 由 role 直接推导 filename，会使 filename 事实上承担 role 语义 ——
+  与 `§4.3.10`（role ≠ filename）及 `§4.5.18`（no silent canonicalization）的**精神冲突**。
+- **判定：**
+  ```
+  filename 可以 deterministic，但不得成为 role 的唯一 / authoritative 来源
+  authoritative 关联 = manifest 的显式声明（Q7）
+  ```
+- 若采用推导（作为便利），**必须**同时保持 manifest 显式声明；
+  且文件名**不得**被解释为 business status ／ scope ／ provenance（`L-4` ／ `L-10`）。
+- **本 Review 不选择** —— 属 **Human Decision**。
+
+**Q7 —— Manifest 是否必须显式建立 `logical dataset role → physical artifact reference`？该问题属哪一层？**
+
+- **必须**（`L-3`）：否则 `included dataset` 无法 deterministic locate，`§4.3.8` 的
+  `included logical datasets` 与 `dataset-level record count` 无法被验证。
+- **Layer ownership（明确划界）：**
+
+| 内容 | 归属 |
+| --- | --- |
+| **要求** manifest 显式建立 `role → physical artifact reference` | **`Physical Dataset Layout`**（本层） |
+| 该 reference 的**具体字段名 / JSON property 结构 / 表达形式** | **`Field Carrier Mapping`** |
+| 该 reference 的**校验 / 拒绝规则** | **`Final Import Contract`** |
+
+**本 Review 只登记要求，不定义字段。**
+
+**Q8 —— `included` 且 `record_count = 0` 时，是否必须仍存在 physical JSON artifact？**
+
+- **必须存在。** 否则 `included with zero records` 与 `not included` 在**物理层不可区分**，
+  直接破坏 `§4.4.4` ／ `§4.3.12` 的 `dataset not included ≠ dataset included with zero records`（`L-5`）。
+- **豁免：** 若某 logical dataset 为 `not included`，则**不得**要求其 artifact 存在。
+- 「如何表达 0 条记录」的 envelope 形式属 **`Field Carrier Mapping`**，本 Review **不定义**。
+
+**Q9 —— `dataset not included` 时，是否禁止出现对应 business artifact？**
+
+- **不得**建立隐式规则「出现 artifact 即视为 `included`」——
+  authoritative 来源**必须**是 **Manifest**（`§4.3.8` ／ `L-5`）。
+- 若物理上**出现**未被 manifest 声明的 artifact，其处理（ignore ／ reject ／ 报告）属
+  **`Final Import Contract`** 的 acceptance 规则。
+- **本 Review 记录 dependency，不决定。**
+
+**Q10 —— 是否允许 nested directory？**
+
+- 现有 Design **未**禁止；技术可行。
+- **判定：** 允许与否属 **Human Decision**；若允许，**必须**保持 `L-4`（role ≠ path）与
+  `L-11`（path 不得逃出 package root）。
+- **POC 适用性判断（非约束）：** nested 会提高 discovery 与 path 校验复杂度。
+
+**Q11 —— package 内 artifact path 是否需要 deterministic ／ unique ／ relative-to-package-root？**
+
+- **需要**：
+  ```
+  deterministic            （同一 accepted package 可被重新定位；L-8）
+  unique                   （避免 artifact 歧义；L-3）
+  relative-to-package-root （保持 package 自包含；L-1 ／ L-7）
+  ```
+- **absolute path 不可**作为 accepted package 的 artifact path（`L-7` ／ `L-11`）。
+
+**Q12 —— 是否允许 absolute path ／ external path ／ path traversal ／ symbolic link ／ package 外部引用？**
+
+- **不得**作为 accepted package 的组成部分 —— 它们破坏：
+  ```
+  L-1  Package Boundary Unambiguous
+  L-7  Package Immutability Compatibility（依赖 package 外部 mutable artifact）
+  L-11 Path Scope Integrity
+  ```
+- **具体 acceptance ／ security 强制方式**（拒绝规则、校验时机、symlink 解析策略）属
+  **`Final Import Contract`**；本 Review **只记录 dependency**。
+
+**Q13 —— directory package 与 archive package 对各约束的影响？**
+
+| 约束 | Directory package | Archive package |
+| --- | --- | --- |
+| **atomicity**（`§4.3.6`） | **弱** —— 目录级 transfer 无内在原子性，需外部约定 | **强** —— 单 artifact 天然接近 package-level atomic 单位 |
+| **immutability**（`§4.3.5`） | 需外部约定（只读 / 冻结）；易被部分覆盖 | 单 artifact 更易整体冻结；但**重打包**可产生同 ID 不同内容风险，须靠 identity 规则约束 |
+| **inspectability**（`R-11`） | **高** —— 可直接浏览 | **中** —— 需归档工具；但**不得**要求专用业务工具（`R-11` 精神） |
+| **reproducibility**（`§4.3.4`） | 高（路径稳定） | 高（artifact 稳定）；但**归档内部条目顺序 / 元数据**可能引入非确定性 —— 若要求 byte-level，属 `Final Import Contract` |
+| **integrity verification**（`§4.3.15`） | 需逐个 artifact（或整体约定） | 可整体校验；**算法**属 `Final Import Contract` |
+| **implementation complexity** | **低** | 中（需归档读写） |
+
+**Q14 —— `Physical Dataset Layout` 的 minimum closure criteria 应是什么？**
+
+- 见 **Required Layout Properties**（`L-1` ～ `L-11`）。
+- **注意：** 这些编号是 **Review working set**；`L-1` ～ `L-10` 中大部分**直接来自既有 Design**，
+  `L-11` 为**本 Review 提出**。**是否将其全部登记为正式 closure criteria 属 Human Decision** ——
+  本 Review **不自行宣布**。
+
+**Q15 —— 哪些问题必须留给 `Field Carrier Mapping` ／ `Final Import Contract` ／ `Adapter Boundary`？**
+
+- 见 **Downstream Ownership Matrix**。
+
+**Required Layout Properties**
+
+| # | Property | 类别 | 依据 |
+| --- | --- | --- | --- |
+| **L-1** | **Package Boundary Unambiguous** —— 一个 Snapshot Package 的物理边界必须能够明确识别 | 既有 | `§4.3.2` ／ `§4.3.5` ／ `§4.3.6` |
+| **L-2** | **Manifest Discoverability** —— Manifest 必须能够 deterministic locate | 既有 | `§4.3.8` ／ `§4.3.6` |
+| **L-3** | **Dataset Artifact Discoverability** —— `included` logical dataset 必须能够 deterministic locate 到对应 artifact | 既有 | `§4.3.8` ／ `§4.4.4` |
+| **L-4** | **Logical ／ Physical Separation** —— `logical dataset role` **不得**等同或依赖 physical filename 语义 | 既有 | `§4.3.10` ／ `§4.5.18` |
+| **L-5** | **Presence Semantics Preservation** —— `not included ≠ included with zero records` 必须可在物理层区分 | 既有 | `§4.3.12` ／ `§4.3.14` ／ `§4.4.4` |
+| **L-6** | **Package Atomicity Compatibility** —— layout 不得要求跨 package 拼接或 silent mixing | 既有 | `§4.3.6` ／ `§4.3.7` |
+| **L-7** | **Package Immutability Compatibility** —— accepted package 不得依赖 package 外部 mutable artifact | 既有 | `§4.3.5` |
+| **L-8** | **Reproducibility** —— 同一 accepted package 必须能被重新定位并解释其 artifact set | 既有 | `§4.3.4` ／ `§4.3.5` |
+| **L-9** | **Serialization Compatibility** —— 所有 serialized artifact 必须服从已关闭的 single JSON strategy | 既有 | PR #51 HD 决定 2 ／ 4 |
+| **L-10** | **Downstream Neutrality** —— layout 不得偷偷完成 `Field Carrier Mapping` 或 `Final Import Contract` | 既有 | `§4.3.1` ／ PR #51 HD 决定 17 ～ 19 |
+| **L-11** | **Path Scope Integrity** —— artifact path 必须 relative-to-package-root，且不得使用 absolute ／ external ／ traversal ／ symlink 逃出 package | **本 Review 提出** | `§4.3.5` ／ `§4.3.6` ／ `§4.3.15` 延伸 |
+
+**Option Review**
+
+**Option 0 —— Keep `Physical Dataset Layout = DESIGN PENDING`（Do Nothing）**
+
+- **技术安全性：** **安全** —— 不产生错误结果；fail-closed 与既有 boundary 全部保持。
+- **阻塞影响：** `Field Carrier Mapping` 与 `Final Import Contract` **无法**完成 ——
+  二者都需要 artifact 的存在性、粒度与定位前提；`Snapshot / Import Contract overall` 将长期 `DESIGN PENDING`。
+- **是否可接受为终点：** **不可接受为终点**（不构成 Design 进展）。
+
+**Option A —— Structured Directory Package**
+
+- 概念形态：`package root` ＋ `independent manifest` ＋ `dataset artifact area`。
+- **优势：** human inspectability 最高；deterministic discovery 容易（固定区域 ＋ manifest）；
+  package copy 行为直观（目录复制即迁移）。
+- **风险：**
+  - **atomic transfer limitation** —— 目录级 transfer **无内在原子性**，需外部约定才能满足 `§4.3.6`；
+  - **immutability** 需外部约定（只读 ／ 冻结），易被部分覆盖；
+  - 若引入固定 subdirectory 名，需保证该名称**不承载** business semantic（`L-4`）。
+- **技术可行性：** **是**（`L-6` 的满足方式需额外设计，属 `Final Import Contract` 例外 —— 见下）。
+- **当前 POC 最适合：** **未判定**。
+
+**Option B —— Flat Directory Package**
+
+- Manifest 与 business dataset artifact 位于同一级 package root。
+- **优势：** simplicity 最高；实现与 inspectability 都最轻。
+- **风险：**
+  - **naming collision** —— manifest 与 dataset artifact ／ artifact 之间共享同一命名空间；
+  - **role ／ filename coupling risk** —— 平坦结构下「文件名即角色」的诱惑最大，直接违反 `L-4`；
+  - **future expansion** —— 若未来需要 nested 或分组，迁移成本较高。
+- **技术可行性：** **是**。
+- **当前 POC 最适合：** **未判定**。
+
+**Option C —— Archive Package**
+
+- 单一 archive container 内含 `independent manifest` ＋ JSON business artifacts。
+- **候选归档格式可讨论（例如 ZIP），但本 Review 不选择任何归档格式。**
+- **优势：**
+  - **package-level atomicity** 最强 —— 单一 artifact 接近 package-level atomic 单位（`§4.3.6`）；
+  - **immutability** 较易整体冻结；**integrity** 可整体校验；
+  - transfer 为单文件，跨环境一致性较好。
+- **风险：**
+  - **extraction semantics** —— 若要求「先解包再导入」，会引入额外状态与中间产物，
+    与 `§4.3.5` 的 immutability 边界需要额外约定；
+  - **archive-specific risk** —— 归档内部条目顺序 ／ 元数据 ／ 时间戳可能**非确定性**；
+    若 integrity contract 要求 byte-level 稳定，需**另行**决定（属 `Final Import Contract`）；
+  - **inspectability** 与 **tooling** 成本高于目录形态；
+  - **ZIP-specific** 细节（例如路径分隔符、符号链接、压缩方法）**不得**在本层决定。
+- **技术可行性：** **是**。
+- **当前 POC 最适合：** **未判定**。
+
+**Option D —— Aggregated Business Data Artifact**
+
+- Manifest 保持独立 artifact；多个 logical dataset **聚合**在一个 JSON business artifact 中。
+- **优势：** artifact 数量少；单文件便于整体处理。
+- **风险：**
+  - **logical dataset isolation** 下降 —— dataset 边界由 artifact **内部结构**表达；
+  - **absent ／ empty semantics** —— `not included` ／ `included with 0 records` ／ `> 0 records`
+    三者必须在同一 artifact 内部结构中被区分，**提高** `L-5` 的实现依赖；
+  - **dataset-level provenance** 与 **dataset-level record count** 必须由内部结构承载 →
+    属 **`Field Carrier Mapping`**（本层**不得**设计）；
+  - **blast radius** —— 单 artifact 内任一 dataset 结构问题会牵动整个 artifact；
+  - **future field carrier mapping** —— 提前绑定内部结构，降低后续自由度；
+  - **human inspection** —— 大 artifact 的可读性下降。
+- **技术可行性：** **是**（但**必须**先有 `Field Carrier Mapping` 才能完整定义 `dataset-level` 语义 ⇒ 与 `L-10` 冲突）。
+- **当前 POC 最适合：** **未判定**；`L-10` 视角下**风险最高**。
+
+**Option Comparison**
+
+`既有` = 受既有 Design 约束；`⚠` = 需新增未授权设计；`—` = 不适用。判定针对**生产可用**形态，
+**不**代表本 Review 的选择。
+
+| 维度 | Option 0 | A（Structured Dir） | B（Flat Dir） | C（Archive） | D（Aggregated） |
+| --- | --- | --- | --- | --- | --- |
+| deterministic discovery（L-2 ／ L-3） | — | **强** | 中（命名空间拥挤） | 强（需归档读取） | 中 |
+| human inspectability | — | **最高** | **高** | 中 | 低中 |
+| package atomicity（L-6） | — | 需**额外约定** | 需**额外约定** | **最强** | 同目录形态 |
+| immutability（L-7） | — | 需外部约定 | 需外部约定 | 较易整体冻结 | 同目录形态 |
+| integrity verification（`§4.3.15`） | — | 逐 artifact | 逐 artifact | 可整体 | 逐 artifact |
+| logical ／ physical separation（L-4） | — | 中高（有区域划分） | **风险最高** | 中高 | 中 |
+| absent ／ empty semantics（L-5） | — | 依赖 manifest | 依赖 manifest | 依赖 manifest | **依赖 FCM 内部结构** ⚠ |
+| blast radius | — | 局部 | 局部 | 局部 | **大** |
+| implementation complexity | 最低（不选型） | 低 | **最低** | 中 | 中 |
+| future FCM compatibility | — | 高 | 中 | 高 | **低**（提前绑定内部结构）⚠ |
+| POC suitability（判断，非约束） | 不构成进展 | 高 | 高 | 中高 | 低中 |
+
+**选项组合说明：** A ／ B 与 C 在**容器形态**上互斥；A ／ B ／ C 均可与
+「`one logical dataset = one artifact`」组合；**D** 与 A ／ B ／ C **正交**
+（D 改变的是 **artifact 粒度**，而非容器形态）。因此 Q1 与 Q2 是**两个独立裁定**。
+
+**本 Review 不选择任何 Option。**
+
+**Manifest Boundary**
+
+**已固定（不得重新设计）：**
+
+```
+Snapshot Manifest = independent artifact
+Snapshot Manifest serialization = JSON
+Snapshot Manifest 的 8 项 logical semantic requirement（§4.3.8）不得修改
+Snapshot Manifest ≠ business dataset
+```
+
+**本 Review 可以分析（并在 Q3 ／ Q4 中给出 evidence）：**
+
+```
+manifest physical placement
+manifest discoverability
+manifest 与 package root 的关系
+manifest 与 dataset artifact 的关系
+```
+
+**本 Review 不得定义：**
+
+```
+具体 Manifest JSON Schema
+具体 property name
+具体 nested object structure
+```
+
+（以上属 **`Field Carrier Mapping`**。）
+
+**Empty / Absent Dataset Boundary**
+
+| Case | Manifest 状态 | 物理层要求（本层） | envelope 形式归属 |
+| --- | --- | --- | --- |
+| **A** | dataset **not included** | **不得**要求对应 artifact 存在；**不得**由「artifact 缺失」推断任何业务结论 | `Field Carrier Mapping` |
+| **B** | dataset **included** ＋ `record_count = 0` | **必须**存在对应 artifact（`L-5`） | `Field Carrier Mapping` |
+| **C** | dataset **included** ＋ `record_count > 0` | **必须**存在对应 artifact，并可 deterministic locate（`L-3`） | `Field Carrier Mapping` |
+
+**禁止的隐式规则：**
+
+```
+「找不到文件 = 没有业务数据」
+「出现文件 = dataset included」
+```
+
+authoritative 来源**必须**是 **Manifest**（`§4.3.8` ／ `§4.4.4`）。
+
+**Provenance Boundary**
+
+**必须保持：**
+
+```
+dataset-level provenance reference  ≠  Stable Source Evidence Locator
+```
+
+**本层不得**把以下自动等同于 provenance semantic 或 `Stable Source Evidence Locator`：
+
+```
+artifact path
+filename
+archive entry path
+```
+
+**compatibility requirement（仅记录）：** 若未来的 `Stable Source Evidence Locator`
+需要包含 **artifact-relative position**（例如「某 artifact 内的第 N 条记录」），
+则物理布局必须**至少**保证 artifact 的 **deterministic 定位**（`L-3` ／ `L-8` ／ `L-11`）——
+使这种 future locator **可表达**。**具体 carrier 留给 `Field Carrier Mapping`。**
+
+**Atomicity / Immutability Boundary**
+
+对每个 Option 与以下约束的兼容性已逐项检查（见 Q13 与 Option Comparison）：
+
+```
+package-level atomic ACCEPT ／ REJECT   （§4.3.6）
+accepted package immutable              （§4.3.5）
+no partial overwrite
+no silent replace
+no cross-snapshot mixing                （§4.3.7）
+```
+
+**本 Review 不设计：**
+
+```
+transaction mechanism
+file locking
+storage engine
+object storage
+database transaction
+upload protocol
+```
+
+**Final Import Contract Boundary（记录 dependency，不决定）**
+
+以下**不得**由本层决定，且若某 layout 方案依赖其中某项，**只记录 dependency**：
+
+```
+hash algorithm
+checksum algorithm
+signature policy
+canonical byte ordering
+archive integrity algorithm
+contract version evolution
+backward compatibility
+forward compatibility
+final acceptance algorithm
+runtime import validator
+artifact-presence / extra-artifact acceptance rule（见 Q9）
+path traversal ／ symlink 拒绝规则（见 Q12）
+```
+
+**Downstream Ownership Matrix**
+
+| 问题 | 归属层 |
+| --- | --- |
+| package container 形态（directory ／ archive） | **`Physical Dataset Layout`** |
+| artifact 粒度（one-per-dataset ／ aggregated） | **`Physical Dataset Layout`** |
+| manifest 位置模型 ／ discoverability | **`Physical Dataset Layout`** |
+| artifact path 必须 deterministic ／ unique ／ relative-to-root | **`Physical Dataset Layout`** |
+| `role → artifact reference` 的**存在要求** | **`Physical Dataset Layout`** |
+| `role → artifact reference` 的**字段 ／ JSON 结构** | **`Field Carrier Mapping`** |
+| dataset envelope ／ record envelope ／ business record 结构 | **`Field Carrier Mapping`** |
+| `canonical field → concrete JSON property name` | **`Field Carrier Mapping`** |
+| `Stable Source Evidence Locator` 的 physical carrier ／ artifact-relative position | **`Field Carrier Mapping`** |
+| 0-record dataset 的物理表达形式 | **`Field Carrier Mapping`** |
+| integrity ／ hash ／ signature ／ byte-level canonicalization | **`Final Import Contract`** |
+| extra-artifact ／ traversal ／ symlink 的 acceptance 与拒绝规则 | **`Final Import Contract`** |
+| contract version evolution ／ 兼容性规则 | **`Final Import Contract`** |
+| Adapter 实现 ／ 连接器 ／ 传输协议 | **`Adapter Boundary`** |
+
+**Known Risks**
+
+| # | Risk | 说明 |
+| --- | --- | --- |
+| **P-1** | **文件名成为隐式 semantic source** | Flat directory（Option B）与「role 推导 filename」最容易诱发；直接破坏 `§4.3.10` 与 `L-4` |
+| **P-2** | **`not included` 与 `included with zero records` 物理不可区分** | 若靠「文件是否存在」推断 presence；破坏 `§4.4.4` ／ `L-5` |
+| **P-3** | **目录形态的 atomicity 依赖外部约定** | `§4.3.6` 的 package-level atomic 语义在目录形态下**没有内在保证** |
+| **P-4** | **归档形态的重打包风险** | 同一 `snapshot_package_id` 对应不同 archive 内容会破坏 `§4.3.5` |
+| **P-5** | **归档内部非确定性** | 条目顺序 ／ 时间戳 ／ 元数据可能使同一内容产生不同 bytes；若 integrity 要求 byte-level，需 `Final Import Contract` 单独决定 |
+| **P-6** | **提前依赖 `Field Carrier Mapping`** | Option D 需要 dataset envelope ／ record envelope 才能成立 —— 与 `L-10` 冲突 |
+| **P-7** | **path 逃出 package** | absolute ／ external ／ traversal ／ symlink 破坏 `L-1` ／ `L-7` ／ `L-11` |
+| **P-8** | **本 Review 结论被误读为 layout 已选定** | 本 Review **未**选择任何 Option |
+| **P-9** | **物理路径被误当作 provenance 语义** | 破坏 `dataset-level provenance reference ≠ Stable Source Evidence Locator` |
+| **P-10** | **`§4.3.1` 的「不得定义 directory layout ／ concrete filenames」被误读为永久禁止** | 该限制约束的是**当时**的 Task；本层决定**必须**由 Human Decision 明确授权 |
+
+**Review Conclusion**
+
+基于 Repository 中已存在的正式设计事实：
+
+1. **`Physical Dataset Layout` 必须满足的性质已可界定**：`L-1` ～ `L-10` **直接来自既有 Design**，
+   `L-11` 为**本 Review 提出**。这构成后续 closure 的可验证基础 ——
+   但**是否全部登记为正式 closure criteria 属 Human Decision**。
+2. **15 个 Review Question 中**：`Q1` ～ `Q6` ／ `Q10` 属 **Human Decision**；
+   `Q7` ／ `Q8` ／ `Q11` ／ `Q12` 已获**证据性回答**（含 layer ownership 归属）；
+   `Q9` ／ `Q13` 已给出判定与 dependency；`Q14` ／ `Q15` 已给出 candidate criteria 与 ownership matrix。
+3. **五个 Option（0 ／ A ／ B ／ C ／ D）均已评估**：
+   `A` ／ `B` ／ `C` 与 `D` 在**不同维度**上取舍（容器形态 vs artifact 粒度）；
+   **Option D 与 `L-10` 存在实质张力**（需先有 FCM）。
+4. **本 Review 不选择最终 layout**；`Physical Dataset Layout` **保持 `DESIGN PENDING`**。
+5. **不推进** `Field Carrier Mapping` ／ `Final Import Contract` ／ `Adapter Boundary`；
+   dependency 已记录，未自行解决。
+6. **未**修改任何 canonical entity ／ field ／ `BR-*` ／ Validation Taxonomy ／ Master Data Mapping ／
+   Serialization Format policy；**未**创建任何 physical artifact。
+
+**Current Status（本 Review 时点）**
+
+```
+Snapshot / Import Contract overall = DESIGN PENDING
+  Package Envelope                 = DESIGN RESOLVED
+  Atomicity Boundary               = DESIGN RESOLVED
+  Immutability Boundary            = DESIGN RESOLVED
+  Analysis Run Linkage             = DESIGN RESOLVED
+  Serialization Format             = DESIGN RESOLVED
+  Physical Dataset Layout          = DESIGN PENDING   ← 本 Review 未关闭
+  Field Carrier Mapping            = DESIGN PENDING
+  Final Import Contract            = DESIGN PENDING
+
+Adapter Boundary                   = DESIGN PENDING
+POC Design v0.2                    = DRAFT
+```
+
+**Human Decision Required**
+
+| # | 问题 | 性质 |
+| --- | --- | --- |
+| 1 | **package container**：`directory` ／ `archive` ／ 其他明确方案？ | Q1 |
+| 2 | **artifact 粒度**：`one logical dataset = one artifact` ／ aggregated business data artifact？ | Q2 |
+| 3 | **manifest placement model**：package root ／ 固定 subdirectory ／ 仅要求 entry-point 可定位？ | Q3 |
+| 4 | **manifest filename 是否固定**？ | Q4 |
+| 5 | **dataset artifact naming strategy**：是否固定 naming convention？ | Q5 |
+| 6 | **`logical dataset role` 如何关联到 physical artifact**：是否要求 manifest 显式声明（本 Review 判定为**必须**，请确认）？是否**禁止**以 filename 作为 authoritative 来源？ | Q6 ／ Q7 |
+| 7 | **included-empty dataset 是否必须存在 artifact**（本 Review 判定为**必须**，请确认）？ | Q8 |
+| 8 | **nested directory 是否允许 ／ 是否需要**？ | Q10 |
+| 9 | 是否接受 **`L-1` ～ `L-11`** 作为 `Physical Dataset Layout` 的 minimum closure criteria？ | Q14 |
+| 10 | 是否授权后续**独立 `Physical Dataset Layout` Implementation PR**（登记选择 ＋ 同步 current-state），并在满足 closure criteria 时允许 `DESIGN PENDING → DESIGN RESOLVED`？ | follow-up |
+
+**本 Review 不作出上述任何决定。** 后续必须由 **Human Decision** 裁定；
+**不得**由 Agent 自行选择最终 layout。
+
 #### 4.3.21 Status Boundary
 
 `Snapshot / Import Contract` **整体仍为 `DESIGN PENDING`**。
