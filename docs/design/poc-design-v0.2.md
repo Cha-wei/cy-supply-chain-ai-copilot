@@ -3922,7 +3922,7 @@ conceptual boundary 已定义
 | Data Dictionary | **`DESIGN RESOLVED`** |
 | Snapshot / Import Contract | `DESIGN PENDING` |
 | Data Validation | **`DESIGN RESOLVED`** |
-| Master Data Mapping | `DESIGN PENDING` |
+| Master Data Mapping | **`DESIGN RESOLVED`** |
 | Adapter Boundary | `DESIGN PENDING` |
 
 > 继承约束（不重新定义）：Integration Pattern = **Controlled Export / Snapshot**。具体文件格式（CSV / JSON / Parquet）与 Adapter Contract 属本阶段待设计事项，**本轮未决定**。
@@ -3930,11 +3930,13 @@ conceptual boundary 已定义
 > **注意**：`Data Validation` 完成**仅**表示 **conceptual validation design complete**；
 > **不代表** implemented / data validated / tested。
 >
-> §4 仍有 **3 个 `DESIGN PENDING` 子领域**：
+> §4 仍有 **2 个 `DESIGN PENDING` 子领域**：
 >
 > - `Snapshot / Import Contract`
-> - `Master Data Mapping`
 > - `Adapter Boundary`
+>
+> （`Master Data Mapping` 已由 **PR #48 Human Decision** 授权并关闭 ——
+> 见 **§4.5.25** ／ **§4.5.22 Final Master Data Mapping Closure Implementation Record**。）
 >
 > **不得声称整个 §4 已完成。**
 
@@ -9007,7 +9009,7 @@ Design DoD = PASS（17 / 17）
 | 依赖领域 | Status |
 | --- | --- |
 | Snapshot / Import Contract | `DESIGN PENDING` |
-| Master Data Mapping | `DESIGN PENDING` |
+| Master Data Mapping | **`DESIGN RESOLVED`** |
 | Adapter Boundary | `DESIGN PENDING` |
 
 `Data Validation = DESIGN RESOLVED` **不要求**且**不表示**：
@@ -9048,7 +9050,7 @@ conceptual validation design complete
 
 ### 4.5 Master Data Mapping
 
-> **子章节整体状态：仍为 `DESIGN PENDING`。**
+> **子章节整体状态：现为 `DESIGN RESOLVED`。**
 >
 > 本节已完成：Canonical Identity Resolution ＋ Relationship Resolution Boundary
 > ＋ **Warehouse Role Resolution**（**§4.5.12**）
@@ -9056,9 +9058,10 @@ conceptual validation design complete
 > ＋ **Supplier Eligibility Vocabulary Mapping**（**§4.5.11**）
 > ＋ **Effective Arrival Date Source Mapping**（**§4.5.21**）
 > ＋ **Allocation Demand-Window Mapping**（**§4.5.9**）
-> ＋ **Other Source-Semantic Mapping**（**§4.5.22**）。
+> ＋ **Other Source-Semantic Mapping**（**§4.5.22**）
+> ＋ **Final Master Data Mapping**（**§4.5.25** ／ **§4.5.22 Final Master Data Mapping Closure Implementation Record**）。
 >
-> **仍为 `DESIGN PENDING` 的层级：** **Final Master Data Mapping**。
+> **仍为 `DESIGN PENDING` 的层级：** 无。
 
 **层级状态登记：**
 
@@ -9074,9 +9077,9 @@ conceptual validation design complete
 | Effective Arrival Date Source Mapping | **`DESIGN RESOLVED`** |
 | Allocation Demand-Window Mapping | **`DESIGN RESOLVED`** |
 | Other Source-Semantic Mapping | **`DESIGN RESOLVED`** |
-| Final Master Data Mapping | `DESIGN PENDING` |
+| Final Master Data Mapping | **`DESIGN RESOLVED`** |
 
-> **`Master Data Mapping` overall 仍为 `DESIGN PENDING`。**
+> **`Master Data Mapping` overall 现为 `DESIGN RESOLVED`。**
 >
 > `BOM Version / Validity Mapping` 的 **BOM Applicability Design Review** 曾判定
 > **`INSUFFICIENT`（Blocking Finding / Canonical Model Conflict）** —— 见 **§4.5.7**；
@@ -9127,8 +9130,9 @@ conceptual validation design complete
 > 因此其状态已变更为 **`DESIGN RESOLVED`**，unresolved count **1 → 0** ——
 > **`Other Source-Semantic Mapping` 现为 `DESIGN RESOLVED`**。
 >
-> **`Final Master Data Mapping` 仍为 `DESIGN PENDING`**（尚无 closure criteria，见 **§4.5.22** 决定 18 ／ 19）；
-> **`Master Data Mapping` overall 仍为 `DESIGN PENDING`**。
+> **`Final Master Data Mapping` 现为 `DESIGN RESOLVED`**（其 scope 与 `MC-1` ～ `MC-10` 已正式登记，
+> 见 **§4.5.25** ／ **§4.5.22 Final Master Data Mapping Closure Implementation Record**）；
+> **`Master Data Mapping` overall 现为 `DESIGN RESOLVED`**。
 
 #### 4.5.1 Purpose & Scope
 
@@ -11367,7 +11371,9 @@ configuration format、API、field name。
 > POC Inventory Scope 的 **logical / source-semantic boundary** 已由现有 **Master Data Mapping** Design 解析
 > （**`Other Source-Semantic Mapping` 现为 `DESIGN RESOLVED`**，见 **§4.5.22 Option D Implementation Record**）；
 > 但 **physical membership evidence / source representation** 仍属**后续 source-specific /
-> physical mapping realization** —— **`Final Master Data Mapping` 仍为 `DESIGN PENDING`**。
+> physical mapping realization** —— 该部分**不属于** `Master Data Mapping` scope
+> （**`Final Master Data Mapping` 现为 `DESIGN RESOLVED`**），
+> 而属 **`§4.3 Field Carrier Mapping` ／ `Final Import Contract`**（**仍为 `DESIGN PENDING`**）。
 
 **两种可接受的 Source Evidence Shape**
 
@@ -11609,7 +11615,7 @@ Warehouse canonical role      = DESIGN RESOLVED
 Warehouse Role Resolution     = DESIGN RESOLVED
 ```
 
-`Master Data Mapping` overall **仍为 `DESIGN PENDING`**。
+`Master Data Mapping` overall **现为 `DESIGN RESOLVED`**。
 
 #### 4.5.13 Cross-System Identifier Boundary
 
@@ -15658,11 +15664,14 @@ Validation Taxonomy Limitation       = OPEN / SEPARATE REVIEW REQUIRED
         `Final Master Data Mapping` 的 **scope = `HUMAN APPROVED FOR REGISTRATION`**；
         **`MC-1` ～ `MC-10`**（含**修正后的 `MC-9`**）**= `HUMAN APPROVED FOR REGISTRATION`**；
         **follow-up conditional closure = `AUTHORIZED`**。
-     —— 但 **scope ／ criteria registration = `NOT YET EXECUTED`**，
-        **closure = `NOT YET EXECUTED`**；`Final Master Data Mapping` **仍为 `DESIGN PENDING`**，
-        `Master Data Mapping` overall **仍为 `DESIGN PENDING`**。
-     —— **后续必须另开独立 Implementation PR** 完成 registration（及满足条件时的 closure）；
-        在 registration 完成前该项**不得**写成 `DESIGN RESOLVED`。
+     —— **scope ／ criteria registration 已完成**（见 **§4.5.25** 与
+        **Final Master Data Mapping Closure Implementation Record**）；
+        **`MC-1` ～ `MC-10` = 全部 `PASS`**，**new blocking canonical mapping gap = `NONE`**。
+     —— 因此 **conditional closure gate = `PASS`**，closure 已执行：
+        `Final Master Data Mapping` **现为 `DESIGN RESOLVED`**，
+        `Master Data Mapping` overall **现为 `DESIGN RESOLVED`**。
+     —— 本 Review Finding 与 Human Decision Record 中 `DESIGN PENDING` ／
+        `NOT YET EXECUTED` 的表述**按其各自时点原样保留**，**不得**回写。
 ```
 
 **Missing Provenance Reference — Validation Taxonomy Gap Design Review（Review Finding）**
@@ -17036,6 +17045,141 @@ POC Design v0.2                     = DRAFT
 **未**实施 scope registration，**未**实施 closure，
 **未**修改 `Final Master Data Mapping` ／ `Master Data Mapping overall` 的 status。
 
+**Final Master Data Mapping Closure Implementation Record（Human-authorized Design Change）**
+
+**Human Authorization Source**
+
+```
+PR #48 Human Decision — Human-approved
+  → 决定 2：Final Master Data Mapping Scope        = APPROVED FOR REGISTRATION
+  → 决定 4：MC-1 ～ MC-8 ＋ MC-10                  = APPROVED
+  → 决定 5：MC-9                                  = AMENDED ＋ APPROVED
+  → 决定 6：G-3 ～ G-11                           = NON-BLOCKING
+  → 决定 7：Snapshot / Import Contract Boundary    = CONFIRMED
+  → 决定 8：follow-up registration                 = AUTHORIZED
+  → 决定 9：conditional closure                    = AUTHORIZED（条件满足时）
+  → 决定 11：Explicit Non-Authorization            = CONFIRMED
+```
+
+**Registration Result**
+
+```
+Final Master Data Mapping scope         = REGISTERED（§4.5.25 A）
+Closure Criteria MC-1 ～ MC-10           = REGISTERED（§4.5.25 B）
+MC-9                                    = 使用 Human Decision 修正版
+Conceptual Closure Boundary             = REGISTERED（§4.5.25 A）
+```
+
+**MC-1 ～ MC-10 Validation Result**
+
+| # | Criterion | Result |
+| --- | --- | --- |
+| **MC-1** | `Final Master Data Mapping` **scope 已正式登记**（`§4.5.25 A`） | **PASS** |
+| **MC-2** | 全部 constituent mapping layers 均为 `DESIGN RESOLVED` | **PASS**（10 / 10） |
+| **MC-3** | mapping scope 内**无** registered unresolved item | **PASS**（`§4.1.12` ／ `§4.4.41` ／ `§4.4.101` ／ `§4.5.22` ／ `§11` 均为 0） |
+| **MC-4** | 每个具 canonical identity 的 entity 都有 identity resolution boundary | **PASS**（A ～ O ＋ Warehouse） |
+| **MC-5** | 每个 canonical relationship 都有 relationship resolution boundary | **PASS** |
+| **MC-6** | 每个被 Rule 使用的 source-specific vocabulary ／ semantic 都有 mapping contract 或 canonical vocabulary 定义 | **PASS** |
+| **MC-7** | 每个 mapping 层都有 explicit ambiguity ／ conflict ／ unresolved behaviour，且**无 silent precedence** | **PASS** |
+| **MC-8** | 每个成功 mapping 都被 logical provenance requirement 覆盖 | **PASS** |
+| **MC-9** | scope 内**无**未登记 ／ 未分类 ／ 未评估 closure impact 的 mapping gap（**修正版**） | **PASS** |
+| **MC-10** | Conceptual Closure Boundary **已正式登记** | **PASS** |
+
+**New Blocking Gap Audit**
+
+```
+已知 deferral（G-3 ～ G-11）          = NON-BLOCKING（严格继承 PR #48 Human Decision 决定 6）
+new blocking canonical mapping gap  = NONE
+```
+
+审计结论：registration 后**未发现**任何此前未知的 blocking canonical mapping gap；
+**未**将任何既有 `NON-BLOCKING` 项升级为 blocker。
+
+**Conditional Closure Result**
+
+```
+MC-1 ～ MC-10                       = ALL PASS
+New Blocking Canonical Mapping Gap  = NONE
+  → conditional closure gate         = PASS
+```
+
+因此执行（**PR #48 Human Decision 决定 9** 授权）：
+
+```
+Final Master Data Mapping    DESIGN PENDING → DESIGN RESOLVED
+Master Data Mapping overall  DESIGN PENDING → DESIGN RESOLVED
+Master Data Mapping layers   10 / 11 → 11 / 11 DESIGN RESOLVED
+```
+
+**Current-State Synchronization**
+
+| 位置 | 同步内容 |
+| --- | --- |
+| `§4` 子领域表 | `Master Data Mapping` → `DESIGN RESOLVED`；`DESIGN PENDING` 子领域 3 → 2 |
+| `§4.4.101 Dependency Boundary` | `Master Data Mapping` → `DESIGN RESOLVED` |
+| `§4.5` 子章节状态块 | 子章节整体状态 → `DESIGN RESOLVED`；`仍为 DESIGN PENDING 的层级` → 无 |
+| `§4.5` 层级状态登记表 | `Final Master Data Mapping` → `DESIGN RESOLVED` |
+| `§4.5.12` | physical realization 归属的最小 direct-contradiction sync（归 `§4.3`） |
+| `§4.5.22 NEXT REQUIRED DESIGN REVIEW` | conditional closure 已执行 |
+| `§4.5.24 Status Boundary` | 各 current-state 语句同步为 `11 / 11` ／ `DESIGN RESOLVED` |
+| `§4.5.25`（新增） | `Final Master Data Mapping` scope 与 `MC-1` ～ `MC-10` 正式登记 |
+
+**Historical Preservation（未回写）**
+
+- **PR #44 Review Finding ／ Human Decision Record**
+- **PR #45 Option D Implementation Record**（含 `DESIGN RESOLVED layer 数现为 10`）
+- **PR #46 Review Finding ／ Human Decision Record**
+- **PR #47 Validation Taxonomy Implementation Record**
+- **PR #48 Review Finding**（含 `MC-1 = 未满足` ／ `MC-9 = 部分未满足` ／ `10 / 11` ／ `DESIGN PENDING`）
+- **PR #48 Human Decision Record**（含 `scope registration = NOT YET EXECUTED` ／ `closure = NOT YET EXECUTED`）
+- 各 **`执行状态（…时点）`** ／ **`Status（…时点）`** 块
+
+**Scope Boundary（保持）**
+
+```
+Snapshot / Import Contract overall = DESIGN PENDING
+  Serialization Format             = DESIGN PENDING
+  Physical Dataset Layout          = DESIGN PENDING
+  Field Carrier Mapping            = DESIGN PENDING
+  Final Import Contract            = DESIGN PENDING
+Adapter Boundary                   = DESIGN PENDING
+
+Master Data Mapping closure  ≠  Snapshot / Import Contract closure
+```
+
+**Meaning of `DESIGN RESOLVED`**
+
+`Final Master Data Mapping = DESIGN RESOLVED` **只**表示
+**canonical / conceptual Master Data Mapping design 已完成**，
+**不表示**：
+
+```
+real ERP mapping completed
+source table / column known
+physical schema exists
+Adapter implemented
+physical import contract completed
+data validated / tested
+production-ready
+```
+
+**执行状态（本 Task 完成时点）**
+
+```
+Human Authorization Source          = PR #48 Human Decision
+Final Master Data Mapping scope     = REGISTERED
+Closure Criteria MC-1 ～ MC-10       = REGISTERED（MC-9 修正版）
+MC-1 ～ MC-10                       = PASS
+New Blocking Canonical Mapping Gap  = NONE
+Conditional Closure Gate            = PASS
+Final Master Data Mapping           = DESIGN RESOLVED
+Master Data Mapping overall         = DESIGN RESOLVED
+Master Data Mapping layers          = 11 / 11 DESIGN RESOLVED
+Snapshot / Import Contract overall  = DESIGN PENDING
+Adapter Boundary                    = DESIGN PENDING
+POC Design v0.2                     = DRAFT
+```
+
 #### 4.5.23 Examples
 
 以下为 **conceptual examples**。
@@ -17068,16 +17212,17 @@ business evidence 来自 P1，但 Material mapping 取自 P2
 
 #### 4.5.24 Status Boundary
 
-`Master Data Mapping` overall **仍为 `DESIGN PENDING`** ——
+`Master Data Mapping` overall **现为 `DESIGN RESOLVED`** ——
 本节已完成 Canonical Identity Resolution、Relationship Resolution Boundary、
 **Warehouse Role Resolution**（**§4.5.12**）、
 **BOM Version / Validity Mapping**（**§4.5.7** ／ **§4.1.4 N**）、
 **Supplier Eligibility Vocabulary Mapping**（**§4.5.11**）、
 **Effective Arrival Date Source Mapping**（**§4.5.21**）、
 **Allocation Demand-Window Mapping**（**§4.5.9**）
-与 **Other Source-Semantic Mapping**（**§4.5.22**）。
+与 **Other Source-Semantic Mapping**（**§4.5.22**）
+与 **Final Master Data Mapping**（**§4.5.25**）。
 
-`DESIGN RESOLVED` 的十个层级**仅**表示其 **conceptual resolution boundary 已定义**，
+`DESIGN RESOLVED` 的十一个层级**仅**表示其 **conceptual resolution boundary 已定义**，
 **不表示**：
 
 - 真实 ERP mapping 已完成
@@ -17188,7 +17333,7 @@ unresolved count                  = 3 → 2
 `GrossRequirement` engine implemented。
 
 **未新增**任何 Master Data Mapping layer —— 这是 **`Other Source-Semantic Mapping`
-内部 unresolved item 的关闭**，**不是**新的 resolved layer；`DESIGN RESOLVED` layer 数现为 **10**（**`Final Master Data Mapping` 仍为 `DESIGN PENDING`**）。
+内部 unresolved item 的关闭**，**不是**新的 resolved layer；`DESIGN RESOLVED` layer 数现为 **11**（**`Final Master Data Mapping` 现为 `DESIGN RESOLVED`**）。
 
 **Option D —— IMPLEMENTED：** `ApplicableMOQ` source / applicability **现为 `DESIGN RESOLVED`** ——
 其 **Option D**（Source-Specific Purchasing-Policy Resolution ＋ resolution-contract form）
@@ -17224,8 +17369,8 @@ Layered Logical Provenance Contract  = IMPLEMENTED
 provenance carrier                   = DESIGN RESOLVED
 unresolved count                     = 1 → 0
 Other Source-Semantic Mapping        = DESIGN RESOLVED
-Final Master Data Mapping            = DESIGN PENDING   ← 未关闭
-Master Data Mapping overall          = DESIGN PENDING   ← 未关闭
+Final Master Data Mapping            = DESIGN PENDING   ← 未关闭（PR #45 时点）
+Master Data Mapping overall          = DESIGN PENDING   ← 未关闭（PR #45 时点）
 Snapshot / Import Contract overall   = DESIGN PENDING
 Validation Taxonomy Limitation       = DESIGN RESOLVED
 ```
@@ -17235,11 +17380,12 @@ Validation Taxonomy Limitation       = DESIGN RESOLVED
 
 **未新增**任何 Master Data Mapping layer —— `Other Source-Semantic Mapping` 是**既有层**，
 本 Task 只关闭其**最后一个 internal unresolved item**。
-`DESIGN RESOLVED` layer 数现为 **10**；`Final Master Data Mapping` **仍为 `DESIGN PENDING`**。
+`DESIGN RESOLVED` layer 数现为 **11**；`Final Master Data Mapping` **现为 `DESIGN RESOLVED`**。
 
-**`Master Data Mapping` overall 仍为 `DESIGN PENDING`** —— 因 **`Final Master Data Mapping` 尚无 closure criteria**
-（见 **§4.5.22 Human Decision Record** 决定 18 ／ 19），
-**不得**因 `unresolved count = 0` 而提前 closure。
+**`Master Data Mapping` overall 现为 `DESIGN RESOLVED`** ——
+`Final Master Data Mapping` 的 scope 与 `MC-1` ～ `MC-10` 已正式登记并全部 `PASS`
+（见 **§4.5.25** ／ **§4.5.22 Final Master Data Mapping Closure Implementation Record**）；
+**`unresolved count = 0` 本身不构成 closure 依据**（**PR #44 Human Decision 決定 18** 保持有效）。
 
 **须另行进行的独立 Review：**
 
@@ -17248,17 +17394,18 @@ Validation Taxonomy Limitation       = DESIGN RESOLVED
      —— **已完成**：Review Finding 与 Human Decision Record 见 **§4.5.22**；
         taxonomy implementation 见 **§4.5.22 Validation Taxonomy Implementation Record**
 2. Master Data Mapping Closure Review
-     —— **已完成**：Review Finding 与 **Human Decision Record** 见 **§4.5.22**
-     —— **scope ＋ `MC-1` ～ `MC-10` = `HUMAN APPROVED FOR REGISTRATION`**；
-        **registration ／ closure = `NOT YET EXECUTED`**
-     —— `Final Master Data Mapping` ／ `Master Data Mapping` overall **保持 `DESIGN PENDING`**
+     —— **已完成**：Review Finding ／ **Human Decision Record** ／
+        **Final Master Data Mapping Closure Implementation Record** 见 **§4.5.22**
+     —— **scope ＋ `MC-1` ～ `MC-10` = `REGISTERED`**；`MC-1` ～ `MC-10` = **`PASS`**；
+        **conditional closure 已执行**
+     —— `Final Master Data Mapping` ／ `Master Data Mapping` overall **现为 `DESIGN RESOLVED`**
 ```
 
 ```
 Validation Taxonomy Limitation = DESIGN RESOLVED
 PROVENANCE_MISMATCH semantic   = UNCHANGED
-Final Master Data Mapping      = NOT CLOSED
-Master Data Mapping overall    = NOT CLOSED
+Final Master Data Mapping      = DESIGN RESOLVED
+Master Data Mapping overall    = DESIGN RESOLVED
 ```
 
 **须另行进行的独立 Review：**
@@ -17267,10 +17414,11 @@ Master Data Mapping overall    = NOT CLOSED
 1. Validation Taxonomy Design Review
      —— **已完成**（见 **§4.5.22 Validation Taxonomy Implementation Record**）
 2. Master Data Mapping Closure Review
-     —— **已完成**：Review Finding 与 **Human Decision Record** 见 **§4.5.22**
-     —— **scope ＋ `MC-1` ～ `MC-10` = `HUMAN APPROVED FOR REGISTRATION`**；
-        **registration ／ closure = `NOT YET EXECUTED`**
-     —— `Final Master Data Mapping` ／ `Master Data Mapping` overall **保持 `DESIGN PENDING`**
+     —— **已完成**：Review Finding ／ **Human Decision Record** ／
+        **Final Master Data Mapping Closure Implementation Record** 见 **§4.5.22**
+     —— **scope ＋ `MC-1` ～ `MC-10` = `REGISTERED`**；`MC-1` ～ `MC-10` = **`PASS`**；
+        **conditional closure 已执行**
+     —— `Final Master Data Mapping` ／ `Master Data Mapping` overall **现为 `DESIGN RESOLVED`**
 ```
 
 **Validation Taxonomy Design Change —— IMPLEMENTED：** `Validation Taxonomy Limitation`
@@ -17292,45 +17440,161 @@ Validation Taxonomy Limitation       = DESIGN RESOLVED
 **不表示** runtime validator implemented ／ API implemented ／ enum implemented ／
 schema implemented ／ Adapter implemented ／ tested production behavior。
 
-**未变更** `§4.5` 任何 layer status —— 本 Task **不是** Master Data Mapping layer 变更；
-`DESIGN RESOLVED` layer 数**仍为 10**；`Final Master Data Mapping` **仍为 `DESIGN PENDING`**；
-`Master Data Mapping` overall **仍为 `DESIGN PENDING`**。
+**Validation Taxonomy Design Change 未变更** `§4.5` layer status —— 本 Task **不是**
+Master Data Mapping layer 变更；`DESIGN RESOLVED` layer 数**现为 11**；
+`Final Master Data Mapping` **现为 `DESIGN RESOLVED`**；
+`Master Data Mapping` overall **现为 `DESIGN RESOLVED`**（见 **§4.5.25**）。
 
-**Master Data Mapping Closure Review —— COMPLETED（Review Finding only）：**
+**Master Data Mapping Closure Review —— COMPLETED（Review Finding only，本 Review 时点）：**
 `Final Master Data Mapping` 的 closure 条件已由独立 Review 审查
 （见 **§4.5.22 Master Data Mapping Closure Review（Review Finding）**）。
 
 ```
-Final Master Data Mapping   = DESIGN PENDING   ← 未关闭
-Master Data Mapping overall = DESIGN PENDING   ← 未关闭
-closure criteria            = 未满足（MC-1 ／ MC-9）
-Human Decision              = NOT YET
+Final Master Data Mapping   = DESIGN PENDING   ← 本 Review 时点
+Master Data Mapping overall = DESIGN PENDING   ← 本 Review 时点
+closure criteria            = 未满足（MC-1 ／ MC-9）（本 Review 时点）
+Human Decision              = NOT YET（本 Review 时点）
 ```
 
 **本 Review 不实施 closure，也不改变任何 status。**
-`Master Data Mapping` overall **仍为 `DESIGN PENDING`** ——
-因 **`Final Master Data Mapping` 尚无 scope 定义与正式 closure criteria**，
-**不得**因 `unresolved count = 0` 而提前 closure。
+上述状态在 **PR #48 Human Decision** 之后，已由 **Final Master Data Mapping Closure Implementation**
+正式推进 —— `Final Master Data Mapping` 与 `Master Data Mapping` overall **现为 `DESIGN RESOLVED`**
+（见 **§4.5.25** ／ **§4.5.22 Final Master Data Mapping Closure Implementation Record**）。
 `Master Data Mapping closure` **≠** `Import Contract closure`（**決定 20** 保持有效）。
 
-**Human Decision Recorded —— `Final Master Data Mapping` scope ＋ `MC-1` ～ `MC-10` APPROVED FOR REGISTRATION：**
+**Human Decision Recorded —— `Final Master Data Mapping` scope ＋ `MC-1` ～ `MC-10` APPROVED FOR REGISTRATION（PR #48 时点）：**
 **Human Decision** 已记录（见 **§4.5.22 Human Decision Record**）：
-`Final Master Data Mapping` **不被关闭**；其 **scope** 与 **minimum closure criteria** 已获批准并**待正式登记**。
+`Final Master Data Mapping` 当时**不被关闭**；其 **scope** 与 **minimum closure criteria**
+已获批准并**待正式登记**（registration 已于后续 **Final Master Data Mapping Closure Implementation** 执行）。
 
 ```
-Final Master Data Mapping          = DESIGN PENDING   ← 未关闭
-Master Data Mapping overall        = DESIGN PENDING   ← 未关闭
+Final Master Data Mapping          = DESIGN PENDING   ← 本记录时点
+Master Data Mapping overall        = DESIGN PENDING   ← 本记录时点
 Snapshot / Import Contract overall = DESIGN PENDING   ← 未关闭（独立）
 Adapter Boundary                   = DESIGN PENDING
 Final Master Data Mapping scope    = HUMAN APPROVED FOR REGISTRATION
 Closure Criteria MC-1 ～ MC-10      = HUMAN APPROVED FOR REGISTRATION
 Follow-up conditional closure      = AUTHORIZED
-registration / closure             = NOT YET EXECUTED
+registration / closure             = NOT YET EXECUTED（本记录时点）
 ```
 
-**本 Task 只记录 Human Decision** —— **未**实施 scope registration，**未**实施 closure。
+**该 Task 只记录 Human Decision** —— **未**实施 scope registration，**未**实施 closure。
 `Master Data Mapping closure` **≠** `Import Contract closure`（**決定 20** 保持有效）；
 `Snapshot / Import Contract overall` 与 `Adapter Boundary` **仍为 `DESIGN PENDING`**。
+
+**Final Master Data Mapping Closure —— IMPLEMENTED：** `Final Master Data Mapping`
+**现为 `DESIGN RESOLVED`** ——
+其 **scope** 与 **`MC-1` ～ `MC-10`** 已由 **PR #48 Human Decision** 授权并正式登记（见 **§4.5.25**）；
+**conditional closure gate = `PASS`**
+（见 **§4.5.22 Final Master Data Mapping Closure Implementation Record**）。
+
+```
+Final Master Data Mapping          = DESIGN RESOLVED
+Master Data Mapping overall        = DESIGN RESOLVED
+Master Data Mapping layers         = 11 / 11 DESIGN RESOLVED
+Snapshot / Import Contract overall = DESIGN PENDING   ← 未关闭（独立）
+Adapter Boundary                   = DESIGN PENDING
+```
+
+`DESIGN RESOLVED` **只**表示 **canonical / conceptual Master Data Mapping design 已完成**，
+**不表示** real ERP mapping ／ source table ／ column known ／ physical schema exists ／
+Adapter implemented ／ physical import contract completed ／ tested。
+`Master Data Mapping closure` **≠** `Import Contract closure`（**決定 20** 保持有效）。
+
+---
+
+#### 4.5.25 Final Master Data Mapping Scope & Minimum Closure Criteria
+
+**Registration Status：`REGISTERED`** ——
+依据 **PR #48 Human Decision**（决定 2 ／ 4 ／ 5 ／ 8），见 **§4.5.22 Human Decision Record**。
+
+**A. `Final Master Data Mapping` Scope（正式登记）**
+
+```
+Final Master Data Mapping
+  = Master Data Mapping conceptual design 的最终 closure layer
+```
+
+**其 scope 包括：**
+
+- canonical identity resolution
+- canonical relationship resolution
+- source-semantic resolution
+- mapping ambiguity ／ conflict ／ unresolved behavior
+- mapping provenance requirement
+- 已批准的 conceptual applicability ／ resolution contracts
+
+**其 scope 明确不包括：**
+
+- real ERP vendor ／ version
+- source table selection
+- source column selection
+- physical source-field realization
+- serialization format
+- physical dataset layout
+- `Field Carrier Mapping`
+- `Final Import Contract`
+- Adapter implementation
+- runtime implementation
+- production testing
+
+**Conceptual Closure Boundary（正式登记）：**
+
+```
+Conceptual Master Data Mapping Closure
+  ≠ Real ERP Mapping Completed
+  ≠ Adapter Implemented
+  ≠ Physical Import Contract Completed
+  ≠ Tested Production Integration
+```
+
+**B. Minimum Closure Criteria `MC-1` ～ `MC-10`（正式登记）**
+
+| # | Minimum Closure Criterion |
+| --- | --- |
+| **MC-1** | `Final Master Data Mapping` 的 **scope 被正式定义**（见本节 `A`） |
+| **MC-2** | 全部 constituent mapping layers 均为 `DESIGN RESOLVED` |
+| **MC-3** | mapping scope 内**无** registered unresolved item |
+| **MC-4** | 每个具 canonical identity 的 canonical entity 都有 identity resolution boundary |
+| **MC-5** | 每个 canonical relationship 都有 relationship resolution boundary |
+| **MC-6** | 每个被 Rule 使用的 source-specific vocabulary ／ semantic 都有 canonical mapping contract，或已被既有 canonical vocabulary 定义 |
+| **MC-7** | 每个 mapping 层都有 explicit ambiguity ／ conflict ／ unresolved behaviour，且**无 silent precedence** |
+| **MC-8** | 每个成功 mapping 都被 logical provenance requirement 覆盖 |
+| **MC-9** | Master Data Mapping scope 内**不得存在**：未登记的 canonical mapping gap ／ 未分类的 mapping gap ／ 未评估 closure impact 的 mapping gap。对于**已经明确文档化**、且**已确认属于 Master Data Mapping scope 之外**的 deferral：**不得要求**为了 closure 重复复制进入统一 design-item registry；只要求 **原位置仍可追踪** ＋ **scope attribution 明确** ＋ **closure impact 已明确判定** |
+| **MC-10** | closure 的语义边界被显式登记（见本节 `A` 的 **Conceptual Closure Boundary**） |
+
+**C. `MC-9` 适用范围（正式登记）**
+
+```
+G-5 quantity precision ／ rounding ／ UoM conversion  = NON-BLOCKING
+G-6 PerformancePeriod period policy                   = NON-BLOCKING
+
+G-3 real ERP source-field mapping   = NON-BLOCKING（属其他 design ／ implementation domain）
+G-9 physical carrier realization    = NON-BLOCKING（属其他 design domain）
+G-10 Adapter Boundary               = NON-BLOCKING（属其他 design domain）
+G-4 ／ G-7 ／ G-8 ／ G-11            = NON-BLOCKING
+```
+
+**不得**因「未进入统一 design-item registry」而**间接**使上述 deferral 变成
+`Master Data Mapping` closure blocker。
+
+**D. Registration Boundary**
+
+- 本节**不新增** canonical entity ／ canonical business field，**不修改** `BR-*`。
+- 本节**不代表** real ERP mapping ／ Adapter ／ physical import contract ／ tested production integration 已完成。
+- `Master Data Mapping closure` **≠** `Snapshot / Import Contract closure`。
+
+**E. Closure Result**
+
+```
+Final Master Data Mapping scope    = REGISTERED
+Closure Criteria MC-1 ～ MC-10      = REGISTERED
+MC-1 ～ MC-10                      = ALL PASS
+New Blocking Canonical Mapping Gap = NONE
+Final Master Data Mapping          = DESIGN RESOLVED
+Master Data Mapping overall        = DESIGN RESOLVED
+Master Data Mapping layers         = 11 / 11 DESIGN RESOLVED
+```
 
 ---
 
