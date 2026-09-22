@@ -32,28 +32,24 @@
 
 ## 2. Governance Navigation
 
-| 文件 | 作用 | 层级 |
+| 文件 | 职责 | 层级 |
 | --- | --- | --- |
 | `AGENTS.md` | 项目 Hard Rules、Context Recovery、Project Standards | Hard Rules |
 | `CONTRIBUTING.md` | 工程 Workflow：DoR / DoD、Git & GitHub、Testing & Validation、Documentation、Delivery Report、Rule Conflict | 一般 Workflow |
 
-规则优先级（canonical definition 见 `CONTRIBUTING.md` §1）：
-`事实完整性 / 安全 / FROZEN / 已批准 Decision` ＞ `AGENTS.md` Hard Rules ＞ `当前 Task 的明确限制` ＞ `专项规范文件` ＞ `CONTRIBUTING.md`。
-
-`CONTRIBUTING.md` 当前 approved baseline = **v0.2**（`APPROVED`，**未** `FROZEN`）。
+- 规则优先级（Rule Precedence）与规则冲突处理：canonical definition 见 `CONTRIBUTING.md` §1 ／ §12，**本文档不复制其内容**。
+- `CONTRIBUTING.md` 当前 approved baseline = **v0.2**（`APPROVED`，**未** `FROZEN`）。
 
 ---
 
 ## 3. Business Baseline Navigation
 
-| 文档 | 版本 | 状态 |
-| --- | --- | --- |
-| `docs/discovery/discovery-brief-v0.1.1.md` | v0.1.1 | **`FROZEN`** |
-| `docs/discovery/discovery-validation-v0.1.md` | v0.1 | **`FROZEN`**（Human-approved，Frozen Date `2026-09-21`） |
+| 文档 | 版本 | 状态 | 用途 |
+| --- | --- | --- | --- |
+| `docs/discovery/discovery-brief-v0.1.1.md` | v0.1.1 | **`FROZEN`** | 业务基线（Discovery Brief） |
+| `docs/discovery/discovery-validation-v0.1.md` | v0.1 | **`FROZEN`**（Human-approved，Frozen Date `2026-09-21`） | Discovery Validation Phase Canonical Source（验证台账） |
 
-- 二者是**已冻结的继承事实**：**不得修改**实质内容，**不得**把 `HYPOTHESIS` / `UNKNOWN` / `TBD` 表述为已确认事实。
-- `discovery-validation-v0.1.md` 是 Discovery Validation Phase 的 Canonical Source（验证台账）。
-- `E05`（真实 ERP 品牌 / 版本）、`E06`（WMS）、`E07`（BOM / PLM ownership）**仍为 `UNKNOWN`**。
+- 二者为**已冻结的继承事实**；使用与修改约束见 `AGENTS.md` 第 2 条及各自文档头部的冻结规则，**本文档不复制**。
 
 ---
 
@@ -96,22 +92,15 @@
 
 **当前 Phase：** `POC Design v0.2`（**`DRAFT`**，尚未 `APPROVED` / `FROZEN`）。
 
-**最近下一设计 Gate：** `Physical Dataset Layout` Implementation PR ——
-由 **PR #53 Human Decision（决定 10）条件性授权**：
+**最近下一设计 Gate：** `Physical Dataset Layout` Implementation ＋ Closure ——
+由 `docs/design/poc-design-v0.2.md` **§4.3 Human Decision Record（决定 10）** 条件性授权；
+authoritative 条件与 current status 见该文档 **§4.3** ／ **§4.3.21 `Status Boundary`**，**本文档不复制**。
+（历史 Review evidence：PR #53；**Decision Source** 以 canonical design on `main` 为准。）
 
-```
-只有当 Human-approved layout decisions = fully registered
-     且 L-1 ～ L-11 = ALL PASS
-     且 New Blocking Contradiction = NONE
-才允许  Physical Dataset Layout   DESIGN PENDING → DESIGN RESOLVED
-```
+**其后 Gate 顺序**（`Field Carrier Mapping` → `Final Import Contract` → `Adapter Boundary`）
+以 §5 Major Design State 的定位入口为准。
 
-该层当前执行状态：`Human Decision = RECORDED`；`Implementation = NOT YET EXECUTED`；
-`Physical Dataset Layout Closure = NOT YET EXECUTED`；`L-1 ～ L-11 = HUMAN APPROVED FOR IMPLEMENTATION`。
-
-**其后仍待设计：** `Field Carrier Mapping`、`Final Import Contract`、`Adapter Boundary`。
-
-**Merge 到 `main` 是永久 Human Gate；Agent 不得自行 merge。**
+merge 到 `main` 属 Human Gate（见 `AGENTS.md` 第 4 ／ 6 条）。
 
 ---
 
