@@ -6817,6 +6817,490 @@ POC Design v0.2                    = DRAFT
 **本 Review 不作出上述任何决定。** 后续必须由 **Human Decision** 裁定；
 **不得**由 Agent 自行选择最终 format。
 
+**Human Decision Record —— `SIMULATED POC Design Policy` ＋ `Human-approved`**
+
+> 本节是对**上方 Review Finding**
+> （**Serialization Format Design Review（Review Finding）**）的 **Human Decision**。
+>
+> 上方 Review Finding 的 **Review Authority / Scope** ／ **Review Question** ／ **Existing Constraints** ／
+> **Required Serialization Properties** ／ **10 Questions Assessment** ／ **Option Review** ／
+> **Option Comparison** ／ **Critical Semantic Boundaries** ／ **Physical Layout Boundary** ／
+> **Known Risks** ／ **Review Conclusion** ／ **Current Status（本 Review 时点）** ／
+> **Human Decision Required**
+> **全部保留，未删除、未改写** —— 其中包括 Review 时点的
+> `Q9 = evidence insufficient` 与 **Option A ／ B ／ C ／ D 的完整比较**。
+
+**决定 1 —— PR #51 Review Finding = ACCEPTED**
+
+正式接受 Review Finding 的主要事实判断：
+
+```
+Controlled Export / Snapshot            = 仍为 Integration Pattern
+Snapshot Package                        = immutable input evidence package
+Snapshot Package ≠ Analysis Run         = 保持
+silent cross-snapshot mixing            = 禁止
+Logical Provenance Carrier              = DESIGN RESOLVED
+Physical Carrier Realization            = DESIGN PENDING
+R-1 ～ R-10                             = 既有 Design 强约束
+CSV ／ JSON ／ JSONL ／ Parquet ／ Hybrid = 均技术可行，
+                                          但都需要新的 physical representation decision
+Physical Dataset Layout                 = DESIGN PENDING
+Field Carrier Mapping                   = DESIGN PENDING
+Final Import Contract                   = DESIGN PENDING
+```
+
+并接受：**当前必须由 Human Decision 明确 `Serialization Format`。**
+
+**决定 2 —— Serialization Strategy = `Option B`（JSON-oriented controlled export）**
+
+正式选择：
+
+```
+Option B
+  = JSON-oriented controlled export
+
+POC v0.2 的 Serialization Strategy
+  = single JSON serialization strategy
+```
+
+具体：
+
+```
+Snapshot Manifest        = 独立 artifact ＋ JSON serialization
+Business dataset         = JSON serialization
+```
+
+本版本**不采用**：
+
+```
+JSONL
+CSV
+Parquet
+Hybrid multi-format strategy
+```
+
+**决定 3 —— Option Decisions（正式记录）**
+
+```
+Option A  CSV           = NOT SELECTED
+Option B  JSON          = SELECTED
+JSONL                   = NOT SELECTED FOR POC v0.2
+Option C  Parquet       = NOT SELECTED
+Option D  Hybrid        = NOT SELECTED
+Option 0  Keep Pending  = NOT SELECTED
+```
+
+**决定 4 —— Single-Format Boundary = CONFIRMED**
+
+POC v0.2 使用**单一** serialization format：**JSON**。
+
+**不得**允许不同 logical dataset 自行选择不同 format。因此：
+
+```
+R-2 cross-format consistency problem = NOT INTRODUCED
+```
+
+同一 canonical logical type **必须**在所有 JSON serialized dataset 中保持**同一 representation rule**。
+
+**决定 5 —— Manifest Decision = CONFIRMED**
+
+```
+Snapshot Manifest                   = independent artifact
+Snapshot Manifest serialization     = JSON
+Business dataset serialization      = JSON
+```
+
+**必须保持：**
+
+```
+Snapshot Manifest  ≠  business dataset
+```
+
+**但二者使用同一 serialization format family。**
+
+本决定**不定义**：
+
+```
+manifest filename
+directory
+package container
+archive
+business dataset filename
+file-per-dataset layout
+```
+
+以上继续留给 **`Physical Dataset Layout`**。
+
+**决定 6 —— Required Properties Decision = AMENDED ＋ APPROVED**
+
+```
+R-1 ～ R-10 = MANDATORY SERIALIZATION CLOSURE CRITERIA
+R-11        = POC DESIGN OBJECTIVE（human inspectability）
+R-12        = POC DESIGN OBJECTIVE（implementation simplicity）
+```
+
+`R-11` ／ `R-12` **必须评估**，但**不作为**单独的 hard closure blocker。
+
+**不得**把主观的「够不够简单」／「够不够容易人工查看」变成**不可验证**的 closure Gate。
+
+**决定 7 —— `C-1` Text Encoding = APPROVED**
+
+```
+UTF-8
+UTF-8 without BOM
+```
+
+**不得依赖**：system locale ／ platform default encoding。
+
+**决定 8 —— `C-2` Missing / Null = APPROVED**
+
+```
+JSON null = explicit missing / unavailable serialized value
+```
+
+**不得**把以下当作 missing 的替代：
+
+```
+0
+false
+""
+"UNKNOWN"
+```
+
+```
+字段 property omission = field 未 serialized
+```
+
+其业务含义**必须**根据 **canonical requiredness ＋ business applicability** 判断。因此：
+
+```
+omitted field  可以是 valid absence
+               也可以是 missing required data
+```
+
+具体结果由**既有 Business ／ Validation semantic**判断，**不得**由 serializer 自行猜测。
+
+对于 **valid absence ／ not produced by design**：**优先允许 property omission**。
+
+**不得**为了「字段完整」强制写 `null` ／ `0` ／ `""` ／ `"N/A"`。
+
+**决定 9 —— `C-3` DATE = APPROVED**
+
+Canonical `DATE` 使用：
+
+```
+YYYY-MM-DD
+```
+
+**不得**：locale-specific date ／ `MM/DD/YYYY` ／ `DD/MM/YYYY` ／ 自然语言日期。
+
+**决定 10 —— `C-4` TIMESTAMP ／ Timezone = APPROVED**
+
+Canonical ／ transport `TIMESTAMP` 使用：
+
+```
+ISO 8601 / RFC 3339 compatible representation
++ explicit UTC offset 或 Z
+```
+
+**不得**：silent timezone inference ／ system-local timezone assumption ／ timezone guessing。
+
+本决定**只定义 serialization representation**，**不定义**新的：
+
+```
+business timezone policy
+freshness policy
+```
+
+**不得**通过 serialization 偷偷改变既有 business time semantic。
+
+**决定 11 —— `C-5` Decimal ／ Quantity Representation = APPROVED**
+
+对 `DECIMAL_QUANTITY` ／ `NON_NEGATIVE_QUANTITY` ／ `RATIO` ／ `PERCENTAGE` 采用：
+
+```
+base-10 decimal string representation
+```
+
+**不得**使用 **binary floating-point** 作为 canonical serialization contract。
+
+允许的 conceptual lexical form（示例）：
+
+```
+"125.5"
+"0"
+"0.035"
+```
+
+**不得**使用：locale comma ／ thousands separator ／ scientific notation 作为 canonical representation。
+
+本决定：
+
+```
+不新增 decimal precision
+不新增 fixed scale
+不新增 quantity rounding rule
+```
+
+serializer **必须**：
+
+```
+不得自行 round
+不得自行 quantize
+不得自行 truncate
+```
+
+因此保持既有 Design Boundary：
+
+```
+decimal precision   = NOT DEFINED
+quantity rounding   = NOT DEFINED
+```
+
+**决定 12 —— `C-6` Boolean = CONFIRMED**
+
+当前 Canonical Data Model **没有** `BOOLEAN` logical type。因此：
+
+```
+BOOLEAN canonical representation = NOT APPLICABLE FOR CURRENT POC
+```
+
+**不得**为了 serialization 新增 boolean canonical field。
+
+**决定 13 —— `C-7` Enum ／ Status = APPROVED**
+
+Canonical enum ／ status 使用**既有 canonical literal 的 exact string representation**。必须：
+
+```
+case-sensitive
+no silent normalization
+no trim-based semantic conversion
+no synonym mapping
+```
+
+**source-specific vocabulary 仍保持 source-specific。**
+
+尤其：
+
+```
+sourcing_status 不得被 serializer 自动变成 canonical status
+```
+
+**决定 14 —— `C-8` Empty Dataset = CONFIRMED**
+
+**必须保持：**
+
+```
+dataset not included  ≠  dataset included with zero records
+```
+
+`Manifest` 是 **dataset presence 的 authoritative package-level evidence**。
+
+```
+included dataset + record_count = 0
+  = structurally valid empty dataset
+```
+
+其 **exact physical JSON dataset envelope** 留给：
+
+```
+Physical Dataset Layout / Field Carrier Mapping
+```
+
+**本 Human Decision 不定义。**
+
+**决定 15 —— `C-9` JSON Parsing ／ Escaping = APPROVED**
+
+JSON **必须 strict parse**。**禁止接受**：
+
+```
+duplicate object keys
+comments
+trailing comma
+NaN
+Infinity
+implementation-specific extension
+```
+
+Character escaping **遵守标准 JSON escaping**。
+
+**Object member order 不得具有 business semantic。**
+
+**不得**把以下作为 import fix-up：
+
+```
+silent trim
+silent case conversion
+silent Unicode normalization
+silent numeric coercion
+```
+
+**决定 16 —— Determinism Boundary = CONFIRMED**
+
+```
+Deterministic Parsing  ≠  Byte-for-byte Canonical JSON Encoding
+```
+
+本阶段要求：
+
+```
+同一 compliant JSON input 必须产生相同 canonical semantic value
+```
+
+**不要求**：
+
+```
+object key 固定排序
+canonical byte ordering
+JSON canonicalization algorithm
+```
+
+如果后续 **integrity contract** 需要 **byte-level hash ／ canonicalization**：
+由 **`Final Import Contract`** 单独决定。
+
+**决定 17 —— Physical Layout Boundary = CONFIRMED**
+
+以下**全部属于** `Physical Dataset Layout`：
+
+```
+package container
+directory / archive
+directory tree
+filename
+file-per-dataset rule
+dataset grouping
+manifest filename
+```
+
+**本 Human Decision 不作上述决定。**
+
+**决定 18 —— Field Carrier Boundary = CONFIRMED**
+
+本决定**不定义**：
+
+```
+source field → JSON property mapping
+canonical field → concrete JSON property name
+Stable Source Evidence Locator 的 physical JSON carrier
+dataset envelope structure
+```
+
+以上属于 **`Field Carrier Mapping`** 或 **`Physical Dataset Layout`**，后续独立处理。
+
+**决定 19 —— Final Import Contract Boundary = CONFIRMED**
+
+以下继续留给 **`Final Import Contract`**：
+
+```
+integrity algorithm
+hash algorithm
+signature policy
+contract version evolution rules
+backward / forward compatibility
+final import acceptance contract
+byte-level canonicalization（如未来需要）
+```
+
+**决定 20 —— Follow-up Implementation Authorization = AUTHORIZED**
+
+授权后续**独立** `Serialization Format` Design Change ／ Implementation PR 实施：
+
+```
+1. 正式登记 JSON serialization strategy
+2. 正式登记 C-1 ～ C-9
+3. 正式登记 R-1 ～ R-10 = mandatory closure criteria
+4. 正式登记 R-11 ／ R-12 = POC design objectives
+5. 同步 current-state references
+6. 执行 serialization closure validation
+```
+
+**如果**：
+
+```
+R-1 ～ R-10 = ALL PASS
+并且 JSON representation rules 已完整登记
+并且没有发现新的 blocking contradiction
+```
+
+**则授权**：
+
+```
+Serialization Format   DESIGN PENDING → DESIGN RESOLVED
+```
+
+**本 PR 不执行上述任何一项。**
+
+**决定 21 —— Historical Record Preservation = CONFIRMED**
+
+**PR #51 Review Finding 必须完整保留**，尤其**不得回写**：
+
+```
+Q9 evidence insufficient
+Option A ／ B ／ C ／ D comparison
+Current Status（本 Review 时点）
+Human Decision Required
+```
+
+本节的 **Human Decision Record** 是对其的**最终裁定**，通过**新增记录**表达，
+**不修改** Review Finding 原文。
+
+**决定 22 —— Explicit Non-Authorization**
+
+本 Human Decision **不授权**：
+
+```
+directory tree
+filename
+archive format
+ZIP
+file-per-dataset rule
+source field mapping
+JSON Schema
+concrete dataset envelope
+parser implementation
+Adapter
+database schema
+real ERP mapping
+integrity hash algorithm
+new canonical entity
+new canonical field
+BR-* changes
+Validation Taxonomy changes
+decimal precision
+quantity rounding rule
+business timezone policy
+```
+
+**执行状态（PR #51 Human Decision 时点）**
+
+```
+PR #51 Review Finding                = ACCEPTED
+Serialization Strategy               = Option B（JSON-oriented controlled export）
+Single-Format Boundary               = JSON only（R-2 cross-format problem = NOT INTRODUCED）
+Snapshot Manifest                    = independent artifact ＋ JSON
+Business dataset serialization       = JSON
+R-1 ～ R-10                          = MANDATORY SERIALIZATION CLOSURE CRITERIA
+R-11 ／ R-12                         = POC DESIGN OBJECTIVES
+C-1 ～ C-9                           = APPROVED（JSON representation policy）
+decimal precision                    = NOT DEFINED
+quantity rounding                    = NOT DEFINED
+business timezone policy             = NOT DEFINED
+Option A ／ JSONL ／ C ／ D ／ Option 0 = NOT SELECTED
+Follow-up conditional closure        = AUTHORIZED
+
+Serialization Format                 = DESIGN PENDING   ← 未关闭（implementation 尚未执行）
+Physical Dataset Layout              = DESIGN PENDING
+Field Carrier Mapping                = DESIGN PENDING
+Final Import Contract                = DESIGN PENDING
+Snapshot / Import Contract overall   = DESIGN PENDING
+Adapter Boundary                     = DESIGN PENDING
+POC Design v0.2                      = DRAFT
+```
+
+**本 PR 只记录 Human Decision。** **未**实施 JSON serialization，
+**未**修改 `Serialization Format` status，**未**推进 `Physical Dataset Layout` ／
+`Field Carrier Mapping` ／ `Final Import Contract`。
+
 #### 4.3.21 Status Boundary
 
 `Snapshot / Import Contract` **整体仍为 `DESIGN PENDING`**。
