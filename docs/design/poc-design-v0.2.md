@@ -3925,13 +3925,16 @@ conceptual boundary 已定义
 | Master Data Mapping | **`DESIGN RESOLVED`** |
 | Adapter Boundary | `DESIGN PENDING` |
 
-> 继承约束（不重新定义）：Integration Pattern = **Controlled Export / Snapshot**。具体文件格式（CSV / JSON / Parquet）与 Adapter Contract 属本阶段待设计事项，**本轮未决定**。
+> 继承约束（不重新定义）：Integration Pattern = **Controlled Export / Snapshot**。
+> 具体文件格式 = **JSON**（**`Serialization Format` = `DESIGN RESOLVED`**，见 **§4.3.22**）；
+> **Adapter Contract** 仍属本阶段待设计事项（**`Adapter Boundary` = `DESIGN PENDING`**）。
 >
 > **current-state 更新：** `Serialization Format` 已由 **PR #51 Human Decision** 登记为 **JSON**
 > （single JSON strategy；manifest = independent artifact ＋ JSON），并经
 > **PR #52 Closure Re-run = `PASS`** 后**现为 `DESIGN RESOLVED`**（见 **§4.3.22**）。
-> `Physical Dataset Layout` ／ `Field Carrier Mapping` ／ `Final Import Contract` 与 **Adapter Contract**
-> 仍待设计。
+> `Physical Dataset Layout` 已由 **PR #53 Human Decision** 登记、并经 **本层 Closure Validation = `PASS`**
+> 后**现为 `DESIGN RESOLVED`**（见 **§4.3.23**）。
+> `Field Carrier Mapping` ／ `Final Import Contract` 与 **Adapter Contract** **仍待设计**。
 
 > **注意**：`Data Validation` 完成**仅**表示 **conceptual validation design complete**；
 > **不代表** implemented / data validated / tested。
@@ -5764,9 +5767,10 @@ data validated、implemented、tested。
 > **子章节整体状态：仍为 `DESIGN PENDING`。**
 >
 > 本节已完成**第一层**（Package Envelope ／ Atomicity Boundary ／ Immutability Boundary ／
-> Analysis Run Linkage）**与 `Serialization Format`**（**PR #51 Human Decision** ＋
-> **PR #52 Closure Re-run = `PASS`**，见 **§4.3.22**）；
-> `Physical Dataset Layout` ／ `Field Carrier Mapping` ／ `Final Import Contract` **仍为 `DESIGN PENDING`**。
+> Analysis Run Linkage）、**`Serialization Format`**（**PR #51 Human Decision** ＋
+> **PR #52 Closure Re-run = `PASS`**，见 **§4.3.22**）与 **`Physical Dataset Layout`**
+> （**PR #53 Human Decision** ＋ **本层 Closure Validation = `PASS`**，见 **§4.3.23**）；
+> `Field Carrier Mapping` ／ `Final Import Contract` **仍为 `DESIGN PENDING`**。
 
 **层级状态登记：**
 
@@ -5777,7 +5781,7 @@ data validated、implemented、tested。
 | Immutability Boundary | **`DESIGN RESOLVED`** |
 | Analysis Run Linkage | **`DESIGN RESOLVED`** |
 | Serialization Format | **`DESIGN RESOLVED`** |
-| Physical Dataset Layout | `DESIGN PENDING` |
+| Physical Dataset Layout | **`DESIGN RESOLVED`** |
 | Field Carrier Mapping | `DESIGN PENDING` |
 | Final Import Contract | `DESIGN PENDING` |
 
@@ -5806,9 +5810,10 @@ concrete filenames、physical schema、API contract、Adapter implementation。
 > 当时**尚未授权**决定 serialization format。
 > **PR #51 Human Decision** 现已授权并登记 **JSON** strategy（见 **§4.3.22**），
 > 因此「不得定义 **JSON**」**不再**构成 current restriction；
-> 但 `CSV` ／ `JSONL` ／ `Parquet` ／ `ZIP` 仍为 `NOT SELECTED`，
-> 且 `directory layout` ／ `concrete filenames` ／ `physical schema` 继续属于
-> **`Physical Dataset Layout`** ／ **`Field Carrier Mapping`**（仍 `DESIGN PENDING`）。
+> 但 `CSV` ／ `JSONL` ／ `Parquet` ／ `ZIP` 仍为 `NOT SELECTED`。
+> **PR #53 Human Decision ＋ 本层 Closure Validation** 现已登记 `directory layout` ／ `concrete filenames`
+> （见 **§4.3.23**，**`DESIGN RESOLVED`**）；
+> `physical schema` 继续属于 **`Field Carrier Mapping`**（仍 `DESIGN PENDING`）。
 
 **当时状态（保留以便追溯）：**
 
@@ -6000,16 +6005,17 @@ Package Identity
 
 上述四者之间的 conceptual relation **已定义**（**§4.5.22**）。
 
-**但 `Serialization Format` ／ `Physical Dataset Layout` ／ `Field Carrier Mapping` ／
-`Final Import Contract` 仍为 `DESIGN PENDING`** ——
+**但 `Field Carrier Mapping` ／ `Final Import Contract` 仍为 `DESIGN PENDING`** ——
 **logical carrier resolved ≠ physical serialization resolved**。
 
 > **PR #51 Human Decision（manifest 部分）：** Snapshot Manifest =
 > **independent artifact ＋ JSON serialization**；business datasets = **JSON**（见 **§4.3.22**）；
 > **`Snapshot Manifest ≠ business dataset`** 保持。
-> 但 `manifest filename` ／ `path` ／ `directory` ／ `package container` ／ `archive`
-> **仍未定义**，属 **`Physical Dataset Layout`**。
+> `manifest filename` ／ `path` ／ `directory` ／ `package container` **已由 `Physical Dataset Layout` 登记**
+> （见 **§4.3.23**）；`archive` = **`NOT SELECTED`**。
 > `Serialization Format` 本身**现为 `DESIGN RESOLVED`**（**PR #52 Closure Re-run = `PASS`**，见 **§4.3.22**）。
+> `Physical Dataset Layout` 本身**现为 `DESIGN RESOLVED`**（**PR #53 Human Decision** ＋
+> **本层 Closure Validation = `PASS`**，见 **§4.3.23**）。
 
 #### 4.3.9 SIMULATED Boundary
 
@@ -8673,12 +8679,12 @@ Adapter Boundary                   = DESIGN PENDING
 
 `Snapshot / Import Contract` **整体仍为 `DESIGN PENDING`**。
 
-本 Task **仅**完成其第一层：Package Envelope、Import Atomicity、Immutability、Analysis Run linkage。
+**历史（原 `Package Envelope` Task 时点）：** 该 Task **仅**完成其第一层：Package Envelope、
+Import Atomicity、Immutability、Analysis Run linkage。
 
-`DESIGN RESOLVED` 的**五个**层级**仅**表示其 **conceptual boundary 已定义**，
+`DESIGN RESOLVED` 的**六个**层级**仅**表示其 **conceptual boundary 已定义**，
 **不表示**：
 
-- physical dataset layout determined
 - field carrier mapping determined
 - import implementation exists
 - data validated
@@ -8687,7 +8693,11 @@ Adapter Boundary                   = DESIGN PENDING
 > **current-state 更新：** `Serialization Format` 已由 **PR #51 Human Decision** 登记 JSON strategy、
 > 并经 **PR #52 Closure Re-run = `PASS`** 后为 **`DESIGN RESOLVED`**（见 **§4.3.22**），
 > 因此 `serialization format determined` 已**移出**上述「不表示」清单。
-> `Physical Dataset Layout` ／ `Field Carrier Mapping` ／ `Final Import Contract` **仍为 `DESIGN PENDING`**。
+>
+> **current-state 更新（本层 Closure）：** `Physical Dataset Layout` 已由 **PR #53 Human Decision** 登记、
+> 并经 **本层 Closure Validation = `PASS`** 后为 **`DESIGN RESOLVED`**（见 **§4.3.23** ／ **§4.3.24**），
+> 因此 `physical dataset layout determined` 已**移出**上述「不表示」清单。
+> `Field Carrier Mapping` ／ `Final Import Contract` **仍为 `DESIGN PENDING`**。
 
 #### 4.3.22 Serialization Format Design（Registered Strategy & Representation Policy）
 
@@ -8800,6 +8810,268 @@ JSON canonicalization algorithm。若未来 **integrity contract** 需要 **byte
   dataset envelope ／ integrity algorithm ／ contract version evolution policy。
 - `Serialization Format` 的 **status 变更**由 **Serialization Format Implementation Record** 的
   **conditional closure gate** 结果决定。
+
+---
+
+#### 4.3.23 Physical Dataset Layout Design（Registered Layout Policy）
+
+**Registration Status：`REGISTERED`** ——
+依据 **PR #53 Human Decision**（决定 1 ～ 9），见上方 **Human Decision Record**。
+
+**current layout policy：**
+
+```
+Package Container    = Flat Directory Package
+Artifact Granularity = one included logical dataset → one independent JSON artifact
+Manifest Placement   = package root
+Manifest Filename    = manifest.json
+Nested Directories   = NOT ALLOWED FOR POC v0.2
+```
+
+**A. Package Container（正式登记）**
+
+```
+Package Container = Flat Directory Package
+Package root      = 当前 POC Snapshot Package 的物理边界
+```
+
+**NOT SELECTED：**
+
+```
+Structured Directory Package = NOT SELECTED
+Archive Package              = NOT SELECTED
+其他特殊 container            = NOT SELECTED
+```
+
+**Flat Directory Boundary：** `Flat Directory` **本身不保证** runtime atomicity ／ runtime immutability ／
+integrity verification；**不得**由本层实现这些 mechanism。
+
+**B. Artifact Granularity（正式登记）**
+
+```
+one included logical dataset = one independent JSON artifact
+```
+
+**NOT SELECTED：** aggregated business data artifact；dataset sharding。
+
+```
+one artifact per logical dataset  ≠  partial package acceptance
+```
+
+单个 artifact 的问题是否导致**整个** package reject，**仍由 `Final Import Contract` 定义**。
+
+**C. Manifest Placement ／ Filename（正式登记）**
+
+```
+Snapshot Manifest placement = package root
+Snapshot Manifest filename  = manifest.json
+manifest.json               = technical filename contract
+                            ≠ business semantic source
+```
+
+`manifest.json` **不得**承载 business identity ／ business status ／ dataset role ／ scope semantic ／
+provenance semantic ／ `snapshot_package_id` semantic。
+
+**NOT SELECTED：** fixed manifest subdirectory；external entry-point locator。
+
+**D. Dataset Artifact Naming（正式登记 —— 最低 physical naming requirements）**
+
+```
+artifact 位于 package root
+filename 在当前 package 内唯一
+serialization extension = .json
+不得使用保留名称 manifest.json
+```
+
+```
+Manifest-declared artifact reference = authoritative physical association
+filename                             = physical convenience only
+```
+
+**不得定义**：role-derived mandatory filename template ／ opaque filename generation algorithm ／
+dataset ID generation rule。**不得**让 filename 成为 `logical dataset role` 的 authoritative source。
+
+**E. `logical dataset role` → physical artifact association（正式登记）**
+
+```
+logical dataset role → physical artifact reference = REQUIRED
+```
+
+该关联**必须**由 **Snapshot Manifest 显式建立**。**禁止**依赖：
+
+```
+filename inference
+directory name inference
+file ordering
+filesystem discovery heuristic
+```
+
+**本层只决定 association MUST EXIST**；具体 Manifest JSON property name ／ nested structure ／
+schema representation 属 **`Field Carrier Mapping`**。
+
+**F. Presence Semantics（正式登记）**
+
+```
+included 且 record_count = 0  →  对应 JSON artifact REQUIRED
+not included                  →  对应 artifact NOT REQUIRED
+not included  ≠  included with zero records
+```
+
+**不定义** empty dataset 的 JSON body（`[]` ／ `{}` ／ 其他 dataset envelope）—— 属 **`Field Carrier Mapping`**。
+
+**G. Nested Directory Boundary（正式登记）**
+
+```
+current package layout = single package root
+                       + manifest.json
+                       + root-level business JSON artifacts
+nested directories     = NOT ALLOWED FOR POC v0.2
+```
+
+该限制**只**约束 Snapshot Package **内部** physical layout；**不限制**其在宿主 filesystem 的**外部存放位置**。
+未来出现**真实需求**时，**可以**通过**新的明确 Design Decision** 重新评估 nested directory。
+
+**H. Path Scope Boundary（正式登记 —— `L-11`）**
+
+所有 physical artifact reference **必须**：
+
+```
+relative to package root
+```
+
+且其 **logical resolved target** **必须**位于**当前 Snapshot Package boundary 内**。
+合法 layout **不得**依赖：
+
+```
+absolute path
+external path / URI
+package-external artifact
+```
+
+```
+Layout                = defines valid path scope
+Final Import Contract = validates / rejects violations
+```
+
+**不得**在本层实现：path normalization algorithm ／ traversal detection algorithm ／
+`..` rejection mechanism ／ symlink resolution algorithm ／ symlink rejection timing ／
+platform-specific path parser ／ runtime rejection behavior。
+
+**I. Required Layout Properties（正式登记 —— `L-1` ～ `L-11`）**
+
+```
+L-1   Package Boundary Unambiguous        = MANDATORY CLOSURE CRITERION
+L-2   Manifest Discoverability            = MANDATORY CLOSURE CRITERION
+L-3   Dataset Artifact Discoverability    = MANDATORY CLOSURE CRITERION
+L-4   Logical / Physical Separation       = MANDATORY CLOSURE CRITERION
+L-5   Presence Semantics Preservation     = MANDATORY CLOSURE CRITERION
+L-6   Package Atomicity Compatibility     = MANDATORY CLOSURE CRITERION（DESIGN COMPATIBILITY ONLY）
+L-7   Package Immutability Compatibility  = MANDATORY CLOSURE CRITERION（DESIGN COMPATIBILITY ONLY）
+L-8   Reproducibility                     = MANDATORY CLOSURE CRITERION
+L-9   Serialization Compatibility         = MANDATORY CLOSURE CRITERION
+L-10  Downstream Neutrality               = MANDATORY CLOSURE CRITERION
+L-11  Path Scope Integrity                = MANDATORY CLOSURE CRITERION（PATH SCOPE ONLY）
+```
+
+`L-6` ／ `L-7` **只**验证 **DESIGN COMPATIBILITY**，**不是** runtime mechanism completion：
+layout **不得**要求 cross-package composition ／ silent mixing ／ 依赖 package 外 mutable artifact ／
+partial overwrite ／ 破坏 accepted-package immutability semantic；但本层**不得实现** transaction ／
+locking ／ atomic filesystem move ／ storage engine ／ object storage semantics ／ upload protocol ／
+runtime immutability enforcement。
+
+`L-11` **只**定义合法 path scope；**不得**演变成 **Security Implementation**。
+
+**J. Registration Boundary**
+
+- 本小节**不新增** canonical entity ／ canonical business field；**不修改** `BR-*` ／ Validation Taxonomy ／
+  Master Data Mapping ／ `Serialization Format` policy。
+- 本小节**不代表** implementation：**未**创建 package directory ／ JSON sample ／ `manifest.json` 实际文件 ／
+  dataset artifact ／ ZIP ／ archive ／ JSON Schema ／ parser ／ runtime validator ／ Adapter。
+- 本小节**不定义**：Manifest JSON property name ／ dataset envelope ／ record envelope ／
+  business record structure ／ source field → JSON property mapping ／
+  canonical field → JSON property mapping ／ Stable Source Evidence Locator physical carrier ／
+  hash ／ checksum ／ signature algorithm ／ byte-level canonicalization ／
+  runtime acceptance ／ rejection algorithm ／ contract compatibility policy。
+- `Physical Dataset Layout` 的 **status 变更**由 **Physical Dataset Layout Closure Validation Record**
+  的 conditional closure gate 结果决定。
+
+---
+
+#### 4.3.24 Physical Dataset Layout Closure Validation Record
+
+**Closure Validation Result：`PASS`**
+
+**State Transition：`Physical Dataset Layout` = `DESIGN PENDING` → `DESIGN RESOLVED`**
+
+**A. Conditional Closure Gate（PR #53 Human Decision 决定 10）**
+
+| # | 条件 | 结果 |
+| --- | --- | --- |
+| 1 | Human-approved layout decisions = fully registered | **`PASS`**（见 **§4.3.23** A ～ J） |
+| 2 | `L-1` ～ `L-11` = ALL PASS | **`PASS`**（见下方 B） |
+| 3 | New Blocking Contradiction = NONE | **`PASS`** |
+
+**B. `L-1` ～ `L-11` 逐项验证**
+
+| # | Property | 验证依据 | 结果 |
+| --- | --- | --- | --- |
+| `L-1` | Package Boundary Unambiguous | single package root（**§4.3.23** A ／ G）；`Snapshot Package ≠ Analysis Run`（**§4.3.4**）；cross-snapshot mixing prohibition（**§4.3.7**） | **`PASS`** |
+| `L-2` | Manifest Discoverability | Manifest = package root ＋ 保留名称 `manifest.json`（**§4.3.23** C） | **`PASS`** |
+| `L-3` | Dataset Artifact Discoverability | artifact 位于 package root ＋ filename package 内唯一 ＋ Manifest 显式 `role → artifact`（**§4.3.23** D ／ E） | **`PASS`** |
+| `L-4` | Logical ／ Physical Separation | filename ／ artifact path **不得**作为 logical dataset role ／ business status ／ scope ／ provenance 的 authoritative source（**§4.3.23** D ／ E） | **`PASS`** |
+| `L-5` | Presence Semantics Preservation | `included ＋ record_count = 0` → artifact REQUIRED；`not included` → NOT REQUIRED；Manifest 为 authoritative presence evidence（**§4.3.23** F；**§4.3.13** ／ **§4.3.14**） | **`PASS`** |
+| `L-6` | Package Atomicity Compatibility | **DESIGN COMPATIBILITY ONLY** —— layout 不要求 cross-package composition ／ silent mixing ／ partial overwrite；**未**实现 runtime mechanism（**§4.3.23** I；**§4.3.6**） | **`PASS`** |
+| `L-7` | Package Immutability Compatibility | **DESIGN COMPATIBILITY ONLY** —— layout 不依赖 package 外 mutable artifact、不破坏 accepted-package immutability semantic；**未**实现 runtime enforcement（**§4.3.23** I；**§4.3.5**） | **`PASS`** |
+| `L-8` | Reproducibility | deterministic discovery（fixed manifest entry ＋ explicit association）＋ relative-to-package-root reference（**§4.3.23** B ／ C ／ D ／ H） | **`PASS`** |
+| `L-9` | Serialization Compatibility | layout 只引用 `.json` artifact；**未**改变 `C-1` ～ `C-10`、**未**选择其他 format（**§4.3.23** D ／ J；**§4.3.22**） | **`PASS`** |
+| `L-10` | Downstream Neutrality | **未**采用 aggregated artifact；**未**定义 dataset ／ record envelope；`Field Carrier Mapping` ／ `Final Import Contract` boundary 保持开放（**§4.3.23** B ／ E ／ F ／ J） | **`PASS`** |
+| `L-11` | Path Scope Integrity | **PATH SCOPE ONLY** —— artifact reference **必须** relative to package root 且 resolved target 位于 package boundary 内；absolute ／ external path ／ URI **不得**作为 accepted package 组成部分（**§4.3.23** H） | **`PASS`** |
+
+**C. Non-Implementation Confirmation**
+
+**未**创建 package directory ／ JSON sample ／ `manifest.json` 实际文件 ／ dataset artifact ／
+ZIP ／ archive ／ JSON Schema ／ parser ／ runtime validator ／ Adapter；
+**未**定义 Manifest property name ／ dataset envelope ／ record envelope ／
+source field → JSON property mapping ／ canonical field → JSON property mapping ／
+hash ／ checksum ／ signature algorithm ／ byte-level canonicalization ／
+runtime acceptance ／ rejection algorithm ／ path validation implementation ／ contract compatibility policy。
+
+**D. Downstream Boundary（保持）**
+
+```
+Field Carrier Mapping              = DESIGN PENDING
+Final Import Contract              = DESIGN PENDING
+Snapshot / Import Contract overall = DESIGN PENDING
+Adapter Boundary                   = DESIGN PENDING
+POC Design v0.2                    = DRAFT
+```
+
+**E. Historical Preservation**
+
+PR #53 `Physical Dataset Layout Design Review（Review Finding）` 与 `Human Decision Record`
+**完整保留**，包括 **`执行状态（PR #53 Human Decision 时点）`** 中的
+`Physical Dataset Layout = DESIGN PENDING` —— 该值时点语义**未被回写**；
+**未**把「**本 Review 不选择任何 Option。**」改写为 Review 已选择 layout。
+
+**执行状态（本 Closure Validation 时点）**
+
+```
+Physical Dataset Layout                     = DESIGN RESOLVED
+Human Decision                              = RECORDED
+Physical Dataset Layout Design Registration = REGISTERED
+Physical Dataset Layout Closure             = PASS
+Runtime Implementation                      = NOT YET EXECUTED
+
+Field Carrier Mapping                       = DESIGN PENDING
+Final Import Contract                       = DESIGN PENDING
+Snapshot / Import Contract overall          = DESIGN PENDING
+Adapter Boundary                            = DESIGN PENDING
+POC Design v0.2                             = DRAFT
+```
+
+`Physical Dataset Layout Design Registration` ／ `Physical Dataset Layout Closure` 属 **design 层**结果；
+`Runtime Implementation` 指 **runtime artifact**（package directory ／ dataset artifact ／ parser ／
+validator 等），本层**未**创建 —— **design registration ≠ runtime implementation**。
 
 ---
 

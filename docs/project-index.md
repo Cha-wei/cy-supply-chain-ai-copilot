@@ -4,7 +4,6 @@
 **Version:** v0.1
 **Status:** `DRAFT`
 **Doc Type:** Navigation Index —— **非** Canonical Source
-**Baseline:** `main @ b4d3bf76`
 
 > 本文档用于新 Chat / 新 Agent 冷启动导航。内容为 **snapshot**，可能滞后于 `main`。
 
@@ -74,7 +73,7 @@
 | **Snapshot / Import Contract overall** | **`DESIGN PENDING`** | §4.3；status 见 §4.3.21 |
 | ├ Package Envelope ／ Atomicity ／ Immutability ／ Analysis Run Linkage | `DESIGN RESOLVED` | §4.3 |
 | ├ Serialization Format | **`DESIGN RESOLVED`** | §4.3.22 |
-| ├ Physical Dataset Layout | **`DESIGN PENDING`** | §4.3（`Physical Dataset Layout Design Review` ＋ `Human Decision Record`） |
+| ├ Physical Dataset Layout | **`DESIGN RESOLVED`** | §4.3.23；closure 见 §4.3.24 |
 | ├ Field Carrier Mapping | **`DESIGN PENDING`** | 尚未设计 |
 | └ Final Import Contract | **`DESIGN PENDING`** | 尚未设计 |
 | Data Validation | **`DESIGN RESOLVED`** | §4.4；closure 见 §4.4.101 |
@@ -92,10 +91,8 @@
 
 **当前 Phase：** `POC Design v0.2`（**`DRAFT`**，尚未 `APPROVED` / `FROZEN`）。
 
-**最近下一设计 Gate：** `Physical Dataset Layout` Implementation ＋ Closure ——
-由 `docs/design/poc-design-v0.2.md` **§4.3 Human Decision Record（决定 10）** 条件性授权；
-authoritative 条件与 current status 见该文档 **§4.3** ／ **§4.3.21 `Status Boundary`**，**本文档不复制**。
-（历史 Review evidence：PR #53；**Decision Source** 以 canonical design on `main` 为准。）
+**最近已完成的 Gate：** `Physical Dataset Layout` Closure —— **`PASS`**
+（authoritative 记录见 `docs/design/poc-design-v0.2.md` **§4.3.24**；本文档**不复制** closure rationale）。
 
 **其余 pending design areas 包括** `Field Carrier Mapping` ／ `Final Import Contract` ／ `Adapter Boundary`；
 状态与入口见 **§5 Major Design State**（本文档**不建立**其执行顺序）。
@@ -129,7 +126,6 @@ authoritative 条件与 current status 见该文档 **§4.3** ／ **§4.3.21 `St
 **Version:** v0.1
 **Status:** `DRAFT` —— 尚未 `APPROVED` / `FROZEN`
 **Doc Type:** Navigation Index —— **非** Canonical Source
-**Baseline:** `main @ b4d3bf76`
 
 - 本文档**不替代**任何 canonical source，**不构成**新的项目事实或 Decision。
 - 本文档内容为 snapshot；`main` 变化后**应同步更新**，但**不得**据此改写 canonical 文档。
