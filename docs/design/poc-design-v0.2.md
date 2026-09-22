@@ -6300,6 +6300,523 @@ Accepted Package may be referenced by Analysis Run
 
 **本 Task 不要求创建正式 enum。**
 
+**Serialization Format Design Review（Review Finding）**
+
+**Review Authority / Scope**
+
+```
+Snapshot / Import Contract 层级状态：
+  Package Envelope       = DESIGN RESOLVED
+  Atomicity Boundary     = DESIGN RESOLVED
+  Immutability Boundary  = DESIGN RESOLVED
+  Analysis Run Linkage   = DESIGN RESOLVED
+  Serialization Format   = DESIGN PENDING   ← 本 Review 对象
+  Physical Dataset Layout = DESIGN PENDING
+  Field Carrier Mapping   = DESIGN PENDING
+  Final Import Contract   = DESIGN PENDING
+```
+
+本 Review **只**产出 Review Finding：
+
+- **不**实施 Serialization Format；
+- **不**选择最终格式；
+- **不**推进 `Physical Dataset Layout` ／ `Field Carrier Mapping` ／ `Final Import Contract`；
+- **不**设计 Adapter ／ parser ／ schema；
+- **不**写 Human Decision。
+
+**Review Question**
+
+```
+1.  POC 的 physical Serialization Format 最低需要解决哪些问题？
+2.  是否需要单一 serialization format，或不同 logical dataset 可以使用不同 format？
+3.  Snapshot Manifest 与 business dataset 是否应该使用相同 serialization format？
+4.  CSV ／ JSON ／ JSONL ／ Parquet 分别有什么 trade-off？
+5.  是否需要 package container 概念（directory ／ archive），
+    还是该问题应留给 Physical Dataset Layout？
+6.  如何保证 deterministic parsing ／ stable field representation ／ reproducibility ／
+    human inspectability ／ version compatibility？
+7.  serialization 层需要定义哪些 cross-cutting rules
+    （text encoding ／ null ／ date ／ datetime ／ decimal ／ boolean ／ enum ／
+     empty dataset ／ escaping）？
+8.  哪些内容属于 Serialization Format，哪些必须留给
+    Physical Dataset Layout ／ Field Carrier Mapping ／ Final Import Contract？
+9.  当前 repository evidence 是否足以做最终 format decision？
+10. 需要 Human Decision 的具体问题是什么？
+```
+
+**Existing Constraints（从 Repository 已存在的正式设计恢复；不得重新设计）**
+
+**Integration Pattern（`§3`）：**
+
+```
+Controlled Export / Snapshot
+      ↓
+POC Data Landing Zone
+      ↓
+Read-only analysis
+```
+
+读取**只能**通过 **Controlled Export / Snapshot** 产物进行；**不得**绕过 Controlled Export 直连源系统（`§3`）。
+`§4` 已记录的继承约束：**具体文件格式（CSV ／ JSON ／ Parquet）与 Adapter Contract 属本阶段待设计事项**。
+
+**Snapshot Package 约束（`§4.3`）：**
+
+| 约束 | 位置 |
+| --- | --- |
+| Snapshot Package = **immutable input evidence package** | `§4.3.2` |
+| `Snapshot Package ≠ Analysis Run`；`Snapshot Package ID ≠ Analysis Run ID` | `§4.3.2` ／ `§4.3.4` |
+| 每个 Analysis Run **必须能够追溯到 exactly one accepted Snapshot Package** | `§4.3.4` |
+| **禁止** silent cross-snapshot mixing（multi-snapshot ／ incremental ／ streaming ／ delta 须另开 Design） | `§4.3.6` ／ `§4.3.7` |
+| 已 Accepted 的 package **不得**原地修改 ／ 部分覆盖 ／ silently replace ／ 同 ID 表示不同内容 | `§4.3.5` |
+| Import 必须是 package-level atomic：`ACCEPTED` 或 `REJECTED` ／ `UNUSABLE` | `§4.3.6` |
+| Package identity ／ integrity ／ required structural metadata 无法可靠确定 → **fail closed** | `§4.3.18` |
+| Import **不得** write back Production ／ modify source ／ request Production DB fallback | `§4.3.19` |
+
+**Logical Snapshot Manifest 必须至少表达（`§4.3.8`）—— 语义层，非物理层：**
+
+```
+snapshot_package_id
+contract version
+export / package creation time
+environment / evidence classification
+included logical datasets
+dataset-level provenance reference
+dataset-level record count / integrity evidence
+package completeness state
+```
+
+> `§4.3.8` 明确：这是 **logical manifest**；**不决定** `manifest.json` ／ `manifest.yaml` ／
+> database row ／ 其他物理实现。
+
+**Integrity Requirement（`§4.3.15`）—— 必须支持未来验证：**
+
+```
+package identity integrity
+dataset identity
+dataset presence
+dataset completeness metadata
+content integrity
+```
+
+> **只定义** `integrity evidence is required`；**不决定** SHA256 ／ MD5 ／ digital signature ／ checksum implementation。
+
+**Provenance 两层（`§4.3.8` ／ `§4.3.16` ／ `§4.5.22 Option D Implementation Record`）：**
+
+```
+dataset-level provenance reference  ≠  Stable Source Evidence Locator
+
+Logical Provenance Carrier   = DESIGN RESOLVED
+Physical Carrier Realization = DESIGN PENDING
+```
+
+**Canonical 类型系统（`§4.2.2`）—— technology-neutral logical types：**
+
+```
+IDENTIFIER ／ ANALYSIS_RUN_ID ／ DATE ／ TIMESTAMP ／
+DECIMAL_QUANTITY ／ NON_NEGATIVE_QUANTITY ／ RATIO ／ PERCENTAGE ／
+STATUS ／ TEXT_CONTEXT
+```
+
+> `§4.2.2` 明确：**不得映射成** `VARCHAR` ／ `DECIMAL(18,2)` ／ `UUID` ／ `BIGINT` ／ `JSONB` 等数据库类型；
+> `§4.2.1` 明确 Data Dictionary **不等于** JSON Schema ／ CSV layout ／ serialization format。
+
+**Field-level 既有语义（不得被 serialization 改变）：**
+
+| 约束 | 位置 |
+| --- | --- |
+| `Zero ≠ Missing`；`missing` **不得**等同于 `0` ／ `false` ／ empty string ／ `UNKNOWN` | `§4.2.2` ／ `§4.2.12` |
+| valid absence ／ not applicable **≠** missing required data | `§4.2.12` ／ `§4.3.13` |
+| **不得**在无现有 Design 支持时新增 `decimal precision` ／ date freshness threshold ／ identifier regex ／ unit-of-measure conversion ／ timezone policy ／ quantity rounding；**未定义就写 `NOT DEFINED`** | `§4.4.42` ／ `§4.2.13` |
+| 具体 quantity precision ／ rounding 由**后续明确 Design Rule** 决定 | `§2.4.8` ／ `§2.5.11` |
+
+**Dataset presence（`§4.3.12` ／ `§4.3.14` ／ `§4.4.4`）：**
+
+```
+Dataset not included  ≠  Dataset included with zero records
+```
+
+- **A**：Manifest **未声明** → **不得**自动解释为「业务上不存在任何记录」；
+- **B**：Manifest 声明 `included` ＋ `record_count = 0` → **structurally valid empty dataset**；
+- **C**：`dataset not declared / not included` 的最终处理**留给 capability validation**。
+
+**Required Serialization Properties**
+
+下表区分 **既有 Design 要求**（`既有`）与 **POC 适用性判断**（`POC`）——
+二者**不得混淆**：`POC` 项**不构成**对最终 format 的强制约束。
+
+| # | Property | 类别 | 依据 |
+| --- | --- | --- | --- |
+| **R-1** | **Deterministic parsing** —— 同一 package 的同一 dataset 在任意合规读取器上产生**同一** canonical 值序列；**不得**依赖启发式 ／ locale ／ 隐式推断 | 既有 | `§4.3.6` ／ `§4.5.2` ／ `§4.3.18` |
+| **R-2** | **Stable field representation** —— 同一 canonical field 的表示跨 dataset ／ 跨 package **一致** | 既有 | `§4.2.2` ／ `§4.5.2` |
+| **R-3** | **Logical type 无损** —— `DATE` vs `TIMESTAMP` ／ `RATIO` vs `PERCENTAGE` ／ `DECIMAL_QUANTITY` vs `NON_NEGATIVE_QUANTITY` 不得因 physical representation 而模糊 | 既有 | `§4.2.2` ／ `§4.2.13` |
+| **R-4** | **Missing ≠ present-with-default** —— 必须能区分「字段不存在」与「存在且为 `0` ／ `false` ／ 空字符串 ／ `UNKNOWN`」 | 既有 | `§4.2.12` ／ `§4.3.13` |
+| **R-5** | **Dataset-level absence 可表达** —— `not included` 与 `included with zero records` 必须可区分 | 既有 | `§4.4.4` ／ `§4.3.12` |
+| **R-6** | **Manifest metadata 可承载** —— `§4.3.8` 的 8 项语义可被承载，且 manifest **不得**与 business dataset 混淆 | 既有 | `§4.3.8` |
+| **R-7** | **Integrity evidence 可承载** —— `§4.3.15` 的 5 项 integrity 证据可被承载（**不**规定算法） | 既有 | `§4.3.15` |
+| **R-8** | **Reproducibility** —— 同一 package 可被多次 Analysis Run 引用并产生一致结果 | 既有 | `§4.3.4` |
+| **R-9** | **Version compatibility** —— `contract version` 可表达且未来可演进 | 既有 | `§4.3.8` |
+| **R-10** | **Adapter 中立** —— serialization **不得**要求 POC 直连源系统或实现 Adapter | 既有 | `§4.3.19` ／ `§3` |
+| **R-11** | **Human inspectability** —— source evidence 必须可被稳定重新定位与检视 | POC | `§4.5.22 Option D`（`Stable Source Evidence Locator`）／ `§4.3.16` |
+| **R-12** | **Implementation simplicity** —— 最小化 POC 实现面与验证面 | POC | `CONTRIBUTING` §8（清晰、简单、局部）／ `§4.4.42` 精神 |
+
+**10 Questions Assessment**
+
+**Q1 —— physical Serialization Format 最低需要解决哪些问题？**
+
+最低必须解决 **R-1 ～ R-10**（全部为既有 Design 要求）：
+
+```
+deterministic parsing
+stable field representation
+logical type 无损
+missing ≠ present-with-default
+dataset-level absence 可表达
+manifest metadata 可承载
+integrity evidence 可承载
+reproducibility
+contract version 可表达
+Adapter 中立
+```
+
+**明确不需要**由 Serialization Format 解决（属其他层）：
+
+```
+directory tree ／ exact filename ／ file-per-dataset rule ／ dataset grouping
+folder naming ／ manifest filename ／ archive filename
+source field → file column mapping
+```
+
+**Q2 —— 单一 format，还是不同 logical dataset 可用不同 format？**
+
+- 现有 Design **既没有**要求「全 package 单一 format」，**也没有**要求「按 dataset 允许不同 format」。
+- **技术可行性判定：** 两种做法在**技术上都不违反**现有 Design 的文字约束。
+- **但**：多 format 会**放大** R-2 的实现面 —— 「同一 canonical field 在不同 dataset 中的表示一致性」规则
+  **当前并不存在**，若选择多 format，**必须**同时定义该规则（否则 R-2 无法验证）。
+- **POC 适用性判断（非强制）：** 单一 format 的验证面与实现面更小（R-12）。
+- **本 Review 不作出该选择** —— 属 **Human Decision**。
+
+**Q3 —— Snapshot Manifest 与 business dataset 是否应该使用相同 serialization format？**
+
+- `§4.3.8` 只要求 manifest 表达 8 项**语义**，**没有**要求 manifest 与 business dataset **同格式**，
+  也**没有**授权把 manifest 与 business dataset **混为一体**。
+- **该问题不可以留到 `Field Carrier Mapping`** —— 它决定 manifest 的**承载方式**，
+  因此落在 **`Serialization Format`（承载）＋ `Physical Dataset Layout`（位置 ／ 命名）** 的交界。
+- **必须保持（无论选择如何）：**
+
+```
+Snapshot Manifest  ≠  business dataset
+```
+
+- **本 Review 不作出该选择** —— 属 **Human Decision**（含「manifest 是否为独立 artifact」）。
+
+**Q4 —— CSV ／ JSON ／ JSONL ／ Parquet 的 trade-off？**
+
+见 **Option Review** 与 **Option Comparison**。
+
+**Q5 —— 是否需要 package container 概念（directory ／ archive）？**
+
+- `§4.3.1` 明确**不得定义** directory layout ／ ZIP；`§4.3.8` 明确**不决定** manifest 物理实现。
+- 因此 **「package container 是否为单一 archive」属于 `Physical Dataset Layout`** —— 本 Review **不决定**。
+- **但必须记录 dependency：**
+
+```
+若 Serialization Format 选择「多 artifact ／ file-per-dataset」形态，
+  则 Physical Dataset Layout 必须定义 package container；
+若 Serialization Format 可选择「单 artifact 承载全部 logical dataset」，
+  则 container 可能不需要。
+
+⇒ 该 dependency 由 Human Decision 在 Q2 ／ Q3 一并对齐，本 Review 不自行解决。
+```
+
+**Q6 —— 如何保证 deterministic parsing ／ stable field representation ／ reproducibility ／
+human inspectability ／ version compatibility？**
+
+| 目标 | Serialization 层可控手段 | 必须依赖其他层（本 Review 不解决） |
+| --- | --- | --- |
+| deterministic parsing | 明确规定 encoding ／ 分隔 ／ 引号 ／ escaping ／ null token ／ 数值与日期字面量规则；**禁止**任何「可省略 ／ 可推断」表达 | `Field Carrier Mapping`（source field → carrier） |
+| stable field representation | 明确规定每个 logical type 的唯一表示；禁止同一 type 多表示 | `Field Carrier Mapping` |
+| reproducibility | 与 `§4.3.5` immutability ＋ `§4.3.4` exactly-one-package 一致；serialization **不得**含非确定性成分（时间戳 ／ 顺序依赖 ／ 随机 ／ locale） | `Final Import Contract` |
+| human inspectability | 与 `Stable Source Evidence Locator` 的可定位性一致；不得要求专用二进制工具才能检视 | `Field Carrier Mapping`（locator 的物理承载） |
+| version compatibility | `contract version` 必须可在 package 层表达并可演进；**不得**要求向后兼容的实际实现 | `Final Import Contract` |
+
+**Q7 —— serialization 层需要定义哪些 cross-cutting rules？**
+
+| # | Rule | 现有 Design 状态 | 判定 |
+| --- | --- | --- | --- |
+| **C-1** | **text encoding** | `§4.2.2` 未定义 encoding 政策 | **必须由 Human Decision 确定**或记为 `NOT DEFINED` |
+| **C-2** | **null representation** | `§4.2.12` 要求 `missing ≠ 0 ／ false ／ empty string ／ UNKNOWN`，但**未**规定 null 的物理表示 | **必须**确定；**不得**用 `0` ／ `""` ／ `UNKNOWN` 代替 null |
+| **C-3** | **date representation** | logical type `DATE` 已定义；**物理表示未定义** | **必须**确定（**不得**引入 freshness threshold） |
+| **C-4** | **datetime representation** | logical type `TIMESTAMP` 已定义；**时区政策未定义** | **必须**确定或记为 `NOT DEFINED`（`§4.4.42` **禁止**无依据新增 timezone policy） |
+| **C-5** | **decimal representation** | `DECIMAL_QUANTITY` ／ `RATIO` ／ `PERCENTAGE` 已定义；**精度未定义**，且 `§2.4.8` ／ `§2.5.11` 明确 precision ／ rounding 由后续 Design Rule 决定 | **必须由 Human-approved Design Decision 确定**，**不得**在本 Review 自行决定（`§4.4.42`） |
+| **C-6** | **boolean representation** | Canonical model **没有** `BOOLEAN` logical type（`§4.2.2` 十种类型无 boolean） | **可能 `NOT APPLICABLE`**；如未来出现，**必须**单独 Design |
+| **C-7** | **enum ／ status representation** | `§4.2.14` 定义 status vocabulary；`sourcing_status` = `SOURCE-SPECIFIC` ／ Adapter-defined | **必须**区分「canonical vocabulary」与「source-specific vocabulary」；**不得**把 source value 当 canonical |
+| **C-8** | **empty dataset representation** | `§4.4.4` 要求区分 `not included` 与 `included with zero records` | **必须**可表达 `record_count = 0` 且与「未声明」不同 |
+| **C-9** | **character escaping** | 未定义 | **必须**由 format 决定，且**不得**引入 silent normalization（`§4.5.18`） |
+
+**关键判定：** `C-1` ～ `C-5` ／ `C-9` 中**任何一项的取值都属于新的 representation 决定**；
+`§4.4.42` 明确**禁止**在无现有 Design 支持时新增 `decimal precision` ／ `timezone policy` ／
+`quantity rounding` 等。因此：
+
+```
+Serialization Format 的最终选择
+  ⇒ 必然同时确定 C-1 ～ C-9 中若干项
+  ⇒ 因此必须由 Human Decision 一次性授权
+```
+
+**Q8 —— 哪些属于 Serialization Format，哪些留给其他层？**
+
+| 内容 | 归属 |
+| --- | --- |
+| text encoding ／ null ／ date ／ datetime ／ decimal ／ enum ／ empty dataset ／ escaping 的**表示规则** | **Serialization Format** |
+| manifest 的**语义**（8 项） | `§4.3.8`（已 `DESIGN RESOLVED`） |
+| manifest 的**承载方式**（是否独立 artifact ／ 是否与 dataset 同格式） | **Serialization Format ＋ Physical Dataset Layout（交界，需 Human Decision）** |
+| directory tree ／ exact filename ／ file-per-dataset rule ／ dataset grouping ／ folder naming ／ manifest filename ／ archive filename | **Physical Dataset Layout** |
+| source field → file column／carrier 的映射；`Stable Source Evidence Locator` 的物理承载 | **Field Carrier Mapping** |
+| contract version 的演进与兼容规则；import 验收的最终合同条款 | **Final Import Contract** |
+| integrity 证据的**算法**（SHA256 ／ MD5 ／ signature ／ checksum） | **Final Import Contract**（`§4.3.15` 只要求「evidence is required」） |
+
+**Q9 —— 当前 repository evidence 是否足以做最终 format decision？**
+
+**不足以作出最终选择；但足以界定 required properties 与 option trade-off。**
+
+支持「不足以」的证据：
+
+| # | 证据 | 影响 |
+| --- | --- | --- |
+| 1 | 当前为 **`SIMULATED` POC**，**没有真实** ERP vendor ／ version ／ schema ／ field list（`E05` ／ `E06` ／ `E07` = `UNKNOWN`） | 无法据真实 source artifact 形态选型 |
+| 2 | `§4.4.42` **禁止**在无现有 Design 支持时新增 `decimal precision` ／ `timezone policy` ／ `quantity rounding` 等 | 最终选型**必然**触碰这些，**必须**有 Human Decision |
+| 3 | `§4.3.1` 明确**不得定义** CSV ／ JSON ／ JSONL ／ Parquet ／ ZIP | 该决定属 **Human Decision** 层级，Agent **不得**自行落定 |
+| 4 | `Physical Dataset Layout` 与 `Field Carrier Mapping` 仍 `DESIGN PENDING` | 选型的部分依据（carrier 形态、dataset 切分）**尚不存在** |
+| 5 | Q2 ／ Q3 尚未裁定 | 单 ／ 多 format 与 manifest 承载会**改变** option 的可行性判定 |
+
+支持「足以界定」的证据：
+
+- `§4.3` 已给出全部**必须满足**的语义约束（R-1 ～ R-10）；
+- `§4.2.2` 已给出 technology-neutral logical type 集合，option 与 type 的兼容性**可判定**；
+- `§4.4.4` ／ `§4.2.12` 已给出 `missing` ／ empty ／ zero 的语义边界，`R-4` ／ `R-5` **可判定**。
+
+**Q10 —— 需要 Human Decision 的具体问题是什么？**
+
+见 **Human Decision Required**。
+
+**Option Review**
+
+> **判定约定：** 每个 Option 分别给出 **`技术上可行`** 与 **`当前 POC 最适合`** 两个独立判定。
+> **不得**以 industry best practice ／ enterprise 惯例 ／ modern data stack 偏好作为选择依据。
+
+**Option 0 —— Keep `Serialization Format = DESIGN PENDING`（Do Nothing）**
+
+- **技术上可行：** 是 —— 与当前状态一致。
+- **代价：** `Snapshot / Import Contract overall` 将**长期**保持 `DESIGN PENDING`；
+  `Physical Dataset Layout` ／ `Field Carrier Mapping` ／ `Final Import Contract` **无法**在不选定
+  承载方式前完成（三者均需要 dataset artifact 的表示前提）。
+- **是否可接受为终点：** **不可接受为终点** —— 它不产生错误结果（fail-closed 保持），
+  但会长期阻塞 Import Contract 的 closure，与 `§4.3.21` 的「不得提前标记完成」并不矛盾，
+  却也**不构成** Design 进展。
+
+**Option A —— CSV-oriented controlled export**
+
+- 以 delimited text 承载 tabular logical dataset；manifest 另行承载。
+- **优势：** human inspectability 最高（R-11）；工具链最少（R-12）；与「controlled export」语义直观一致。
+- **风险：**
+  - **R-3**：CSV **本身不含类型信息** —— `DATE` vs `TIMESTAMP`、`RATIO` vs `PERCENTAGE`、
+    `DECIMAL_QUANTITY` vs `NON_NEGATIVE_QUANTITY` 的区分**必须**由外部 schema 提供，
+    否则类型信息丢失 → **必须**同时定义 field-level 类型声明（属 `Field Carrier Mapping` 范围）。
+  - **R-4**：CSV 对「空单元格」的语义**不唯一**（`missing` vs empty string）→ **必须**显式定义 null token。
+  - **C-5**：`DECIMAL_QUANTITY` 的文本表示会引入**精度取舍** → 触发 `§4.4.42` 限制 → **需 Human Decision**。
+  - **R-5**：`included with zero records` 只能通过 header-only 文件 ＋ manifest `record_count` 表达 → 可行但需显式规则。
+- **技术上可行：** 是。
+- **当前 POC 最适合：** **未判定**（本 Review 不选择）。
+
+**Option B —— JSON ／ JSONL-oriented controlled export**
+
+- **B-1 JSON（单文档）：** 可承载 nested ／ relationship 结构；类型自描述（`null` 原生支持 → R-4 友好）。
+- **B-2 JSONL（逐行对象）：** 保留 JSON 的类型表达能力，同时**接近** tabular ／ 流式处理形态。
+- **优势：**
+  - `null` 原生 → **R-4** ／ **R-5** 表达力最强；
+  - 类型可显式标注（R-3）；
+  - human inspectability 高（R-11）；
+  - 工具链常见（R-12）。
+- **风险：**
+  - **数字精度**：JSON number 在不同实现中的 decimal 处理**不一致** → **C-5** **必须**显式规定
+    （字符串化 decimal 或明确精度）→ 触发 `§4.4.42` → **需 Human Decision**。
+  - **date ／ datetime**：JSON **无** date 类型 → **C-3** ／ **C-4** **必须**显式规定（含 timezone 政策）→ 同上。
+  - **R-1**：JSON 允许重复 key ／ 顺序无关 ／ 数字格式多样 → **必须**显式收紧（否则无法保证 deterministic parsing）。
+  - **R-2**：若同时使用 JSON 与 JSONL，**同一 field 的表示一致性规则**必须定义。
+- **技术上可行：** 是。
+- **当前 POC 最适合：** **未判定**。
+
+**Option C —— Parquet-oriented controlled export**
+
+- 以 columnar binary 承载 tabular dataset；schema 内嵌。
+- **优势：**
+  - **R-3** 最强：类型由 schema 承载（含 decimal ／ timestamp）；
+  - 大 dataset 适用性最好；压缩与 IO 效率高；
+  - 与 future Adapter ／ analytics 生态兼容性高。
+- **风险：**
+  - **R-3 的另一面：** schema 内嵌意味着**必须**在本层确定 `DECIMAL(p,s)` ／ timestamp unit ／ timezone 等
+    **物理类型参数** → **直接触发** `§4.4.42` 的禁止项 → **必须** Human-approved Design Decision；
+    且 `§4.2.2` 明确**不得**把 logical type 映射成 `DECIMAL(18,2)` 等数据库类型 ——
+    该映射本身**需要**新的 Design 授权。
+  - **R-11**：human inspectability 最低（需专用工具）；
+  - **R-12**：工具链复杂度与实现面最高；
+  - **R-1**：需显式规定 writer 参数（否则同一数据的 bytes 不稳定；但**语义**层仍可 deterministic）。
+- **技术上可行：** 是（但**必须**先获得 physical type 映射的 Human-approved Design 授权）。
+- **当前 POC 最适合：** **未判定**。
+
+**Option D —— Hybrid serialization strategy**
+
+- 例如：manifest ＋ 部分 dataset 用 tabular text，部分 dataset 用 JSONL；或 text 为对外形态 ＋ 内部转换为 columnar。
+- **优势：** 可按 dataset 特性选择（如大 dataset 用 columnar，小 dataset 用 text）；
+  在某些 dataset 上同时取得 inspectability 与效率。
+- **风险（决定性）：**
+  - **R-2 被直接削弱** —— 「同一 canonical field 在不同 dataset 中的表示一致性」**必须**新增规则，
+    而该规则**当前不存在**；
+  - **R-1 ／ R-12 复杂化** —— 需要多套 reader ／ writer 与跨 format 验证；
+  - **Q2 ／ Q3 未裁定** → hybrid 的边界**无法**在现有 Design 下确定；
+  - 与 `§4.3.6` package-level atomicity **不冲突**，但要求 import 侧对**全部** format 一致地执行 fail-closed。
+- **技术上可行：** 是（**前提**是 Q2 ／ Q3 已裁定且 R-2 一致性规则已定义）。
+- **当前 POC 最适合：** **未判定**；**POC 适用性判断**倾向于**降低 format 数量**（R-12）。
+
+**Option Comparison**
+
+`既有` = 受既有 Design 约束；`⚠` = 需要新的 Human-approved representation 决定；
+`—` = 不适用。判定针对**生产可用**形态，**不**代表本 Review 的选择。
+
+| 维度 | Option 0（Keep PENDING） | Option A（CSV） | Option B（JSON ／ JSONL） | Option C（Parquet） | Option D（Hybrid） |
+| --- | --- | --- | --- | --- | --- |
+| deterministic parsing | — （未选型） | 中 —— 需显式 null ／ escaping ／ decimal 规则 | 中高 —— 需显式收紧 JSON 宽松性 | 高 —— schema 驱动，但需固定 writer 参数 | 低 —— 跨 format 一致性成本最高 |
+| schema clarity | — | 低 —— **无内嵌类型**，须外部声明 | 中 —— 可自描述，但需显式约束 | 高 —— 内嵌 schema | 中 —— 依组合而定 |
+| human inspectability | — | **最高** | **高** | **最低** | 中高 |
+| tooling complexity | 最低（不选型） | **低** | 低中 | **高** | **高** |
+| nested ／ relationship representation | — | **弱** —— 需扁平化 ／ 关联键 | **强**（JSON）／ 中（JSONL） | 中 —— 需重复 ／ 嵌套类型 | 强 |
+| decimal ／ date fidelity | — | **⚠ 需 Human Decision**（文本精度 ／ 日期字面量） | **⚠ 需 Human Decision**（number 精度 ／ 日期 ／ timezone） | **⚠ 需 Human Decision**（physical type 映射，`§4.2.2` 禁止直接映射） | **⚠ 同上，且需跨 format 一致** |
+| large dataset suitability | — | 低中 | 中 | **最高** | 高 |
+| manifest compatibility | — | 需另行承载 manifest（Q3 未裁定） | 可同格式（Q3 未裁定） | 需另行承载 manifest（schema 不同） | 依组合而定 |
+| implementation complexity | — | **低** | 低中 | **高** | **最高** |
+| POC suitability（判断，非约束） | 不构成进展 | 高（若接受外部类型声明） | 高（若接受显式收紧） | 低（当前 `SIMULATED` POC 无真实 schema 依据） | 低中 |
+| future Adapter compatibility | — | 中 —— 依赖 source 侧导出能力 | 中高 | **高** | 高 |
+
+**关键观察（基于上表）：**
+
+1. **没有任何 Option 可以「零新增 representation 决定」落地** —— A ／ B ／ C ／ D 均触发 **`⚠`**；
+   这是 `§4.4.42` 的直接后果，**不是**某一 option 的缺陷。
+2. **Option C 的 `⚠` 最重** —— 它要求的 physical type 映射与 `§4.2.2`「不得映射成数据库类型」**直接相邻**，
+   需要**明确**的 Human Design 授权才能成立。
+3. **Option A 的 `⚠` 最集中** —— 只需外部类型声明 ＋ null token ＋ decimal ／ date 字面量规则。
+4. **Option D 的 `⚠` 数量最多** —— 且额外要求当前**不存在**的 R-2 跨 format 一致性规则。
+5. **R-11 ／ R-12（`POC` 类）** 在 A ／ B 上更优，在 C 上最弱 —— 但**二者不构成**对最终选择的强制约束。
+
+**本 Review 不选择任何 Option。** 选择属 **Human Decision**。
+
+**Critical Semantic Boundaries**
+
+Serialization Format **不得**改变以下区分。若某一 format **无法**表达某一行，
+则该 format 在**该维度上不可接受**（无论其他维度多优）：
+
+| # | 必须保持的区分 | Serialization 义务 | 依据 |
+| --- | --- | --- | --- |
+| **B-1** | `Zero ≠ Missing` | 必须能表达「字段不存在」且**不**等同于 `0` | `§4.2.12` |
+| **B-2** | valid absence ≠ missing required data | 「不适用 ／ 不产生」必须可与「缺失」区分 | `§4.2.12` ／ `§4.3.13` |
+| **B-3** | not applicable ≠ unresolved | 两者**不得**共用同一表示 | `§4.2.12` ／ `§4.4` |
+| **B-4** | Package structural failure ≠ Business `DATA_INCOMPLETE` | import 层结构判定**不得**由 serialization 推断业务完整性 | `§4.3.12` |
+| **B-5** | dataset not included ≠ empty dataset | `record_count = 0` 必须与「未声明」不同 | `§4.3.12` ／ `§4.4.4` |
+| **B-6** | logical dataset role ≠ physical filename | serialization **不得**把 role 绑定为文件名 | `§4.3.10` ／ `§4.5.22` |
+| **B-7** | dataset-level provenance reference ≠ `Stable Source Evidence Locator` | 两层**不得**合并为同一字段 | `§4.3.8` ／ `§4.3.16` |
+| **B-8** | Snapshot Package identity ≠ Analysis Run identity | 两者**不得**共用同一字段 ／ 命名空间 | `§4.3.2` ／ `§4.3.4` |
+
+**Physical Layout Boundary**
+
+本 Review **不得**定义（且**未**定义）：
+
+```
+directory tree
+exact filename
+file-per-dataset rule
+dataset grouping
+folder naming
+manifest filename
+archive filename
+source field → file column mapping
+```
+
+**记录的 dependency（不自行解决）：**
+
+| # | Dependency | 状态 |
+| --- | --- | --- |
+| **D-1** | 若选择「多 artifact」形态（含 Option A 的 file-per-dataset、Option C），则 `Physical Dataset Layout` **必须**定义 package container（directory 或 archive） | **待 Human Decision（Q2 ／ Q5）** |
+| **D-2** | `Field Carrier Mapping` 必须提供 **field-level 类型声明**（Option A 必需；B ／ C 加强） | 依赖 Serialization 选择 |
+| **D-3** | `Field Carrier Mapping` 必须定义 `Stable Source Evidence Locator` 的**物理承载** | 与 `§4.3.17` 一致（physical 层面仍未决定） |
+| **D-4** | `Final Import Contract` 必须定义 integrity **算法**与 version 兼容规则 | `§4.3.15` 只要求 evidence 存在 |
+| **D-5** | Q2 ／ Q3 未裁定前，Option A ／ B ／ C ／ D 的**可行性判定都可能改变** | **阻塞最终选择** |
+
+**Known Risks**
+
+| # | Risk | 说明 |
+| --- | --- | --- |
+| **K-1** | **以 industry practice 代替 Design 依据** | 例如「现代数据栈用 Parquet」／「企业导出通常用 CSV」。`§4.4.42` 明确禁止此类理由；本 Review 已按证据约束评估 |
+| **K-2** | **把 logical type 直接映射为物理类型** | `§4.2.2` 明确禁止；若选 Option C ／ B 的 typed 形态，**必须**另有 Human-approved 授权 |
+| **K-3** | **silent normalization 通过 serialization 回流** | trim ／ case ／ prefix 去除等会使 `§4.5.18` 的禁止失效 |
+| **K-4** | **用 `0` ／ 空字符串代替 null** | 直接破坏 B-1 ／ B-2；CSV 尤其高风险 |
+| **K-5** | **`record_count = 0` 与「未声明」不可区分** | 破坏 B-5；若 manifest 与 dataset 混为一体，风险显著上升 |
+| **K-6** | **serialization 隐含 physical precision 决策** | `C-5`（decimal）／ `C-1`（encoding）／ `C-4`（timezone）在本 Review 中**未**决定；若实现阶段自行取值，等于绕过 `§4.4.42` |
+| **K-7** | **本 Review 结论被误读为 format 已选定** | 本 Review **未**选择任何 Option |
+| **K-8** | **`§4.3.1` 的「不得定义 CSV ／ JSON ／ JSONL ／ Parquet ／ ZIP」被误读为永久禁止** | 该限制约束的是**当时**的 Task；后续决定**必须**由 **Human Decision 明确授权**，而非 Agent 自行解禁 |
+| **K-9** | **多 format 引入未定义的 R-2 一致性规则** | Option D 的直接风险 |
+
+**Review Conclusion**
+
+基于 Repository 中已存在的正式设计事实：
+
+1. **Serialization Format 的最低要求已可明确界定**：**R-1 ～ R-10**（全部来自既有 Design），
+   加上 **R-11 ／ R-12**（`POC` 类判断）。这构成后续 closure 的可验证基础。
+2. **10 个 Review Question 中**：`Q1` ／ `Q4` ／ `Q5` ／ `Q6` ／ `Q7` ／ `Q8` 已获**证据性回答**；
+   `Q2` ／ `Q3` 属 **Human Decision**；`Q9` = **evidence 不足以作最终选择**；`Q10` 已列出具体决策点。
+3. **四个候选 Option（A ／ B ／ C ／ D）与 Option 0 均已评估**：
+   **没有任何 Option 可以「零新增 representation 决定」落地** —— 这是 `§4.4.42` 的直接后果。
+4. **本 Review 不选择最终 format**，也**不**推荐某一个 Option 作为「已定方案」。
+   **`Serialization Format` 保持 `DESIGN PENDING`。**
+5. **不推进** `Physical Dataset Layout` ／ `Field Carrier Mapping` ／ `Final Import Contract`；
+   dependency **D-1** ～ **D-5** 已记录，未自行解决。
+6. **未**修改任何 canonical entity ／ field ／ `BR-*` ／ Validation Taxonomy ／ Master Data Mapping ／
+   Adapter Boundary；**未**创建 JSON Schema ／ CSV ／ Parquet ／ parser ／ runtime enum。
+
+**Current Status（本 Review 时点）**
+
+```
+Snapshot / Import Contract overall = DESIGN PENDING
+  Package Envelope                 = DESIGN RESOLVED
+  Atomicity Boundary               = DESIGN RESOLVED
+  Immutability Boundary            = DESIGN RESOLVED
+  Analysis Run Linkage             = DESIGN RESOLVED
+  Serialization Format             = DESIGN PENDING   ← 本 Review 未关闭
+  Physical Dataset Layout          = DESIGN PENDING
+  Field Carrier Mapping            = DESIGN PENDING
+  Final Import Contract            = DESIGN PENDING
+
+Master Data Mapping overall        = DESIGN RESOLVED
+Adapter Boundary                   = DESIGN PENDING
+POC Design v0.2                    = DRAFT
+```
+
+**Human Decision Required**
+
+| # | 问题 | 性质 |
+| --- | --- | --- |
+| 1 | 是否授权在 POC 中**确定** `Serialization Format`（即明确解禁 `§4.3.1` 的「不得定义 CSV ／ JSON ／ JSONL ／ Parquet ／ ZIP」）？ | authorization |
+| 2 | **单一 format**，还是**允许不同 logical dataset 使用不同 format**？（若允许混合，**必须**同时裁定 R-2 跨 format 一致性规则） | 选型前提 |
+| 3 | **Snapshot Manifest 的承载**：是否为**独立 artifact**？是否与 business dataset **同格式**？（`Snapshot Manifest ≠ business dataset` 必须保持） | 选型前提 |
+| 4 | 是否接受 **R-1 ～ R-12** 作为 `Serialization Format` 的 minimum required properties ／ closure criteria？ | criteria |
+| 5 | **Cross-cutting rules 的取值**（`C-1` ～ `C-9`）：哪些本轮决定，哪些记为 `NOT DEFINED`？（`§4.4.42` 要求无依据即 `NOT DEFINED`） | representation |
+| 6 | 是否接受 **decimal 精度（`C-5`）／ timezone（`C-4`）／ quantity rounding** 属于**必须由 Human-approved Design Decision** 决定的项目，**不得**由 Agent 或实现阶段自行取值？ | `§4.4.42` 边界 |
+| 7 | 是否接受 **package container（directory ／ archive）属于 `Physical Dataset Layout`**，本 Review 只记录 dependency（`D-1`）？ | boundary |
+| 8 | 是否接受**选项裁定顺序**：先裁 `Q2` ／ `Q3`，再裁 format（因 `D-5` 会使可行性判定改变）？ | 决策结构 |
+| 9 | 是否授权后续**独立 Serialization Format Implementation PR**（登记选择 ＋ cross-cutting rules ＋ 同步 current-state），并在满足 `R-1` ～ `R-12` 时允许 `Serialization Format` `DESIGN PENDING → DESIGN RESOLVED`？ | follow-up |
+| 10 | 是否确认 `Snapshot / Import Contract overall` 在 `Physical Dataset Layout` ／ `Field Carrier Mapping` ／ `Final Import Contract` 完成前**保持 `DESIGN PENDING`**？ | boundary |
+
+**本 Review 不作出上述任何决定。** 后续必须由 **Human Decision** 裁定；
+**不得**由 Agent 自行选择最终 format。
+
 #### 4.3.21 Status Boundary
 
 `Snapshot / Import Contract` **整体仍为 `DESIGN PENDING`**。
