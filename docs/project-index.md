@@ -4,7 +4,6 @@
 **Version:** v0.1
 **Status:** `DRAFT`
 **Doc Type:** Navigation Index —— **非** Canonical Source
-**Baseline:** `main @ b4d3bf76`
 
 > 本文档用于新 Chat / 新 Agent 冷启动导航。内容为 **snapshot**，可能滞后于 `main`。
 
@@ -127,7 +126,6 @@
 **Version:** v0.1
 **Status:** `DRAFT` —— 尚未 `APPROVED` / `FROZEN`
 **Doc Type:** Navigation Index —— **非** Canonical Source
-**Baseline:** `main @ b4d3bf76`
 
 - 本文档**不替代**任何 canonical source，**不构成**新的项目事实或 Decision。
 - 本文档内容为 snapshot；`main` 变化后**应同步更新**，但**不得**据此改写 canonical 文档。

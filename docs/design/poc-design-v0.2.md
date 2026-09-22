@@ -3925,7 +3925,9 @@ conceptual boundary 已定义
 | Master Data Mapping | **`DESIGN RESOLVED`** |
 | Adapter Boundary | `DESIGN PENDING` |
 
-> 继承约束（不重新定义）：Integration Pattern = **Controlled Export / Snapshot**。具体文件格式（CSV / JSON / Parquet）与 Adapter Contract 属本阶段待设计事项，**本轮未决定**。
+> 继承约束（不重新定义）：Integration Pattern = **Controlled Export / Snapshot**。
+> 具体文件格式 = **JSON**（**`Serialization Format` = `DESIGN RESOLVED`**，见 **§4.3.22**）；
+> **Adapter Contract** 仍属本阶段待设计事项（**`Adapter Boundary` = `DESIGN PENDING`**）。
 >
 > **current-state 更新：** `Serialization Format` 已由 **PR #51 Human Decision** 登记为 **JSON**
 > （single JSON strategy；manifest = independent artifact ＋ JSON），并经
@@ -8677,7 +8679,8 @@ Adapter Boundary                   = DESIGN PENDING
 
 `Snapshot / Import Contract` **整体仍为 `DESIGN PENDING`**。
 
-本 Task **仅**完成其第一层：Package Envelope、Import Atomicity、Immutability、Analysis Run linkage。
+**历史（原 `Package Envelope` Task 时点）：** 该 Task **仅**完成其第一层：Package Envelope、
+Import Atomicity、Immutability、Analysis Run linkage。
 
 `DESIGN RESOLVED` 的**六个**层级**仅**表示其 **conceptual boundary 已定义**，
 **不表示**：
@@ -9053,17 +9056,22 @@ PR #53 `Physical Dataset Layout Design Review（Review Finding）` 与 `Human De
 **执行状态（本 Closure Validation 时点）**
 
 ```
-Physical Dataset Layout            = DESIGN RESOLVED
-Human Decision                     = RECORDED
-Implementation                     = NOT YET EXECUTED
-Physical Dataset Layout Closure    = PASS
+Physical Dataset Layout                     = DESIGN RESOLVED
+Human Decision                              = RECORDED
+Physical Dataset Layout Design Registration = REGISTERED
+Physical Dataset Layout Closure             = PASS
+Runtime Implementation                      = NOT YET EXECUTED
 
-Field Carrier Mapping              = DESIGN PENDING
-Final Import Contract              = DESIGN PENDING
-Snapshot / Import Contract overall = DESIGN PENDING
-Adapter Boundary                   = DESIGN PENDING
-POC Design v0.2                    = DRAFT
+Field Carrier Mapping                       = DESIGN PENDING
+Final Import Contract                       = DESIGN PENDING
+Snapshot / Import Contract overall          = DESIGN PENDING
+Adapter Boundary                            = DESIGN PENDING
+POC Design v0.2                             = DRAFT
 ```
+
+`Physical Dataset Layout Design Registration` ／ `Physical Dataset Layout Closure` 属 **design 层**结果；
+`Runtime Implementation` 指 **runtime artifact**（package directory ／ dataset artifact ／ parser ／
+validator 等），本层**未**创建 —— **design registration ≠ runtime implementation**。
 
 ---
 
