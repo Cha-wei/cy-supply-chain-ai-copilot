@@ -8724,6 +8724,7 @@ Status Change  = NONE
 **In scope（仅以下问题）：**
 
 1. Manifest 的 physical JSON carrier model —— package-level metadata 的 property 集合与 grouping boundary
+   （**含 `K-6` 的 dataset-level `record count` ／ integrity evidence 的 carrier 位置与 grouping boundary**）
 2. `logical dataset role → artifact reference` 的 concrete carrier model
 3. business dataset artifact 的 top-level carrier ／ envelope boundary
 4. record carrier boundary
@@ -8736,7 +8737,7 @@ Status Change  = NONE
 
 **Out of scope（属其他层，本 Review 只记录 dependency）：**
 
-- integrity ／ hash ／ checksum ／ signature algorithm ／ byte-level canonicalization → `Final Import Contract`
+- integrity ／ hash ／ checksum ／ signature **algorithm** ／ byte-level canonicalization → `Final Import Contract`（**integrity evidence 的 carrier 位置**属本层，见 `CS-12a` ／ `RF-X5`）
 - runtime acceptance ／ rejection ／ path validation ／ traversal ／ symlink → `Final Import Contract`
 - Adapter ／ 连接器 ／ 传输协议 ／ 真实 source field → `Adapter Boundary`
 - canonical entity ／ field ／ enum ／ Validation Reason 的新增或修改 → 非本 Task 授权范围
@@ -8758,7 +8759,8 @@ Status Change  = NONE
 | `CS-9` | `sourcing_status` 携带 source-specific literal | **禁止** silent canonicalization（`C-7`） | property carrier **不得**暗示 canonical enum |
 | `CS-10` | Manifest 声明 `included` 但 artifact missing | Structural inconsistency（`§4.3.12` 情形 A） | carrier **必须**使该不一致**可判定** |
 | `CS-11` | package 只包含当前 capability 所需的**部分** datasets | 允许（`K-13`） | carrier **不得**暗示「完整 = 全部 dataset」 |
-| `CS-12` | carrier 出现未被 canonical model 声明的额外属性 | 既有 Design **未定义** | **不得**由本层擅自允许或禁止 —— 属 `Final Import Contract` |
+| `CS-12a` | **已批准 carrier metadata**（如 integrity evidence ／ dataset-level provenance ／ mapping basis）**是否存在**、以及放在 envelope ／ record sibling ／ nested namespace 的**哪里** | 既有 Design **未决定** | 属 **`Field Carrier Mapping`** —— **必须**由本层裁定（见 `RF-X5`）；**不得**推给 `Final Import Contract` |
+| `CS-12b` | 输入出现**未在已批准 carrier contract 中声明**的 unknown property 时，runtime 的 reject ／ ignore ／ tolerate 行为及验证方式 | 既有 Design **未定义** | 属 **`Final Import Contract`** —— 本层**不**裁定 runtime policy |
 
 ---
 
@@ -8799,6 +8801,12 @@ Status Change  = NONE
 `M-C` —— Package header ＋ 独立 dataset index（或独立 integrity 区段）
 - 当前 **无证据**要求该形态；**不建议**在 POC v0.2 引入。
 
+**integrity evidence carrier（`K-6` ／ `K-14`）：** Logical Manifest **必须**表达 dataset-level
+**integrity evidence**；其 **physical carrier 的位置与 grouping boundary**
+（package-level carrier ／ dataset-entry-level carrier ／ 与 business field 的分离方式）
+**必须**由本层裁定（见 `CS-12a` ／ `RF-X5`）—— **是否存在**与**放在哪里**属本层；
+**算法**（hash ／ checksum ／ signature）属 `Final Import Contract`。
+
 **B. Dataset Entry Model（`Q2`）**
 
 `D-A` —— array of dataset entry objects
@@ -8808,7 +8816,11 @@ Status Change  = NONE
 ```
 
 - 优点：条目同构、易于 validate、易表达「无 entry」；
-- 风险：role **唯一性**需额外约束；重复 entry 的语义属 `Final Import Contract`。
+- **必须保持的 design invariant（`RF-2` ／ `F-2`）：** 同一个 included logical role
+  **只**建立 **一个** authoritative artifact association —— 由 `K-2`（one included logical dataset =
+  one independent JSON artifact）＋ `K-3`（Manifest 显式建立 `role → artifact reference`）共同要求；
+- 风险：array 形态**不会自动**保证该 invariant，**必须**由 carrier contract 明确其 cardinality ／
+  uniqueness 规则；runtime **如何检测 ／ reject** duplicate 或 conflicting entry 属 `Final Import Contract`。
 
 `D-B` —— object keyed by logical dataset role
 
@@ -8817,6 +8829,8 @@ Status Change  = NONE
 ```
 
 - 优点：`role → entry` 天然唯一，查表直接；
+- **design invariant（`RF-2` ／ `F-2`）：** 与 `D-A` **同一** logical invariant ——
+  一个 included logical role **只**对应一个 authoritative artifact association；
 - 风险：canonical role 字面量被固化为 JSON property name，与 `K-12` 的 exact-string 要求叠加时，
   **必须**先明确 role 字面量的 case ／ escaping 规则（见 `RF-X2`）。
 
@@ -8824,7 +8838,10 @@ Status Change  = NONE
 - 仅在 `M-A` 下可行；role 集合的扩展性最差。
 
 **共同要求（无论 `D-*`）：** entry **必须**携带 artifact reference（`K-3`）与 presence metadata（`K-4`）；
-且 dataset-level provenance reference（`K-6`）与 evidence-level locator（`K-7`）**必须可分别承载**。
+且 dataset-level provenance reference（`K-6`）、**integrity evidence**（`K-6` ／ `K-14`）
+与 evidence-level locator（`K-7`）**必须可分别承载**。
+**integrity evidence 的 carrier 位置与 grouping boundary** 属本层裁定（`CS-12a` ／ `RF-X5`），
+但 **hash ／ checksum ／ signature 算法**仍属 `Final Import Contract`。
 
 **C. Business Dataset Top-Level Carrier（`Q3`）**
 
@@ -8857,8 +8874,11 @@ Status Change  = NONE
 - 与 `C-9`（object member order **不得**具有 business semantic）一致。
 
 `R-B` —— 每个 record = 位置数组（positional）
-- 依赖隐式顺序寻址，与 `C-9` 的「member order 不得具有 business semantic」精神
-  **实质张力** → **`NOT RECOMMENDED`**。
+- **技术上与 `C-9` 兼容** —— `C-9` 只规定 JSON **object member order** 不得具有 business semantic，
+  **并未**禁止 JSON array 的位置语义，**也未**建立「必须 property-addressed object」的 canonical rule；
+- 但若采用，**必须**另行显式登记 **deterministic positional mapping ／ field order contract**；
+  否则字段顺序变化会静默改变语义，**复杂度与可维护性更差**、human inspectability 更低；
+- 因此这是**需要权衡的 trade-off**，**不是 canonical prohibition** → **`NOT RECOMMENDED`**。
 
 `R-C` —— record = JSON object，且**允许**非 canonical 的 carrier-level 属性混入
 - 风险：混淆 business record 与 carrier metadata；
@@ -8896,8 +8916,11 @@ physical carrier **不得**等同于 `Stable Source Evidence Locator` 的 semant
 
 **H. Missing / Omission Policy（`Q9`）**
 
-`N-A` —— `null` = **explicit missing**；**property omission** = valid absence ／ not produced by design
-（与 `C-2` 一致）
+`N-A` —— **即已登记的 `C-2` policy**：`null` = **explicit missing ／ unavailable serialized value**；
+**property omission** = field **not serialized**，其业务语义**必须**由
+**canonical requiredness ＋ business applicability ＋ existing validation semantic** 共同判断；
+`valid absence ／ not produced by design` **允许** omission，
+但 **`omission` 本身不自动等于 `valid absence`**。
 
 `N-B` —— 始终发出所有 property，统一用 `null` 表示
 - 把 `valid absence` 与 `missing` **压平**，与 `K-9` 直接冲突 → **`NOT COMPATIBLE`**
@@ -8923,7 +8946,7 @@ physical carrier **不得**等同于 `Stable Source Evidence Locator` 的 semant
 | `B-B` | 兼容 | 兼容 | 兼容 | 引入 envelope 结构 |
 | `B-C` | 兼容 | **`NOT COMPATIBLE`** | — | 与 one-artifact 规则冲突 |
 | `R-A` | 兼容 | 兼容 | 兼容 | 与 `C-9` 一致 |
-| `R-B` | **张力** —— 依赖隐式顺序 | 兼容 | 兼容 | 不建议 |
+| `R-B` | 兼容（`C-9` 未禁止 array 位置语义） | 兼容 | 兼容 | 需显式 positional ／ field order contract；trade-off，不建议 |
 | `R-C` | 兼容 | 兼容 | 兼容 | 需先明确允许范围 |
 | `F-A` | 兼容 | 兼容 | 兼容 | 稳定性最高 |
 | `F-B` | 兼容 | 兼容 | 兼容 | 允许将来改名 |
@@ -8935,7 +8958,7 @@ physical carrier **不得**等同于 `Stable Source Evidence Locator` 的 semant
 | `MB-A` | 兼容 | 兼容 | 兼容 | — |
 | `MB-B` | 兼容 | 兼容 | 兼容 | — |
 | `MB-C` | 兼容 | 兼容 | 兼容 | — |
-| `N-A` | **兼容（与 `C-2` 一致）** | 兼容 | 兼容 | 与 `K-9` 一致 |
+| `N-A` | **兼容（即已登记的 `C-2` policy 本身）** | 兼容 | 兼容 | 与 `K-9` 一致；不新增 token |
 | `N-B` | **`NOT COMPATIBLE`** | — | — | 压平 absence ／ missing |
 | `N-C` | **`NOT COMPATIBLE`** | — | — | 违反 `C-2` ／ `K-11` |
 
@@ -8950,8 +8973,13 @@ grouping boundary。`M-A` 与 `M-B` 均可满足既有约束，差异在**层次
 
 **`RF-2`（`Q2` Dataset Entry Carrier）**
 `role → artifact reference` 的**存在性要求**已由 `§4.3.23` E 关闭；本层只决定其 **carrier 形态**。
-**本 Review 判定：** entry **必须**与 presence metadata（record count）**同域承载**，
-否则 `CS-2` 与 `CS-1` 不可判定。`D-A` ／ `D-B` ／ `D-C` 的取舍属 Human Decision。
+**本 Review 判定（本层必须保持的 design invariant）：**
+① entry **必须**与 presence metadata（record count）**同域承载**，否则 `CS-1` 与 `CS-2` 不可判定；
+② **同一个 included logical role 只建立一个 authoritative artifact association**
+（cardinality ／ uniqueness invariant）—— 由 `K-2` ＋ `K-3` 共同要求，**不是**可选项；
+`D-A` ／ `D-B` ／ `D-C` **均必须**满足同一 logical invariant；
+runtime **如何检测 ／ reject** duplicate 或 conflicting entry 属 `Final Import Contract`。
+`D-A` ／ `D-B` ／ `D-C` 的具体取舍属 Human Decision。
 
 **`RF-3`（`Q3` Business Dataset Top-Level Carrier）**
 `B-C` 与 `K-2` **不兼容**，予以排除。`B-A` 与 `B-B` 的取舍取决于
@@ -8959,10 +8987,12 @@ grouping boundary。`M-A` 与 `M-B` 均可满足既有约束，差异在**层次
 该问题**当前无 canonical 证据**可自动裁定，属 Human Decision（见 `RF-X1`）。
 
 **`RF-4`（`Q4` Record Carrier）**
-既有约束**要求** deterministic property addressing（`C-2` ／ `C-9` ／ `C-10`）。
-`R-B`（positional）与 `C-9` 存在实质张力。**本 Review 判定 `R-A` 形态与既有约束一致**；
-但「是否**强制**每个 record 为 JSON object」与「是否允许 carrier-level 属性混入（`R-C`）」
-属 Human Decision。
+既有约束**并未**要求 property addressing —— `C-9` 只约束 **object member order 不得具有 business semantic**，
+**未**禁止 array 位置语义，**也未**建立「必须 property-addressed object」的规则。
+因此 `R-B`（positional）属**可选 trade-off**：若采用，**必须**显式登记
+**deterministic positional mapping ／ field order contract**，并接受更差的复杂度与 inspectability。
+**本 Review 判定 `R-A` 与既有约束一致，`R-B` 技术上可兼容但需额外契约**；
+「是否**强制**每个 record 为 JSON object」与「是否允许 carrier-level 属性混入（`R-C`）」属 Human Decision。
 
 **`RF-5`（`Q5` Canonical Field Carrier）**
 **不得**改变 canonical field semantic（硬约束）。`F-A` ／ `F-B` ／ `F-C` 均可满足 compatibility。
@@ -8972,7 +9002,7 @@ grouping boundary。`M-A` 与 `M-B` 均可满足既有约束，差异在**层次
 **`RF-6`（`Q6` Logical Type Compatibility）**
 `C-1` ～ `C-10` **已经**固定 representation；本层只需保证 carrier **不引入**违反它们的结构
 （例如以 numeric type 承载 `DECIMAL_QUANTITY`、或 property name 触发 coercion）。
-**兼容性可判定，无需新 decision** —— 但 `N-*` policy **必须**选定（`N-B` ／ `N-C` 已判定不可兼容）。
+**兼容性可判定，无需新 decision** —— `N-*` policy 实际上**已由 `C-2` 固定**（`N-A` = `C-2` 本身）；`N-B` ／ `N-C` 已判定不可兼容。
 
 **`RF-7`（`Q7` Evidence-Level Provenance Carrier）**
 `K-7` ／ `K-8` 要求 locator **可被稳定重新定位**。`P-A` ～ `P-D` 均可兼容。
@@ -8987,10 +9017,13 @@ locator **不得**以 artifact path ／ filename 表达。
 本层**必须**区分三层 requiredness：
 **package-level required**（`K-6`）／ **dataset-entry required**（`K-3` ／ `K-4`）／
 **record-level conditional**（`§4.2.2` requiredness）。
-**不得**把 `valid absence` ／ `missing` ／ `not applicable` 压平（`CS-3` ／ `CS-4`）。
+**不得**把 `valid absence` ／ `missing` ／ `not applicable` 的语义**压平**（`CS-3` ／ `CS-4`）。
+**本 Review 判定：** 本层**不要求** carrier 为三者各自定义独立 token；**要求**的是
+**omission 的语义推断链不被压平** —— `property omission` **不自动等于** `valid absence`，
+且 `null` **不得**被 `0` ／ `false` ／ `""` ／ sentinel string 替代（`C-2` ／ `K-11`）。
 
 **`RF-10`（`Q10` Closure Criteria）**
-见下方候选 `F-1` ～ `F-16`；**是否登记为正式 criteria 属 Human Decision** —— 本 Review **不自行宣布**。
+见下方候选 `F-1` ～ `F-17`；**是否登记为正式 criteria 属 Human Decision** —— 本 Review **不自行宣布**。
 
 **`RF-X1`（跨选择发现 —— 需组合裁定）**
 「**dataset-level metadata 是否必须落在 business dataset artifact 内**」同时决定
@@ -9003,14 +9036,26 @@ locator **不得**以 artifact path ／ filename 表达。
 会产生两个 entry，直接破坏 `K-3` 的唯一性。
 
 **`RF-X3`（边界发现 —— 明确不属于本层）**
-integrity algorithm ／ byte-level canonicalization ／ runtime acceptance ／ rejection ／
-path validation ／ version compatibility policy ／ schema validation implementation
-**全部**留给 **`Final Import Contract`**。
+integrity **algorithm** ／ byte-level canonicalization ／ runtime acceptance ／ rejection ／
+**unknown ／ undeclared property 的 runtime 行为** ／ path validation ／ version compatibility policy ／
+schema validation implementation **全部**留给 **`Final Import Contract`**。
+（**注意：** integrity evidence 的 **carrier 位置与 grouping boundary** **不属于**此类 —— 见 `RF-X5` ／ `CS-12a`。）
 
 **`RF-X4`（一致性风险）**
 若各 option 被**独立**裁定而缺少跨选择一致性检查，可能出现
 「Manifest 期望 dataset-level metadata 位于 artifact 内，而 `B-A` 并未提供」的**组合冲突**。
 **建议** Human 以**组合**方式裁定，而非逐项独立裁定。
+
+**`RF-X5`（carrier structure vs runtime policy —— 层级划分）**
+必须区分两个问题：
+
+1. **FCM 设计问题** —— **已批准 carrier metadata**（含 **integrity evidence**、dataset-level provenance、
+   `Mapping / Resolution Basis`）**是否存在**、以及位于 envelope ／ record sibling ／ nested namespace 的**哪里**；
+   这属 **`Field Carrier Mapping`**，**必须**由本层裁定。
+2. **FIC runtime contract 问题** —— 输入出现**未在已批准 carrier contract 中声明**的 unknown property 时，
+   runtime 的 reject ／ ignore ／ tolerate 行为及验证方式；这属 **`Final Import Contract`**。
+
+**不得**把第 1 类问题推给 `Final Import Contract`；**也不得**由本层擅自裁定第 2 类问题。
 
 ---
 
@@ -9019,7 +9064,7 @@ path validation ／ version compatibility policy ／ schema validation implement
 | # | Criterion | 类别 |
 | --- | --- | --- |
 | `F-1` | Manifest carrier model 已显式登记（含 package-level property 集合与 grouping boundary） | MANDATORY CLOSURE CRITERION |
-| `F-2` | `logical dataset role → artifact reference` 的 carrier 形态已登记，且满足 `K-3` | MANDATORY CLOSURE CRITERION |
+| `F-2` | `logical dataset role → artifact reference` 的 carrier 形态已登记，满足 `K-3`，**并保持 role-entry cardinality ／ uniqueness invariant**（一个 included logical role → 一个 authoritative artifact association；`D-A` ／ `D-B` ／ `D-C` 均须满足） | MANDATORY CLOSURE CRITERION |
 | `F-3` | dataset entry 可承载 presence metadata（record count ／ presence state），使 `CS-1` 与 `CS-2` 可判定 | MANDATORY CLOSURE CRITERION |
 | `F-4` | business dataset top-level carrier 形态已登记，且与 Flat Directory Layout（`K-2`）兼容 | MANDATORY CLOSURE CRITERION |
 | `F-5` | `included ＋ record_count = 0` 与 `not included` 在 physical carrier 层**可区分** | MANDATORY CLOSURE CRITERION |
@@ -9029,11 +9074,12 @@ path validation ／ version compatibility policy ／ schema validation implement
 | `F-9` | dataset-level provenance reference 的 carrier 已登记 | MANDATORY CLOSURE CRITERION |
 | `F-10` | `Stable Source Evidence Locator` 的 carrier 已登记，且与 dataset-level reference **分层不混合** | MANDATORY CLOSURE CRITERION |
 | `F-11` | `Mapping / Resolution Basis` 的 carrier 已登记（when applicable） | MANDATORY CLOSURE CRITERION |
-| `F-12` | `valid absence` ／ `missing` ／ `not applicable` 在 carrier 层**可区分**（`N-B` ／ `N-C` 类方案被排除） | MANDATORY CLOSURE CRITERION |
+| `F-12` | carrier 层**不压平** `valid absence` ／ `missing` ／ `not applicable` 的语义：`property omission` **不自动等于** `valid absence`，且 `null` **不得**被 `0` ／ `false` ／ `""` ／ sentinel string 替代（`C-2` ／ `K-11`；`N-B` ／ `N-C` 类方案被排除） | MANDATORY CLOSURE CRITERION |
 | `F-13` | carrier 层**无** silent fix-up（trim ／ case conversion ／ numeric coercion ／ Unicode normalization） | MANDATORY CLOSURE CRITERION |
 | `F-14` | 各 option 裁定之间**无**跨选择冲突（见 `RF-X4`） | MANDATORY CLOSURE CRITERION |
 | `F-15` | Human Inspectability（carrier 可被人直接检视） | POC DESIGN OBJECTIVE |
 | `F-16` | Implementation Simplicity（carrier 结构最小化） | POC DESIGN OBJECTIVE |
+| `F-17` | **integrity evidence** 的 physical carrier（package-level ／ dataset-entry-level 的位置与 grouping boundary）已登记，且不与 business field 混淆（**算法**仍属 `Final Import Contract`） | MANDATORY CLOSURE CRITERION |
 
 `F-15` ／ `F-16` **必须评估**，但**不作为**独立 hard closure blocker；
 **不得**把主观判断变成不可验证的 closure Gate。
@@ -9045,7 +9091,9 @@ path validation ／ version compatibility policy ／ schema validation implement
 | Manifest ／ dataset entry ／ business dataset envelope ／ record ／ property carrier 形态 | **`Field Carrier Mapping`** |
 | `missing` ／ valid absence ／ omission 的 representation policy | **`Field Carrier Mapping`** |
 | evidence-level locator 与 mapping ／ resolution basis 的 carrier 形态 | **`Field Carrier Mapping`** |
-| integrity ／ hash ／ checksum ／ signature algorithm | **`Final Import Contract`** |
+| 已批准 carrier metadata（**integrity evidence** ／ dataset-level provenance ／ `Mapping / Resolution Basis`）的**位置与 grouping boundary** | **`Field Carrier Mapping`** |
+| integrity ／ hash ／ checksum ／ signature **algorithm** | **`Final Import Contract`** |
+| 未在已批准 carrier contract 中声明的 **unknown property** 的 runtime 行为（reject ／ ignore ／ tolerate）与验证 | **`Final Import Contract`** |
 | byte-level canonicalization ／ canonical byte ordering | **`Final Import Contract`** |
 | runtime acceptance ／ rejection algorithm ／ partial package 处理 | **`Final Import Contract`** |
 | path normalization ／ traversal ／ symlink ／ path validation 实现 | **`Final Import Contract`** |
@@ -9059,8 +9107,8 @@ path validation ／ version compatibility policy ／ schema validation implement
 
 | # | 问题 | 关联 |
 | --- | --- | --- |
-| 1 | **Manifest carrier model**：`M-A` flat ／ `M-B` grouped nested ／ 其他明确方案？ | `Q1` ／ `RF-1` |
-| 2 | **dataset entries 的 collection 形态**：`D-A` array ／ `D-B` role-keyed object ／ `D-C` flat？ | `Q2` ／ `RF-X2` |
+| 1 | **Manifest carrier model**：`M-A` flat ／ `M-B` grouped nested ／ 其他明确方案？（**并须裁定 integrity evidence 的 carrier 位置与 grouping boundary**，见 `F-17`） | `Q1` ／ `RF-1` ／ `RF-X5` |
+| 2 | **dataset entries 的 collection 形态**：`D-A` array ／ `D-B` role-keyed object ／ `D-C` flat？（须保持 **role-entry cardinality ／ uniqueness invariant**，见 `F-2`） | `Q2` ／ `RF-X2` ／ `RF-2` |
 | 3 | **business dataset top-level carrier**：`B-A` bare record array ／ `B-B` object envelope？ | `Q3` ／ `RF-X1` |
 | 4 | **dataset-level metadata 是否必须落在 business dataset artifact 内**？ | `Q3` ／ `RF-X1` |
 | 5 | **record carrier**：是否**强制**每个 record 为 JSON object？ | `Q4` ／ `RF-4` |
@@ -9068,8 +9116,8 @@ path validation ／ version compatibility policy ／ schema validation implement
 | 7 | **canonical field 作为 JSON property name**：`F-A` 直接 ／ `F-B` ＋ mapping table ／ `F-C` source-specific ＋ mapping？ | `Q5` ／ `RF-5` |
 | 8 | **`Stable Source Evidence Locator` 的 carrier 形态**：`P-A` ／ `P-B` ／ `P-C` ／ `P-D`？ | `Q7` ／ `RF-7` |
 | 9 | **`Mapping / Resolution Basis` 的 carrier 形态**：`MB-A` ／ `MB-B` ／ `MB-C`？ | `Q8` ／ `RF-8` |
-| 10 | **missing ／ omission policy**：是否确认采用 `N-A`（`null` = explicit missing；omission = valid absence）？ | `Q9` ／ `F-12` |
-| 11 | 是否接受 **`F-1` ～ `F-14`** 作为 `Field Carrier Mapping` 的 minimum closure criteria？ | `Q10` ／ `RF-10` |
+| 10 | **missing ／ omission policy**：是否确认**沿用已登记的 `C-2`**（`null` = explicit missing；`property omission` = field not serialized，语义由 requiredness ＋ applicability ＋ validation semantic 判断，**不自动等于** valid absence）？ | `Q9` ／ `F-12` |
+| 11 | 是否接受 **`F-1` ～ `F-14` ＋ `F-17`** 作为 `Field Carrier Mapping` 的 minimum closure criteria？ | `Q10` ／ `RF-10` |
 | 12 | 是否授权后续**独立** `Field Carrier Mapping` Design Change ／ Implementation PR（登记选择 ＋ 同步 current-state），并在满足 closure criteria 时允许 `DESIGN PENDING → DESIGN RESOLVED`？ | follow-up |
 
 **本 Review 不作出上述任何决定。** 后续必须由 **Human Decision** 裁定；
