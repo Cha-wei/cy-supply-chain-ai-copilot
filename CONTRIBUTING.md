@@ -1,7 +1,7 @@
 # CONTRIBUTING.md
 
 **项目：** Yunnan CY Group Supply Chain AI Copilot
-**文档版本：** v0.1
+**文档版本：** v0.2
 **文档状态：** `APPROVED`
 **生效范围：** 本项目日常工程协作流程
 
@@ -137,6 +137,167 @@ Task 进入 `READY` 前至少保证：
 - 如果无法自动创建新的顶层 Session，但判断 Fresh Context 更合适，**应生成完整 Handoff Prompt**，而不是要求用户重新解释项目背景。
 - **Implementation 与 Review 应尽可能使用独立 Context**，避免同一上下文自我确认。
 
+### Multi-Agent Execution
+
+> 本节补充**多 Agent ／ 多 Context 协作**所需的最小执行约束。
+> 它**不**重新定义 Human Approval、DoR、DoD、Required Gate、Git / PR 规则或 Rule Precedence ——
+> 相关内容**只引用**本文件其他章节（见第 1 节「规则优先级」）。
+
+**设计原则：本治理不绑定具体 Agent ／ Model。** 角色按 **Role-based assignment** 分配，
+**不得**写成 Agent-name-based；「哪个 Agent 扮演哪个 Role」属**动态执行状态**，
+**不得**写入本文件作为硬依赖。
+
+#### 角色（Role）
+
+| Role | 职责 | 必需性 |
+| --- | --- | --- |
+| **Human** | Decision Authority；Human Approval boundary **不变**（见第 1 节与 `AGENTS.md`） | 按现有规则 |
+| **Coordinator** | Task decomposition、dependency coordination、integration coordination、并行编排 | **OPTIONAL** |
+| **Write Owner** | 某一 **Active Write Scope** 的**唯一**写入者 | 每个 active write scope 必需 |
+| **Reviewer** | Independent Review ／ Acceptance Check；默认 **READ-ONLY** | 按现有 Required Gate 判断 |
+
+**Coordinator 是 OPTIONAL ROLE。** 仅在 **complex task ／ dependency coordination ／
+task decomposition ／ parallel execution ／ integration coordination** 场景需要。
+**简单 Task 不得为了形式主义强制指定 Coordinator。**
+
+**Reviewer 默认为 READ-ONLY**，**不应**在 Review 过程中顺手成为同一变更的 Write Owner。
+如 Reviewer 必须实施修改，**必须显式发生 Ownership Transfer**（见下文）；
+其修改部分是否需要新的 Independent Review，**按现有 Required Gate 规则判断**。
+**不得建立无限 Review Chain。**
+
+#### Write Ownership
+
+**定义：** 每个 **Active Write Scope** 在同一时刻**必须有且只有一个明确的 Write Owner**。
+
+```
+Write Scope = file ／ directory ／ module ／ 明确授权的其他 repository area
+Write 操作  = edit ／ create ／ delete ／ formatting ／ generated overwrite ／ bulk rewrite
+```
+
+**Write Ownership：**
+
+- **不等于** Human Approval；
+- **不等于** Merge Authority；
+- **不自动**扩大 Task Scope。
+
+**规则：**
+
+1. 同一 Active Write Scope，同一时刻**只能有一个** Write Owner。
+2. **不得**覆盖、删除或接管**来源无法确认**或 **Ownership 无法确认**的未完成工作。
+3. 同一文件即使计划修改**不同 section**，**默认**也视为 **overlapping write scope**；
+   除非明确证明并行修改安全，否则**串行**。
+4. 发现 Scope 越界需求时：**不得自行扩大** Write Ownership；
+   应由 **Coordinator（如存在）** 或 **Human ／ 当前 Task authority** 重新分配。
+
+#### Parallel Eligibility
+
+```
+Parallel Execution = PERMITTED, NOT DEFAULT
+```
+
+**不得**为了使用多个 Agent 而人为制造并行。write task 只有**同时**满足以下条件才适合并行：
+
+- Objective 可以独立描述；
+- Acceptance Criteria 可以独立验证；
+- 输入版本明确；
+- 关键依赖已经稳定；
+- 不依赖另一并行 Task 尚未决定的 Architecture ／ Contract ／ Schema ／ Design；
+- **Write Scope 不重叠**；
+- 没有未隔离的 **shared mutable resource**（见第 5 节）；
+- 每个子任务可以独立验证；
+- 有明确的 **Integration Responsibility**。
+
+```
+different files  ≠  automatically independent
+```
+
+**只读工作**（audit ／ analysis ／ review ／ multi-angle validation）通常可以更自由地并行。
+
+#### Review Independence
+
+保留现有原则：**Implementation 与 Review 应尽可能使用独立 Context**（见「执行方式选择」）。
+
+在此基础上，**Independent Review** 至少要求：
+
+- Reviewer **未参与**被审变更的主要实现；
+- Review 使用 **independent Context**；
+- Reviewer **直接检查实际 repository artifact**；
+- 检查真实 **diff ／ commit ／ tests ／ validation evidence**；
+- **Implementer summary 只能作为辅助信息**。
+
+```
+different model  ≠  automatically independent
+```
+
+**Independent Context ＋ 直接检查 evidence** 比 Agent 品牌更重要。
+
+如果真正的 Independent Review **属于当前 Task 的 Required Gate 但无法获得**：
+按第 6 节 Required Gate 规则处理（`NOT RUN` ／ `BLOCKED`），
+**不得**用普通 self-check 伪装成 Independent Review。
+
+#### Ownership Transfer ／ Handoff
+
+**Ownership Transfer 必须显式**，并优先在
+**clean ／ committed ／ otherwise recoverable Git boundary** 完成。
+
+交接前**必须确认**：旧 Write Owner **已停止写入**。
+
+接管方**必须从实际 Repository 状态恢复**：
+
+```
+current branch
+working tree
+relevant diff / commit
+Validation state
+Remaining Issues
+```
+
+**不得**仅依赖聊天中的「已经完成」。
+
+**Handoff 优先复用现有载体** —— Current Task ／ Git branch ／ commit ／ PR ／
+现有 Delivery Report ／ canonical docs。**不得**因为 Multi-Agent 而强制创建新的 Handoff document。
+
+**跨 Agent ／ 跨 Context 恢复时**，至少应能确定：
+
+| 信息 | 说明 |
+| --- | --- |
+| Task ／ Subtask | 当前授权范围 |
+| Write Owner | 当前唯一写入者 |
+| Input Version ／ Commit | 起始 baseline |
+| Write Scope | 允许写入的区域 |
+| Dependencies | 尚未稳定的依赖 |
+| Acceptance Criteria | 验收条件 |
+| Current Git State | branch ／ working tree ／ commit |
+| Validation Result | 已执行的 Gate 与结果 |
+| Remaining Work | 未完成事项 |
+
+上述信息**已存在于** Task ／ Git ／ PR ／ Delivery Report ／ canonical docs 时，
+**不得重复复制**（见第 9 节「Canonical Source」）。
+
+#### Fallback Assignment
+
+```
+Agent unavailable  ≠  Task automatically BLOCKED
+```
+
+**Agent unavailable 只触发 Role Reassignment** ——
+除非该 Agent **独有的某项能力本身是当前 Required Gate** 且**没有可用替代方案**
+（此时按第 6 节处理为 `BLOCKED`）。
+
+**Role Reassignment 不得改变：**
+
+- Objective
+- Scope
+- Acceptance Criteria
+- approved Decisions
+- Human Approval boundary
+- Required Gates
+
+**默认：** 如果 Write Owner 无法继续，Ownership 回到 **Coordinator（如果存在）**，
+否则回到 **当前 Task authority ／ Human** 重新分配。
+
+**不要求**每个普通 Task 重复填写专门的 fallback owner。
+
 ---
 
 ## 5. Git & GitHub Workflow
@@ -146,6 +307,56 @@ Task 进入 `READY` 前至少保证：
 - `main` 是可信主线。
 - 正式开发 Task 默认使用独立 Task Branch。
 - 不得默认直接 Push 到受保护的 `main`。
+
+### Workspace ／ Worktree Isolation
+
+**同一个 writable working tree 不得有多个 concurrent Write Owner。**
+（Write Ownership 定义见第 4 节「Multi-Agent Execution」。）
+
+如果多个 Agent **同时**执行 repository write task，**必须**使用：
+
+```
+independent Task Branch
++
+isolated workspace / Git worktree
+```
+
+并**记录或能够恢复**其 **input commit ／ common baseline**。
+
+如果 worktree ／ isolated workspace **当前不可用**，则 fallback 为 **serial write execution**。
+
+```
+branch isolation  ≠  Write Ownership replacement
+```
+
+即使 branch 不同，**高重叠 ／ 高 dependency task 仍不得强行并行**
+（见第 4 节「Parallel Eligibility」）。
+
+**Shared Mutable Resource Boundary：**
+
+Git worktree **只**隔离 repository working files，**不自动**隔离：
+
+```
+database
+dev server
+generated output directory
+shared cache
+external service
+test environment
+secrets
+other mutable external state
+```
+
+存在共享 mutable resource 时：**必须独立分配或串行执行**。
+
+```
+separate branch  ≠  full environment isolation
+```
+
+**Integration Responsibility：** 并行 write task **必须**由明确 Role
+（Coordinator，或当前 Task authority 指定的 Write Owner）负责整合，
+并保证 integration 发生在**明确 baseline** 之上；
+integration 后的变更仍按本节的 Commit ／ PR 规则与第 6 节的验证规则处理。
 
 ### Commit
 
@@ -433,6 +644,7 @@ DRAFT → REVIEW → APPROVED → FROZEN → DEPRECATED
 | `Known Risks` | 已知风险 |
 | `Remaining Issues` | 未解决事项 |
 | `Human Attention` | 需要人决策或确认的点 |
+| `Write Owner` | **仅当当前 Task 涉及多个 Agent ／ Context 时**：列出各 Active Write Scope 的 Write Owner（定义见第 4 节「Multi-Agent Execution」）；单一 Agent Task 可省略 |
 
 ### 语言要求
 
@@ -504,13 +716,14 @@ DRAFT → REVIEW → APPROVED → FROZEN → DEPRECATED
 ## Document Control
 
 **Document:** CONTRIBUTING
-**Version:** v0.1
+**Version:** v0.2
 **Status:** `APPROVED`
 
 本文档当前为 `APPROVED`，**未** `FROZEN`。
 
 - 本文档已完成实际文件 Review 并获 `APPROVAL`，构成本项目已批准的工程协作基线；但**尚未** `FROZEN`，因此仍可通过治理 Task 修订。
 - 实质修改需通过明确授权的 Governance Task，并按第 12 节处理冲突。
+- **v0.2（明确授权的 Governance Task）：** 新增第 4 节 `### Multi-Agent Execution` 与第 5 节 `### Workspace ／ Worktree Isolation`，并在第 11 节增加一个**条件性** `Write Owner` 字段。**未**修改 Human Approval、DoR、DoD、Required Gate、Git / PR 规则、Rule Precedence 或 Governance Protection；**未**新增 governance artifact；`AGENTS.md` **未修改**。
 - 非实质修正（typo、坏链接、格式）可直接修正，无需扩大为架构决策。
 - 本文档不包含：完整 Testing Strategy、Security Policy、ADR Template、Deployment Policy。相关内容在项目实际需要时再单独定义，以避免提前引入无证据支持的规范负担。
 
