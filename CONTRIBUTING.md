@@ -2,7 +2,7 @@
 
 **项目：** Yunnan CY Group Supply Chain AI Copilot
 **文档版本：** v0.2
-**文档状态：** `APPROVED`
+**文档状态：** `APPROVED`（当前已批准 baseline = `v0.1`；`v0.2` 待 Human Merge Gate，见 Document Control）
 **生效范围：** 本项目日常工程协作流程
 
 > 本文档定义本项目日常工程协作的一般默认流程。
@@ -280,9 +280,18 @@ Remaining Issues
 Agent unavailable  ≠  Task automatically BLOCKED
 ```
 
-**Agent unavailable 只触发 Role Reassignment** ——
-除非该 Agent **独有的某项能力本身是当前 Required Gate** 且**没有可用替代方案**
-（此时按第 6 节处理为 `BLOCKED`）。
+**Agent unavailable 本身不自动导致 Task `BLOCKED`。**
+默认**优先尝试 Role Reassignment**（见下文默认规则）。
+
+**但 Task 是否能够继续，仍由现有规则决定**，包括：
+
+- Definition of Ready（第 3 节）
+- Ownership Transfer safety（见「Ownership Transfer ／ Handoff」）
+- dependency availability
+- Required Gates（第 6 节）
+- actual repository state
+
+**本节不建立新的阻塞条件，也不缩窄现有阻塞条件。**
 
 **Role Reassignment 不得改变：**
 
@@ -293,8 +302,15 @@ Agent unavailable  ≠  Task automatically BLOCKED
 - Human Approval boundary
 - Required Gates
 
-**默认：** 如果 Write Owner 无法继续，Ownership 回到 **Coordinator（如果存在）**，
-否则回到 **当前 Task authority ／ Human** 重新分配。
+**默认：** 如果 Write Owner 无法继续，**责任由 Coordinator（如果存在）承担**；
+否则由 **当前 Task authority ／ Human** 承担，并**重新分配** Write Ownership。
+
+```
+Coordinator 不自动成为 Write Owner。
+```
+
+新的 Write Owner **必须显式指定**，并且**只有在 Ownership Transfer conditions satisfied**
+（见「Ownership Transfer ／ Handoff」）后才允许写入。
 
 **不要求**每个普通 Task 重复填写专门的 fallback owner。
 
@@ -313,13 +329,21 @@ Agent unavailable  ≠  Task automatically BLOCKED
 **同一个 writable working tree 不得有多个 concurrent Write Owner。**
 （Write Ownership 定义见第 4 节「Multi-Agent Execution」。）
 
-如果多个 Agent **同时**执行 repository write task，**必须**使用：
+**触发条件是 execution context，不是 Agent identity。**
+如果多个**独立执行上下文**（independent execution context）**同时**执行 repository write task ——
+**无论是否来自同一个 Agent ／ Model**（例如同一 Agent 的多个 Session、多个 independent Context、
+或多个 concurrent execution context）—— **必须**使用：
 
 ```
 independent Task Branch
 +
 isolated workspace / Git worktree
 ```
+
+**Write Owner identity 按「实际执行上下文 ＋ Active Write Scope」判断**，**不按 Agent 名称判断**：
+同一个 Agent ／ Model 的多个 Session 属于**多个不同的 concurrent writer**，
+**不得**因为「使用的是同一个 Agent」而被视为同一个 Write Owner；
+反之，不同 Agent 若不构成独立执行上下文，也**不得**据此规避本条规则。
 
 并**记录或能够恢复**其 **input commit ／ common baseline**。
 
@@ -644,7 +668,7 @@ DRAFT → REVIEW → APPROVED → FROZEN → DEPRECATED
 | `Known Risks` | 已知风险 |
 | `Remaining Issues` | 未解决事项 |
 | `Human Attention` | 需要人决策或确认的点 |
-| `Write Owner` | **仅当当前 Task 涉及多个 Agent ／ Context 时**：列出各 Active Write Scope 的 Write Owner（定义见第 4 节「Multi-Agent Execution」）；单一 Agent Task 可省略 |
+| `Write Owner` | **仅当本次交付涉及 write ownership split 或 Ownership Transfer 时**：列出或引用 relevant Write Scope ＋ Write Owner（定义见第 4 节「Multi-Agent Execution」）。**不存在相关写入分工时可省略**；ownership 信息已可靠存在于 Task ／ PR ／ 其他 canonical source 时**允许引用，不要求重复复制** |
 
 ### 语言要求
 
@@ -719,11 +743,14 @@ DRAFT → REVIEW → APPROVED → FROZEN → DEPRECATED
 **Version:** v0.2
 **Status:** `APPROVED`
 
-本文档当前为 `APPROVED`，**未** `FROZEN`。
+本文档的**当前已批准 baseline** 为 **`v0.1`**（文档级状态 `APPROVED`，**未** `FROZEN`）。
+**`v0.2`** 是**当前 Governance revision**，其最终生效取决于承载该修订的 PR 的 **Human Review ／ Merge Gate**。
 
-- 本文档已完成实际文件 Review 并获 `APPROVAL`，构成本项目已批准的工程协作基线；但**尚未** `FROZEN`，因此仍可通过治理 Task 修订。
+- **`v0.1`：** 已完成实际文件 Review 并获 `APPROVAL`，构成本项目**此前已批准**的工程协作基线。
+- **`v0.2`：** 经**明确授权的 Governance Task** 新增第 4 节 `### Multi-Agent Execution` 与第 5 节 `### Workspace ／ Worktree Isolation`，并在第 11 节增加一个**条件性** `Write Owner` 字段；**未**修改 Human Approval、DoR、DoD、Required Gate、Git / PR 规则、Rule Precedence 或 Governance Protection；**未**新增 governance artifact；`AGENTS.md` **未修改**。
+- **`v0.2` 的生效：** 在承载该修订的 PR 通过 **Human Review ／ Merge Gate** 并被 merge **之前**，`v0.2` **不是**已批准的正式 baseline；**merge 后**该修订成为**新的 `APPROVED` baseline**。
+- 本文档**尚未** `FROZEN`，因此仍可通过治理 Task 修订。
 - 实质修改需通过明确授权的 Governance Task，并按第 12 节处理冲突。
-- **v0.2（明确授权的 Governance Task）：** 新增第 4 节 `### Multi-Agent Execution` 与第 5 节 `### Workspace ／ Worktree Isolation`，并在第 11 节增加一个**条件性** `Write Owner` 字段。**未**修改 Human Approval、DoR、DoD、Required Gate、Git / PR 规则、Rule Precedence 或 Governance Protection；**未**新增 governance artifact；`AGENTS.md` **未修改**。
 - 非实质修正（typo、坏链接、格式）可直接修正，无需扩大为架构决策。
 - 本文档不包含：完整 Testing Strategy、Security Policy、ADR Template、Deployment Policy。相关内容在项目实际需要时再单独定义，以避免提前引入无证据支持的规范负担。
 
