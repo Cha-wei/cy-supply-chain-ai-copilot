@@ -97,23 +97,20 @@
 authoritative 条件与 current status 见该文档 **§4.3** ／ **§4.3.21 `Status Boundary`**，**本文档不复制**。
 （历史 Review evidence：PR #53；**Decision Source** 以 canonical design on `main` 为准。）
 
-**其后 Gate 顺序**（`Field Carrier Mapping` → `Final Import Contract` → `Adapter Boundary`）
-以 §5 Major Design State 的定位入口为准。
+**其余 pending design areas 包括** `Field Carrier Mapping` ／ `Final Import Contract` ／ `Adapter Boundary`；
+状态与入口见 **§5 Major Design State**（本文档**不建立**其执行顺序）。
 
-merge 到 `main` 属 Human Gate（见 `AGENTS.md` 第 4 ／ 6 条）。
+任务完成／合并判定见 `CONTRIBUTING.md` §7 Definition of Done 与 §5 Git & GitHub Workflow。
 
 ---
 
 ## 7. Cold Start Protocol
 
-默认读取顺序（**渐进式**，够用即停）：
+**Context Recovery 的 canonical 顺序由 `AGENTS.md` `## Context Recovery` 与 `CONTRIBUTING.md` §4 定义。
+本文档不重定义、不替代该顺序，也不排在 Hard Rules 之前。**
 
-1. `docs/project-index.md`
-2. `AGENTS.md` / `CONTRIBUTING.md`
-3. 当前 active Task（Issue / PR / Task 描述）
-4. 该 Task 明确引用的 canonical sections
-5. current `git diff` / PR / CI 状态
-6. **仅在**出现 ambiguity / contradiction 时，才读取更深历史
+在 governance 已可靠加载后，可将本文档作为**导航辅助**，用于定位 current canonical docs 与 current phase；
+其余信息按需逐层加载，**够用即停** —— **仅在**出现 ambiguity / contradiction 时，才读取更深历史。
 
 ---
 
@@ -122,7 +119,7 @@ merge 到 `main` 属 Human Gate（见 `AGENTS.md` 第 4 ／ 6 条）。
 - **Reference over duplication：** 引用 canonical source，**不复制**其内容。
 - **Progressive context loading：** 按需逐层加载，够用即停。
 - **不得**默认读取：整个 repository、整个 `POC Design v0.2`、全部历史 PR / commit / closed issue。
-- Repository 是 durable project memory；**conversation history 不是**恢复项目状态的必需依赖。
+- Durable project memory 与 Context Recovery 原则见 `AGENTS.md` `## Context Recovery` ／ `CONTRIBUTING.md` §4，**本文档不复制**。
 
 ---
 
