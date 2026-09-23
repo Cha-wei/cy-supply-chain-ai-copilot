@@ -78,12 +78,14 @@
 | └ Final Import Contract | **`DESIGN RESOLVED`** | §4.3.28；closure 见 §4.3.29 |
 | Data Validation | **`DESIGN RESOLVED`** | §4.4；closure 见 §4.4.101 |
 | Master Data Mapping | **`DESIGN RESOLVED`**（11 / 11 层） | §4.5；status 见 §4.5.24；scope 见 §4.5.25 |
-| **Adapter Boundary** | **`DESIGN PENDING`** | §4 子章节状态表 |
+| **Adapter Boundary** | **`DESIGN RESOLVED`**（conceptual closure；implementation 未授权） | §4 子章节状态表；closure 见 §4.6.21 |
 | AI / Tool Boundary、HITL、Permission & Security、Audit & Observability、Test & AI Eval | 见对应章节 status boundary | §5 ～ §9（§5 status 见 §5.18） |
 | Architecture Decisions | **尚无正式 ADR**；技术栈明确未决定 | §10；`## Explicit Non-Decisions` |
 
-**§4 仍有 1 个 `DESIGN PENDING` 子领域：** `Adapter Boundary`。
-**不得声称整个 §4 已完成。**
+**§4 现有 0 个 `DESIGN PENDING` 设计子领域**（`Adapter Boundary` 已由 Issue #90 Closure Validation = `PASS`
+登记为 `DESIGN RESOLVED`；见 §4.6.21）。
+**设计层 closure ≠ implemented / tested / production-ready；不得据此声称整个 §4 已实现 / 已验证，
+也不得声称 `POC Design v0.2 overall` 已完成。**
 
 ---
 
@@ -91,13 +93,18 @@
 
 **当前 Phase：** `POC Design v0.2`（**`DRAFT`**，尚未 `APPROVED` / `FROZEN`）。
 
-**最近已完成的 Gate：** `Final Import Contract` Closure Validation —— **`PASS`**
-（`Final Import Contract` 与 `Snapshot / Import Contract overall` 均 → **`DESIGN RESOLVED`**；
-authoritative 记录见 `docs/design/poc-design-v0.2.md` **§4.3.28** ／ **§4.3.29**；
+**最近已完成的 Gate：** `Adapter Boundary` Closure Validation —— **`PASS`**
+（`Adapter Boundary` → **`DESIGN RESOLVED`**；authoritative 记录见 `docs/design/poc-design-v0.2.md` **§4.6.21**；
 本文档**不复制** closure rationale）。
 
-**其余 pending design areas 包括** `Adapter Boundary`；
-状态与入口见 **§5 Major Design State**（本文档**不建立**其执行顺序）。
+**更早：** `Final Import Contract` Closure Validation —— **`PASS`**
+（`Final Import Contract` 与 `Snapshot / Import Contract overall` 均 → **`DESIGN RESOLVED`**；
+authoritative 记录见 **§4.3.28** ／ **§4.3.29**）。
+
+**其余 pending areas（§5 ～ §9 对应章节的 status boundary，例如 `Permission & Security` 的
+`RBAC` / `Data Scope` / `Tool Permission` / `Secret Handling`）** 见 **§5 Major Design State**；
+`Adapter Boundary` 的 **implementation / Architecture / §7 / §8 等后续工作未由 closure 授权**，
+须以独立、明确授权的 task / PR 进行（本文档**不建立**其执行顺序）。
 
 任务完成／合并判定见 `CONTRIBUTING.md` §7 Definition of Done 与 §5 Git & GitHub Workflow。
 
