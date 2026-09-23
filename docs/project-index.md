@@ -74,7 +74,7 @@
 | ├ Package Envelope ／ Atomicity ／ Immutability ／ Analysis Run Linkage | `DESIGN RESOLVED` | §4.3 |
 | ├ Serialization Format | **`DESIGN RESOLVED`** | §4.3.22 |
 | ├ Physical Dataset Layout | **`DESIGN RESOLVED`** | §4.3.23；closure 见 §4.3.24 |
-| ├ Field Carrier Mapping | **`DESIGN PENDING`** | 尚未设计 |
+| ├ Field Carrier Mapping | **`DESIGN RESOLVED`** | §4.3.25；closure 见 §4.3.27 |
 | └ Final Import Contract | **`DESIGN PENDING`** | 尚未设计 |
 | Data Validation | **`DESIGN RESOLVED`** | §4.4；closure 见 §4.4.101 |
 | Master Data Mapping | **`DESIGN RESOLVED`**（11 / 11 层） | §4.5；status 见 §4.5.24；scope 见 §4.5.25 |
@@ -91,10 +91,10 @@
 
 **当前 Phase：** `POC Design v0.2`（**`DRAFT`**，尚未 `APPROVED` / `FROZEN`）。
 
-**最近已完成的 Gate：** `Physical Dataset Layout` Closure —— **`PASS`**
-（authoritative 记录见 `docs/design/poc-design-v0.2.md` **§4.3.24**；本文档**不复制** closure rationale）。
+**最近已完成的 Gate：** `Field Carrier Mapping` Closure Re-run —— **`PASS`**
+（authoritative 记录见 `docs/design/poc-design-v0.2.md` **§4.3.27**；本文档**不复制** closure rationale）。
 
-**其余 pending design areas 包括** `Field Carrier Mapping` ／ `Final Import Contract` ／ `Adapter Boundary`；
+**其余 pending design areas 包括** `Final Import Contract` ／ `Adapter Boundary`；
 状态与入口见 **§5 Major Design State**（本文档**不建立**其执行顺序）。
 
 任务完成／合并判定见 `CONTRIBUTING.md` §7 Definition of Done 与 §5 Git & GitHub Workflow。
