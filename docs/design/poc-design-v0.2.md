@@ -9591,7 +9591,7 @@ Status Change  = NONE
 6. integrity contract 的**未继承部分**（algorithm strategy ／ evidence representation ／ digest 目标 ／ Manifest 自身）
 7. `contract_version` compatibility model
 8. partial package ／ failure isolation ／ atomicity 边界
-9. `completeness_state` 与 finality ／ immutability 的 acceptance 角色
+9. `completeness_state` 与 finality ／ immutability 的 acceptance 角色（**含 acceptance-time 一致输入视图**，`IS-24`）
 10. deterministic failure reporting 的 **shape**（reason taxonomy 已 inherited）
 11. **`REJECTED` ／ `UNUSABLE` 的 contract-level usage**
 12. Final Import Contract 的 minimum closure criteria 候选
@@ -9631,13 +9631,16 @@ Status Change  = NONE
 | `IS-14` | **unknown canonical record property** | `IC-6`：canonical field identifier 即 property name；`IC-9` ／ `IC-10` 禁止 silent fix-up —— 但「未知 property 是否 reject」**未**决定 | **`open`** |
 | `IS-15` | **unknown `"_meta"` member** | `IC-7`：`"_meta"` 为 reserved namespace；**内部 member 名称未批准** ⇒ **known member set 尚未存在**，无法在缺该集合时判定「unknown」 | **`open`＋ prerequisite**（见 `DEP-8`） |
 | `IS-16` | artifact reference 含 `.` ／ `..` ／ 平台分隔符 ／ 指向 boundary 之外 | `IC-2`：resolved target **必须**在 boundary 内 —— boundary 结论 inherited；**normalization 是否存在**未决定 | **`IC + open`** |
-| `IS-17` | 两个 reference **归一化后指向同一 target**，字面量不同 | `IC-1` ／ `IC-3`；是否视为 duplicate 取决于 normalization 语义 | **`open`** |
+| `IS-17a` | reference 的 **target-equivalence 识别规则**（字面量 ／ normalization ／ separator ／ case ／ symlink ／ alias）**尚未登记** | `IC-2`（boundary 不可让步）；**识别规则本身**既有 Design 未决定 | **`open`** |
+| `IS-17b` | 两个 reference 在**已选定且允许的**解析规则下**已确认指向同一 artifact**，字面量不同 | **`IC`**：`IC-1` 要求每个 included logical dataset 对应 **independent** artifact；**target identity 一旦确定为同一 artifact，即不构成第二个 independent artifact** ⇒ 适用与 `IS-4` ／ `IS-9` 相同的违反结论。normalization ／ case ／ symlink ／ alias policy 决定的是**如何建立 target identity**，**不得**在该 identity 已确定相同时再用作绕过 `IC-1` 的自由选项 | **`IC`** |
 | `IS-18` | `"integrity_evidence"` **missing ／ malformed ／ 无法验证** | **`IC-22`**：integrity 无法可靠确定 ⇒ structural ＋ fail closed | **`IC`** |
 | `IS-19` | `"contract_version"` 为**不受支持**的版本 | 既有 Design **未决定** compatibility model；**不得** silent interpretation | **`open`** |
 | `IS-20` | `"completeness_state"` 表示 **incomplete ／ in-progress** 的 package 被提交 | `IC-12` ／ `§4.3.12` A ／ B | **`open`** |
 | `IS-21` | Package 同时存在**多个** structural defect | 既有 Design **未决定** reporting 形态（reason taxonomy 已 inherited，`IC-20`） | **`open`**（reporting shape only） |
 | `IS-22` | Accepted 后 artifact bytes 发生变化 | `IC-12`：accepted = immutable，同 ID 不得不同内容 ⇒ **该 identity 不再可信 ⇒ fail closed**；**如何检测**未决定 | **`IC + open`**（detection ／ re-verification ／ binding 开放） |
 | `IS-23` | 同一 Package 被描述为 `REJECTED` 或 `UNUSABLE` | `IC-21`：二者是 **Package disposition**，不是 reason；**但二者之间的 contract-level 差异在 repository 中未被定义** | **`open`**（见 `RIF-1` ／ Decision 3） |
+| `IS-24` | **acceptance 期间「验证对象 ≠ 接受对象」**：某次验证所依据的 artifact ／ Manifest 内容视图，与最终被接受、随后供 Analysis Run 使用的 package 内容视图**不属同一稳定输入版本**（或在 acceptance 过程中发生变更 ／ 前后读取结果不一致） | **`IC`**：`IC-12` ／ `IC-13`（源 `§4.3.5` ／ `§4.3.6`）的 immutable ／ package-level atomic meaning 要求一个 package 内容视图成立；**「分别成功」不等于「同一次 acceptance 内一致」** ⇒ 无法建立一致性时**不可判定为通过**（`IC-16`）；**检测时机与保证边界**属本层 contract（见 `RIF-13` ／ `I-14`） | **`IC + open`**（检测时机 ／ 保证边界 ／ 报告表述开放；锁 ／ 事务 ／ 原子移动 ／ 存储技术属 implementation） |
+| `IS-25` | 已关闭层的 residual（例如 `IC-7` 的 `"_meta"` 内部 member 名称未批准）被**直接**视为对本层某候选分支 non-blocking | 已关闭层的 non-blocking 结论**只**在其自身 closure 范围内成立（`§4.3.27` D）；**是否**对本层某候选分支 non-blocking **必须**在本层按其自身 contract 依赖**重新评估** | **`open`＋ prerequisite**（见 `DEP-10`） |
 
 ---
 
@@ -9684,7 +9687,13 @@ typo ／ silent data loss risk
 
 **`Inherited Constraint`（不可让步）：** resolved target **必须**在当前 package boundary 内；absolute ／
 external ／ URI **不属于**合法 layout（`IC-2`）。
-**开放：** normalization **是否存在**、separator ／ case ／ symlink ／ alias 语义、normalized duplicate（`IS-17`）。
+**`Inherited Constraint`（不可让步，与 normalization 选择无关）：** **不同 included roles 的 reference 一旦按已选定且允许的
+解析规则确认解析到同一 artifact**，即**不再**构成两个 independent artifact（`IC-1`，同 `IS-4` ／ `IS-9`）。
+`PN-1` ／ `PN-2` ／ `PN-3` **共享同一适用前提**：**必须**同时定义 **alias ／ link（symlink ／ junction）的拒绝或安全解析边界**；
+**不得**以「选择低成本项」为由豁免 package boundary（`IC-2`）与 artifact independence（`IC-1`）。
+`PN-1` 只表示**不做**普通化处理，**不表示**可以跳过 boundary ／ alias 约束。
+**开放：** normalization **是否存在**、separator ／ case ／ symlink ／ junction ／ alias 语义、
+以及 **target-equivalence 识别规则**本身（`IS-17a`）。
 
 **D. Integrity Contract（Q6）**
 
@@ -9702,6 +9711,22 @@ integrity unverifiable  ⇒ Package Structural Inconsistency ⇒ fail closed
 
 **算法族**（仅列类别，**不**在任何层选定具体算法）：cryptographic hash ／ non-cryptographic checksum ／
 digital signature ／ 混合（例如 hash ＋ 可选 signature）。
+
+> **algorithm family 的可行性分级（`open` 选择，但不得隐含前提）：**
+> **hash ／ checksum 分支**只把 **content integrity** 作为目标，其 verification input 为
+> （algorithm ＋ 被覆盖内容 ＋ evidence value）—— 本层可达 deterministic。
+> **digital signature ／ 混合分支为条件性可行（conditionally viable）**：除 algorithm 与 covered content 之外，
+> verification **还依赖 verification key**。若把 signature 用来建立 **Manifest ／ 来源可信性（authenticity）**，
+> **必须同时**确定 ① **verification key 的信任来源与选择边界**（由谁提供、如何绑定到 contract、
+> 缺失或与 evidence 不一致时如何处理），② 与 **evidence representation**（`IG-rep-*`）及
+> **Manifest 自身 integrity**（`IG-self-*` ／ `DEP-9`）的依赖，③ 达到 deterministic verification 的**完成条件**。
+> **不得**接受 package 自带但**未经任何信任约束**的 key，却把「数学验证成功」当作来源可信。
+> 若该分支需要新的 security ／ key-management design，**必须**按治理标记为
+> **requires separate Human-authorized design change**，并**明确**其是否阻塞所选分支的 closure（`DEP-11`）。
+> **不变式：** **content integrity 目标 ≠ identity ／ authenticity 目标**；
+> hash ／ checksum 的「内容完整性」**不得**被当作来源认证（`IC-15` 的 integrity evidence 不等于既有
+> `PROVENANCE` 层语义）。
+> **本 Review 不要求**选择 signature、不要求引入 PKI、不要求设计 signing infrastructure、不要求获取任何 secrets。
 
 **deterministic verification 的候选 shape（`open`）：**
 
@@ -9737,7 +9762,21 @@ verification 结果**不依赖 implementation 选择**」。
 | --- | --- | --- |
 | `IG-self-A` | Manifest 自身**单独**处理（detached evidence ／ sidecar） | **需要** —— `IC-5` ／ `IC-7` 未提供 Manifest-self-integrity carrier；新增 carrier ／ sidecar 即触碰 **Field Carrier Mapping ／ Physical Dataset Layout**，属 **requires separate Human-authorized design change** |
 | `IG-self-B` | 与 artifact **同一机制**处理 | **需要** —— 同样缺 carrier；且需定义**自引用排除规则**（hash 是否覆盖承载 evidence 的字段）→ 仍触发 carrier ／ canonicalization 问题 |
-| `IG-self-C` | 本层**只**要求「Manifest 自身可信性必须可建立」，**不**规定 mechanism ／ carrier | **不需要**新增 carrier；但需明确**不得**由 Agent 自行新增 literal |
+| `IG-self-C` | 本层**只**要求「Manifest 自身可信性必须可建立」，**不**规定 mechanism ／ carrier | **不需要**新增 carrier；但**必须**说明**可审计的信任前提 ／ 输入边界**，且**不得**由 Agent 自行新增 literal（见下方前提条件） |
+
+> **`IG-self-C` 的前提条件与 closure 边界（不得省略 —— 目标陈述 ≠ 可判定前提）：**
+> 若采纳 `IG-self-C`，本层**必须**同时登记：
+>
+> 1. **可审计的信任前提 ／ 输入边界** —— 即「Manifest 自身可信性可建立」**依据什么输入**、
+>    **由谁提供**、以及**哪些输入缺失即视为不可建立**（否则该表述只是目标陈述，**不可判定**）；
+> 2. **完成 gate** —— 规定 mechanism ／ carrier（例如 Manifest-self carrier ／ sidecar ／
+>    自引用排除规则）的**后续动作**必须具名、且其完成**明确**是
+>    **(a)** 不影响 acceptance 判定的 implementation detail residual，**或**
+>    **(b)** 影响 acceptance 判定的 contract prerequisite；
+> 3. **对选中分支的重新评估** —— 已关闭层（`§4.3.27` D）记录的 FCM non-blocking residual
+>    **不得**被**直接**沿用来证明本层候选分支 non-blocking（`DEP-10` ／ `IS-25`）；
+> 4. **closure claim 范围** —— 在 (1) ／ (2) 完成前，本层**只**可声称
+>    **CL-2（conditional）**，**不得**无条件声称 `IG-self-C` 已「低成本解决」Manifest 自身可信性。
 
 **E. Contract Version Compatibility（Q7）**
 
@@ -9839,15 +9878,17 @@ reporting **必须**区分 `not evaluable due to prerequisite` 与 `evaluated an
 
 | # | Dependency | 说明 |
 | --- | --- | --- |
-| `DEP-1` | **unknown-content policy ↔ version compatibility** | 若 unknown property 被 reject，任何**新增字段**等价于版本不兼容 ⇒ `VC-*` 与 `UX-*` **必须**组合裁定 |
+| `DEP-1` | **unknown-content policy ↔ version compatibility** | **正确形式：** 先按**受支持版本 ／ 兼容规则**确定所适用的 contract 与**该 contract 的 known member set**，**再**对该 version 的 payload 应用该 contract 的 unknown policy。**version-token 匹配 ≠ field policy**：版本是否**被支持**，与 payload 是否符合**所选版本**，是两件事。`VC-*` 与 `UX-*` **必须**组合裁定，但**不得**写成「reject unknown ⇒ 任何新增字段必然版本不兼容」 |
 | `DEP-2` | **integrity digest 目标 ↔ byte-level canonicalization（`IC-11`）** | `IG-canon` **触发** byte-level canonicalization 设计；`IG-raw` **不**触发 |
 | `DEP-3` | **integrity mandatory 性 —— 已 inherited，不再依赖其他选择** | mandatory ＋ unverifiable → structural ＋ fail closed 由 `IC-22` 唯一确定；**剩余依赖**为 `IG-rep-*`（evidence 表示）↔ `IC-7` 的 carrier ownership 边界 |
 | `DEP-4` | **`completeness_state` 角色 ↔ acceptance gate** | `CF-2` ／ `CF-3` 会**新增** acceptance 拒绝条件 ⇒ 须与 `IS-*` 的 structural 集合一致 |
-| `DEP-5` | **path normalization ↔ presence 判定** | normalized duplicate reference（`IS-17`）会改变「artifact 是否存在」的判定 |
+| `DEP-5` | **path ／ alias 解析 ↔ target identity ＋ uniqueness ＋ boundary 判定** | target-equivalence 识别规则（`IS-17a`）决定**如何建立 target identity**；该 identity 一旦确定相同（`IS-17b`），**同时**影响 ① artifact presence、② artifact **uniqueness ／ independence**（`IC-1`）、③ boundary 判定（`IC-2`）—— **不**只影响 presence |
 | `DEP-6` | **failure reporting ↔ `IC-20`（taxonomy）** | reason taxonomy 已 inherited（`PACKAGE_STRUCTURE` ／ `STRUCTURAL_INCONSISTENCY`）；**报告 shape** 开放，但**不得**引入新的 root reason |
 | `DEP-7` | **`AM-1`（`IC`）↔ 全部 rejection 条件** | 任何 rejection 条件都在 package-level atomic 语义下生效，**不得**被实现为 dataset-level partial outcome |
-| `DEP-8` | **unknown `"_meta"` member policy ↔ known member set 的存在性** | 在 `IC-7` 的 P-A ／ MB-A 内部 member literal 获批**之前**，**known member set 不存在**，故 unknown-`"_meta"` policy **无法判定**（`IS-15`）。须先裁定：**是否**把 member set 升为**独立 naming decision**，或**允许**先登记 abstract policy（implementation 前再定 literal） |
-| `DEP-9` | **Manifest 自身 integrity ↔ Field Carrier Mapping ／ Physical Dataset Layout** | `IG-self-A` ／ `IG-self-B` 需要新 carrier ／ sidecar（`IC-5` ／ `IC-7` 未提供）⇒ **cross-layer**，须 **separate Human-authorized design change** |
+| `DEP-8` | **unknown `"_meta"` member policy ↔ known member set 的存在性** | 在 `IC-7` 的 P-A ／ MB-A 内部 member literal 获批**之前**，**known member set 不存在**，故 unknown-`"_meta"` policy **无法判定**（`IS-15`）。须先裁定：**是否**把 member set 升为**独立 naming decision**，或**允许**先登记 abstract policy（implementation 前再定 literal）。**若**选择后者，**仍必须**登记：authoritative parameter（member set）的**来源**、其**版本 ／ 绑定关系**、**缺失时的行为**（fail closed ／ not evaluable）、以及**可声称的 closure 范围 ／ 完成 gate**（§7.1 `CL-2`） |
+| `DEP-9` | **Manifest 自身 integrity ↔ Field Carrier Mapping ／ Physical Dataset Layout** | `IG-self-A` ／ `IG-self-B` 需要新 carrier ／ sidecar（`IC-5` ／ `IC-7` 未提供）⇒ **cross-layer**，须 **separate Human-authorized design change**；`IG-self-C` **不**新增 carrier，但**仍受**下方前提条件与 `DEP-10` 约束 |
+| `DEP-10` | **已关闭层 residual ↔ 本层候选分支（cross-layer 再评估）** | `IC-7` 的 `"_meta"` 内部 member 名称未批准，在 **FCM closure（`§4.3.27` D）** 范围内**不构成** blocking gap。该结论**只**对 FCM closure 成立，**不自动**证明其对本层任何候选分支 non-blocking：若所选分支要求 known member set 作为**接受判定**的 prerequisite（例如 unknown-`"_meta"` policy ／ 含 `"_meta"` 的 digest 覆盖范围），则**必须**在本层**重新评估**，并登记完成 gate 与缺失时的行为（`IS-15` ／ `IS-25`） |
+| `DEP-11` | **signature 分支 ↔ verification key 信任源 ＋ evidence representation ＋ Manifest self-integrity** | 若所选 integrity 分支包含 digital signature（或以 signature 主张**来源可信性**），其 verification input **不**止于 algorithm ＋ covered content：**必须**确定 verification key 的**信任来源 ／ 配置边界 ／ 选择规则**、key 与 contract 的**绑定**、以及 key 不可用或不一致时的处置。该分支与 `IG-rep-*`（evidence representation）及 `DEP-9`（Manifest self-integrity）**耦合**；任何新的 security ／ key-management 设计**必须**标记为 **requires separate Human-authorized design change**，并**明确**是否阻塞所选分支的 closure（`IS-18` 的 deterministic 前提） |
 
 ---
 
@@ -9885,14 +9926,23 @@ reporting **必须**区分 `not evaluable due to prerequisite` 与 `evaluated an
 **本 Review 判定：** 只有上表**第一组**边是 inherited；**`record_count` → integrity 的顺序不得提前固定**。
 **不写 parser algorithm。**
 
+**新增 inherited obligation（`IS-24` ／ `RIF-13`）：** 上述 partial order **不得**被解释为
+「各项检查各自成功即可接受」。**必须**额外要求：**同一次 acceptance 所依据的 Manifest ／ artifact set ／
+parse 结果 ／ record-count 结果 ／ integrity 结果，属于同一稳定 package 内容视图**，
+且该视图即**被接受**、随后供 Analysis Run 使用的视图。
+**prerequisite 不可判定**（例如 `manifest.json` 无法 strict-parse）时，其 downstream check
+**not evaluable**，**不得**记为 passed（与 `F.2` 一致）。
+
 **`RIF-3`（Q3 Manifest ↔ Artifact Consistency）**
 **Inherited（structural，`IC`）—— 附依据：** `IS-1` ／ `IS-5` ／ `IS-6` ／ `IS-11`（`IC-14` 字数列出）；
-`IS-3`（`IC-3` 唯一性 ＋ `IC-1` 粒度）；`IS-4` ／ `IS-9`（`IC-1` 要求 artifact 对每个 included logical
-dataset **independent**，多 role 共用同一 artifact 即违反）；`IS-2`（`IC-8` strict-parse 失败 ⇒
+`IS-3`（`IC-3` 唯一性 ＋ `IC-1` 粒度）；`IS-4` ／ `IS-9` ／ `IS-17b`（`IC-1` 要求 artifact 对每个 included
+logical dataset **independent**，多 role 共用**同一 target identity** 的 artifact 即违反，
+**无论其 reference 字面量是否相同**）；`IS-2`（`IC-8` strict-parse 失败 ⇒
 `IC-16` fail closed）；`IS-7`（`"record_count"` 为 Manifest **authoritative presence metadata**，
 与 artifact 内容不一致 ⇒ required structural metadata 不可靠确定 ⇒ `IC-16` fail closed）；
 `IS-10`（`IC-4` ／ `IC-6` 要求 empty payload = 空 record array）。
 **开放（`open`）—— 仅剩：** `IS-8`（未引用 artifact，归 Decision 1）；
+`IS-17a` 的 target-equivalence 识别规则（归 Decision 4 ／ `RIF-5`）；
 以及上述各 `IC` 情景的 **disposition wording ／ reporting detail**（归 Decision 8）。
 **本 Review 不再把上述**任何一种列为「structural ／ allowed ／ deferred」三选一。
 
@@ -9902,11 +9952,18 @@ dataset **independent**，多 role 共用同一 artifact 即违反）；`IS-2`�
 **不可让步项：** 任何策略**不得**使 unknown content 被**当作** canonical business field
 （尤其 `IC-6` ／ `IC-7`）；**不得**引入 silent fix-up（`IC-10`）；
 **不得**借 unknown policy 扩展 canonical field 集合。
+**另须区分（与 `IS-15` 直接相关）：** 某一载体**是否允许**选择 abstract ／ parameterized policy
+（参数在 implementation 前再定），与**该 policy 是否已可判定**是两件事。若允许前者，
+登记内容**必须**包含参数来源、版本 ／ 绑定、缺失时行为与 closure 范围（`DEP-8` ／ `I-17`）。
 
 **`RIF-5`（Q5 Path ／ Boundary Enforcement）**
 `IC-2` 的 **boundary 结论**为 **`Inherited Constraint`**。
-**开放：** normalization 是否存在、separator ／ case ／ symlink ／ junction ／ alias 语义、
-normalized duplicate reference（`IS-17`）。**这是 contract ／ validation semantics，不是 security implementation。**
+**`Inherited Constraint`（另附）：** 不同 included roles 的 reference **一旦确认解析到同一 artifact**，
+其行为结论与 `IS-4` ／ `IS-9` 相同（`IS-17b`）—— 该部分**不**开放。
+**开放：** target-equivalence 识别规则本身（`IS-17a`）：normalization 是否存在、
+separator ／ case ／ symlink ／ junction ／ alias 语义；且 `PN-1` ／ `PN-2` ／ `PN-3`
+**均须**定义 alias ／ link 的拒绝或安全解析边界，**不得**以低成本为由豁免 boundary 与 independence。
+**这是 contract ／ validation semantics，不是 security implementation。**
 
 **`RIF-6`（Q6 Integrity Contract）**
 **`Inherited Constraint`：** integrity verification **mandatory**；`integrity unverifiable` ⇒
@@ -9915,12 +9972,20 @@ normalized duplicate reference（`IS-17`）。**这是 contract ／ validation s
 **开放：** ① algorithm strategy ＋ shape（`IG-alg-*`，**本 Review 不选算法**）；
 ② evidence representation ／ ownership ＋ **algorithm identifier 语义**（`IG-rep-*`）；
 ③ digest 目标（`IG-raw` vs `IG-canon`，触发／不触发 `IC-11`）；
-④ Manifest 自身 integrity（**cross-layer**，`DEP-9` ／ `RIF-X5`）。
+④ Manifest 自身 integrity（**cross-layer**，`DEP-9` ／ `DEP-10` ／ `RIF-X5`）；
+⑤ **verification key ／ trust input**（仅当所选分支包含 signature 或以 signature 主张来源可信性时，`DEP-11`）。
 **closure 要求：** algorithm contract **必须**达到 **deterministic 可判定**（**`I-18`**）。
+**不得**把「内容完整性」目标与「身份 ／ 来源可信性」目标混同 —— signature 分支的确定性前提
+**包含 verification key 的信任边界**，仅登记 algorithm identifier **不足**。
 
 **`RIF-7`（Q7 Contract Version Compatibility）**
 既有 Design **未**决定 compatibility model。**`Inherited Constraint`：** **不得**对不受支持版本做
 silent interpretation。`VC-*` 与 `UX-*` **互为依赖**（`DEP-1`），**必须**组合裁定。
+**不得**把 version-token 匹配等同于 payload field policy：**被支持版本**与
+**payload 是否符合所选版本的 contract** 是**两个不同判定**；
+`VC-2` 下某版本**显式新增**的字段是该版本的 **known field**，**不**自动构成不兼容；
+`VC-1` 下额外 property 的结果**由该 version 的 unknown policy（`UX-*`）决定**，
+**不能**仅由 exact-match 推出 reject（详见 `Decision 2` 的更正 trade-off）。
 
 **`RIF-8`（Q8 Partial Package ／ Failure Isolation）**
 `AM-2` ／ `AM-3`（dataset-level partial acceptance）**与 `IC-13`（源 `§4.3.6` ／ `§4.3.7`）不兼容** ——
@@ -9934,6 +9999,12 @@ artifact parse failure ／ integrity failure ／ missing declared artifact **同
 **开放：** `"completeness_state"` 是否参与 acceptance gate（`CF-*`）；
 以及 detection ／ re-verification ／ binding 的 **mechanism**（`MG-*`，**不得**重新打开 immutability）。
 **不实现** transaction ／ locking ／ atomic filesystem move。
+
+> **范围更正（`IS-24` ／ `RIF-13`）：** `IS-22` ／ `MG-*` ／ `I-14` 只覆盖
+> **post-accept** mutation。**acceptance 期间**的「**验证对象 ≠ 接受对象**」窗口
+> **不**由此覆盖，须由 **`RIF-13`** 的 **acceptance-time 一致输入视图**义务处理。
+> `CF-*` 只决定 `"completeness_state"` 是否参与 gate，**不**替代该一致输入义务。
+> **本 Review 不裁定** `CF-*` 的选择，但任何 `CF-*` 选择**均不得**削弱 `IS-24` 的不可判定结论。
 
 **`RIF-10`（Q10 Deterministic Failure Reporting）**
 **`Inherited Constraint`：** Package Structural Failure 的 root-issue taxonomy 已存在 ——
@@ -9954,6 +10025,39 @@ integrity verification contract、package atomic acceptance semantics、parser �
 
 **`RIF-12`（Q12 Minimum Closure Criteria）**
 见下方候选 **`I-1` ～ `I-18`**（MANDATORY）＋ **`I-19` ／ `I-20`**（POC DESIGN OBJECTIVE）；**是否登记为正式 criteria 属 Human Decision**。
+
+**`RIF-13`（acceptance-time 一致输入视图 —— `IS-24`，**新增 closure obligation**）**
+**问题：** `IS-22` ／ `MG-*` ／ `I-14` 只处理 **accepted 之后**的变化；`CF-*` 只决定
+`"completeness_state"` 是否参与 gate。二者**都未**规定：
+**一次 acceptance 所依据的 Manifest、artifact set、JSON parse result、record-count result
+与 integrity result，必须来自同一稳定 package 内容视图**。
+
+**反例（reproducible 语义层面）：** importer 先对 artifact A 完成 count ／ integrity 验证；
+**在 package 正式 `Accepted` 之前** A 被替换（或目录内容变化、或后续步骤重新读取到另一内容）；
+其余检查随后通过，最终**被接受**的是变化后的目录 ／ 后续读取到的 A。
+**所有独立检查可以分别成功，却没有任何一次验证覆盖实际 accepted 的输入。**
+仅规定「`Accepted` 之后 immutable」或「检测到 post-accept mutation ⇒ fail closed」
+**不能**处理该窗口。
+
+**`Inherited Constraint`（结论）：** `IC-12` ／ `IC-13`（源 `§4.3.5` ／ `§4.3.6`）的 immutable ／
+package-level atomic meaning ⇒ **验证结果必须绑定实际被接受、随后供 Analysis Run 使用的同一 package
+内容视图**；**无法建立该一致性时，不得据此宣称通过**（`IC-16`，`not evaluable ≠ passed`）。
+
+**closure obligation（`I-14` 扩展项，MANDATORY）：**
+acceptance contract **必须**显式登记 「acceptance-time 一致输入视图」要求，至少覆盖：
+① 判定所依据的 Manifest ／ artifact set 与**最终被接受**的视图相同；
+② **一次 acceptance 内**对同一 artifact 的重复读取**不得**产生不同内容视图；
+③ 无法建立 ① ／ ② 时的处置为 **fail closed ／ not evaluable**，**不得**记为 passed。
+
+**依赖：** `RIF-2`（ordering ／ prerequisite 可达性，`not evaluable` 语义）、
+`DEP-4`（completeness ／ finality，`CF-*`）、`DEP-2`（digest 目标 ⇒ 验证所覆盖的内容视图）、
+`I-14`（post-accept binding）、`IC-13`（package-level atomic outcome）。
+
+**边界（本 Review 不替 Human 选择实现机制）：** **检测时机与保证边界**属 **contract**；
+**锁 ／ 事务 ／ 原子移动 ／ 存储技术**仍属 **implementation**，本 Review **不**要求实现它们，
+**不**创建 sidecar ／ validator，**不**新增 carrier ／ literal。
+本项**继承** `§4.3.5` ／ `§4.3.6` 的 immutable ／ package-level atomic meaning，
+**不**重新打开 immutability。
 
 **`RIF-X1`（正交维度 —— syntax validity vs semantic recognition）**
 必须把两个**正交**维度分开，**不得**互相推导：
@@ -9985,9 +10089,11 @@ integrity verification contract、package atomic acceptance semantics、parser �
 
 | 项 | 准确依赖 |
 | --- | --- |
-| unknown-content policy（`IS-12` ～ `IS-14` ／ `IS-8`） | **`DEP-1`** —— 与 `VC-*`（version compatibility）**组合**裁定 |
-| unknown `"_meta"` member policy（`IS-15`） | **`IC-7`** ＋ **`DEP-8`**（known member set 前置） |
-| Manifest self-integrity（`IG-self-*`） | **`IC-5` ／ `IC-7`** ＋ **`DEP-9`**；若采用 **canonicalized bytes** 则另涉 **`IC-11`** |
+| unknown-content policy（`IS-12` ～ `IS-14` ／ `IS-8`） | **`DEP-1`** —— 与 `VC-*`（version compatibility）**组合**裁定（**先**由版本确定 applicable contract ／ known member set，**再**应用该 contract 的 unknown policy） |
+| unknown `"_meta"` member policy（`IS-15`） | **`IC-7`** ＋ **`DEP-8`**（known member set 前置）＋ **`DEP-10`**（FCM residual 的 non-blocking 结论**不得**直接沿用） |
+| Manifest self-integrity（`IG-self-*`） | **`IC-5` ／ `IC-7`** ＋ **`DEP-9`** ／ **`DEP-10`**；若采用 **canonicalized bytes** 则另涉 **`IC-11`** |
+| signature ／ authenticity 分支（若被选择） | **`DEP-11`** —— verification key 信任源 ＋ evidence representation ＋ Manifest self-integrity |
+| acceptance-time 一致输入视图（`IS-24` ／ `RIF-13`） | **`DEP-2`** ＋ **`DEP-4`** ＋ `RIF-2` 的 prerequisite 边界（**不**依赖 `MG-*` 的具体 mechanism 选择） |
 
 **`IC-20` 是 Validation Taxonomy**，与上述三项**不构成**共同依赖。
 **建议** Human 以**组合**方式裁定**相关**项，而非逐项独立裁定。
@@ -10000,10 +10106,57 @@ hash ／ sign 的方案都可能需要 **detached evidence ／ sidecar ／ packa
 **处置：** `IG-self-A` ／ `IG-self-B` **必须**标为 **requires separate Human-authorized design change**；
 本层**可**采纳 `IG-self-C`（只要求可信性可建立，不规定 mechanism ／ carrier），
 且**不得**由 Agent 自行新增任何 literal。
+**但 `IG-self-C` 不是无条件 closure：** 「只要求可信性可建立」若**未**说明
+**可审计的信任前提 ／ 输入边界**与**完成 gate**，则仅是**目标陈述**，**不可判定** ——
+须按上方 **`D.5` 的前提条件与 closure 边界**登记（并见 **`§7.1`** 的 closure 强度分级 ／ **`DEP-10`**）。
+已关闭层（`§4.3.27` D）记录的 FCM non-blocking residual **不**自动对本层候选分支成立，
+**必须**在本层按其自身 contract 依赖**重新评估**（`DEP-10`）。
+
+---
+
+**7.1 Claimable Design-Closure Levels（`closure claim` 强度分级）**
+
+本层各候选 `I-*` criterion 的 **PASS 强度必须可判定** —— 否则「已登记」会被误读为「已满足」。
+因此定义**三个** closure level；**每一项 closure claim 必须归入其一**：
+
+| Level | 名称 | 含义（可作为本层 closure 结论的条件） |
+| --- | --- | --- |
+| **`CL-1`** | **unconditional** | 该 criterion 的行为**已由 inherited constraint 或已登记的 contract 语义唯一确定**；**不**依赖任何未决选择或未提供输入，**无**后续前置条件 |
+| **`CL-2`** | **conditional（可判定）** | 已确定其 **contract 语义**，且**明确登记**了：① **authoritative parameter ／ input 的来源**（例如 known member set、supported version set、verification key 信任源）、② **版本 ／ 绑定关系**（该 parameter 如何与 contract version 绑定）、③ **缺失或不可用时的行为**（fail closed ／ `not evaluable`）、④ **完成 gate**（谁在何时以何种方式补齐）、⑤ **可声称的 closure 范围**（该 PASS 覆盖什么、**不**覆盖什么）。**满足 ①～⑤ 才可记为 PASS（conditional）** |
+| **`CL-3`** | **not claimable** | 该 criterion 的**接受判定所依赖**的 parameter ／ prerequisite 尚不存在、或无法在本层建立 ⇒ **不可记为 PASS**；只能记为 **`BLOCKED` ／ 不可判定**，并标记所需跨层变更 |
+
+**强制规则：**
+
+1. **不得**把 `CL-2` 表述为 `CL-1`：**「记录依赖」≠「满足依赖」**。
+   一个被登记为 follow-up 的依赖，**只有**在满足上述 ①～⑤ 时才可作为 `CL-2` 支撑本层 closure；
+   否则为 `CL-3`。
+2. **区分 (a) 与 (b)：**
+   **(a) 不影响 acceptance 判定的 implementation detail residual**（例如内部命名、
+   不影响判定结果的表示细节）**可以**作为 `CL-2` 且**不阻塞** Human Decision readiness；
+   **(b) 影响 acceptance 判定的 contract prerequisite**（例如 known member set、
+   verification key 信任源、acceptance-time 一致输入视图）
+   **必须**在 criterion 内**明确其完成 gate**，**不得**仅记录为 follow-up。
+   判断归属的依据是 **「该项缺失时，acceptance 结果是否仍可唯一确定」**。
+3. **跨层变更的 gate：** 对选中方案必需的跨层变更（`DEP-9` ／ `DEP-10` ／ `DEP-11`）
+   **不得**写成「已标记为 separate change ⇒ 本 criterion PASS」；
+   **必须**同时明确**该 separate change 的完成是否是本层 closure 的前提**，
+   以及在其完成前本层**可声称的范围**（`CL-2`）与**不可声称的部分**。
+4. **`IG-self-C` 与 abstract `"_meta"` policy 的门禁：**
+   允许参数化 ／ 抽象 policy 作为设计关闭结果，**但**该允许**本身不构成** `CL-1`；
+   其 PASS 记录**必须**包含参数来源、版本 ／ 绑定、缺失时行为与 closure 范围（同 `CL-2` ①～⑤）。
+   **不得**一面承认 acceptance policy 在该前提下**不可判定**，一面无条件宣称本层 resolved。
+5. **本分级不改变任何状态：** 本节**只**约束 **closure claim 的强度与可判定性**；
+   **不**新增 decision、**不**选择 option、**不**改变 `Final Import Contract = DESIGN PENDING`。
 
 ---
 
 **8. Proposed Minimum Closure Criteria（candidate —— 待 Human 批准）**
+
+> **closure 强度约定（`§7.1` 强制适用）：** 每项 criterion 的最终 PASS **必须**标注
+> closure level（`CL-1` ／ `CL-2` ／ `CL-3`）。
+> **`CL-2` 的 PASS 必须**同时登记「参数来源 ／ 版本绑定 ／ 缺失时行为 ／ 完成 gate ／ 可声称范围」；
+> **缺少完成 gate 的「已登记 follow-up」不是 PASS，而是 `CL-3`。**
+> 本表**不**预先判定任何选项，**不**改变任何 status。
 
 | # | Criterion | 类别 |
 | --- | --- | --- |
@@ -10011,20 +10164,21 @@ hash ／ sign 的方案都可能需要 **detached evidence ／ sidecar ／ packa
 | `I-2` | `REJECTED` ／ `UNUSABLE` 的 **contract-level usage** 已由 Human Decision 登记（**不新增** enum） | MANDATORY CLOSURE CRITERION |
 | `I-3` | acceptance **partial order** 已登记：inherited 前置边已固定，且 integrity 位置**显式**依赖 digest 目标选择 | MANDATORY CLOSURE CRITERION |
 | `I-4` | `IS-*` 的 structural 集合已登记，且**未**被重新打开为自由 trade-off；`IC + open` 项的 **disposition wording** 已登记 | MANDATORY CLOSURE CRITERION |
-| `I-5` | unknown ／ undeclared content policy 已逐类登记（含 `IS-8`） | MANDATORY CLOSURE CRITERION |
-| `I-6` | path resolution ／ boundary enforcement semantics 已登记（含 normalization 与 case ／ symlink 语义） | MANDATORY CLOSURE CRITERION |
-| `I-7` | normalized duplicate reference 的判定语义已登记 | MANDATORY CLOSURE CRITERION |
-| `I-8` | integrity **evidence representation ／ ownership** 已登记（**mandatory 性与 fail-closed 属 inherited，不重开**） | MANDATORY CLOSURE CRITERION |
+| `I-5` | unknown ／ undeclared content policy 已逐类登记（含 `IS-8`）；**且**登记时**显式**给出 applicable contract ／ known member set 的确定前提（先定 version ／ contract，**再**应用 unknown policy） | MANDATORY CLOSURE CRITERION |
+| `I-6` | path resolution ／ boundary enforcement semantics 已登记（含 normalization 与 case ／ symlink 语义）；**且** `PN-1` ／ `PN-2` ／ `PN-3` 均定义了 alias ／ link 的拒绝或安全解析边界 | MANDATORY CLOSURE CRITERION |
+| `I-7` | normalized ／ aliased **target identity** 的判定语义已登记，且**明确**：target identity 一旦确定为同一 artifact，即适用 `IC-1`（同 `IS-4` ／ `IS-9`，**不**作为自由选项） | MANDATORY CLOSURE CRITERION |
+| `I-8` | integrity **evidence representation ／ ownership** 已登记（**mandatory 性与 fail-closed 属 inherited，不重开**）；**若**所选分支主张 **signature ／ authenticity**，则 verification key 的**信任来源 ／ 配置边界 ／ 绑定** 与 key 不可用时的行为**一并**登记 | MANDATORY CLOSURE CRITERION |
 | `I-9` | integrity 覆盖对象 ＋ digest 目标（raw vs canonical）已登记，且与 `IC-11` 一致 | MANDATORY CLOSURE CRITERION |
-| `I-10` | Manifest 自身 integrity 的处置已登记：**或** `IG-self-C`，**或** 明确标记为 **requires separate Human-authorized design change** | MANDATORY CLOSURE CRITERION |
-| `I-11` | `contract_version` compatibility model 已登记，且**禁止** unsupported version 的 silent interpretation | MANDATORY CLOSURE CRITERION |
+| `I-10` | Manifest 自身 integrity 的处置已登记，**且达到相应 closure level**：**或** `IG-self-C` 并登记其**可审计信任前提 ／ 输入边界 ＋ 后续动作的完成 gate ＋ 是否影响 acceptance 判定 ＋ 可声称 closure 范围**（`CL-2` 成立），**或** 明确标记为 **requires separate Human-authorized design change** 并**同时**说明其完成是否为本层 closure 前提。**仅声明「已标记为 separate change」不构成 PASS** | MANDATORY CLOSURE CRITERION |
+| `I-11` | `contract_version` compatibility model 已登记，且**禁止** unsupported version 的 silent interpretation；**且**区分「版本被支持」与「payload 符合所选版本 contract」，**不**把 version-token 匹配等同于 unknown-field policy | MANDATORY CLOSURE CRITERION |
 | `I-12` | package-level atomic acceptance 语义已登记（**无** dataset-level partial outcome） | MANDATORY CLOSURE CRITERION |
 | `I-13` | `"completeness_state"` 在 acceptance gate 中的角色已登记 | MANDATORY CLOSURE CRITERION |
-| `I-14` | post-accept mutation 的 **detection ／ re-verification ／ binding** 要求已登记（**不得**重开 immutability） | MANDATORY CLOSURE CRITERION |
+| `I-14` | post-accept mutation 的 **detection ／ re-verification ／ binding** 要求已登记（**不得**重开 immutability）；**并含** `RIF-13` 的 **acceptance-time 一致输入视图**义务：验证结果绑定实际被接受、随后供 Analysis Run 使用的同一 package 内容视图，无法建立一致性时为 **fail closed ／ not evaluable**（`IS-24`） | MANDATORY CLOSURE CRITERION |
 | `I-15` | failure reporting 的 **shape**（fail-fast ／ collect-all **受 prerequisite 边界限定**、ordering、auditable 最小内容、`not evaluable due to prerequisite` 与 `evaluated` 的区分）已登记，且 root-issue 沿用 inherited `PACKAGE_STRUCTURE` ／ `STRUCTURAL_INCONSISTENCY` | MANDATORY CLOSURE CRITERION |
 | `I-16` | layer ownership boundary 已登记，且**不**把 Layer 2 ～ Layer 4 问题提升为 structural failure（`IC-17`） | MANDATORY CLOSURE CRITERION |
-| `I-17` | unknown-`"_meta"` member policy 的**前置条件**已处置：**或**登记 abstract policy，**或**升级为独立 naming decision（`DEP-8`） | MANDATORY CLOSURE CRITERION |
-| `I-18` | **integrity verification algorithm contract** 已达 **deterministic 可判定**状态：algorithm strategy ／ supported algorithm contract ／ **algorithm identifier 语义**已登记（`IG-alg-*` 之一，必要时含 evidence 表示） | MANDATORY CLOSURE CRITERION |
+| `I-17` | unknown-`"_meta"` member policy 的**前置条件**已处置：**或**升级为**独立 naming decision**（可 `CL-1`），**或**登记 abstract policy **并同时**登记 **authoritative member set 的来源 ／ 版本绑定 ／ 缺失时行为（fail closed ／ not evaluable）／ 完成 gate ／ 可声称 closure 范围**（`CL-2`；**缺任一即 `CL-3`，不得 PASS**） | MANDATORY CLOSURE CRITERION |
+| `I-18` | **integrity verification algorithm contract** 已达 **deterministic 可判定**状态：algorithm strategy ／ supported algorithm contract ／ **algorithm identifier 语义**已登记（`IG-alg-*` 之一，必要时含 evidence 表示）；**若**含 signature ／ authenticity 分支，则 **verification key ／ trust input 的确定方式**（来源、绑定、不一致时的处置）**一并**登记，否则该分支为条件性可行而非达到 deterministic | MANDATORY CLOSURE CRITERION |
+| `I-21` | 跨选择无阻塞矛盾已显式核验：对**已选**的 option 组合，逐项确认不存在 `IC` 冲突（`NOT COMPATIBLE` 项未被隐式选中），且 `CL-2` 项的完成 gate 及其**是否阻塞本层 closure** 已登记 | MANDATORY CLOSURE CRITERION |
 | `I-19` | Human Inspectability（acceptance outcome 与 defect 可被人工检视） | POC DESIGN OBJECTIVE |
 | `I-20` | Implementation Simplicity（contract 结构最小化） | POC DESIGN OBJECTIVE |
 
@@ -10039,15 +10193,17 @@ hash ／ sign 的方案都可能需要 **detached evidence ／ sidecar ／ packa
 - **Question：** `IS-12`（Manifest property）／ `IS-13`（dataset-entry property）／ `IS-14`（canonical record property）／ `IS-8`（unreferenced artifact）各自采用 `UX-A` reject ／ `UX-B` ignore ／ `UX-C` preserve-but-not-interpret？
 - **Options：** 三选一，按载体分别裁定。
 - **Trade-offs：** reject = forward compatibility 最差但 typo 最安全；ignore = 成本最低但有 **silent data loss** 风险；preserve = forward compatible 但需明确「不解释」。
-- **Dependencies：** `DEP-1`（与 `VC-*` 耦合）、`RIF-X1` 、`IC-6`。
+- **前提（**必须先确定，否则选项不可判定**）：** unknown policy **只**对**已确定适用的 contract** 生效 —— **先**由 version ／ compatibility 规则确定 **applicable contract 与 known member set**，**再**应用该 contract 的 unknown policy。
+  **不得**把「unsupported version 的 rejection」与「supported version 下 payload 的 unknown property 处置」混为一谈（更正后见 `DEP-1` ／ `Decision 2`）。
+- **Dependencies：** `DEP-1`（与 `VC-*` **组合**裁定）、`RIF-X1`、`IC-6`；`IS-15` 另受 `DEP-8` ／ `DEP-10` 前置约束，**不**在本 Decision 内裁定（见 Decision 11）。
 - **What changes：** `I-4` ／ `I-5` 的最终分类；版本演进策略。
 
 **Decision 2 —— Contract version compatibility model**
 - **Question：** `VC-1` exact-match ／ `VC-2` explicit supported set ／ `VC-3` major-minor？
 - **Options：** 三选一。
-- **Trade-offs：** `VC-1` 成本最低但字段新增即不兼容；`VC-3` 灵活但引入演进体系成本。
+- **Trade-offs（更正）：** `VC-1` 只接受**一个** version token，成本最低，**但**「额外 property 是否被接受」**由该 version 的 unknown policy 决定**，**不能**仅由 exact-match 推出 reject；`VC-2` 可对**每个受支持版本**定义各自的 known field set，某版本**显式新增**的字段是该版本的 **known field**，**不**自动构成不兼容；`VC-3` 灵活但引入演进体系成本。**选择 `VC-*` 不代替** `UX-*` 的选择。
 - **Dependencies：** `DEP-1`（与 Decision 1 **必须**组合裁定）。
-- **What changes：** unsupported version 的 acceptance 结果；unknown property 是否等价于不兼容。
+- **What changes：** unsupported version 的 acceptance 结果；**以及**「supported version 内 payload 是否符合该版本 contract」这一独立判定的归属（归 `UX-*` ／ 该版本的 known member set）。
 
 **Decision 3 —— `REJECTED` vs `UNUSABLE` 的 contract-level usage**
 - **Question：** 二者是同一 negative disposition 的两种写法（`RD-A`）／ 分别表示 import-time reject 与 previously-accepted-then-unusable（`RD-B`）／ 其他有 evidence 支持的区分（`RD-C`）？
@@ -10062,15 +10218,22 @@ hash ／ sign 的方案都可能需要 **detached evidence ／ sidecar ／ packa
 - **Options：** 同上；`IC-2` 为**不可让步**项。
 - **Trade-offs：** `PN-1` 可预期性最高但不处理平台差异；`PN-3` 覆盖最全但引入非确定性风险。
 - **Dependencies：** `DEP-5`。
-- **What changes：** 哪些 reference 被判非法；`IS-16` ／ `IS-17` 的判定结果。
+- **What changes：** 哪些 reference 被判非法；`IS-16` ／ `IS-17a` 的判定结果（`IS-17b` 的结论**已 inherited，不**随本 Decision 变化）。
 
 **Decision 5 —— Integrity algorithm strategy ／ evidence representation ／ ownership**
 - **Question：** algorithm strategy 取哪一族（cryptographic hash ／ checksum ／ signature ／ 混合）与哪一 shape（`IG-alg-1` fixed ／ `IG-alg-2` supported set ／ `IG-alg-3` algorithm-tagged）？evidence 表示与 **algorithm identifier 语义**归属由本层定义（`IG-rep-A`）还是留给实现（`IG-rep-B`）？
 - **Options：** algorithm 族（**本 Review 不选**）；`IG-rep-A` ／ `IG-rep-B`。
 - **Trade-offs：** `IG-rep-A` 使 `IC-15` 更可判定但更接近实现；`IG-rep-B` 更轻，但**可能不足以满足本层 closure**（verification 将依赖 implementation 选择）—— 若选则**必须**说明如何达到 deterministic verification。
-- **Dependencies：** `DEP-3`（mandatory 性已 inherited，**不再**是选项）；与 `IC-7` 的 carrier ownership 边界。
+- **Dependencies：** `DEP-3`（mandatory 性已 inherited，**不再**是选项）；`DEP-11`（仅当选择 signature ／ 主张 authenticity 时）；与 `IC-7` 的 carrier ownership 边界。
 - **What changes：** `I-8` ／ **`I-18`** 的可判定性；verification 是否**不依赖** implementation 选择。
-- **注意：** **mandatory 性与 fail-closed 属 inherited（`IC-22`），本 Decision 不重新打开。**
+- **注意（更正 —— signature 分支为条件性可行）：** **mandatory 性与 fail-closed 属 inherited（`IC-22`），本 Decision 不重新打开。**
+  若选择 **digital signature ／ 混合**，则**必须**同时登记：**verification key 的信任来源 ／ 配置边界 ／ 选择规则**、
+  key 与 contract 的**绑定**、key 不可用或不一致时的处置，以及与 **evidence representation**（`IG-rep-*`）／
+  **Manifest self-integrity** 的依赖（`DEP-11`）；**仅登记 algorithm identifier 不构成 deterministic verification**。
+  **content integrity（hash ／ checksum）目标 ≠ identity ／ authenticity 目标** ——
+  「数学验证成功」**不得**被当作来源可信。**本 Decision 不要求**引入 PKI ／ secrets ／ signing infrastructure；
+  若该分支需要新的 security ／ key-management design，**必须**按治理登记 **requires separate Human-authorized design change**，
+  并**明确**其完成是否阻塞所选分支 closure。**本 Review 不选任何算法族。**
 
 **Decision 6 —— Integrity 覆盖对象与 digest 目标**
 - **Question：** digest 针对 **raw artifact bytes**（`IG-raw`）还是 **canonicalized bytes**（`IG-canon`）？覆盖哪些对象？
@@ -10083,9 +10246,14 @@ hash ／ sign 的方案都可能需要 **detached evidence ／ sidecar ／ packa
 - **Question：** 采纳 `IG-self-C`（只要求可信性可建立、不规定 mechanism ／ carrier），还是采纳 `IG-self-A` ／ `IG-self-B`（需要新 carrier ／ sidecar）？
 - **Options：** `IG-self-C` ／ `IG-self-A` ／ `IG-self-B`。
 - **Trade-offs：** `IG-self-C` 在本层 scope 内且不新增 naming；`IG-self-A` ／ `IG-self-B` 语义更强但**越出**本层 Write Scope。
-- **Dependencies：** `DEP-9` ／ `RIF-X5`；`IC-5` ／ `IC-7`。
-- **What changes：** `I-10` 的处置方式。
-- **注意：** 任何需要**新增 carrier ／ sidecar ／ literal** 的方案**必须**标记为 **requires separate Human-authorized design change**。
+- **Dependencies：** `DEP-9` ／ `DEP-10` ／ `RIF-X5`；`IC-5` ／ `IC-7`。
+- **What changes：** `I-10` 的处置方式**与可声称的 closure 强度**（`§7.1` `CL-2` ／ `CL-3`）。
+- **注意：** 任何需要**新增 carrier ／ sidecar ／ literal** 的方案**必须**标记为 **requires separate Human-authorized design change**，
+  且**不得**仅以「已标记 separate change」作为本层 closure 依据 —— **必须**同时明确该变更的完成 gate
+  及其是否为**本层 closure 的前提**。
+- **额外要求（`IG-self-C` 不得省略）：** 若选择 `IG-self-C`，**必须**登记**可审计的信任前提 ／ 输入边界**与**完成 gate**
+  （见上方 `D.5` 的前提条件）；仅声明「可信性必须可建立」是**目标陈述**，**不可判定**，**不构成** PASS。
+  同时**不得**直接沿用已关闭层（`§4.3.27` D）的 FCM non-blocking residual 结论来证明本分支 non-blocking（`DEP-10` ／ `IS-25`）。
 
 **Decision 8 —— Failure reporting shape**
 - **Question：** `FR-1` fail-fast ／ `FR-2` collect-all（**受 prerequisite 边界限定**）／ `FR-3` ＋ deterministic ordering？auditable 最小内容如何界定（在 `§4.4.79` dimensions 之内）？
@@ -10098,33 +10266,43 @@ hash ／ sign 的方案都可能需要 **detached evidence ／ sidecar ／ packa
 - **Question：** `CF-1` 纯 metadata ／ `CF-2` 参与 gate ／ `CF-3` 要求 final 状态？
 - **Options：** 三选一。
 - **Trade-offs：** `CF-1` 不改变判定、成本最低；`CF-2` ／ `CF-3` 会新增拒绝条件。
-- **Dependencies：** `DEP-4`。
+- **Dependencies：** `DEP-4`；**`RIF-13`**（`IS-24` 的 acceptance-time 一致输入视图义务**不**因选择 `CF-1` 而消失）。
 - **What changes：** incomplete ／ in-progress package 是否可被读取或 accepted；`I-13`。
+- **注意：** 本 Decision **只**决定 `"completeness_state"` 的角色，**不**决定 acceptance-time 一致性要求；
+  任一 `CF-*` 选择**均不得**被解释为已满足 `I-14` 的 `RIF-13` 义务。
 
 **Decision 10 —— Post-accept mutation 的 detection ／ re-verification ／ binding**
 - **Question：** `MG-1` 不规定 proactive detection ／ `MG-2` 要求 re-verification ／ `MG-3` 要求 identity ／ content binding？
 - **Options：** 三选一。
 - **Trade-offs：** `MG-1` 最简（**但不得**被解释为 mutation 后仍可作为同一 Accepted package 使用）；`MG-2` ／ `MG-3` stronger but closer to storage implementation。
-- **Dependencies：** `IC-12` ＋ `IC-16`（**immutability 与 fail-closed 已 inherited**）。
+- **Dependencies：** `IC-12` ＋ `IC-16`（**immutability 与 fail-closed 已 inherited**）；`RIF-13`（`IS-24`）。
 - **What changes：** `IS-22` 的 detection 要求；`I-14`。
-- **注意：** **不重新打开 immutability。**
+- **注意：** **不重新打开 immutability。** 本 Decision 覆盖 **post-accept** mutation；
+  **acceptance 期间**「验证对象 ≠ 接受对象」的窗口（`IS-24`）**不**由本 Decision 处理，
+  属 `RIF-13` 的**独立** closure obligation，其 contract 语义**已 inherited**（`IC-12` ／ `IC-13`）。
 
 **Decision 11 —— unknown `"_meta"` member policy 的前置条件**
 - **Question：** 是否把 P-A ／ MB-A 的 **known member set** 升为**独立 naming decision**，还是**允许**先登记 **abstract unknown-member policy**（implementation 前再定 literal）？
 - **Options：** 独立 naming decision ／ abstract policy now ＋ literal later。
-- **Trade-offs：** 前者使 `IS-15` 立即可判定；后者不阻塞本层 closure，但 `IS-15` 的 policy 在该前提下**不可判定**。
-- **Dependencies：** `DEP-8`；`IC-7`（内部 member 名称未批准）。
-- **What changes：** `I-17` 的处置；是否需要在 `Final Import Contract` 之外新增 naming task。
+- **Trade-offs（更正）：** 前者使 `IS-15` 立即可判定（**可 `CL-1`**）；后者**可以**使本层 closure 不被 literal 阻塞，
+  **但**其 PASS **只**在**同时**登记 **authoritative member set 的来源**、**版本 ／ 绑定关系**、
+  **缺失时行为**（fail closed ／ `not evaluable`）、**完成 gate** 与**可声称 closure 范围**时成立（`CL-2`）；
+  **缺任一条件**则该 policy **不可判定**，只能记 **`CL-3`**。
+  **不得**一面承认 policy 在 known member set 未定时不可判定，一面无条件宣称本层已处理该依赖。
+- **Dependencies：** `DEP-8` ／ `DEP-10`；`IC-7`（内部 member 名称未批准）；`§7.1`。
+- **What changes：** `I-17` 的处置**与 closure 强度**；是否需要在 `Final Import Contract` 之外新增 naming task。
 - **注意：** **不得**由 Agent 自行发明 provenance ／ basis 内部 property name。
 
 **Decision 12 —— Minimum closure criteria 接受与 follow-up 授权**
-- **Question：** 是否接受 **`I-1` ～ `I-18`** 作为 minimum closure criteria（`I-19` ／ `I-20` 为 design objectives）？是否授权后续独立
+- **Question：** 是否接受 **`I-1` ～ `I-18` ＋ `I-21`** 作为 minimum closure criteria（`I-19` ／ `I-20` 为 design objectives）？是否授权后续独立
   `Final Import Contract` Design Change ／ Implementation PR（登记选择 ＋ 同步 current-state），
   并在满足 closure criteria 时允许 `DESIGN PENDING → DESIGN RESOLVED`？
 - **Options：** 接受 ／ 调整 ／ 拒绝；授权 ／ 不授权。
 - **Trade-offs：** 授权推进 closure；不授权保持 `DESIGN PENDING`。
-- **Dependencies：** Decision 1 ～ 11。
-- **What changes：** 本层是否可进入 closure。
+- **Dependencies：** Decision 1 ～ 11；**`§7.1` 的 closure 强度规则**（每项 PASS 必须标注 `CL-1` ／ `CL-2` ／ `CL-3`，
+  且 `CL-2` 须满足 ①～⑤）。
+- **What changes：** 本层是否可进入 closure；**以及**哪些 criterion 可以 `CL-1` ／ `CL-2` 声称、
+  哪些必须在跨层变更完成后才可声称。
 
 **本 Review 不作出上述任何决定。** 后续必须由 **Human Decision** 裁定；
 **不得**由 Agent 自行选择最终 acceptance model ／ integrity algorithm ／ compatibility policy。
@@ -10175,6 +10353,37 @@ Package Structural Failure
 本 Review 不选择任何 Option。
 本 Review 未创建任何 runtime artifact。
 ```
+
+---
+
+**12. Revision Log（本 Review 的独立复核修正 —— review-only）**
+
+> 本节记录**本次 review-only 修正**，用于说明「候选 ／ 依赖 ／ closure 判定前提」表达层面的更正。
+> **仍不选择任何方案**，**不**登记 final policy，**不**改变任何 status，**不**创建 runtime artifact，
+> **不**新增 Validation Reason ／ property name ／ carrier。
+
+| 修正项 | 主题 | 本次变更 |
+| --- | --- | --- |
+| `IR-65-01` | 依赖 ／ closure 判定 | 新增 **`§7.1 Claimable Design-Closure Levels`**（`CL-1` ／ `CL-2` ／ `CL-3`，含 `CL-2` ①～⑤ 与「记录依赖 ≠ 满足依赖」）；重写 `I-10` ／ `I-17`；扩展 `I-5` ／ `I-8` ／ `I-11` ／ `I-14` ／ `I-18`；新增 `I-21`（跨选择无阻塞矛盾核验）；补齐 `IG-self-C` 的**可审计信任前提 ／ 输入边界 ＋ 完成 gate ＋ closure claim 范围**（`D.5` ／ `Decision 7`）；新增 `DEP-10`（FCM residual 只在其自身 closure 范围内成立）与 `IS-25` |
+| `IR-65-02` | acceptance-time 一致性 | 新增 **`IS-24`** 与 **`RIF-13`**：验证结果**必须**绑定实际被接受、随后供 Analysis Run 使用的**同一 package 内容视图**，无法建立一致性时 **fail closed ／ not evaluable**；纳入 `I-14`；`RIF-2` ／ `RIF-9` ／ `Decision 9` ／ `Decision 10` 补齐边界（`MG-*` 只覆盖 **post-accept**；`CF-*` **不**替代该义务） |
+| `IR-65-03` | alias ／ target identity | `IS-17` **拆为** `IS-17a`（target-equivalence **识别规则** = `open`）与 `IS-17b`（已确认同一 target identity ⇒ 适用 `IC-1`，**`Inherited Constraint`**）；Section 4-C 为 `PN-1` ／ `PN-2` ／ `PN-3` 增加**共同适用前提**（alias ／ link 的拒绝或安全解析边界；**不得**因低成本豁免 boundary 与 independence）；更正 `DEP-5`（target identity ＋ uniqueness ＋ boundary，**不**只 presence）与 `I-7` |
+| `IR-65-04` | version ↔ unknown property | 更正 **`DEP-1`**：**先**由受支持版本 ／ 兼容规则确定 applicable contract 与 known member set，**再**应用该 contract 的 unknown policy；**version-token 匹配 ≠ field policy**；更正 `Decision 2` trade-off 与 `Decision 1` 前提；同步 `RIF-7` ／ `I-5` ／ `I-11`。**未**制定新的演进方案、**未**偏向任何 `VC-*` ／ `UX-*` |
+| `IR-65-05` | signature ／ trust input | `D.2` 标注 **digital signature ／ 混合为条件性可行**：**必须**确定 verification key 的信任来源 ／ 配置边界 ／ 绑定、与 evidence representation 及 Manifest self-integrity 的依赖、以及 deterministic verification 的完成条件；新增 **`DEP-11`**；扩展 `Decision 5` ／ `RIF-6` ／ `I-8` ／ `I-18`；明确 **content integrity ≠ identity ／ authenticity**。**未**选择 signature、**未**引入 PKI ／ secrets ／ signing infrastructure |
+
+**本次修正的 review-only 边界（自我核验）：**
+
+```
+未选择任何 Human option（acceptance model ／ algorithm ／ compatibility ／ path policy ／ status usage）
+未登记任何 final policy
+未新增 Validation Reason ／ status enum ／ JSON property name ／ carrier ／ sidecar
+未修改已注册 policy、历史 Review ／ Human Decision ／ Closure 记录
+未修改 §4.3.* ／ §4.4.* 任何已注册 policy 的实质内容（本次改动仅位于本 Review 段落之内）
+未创建 runtime code ／ schema ／ sample package
+未改变任何 status、未选择 merge、未准备 Human Decision 结论
+```
+
+`Final Import Contract` **仍为 `DESIGN PENDING`**；`Snapshot / Import Contract overall` **仍为 `DESIGN PENDING`**；
+`Adapter Boundary` **仍为 `DESIGN PENDING`**；`POC Design v0.2` **仍为 `DRAFT`**。
 
 ---
 
