@@ -9547,7 +9547,7 @@ Import Atomicity、Immutability、Analysis Run linkage。
 > **current-state 更新（本层 Closure）：** `Physical Dataset Layout` 已由 **PR #53 Human Decision** 登记、
 > 并经 **本层 Closure Validation = `PASS`** 后为 **`DESIGN RESOLVED`**（见 **§4.3.23** ／ **§4.3.24**），
 > 因此 `physical dataset layout determined` 已**移出**上述「不表示」清单。
-> `Field Carrier Mapping` ／ `Final Import Contract` **仍为 `DESIGN PENDING`**。
+> `Final Import Contract` **仍为 `DESIGN PENDING`**。
 >
 > **current-state 更新（Field Carrier Mapping）：** `Field Carrier Mapping` 的 **Human Decision 已登记**
 > （见 **§4.3.25**）；**Decision Gap `G-1` ／ `G-2`** 已由 **Supplementary Human Naming Decision** 解除
@@ -10130,9 +10130,13 @@ integrity algorithm（hash ／ checksum ／ signature）= Final Import Contract
   Master Data Mapping ／ `Serialization Format` policy ／ `Physical Dataset Layout` policy。
 - 本小节**不代表** implementation：**未**创建 package directory ／ JSON sample ／ `manifest.json` 实际文件 ／
   dataset artifact ／ ZIP ／ archive ／ JSON Schema ／ parser ／ serializer ／ validator ／ Adapter。
-- 本小节**不登记**任何 literal JSON property name ／ grouping name ／ namespace name（见 **§4.3.26** E）。
-- `Field Carrier Mapping` 的 **status 变更**由 **Field Carrier Mapping Closure Validation Record**（**§4.3.26**）
-  的 conditional closure gate 结果决定。
+- 本小节**仅登记** **Supplementary Human Naming Decision** 明确批准的 literal
+  （package-level grouping `"package"` ／ dataset collection `"datasets"` ／ package-scoped properties ／
+  dataset-entry properties ／ reserved namespace `"_meta"`）；
+  **不得**自行扩展、推断或新增其他 property ／ grouping ／ namespace 名称。
+- `Field Carrier Mapping` 的 **status** 由 **latest authoritative closure** ——
+  **Field Carrier Mapping Closure Re-run Record**（**§4.3.27**，`PASS`）—— 决定；
+  **§4.3.26** 为**首次 failed closure attempt**，**保留为历史时点记录**。
 
 ---
 
