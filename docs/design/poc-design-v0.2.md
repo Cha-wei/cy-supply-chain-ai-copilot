@@ -346,7 +346,7 @@ candidate 判断：
 >
 > **current-state（Issue #94）：** `GSD-1` 已 **`REGISTERED`** —— 选择 **`§1 Option 2`**（见 **`§1.11`**）。
 > 上表其余内容仍为其时的 candidate 描述，**未**因该选择而改写；`§1 Option 2` 的具体 canonical wording
-> 仍待 `GSD-2` ～ `GSD-8` 裁定，§1 四项 top-level status **仍为 `DESIGN PENDING`**。
+> 仍待 `GSD-3` ～ `GSD-8` 裁定（**`GSD-2` 已于 Issue #96 登记 wording boundary**，见 **`§1.12`**），§1 四项 top-level status **仍为 `DESIGN PENDING`**。
 
 ### 1.7 Proposed Minimum Closure Criteria（candidate —— 待 Human 批准）
 
@@ -375,7 +375,7 @@ candidate 判断：
 | # | Human Decision Question | Options | Trade-offs ／ 说明 | 影响 |
 | --- | --- | --- | --- | --- |
 | `GSD-1` | §1 采用哪种 conceptual closure model？ | `§1 Option 0` ／ `Option 1` ／ `Option 2` ／ 其他 | 见 1.6 | §1 是否进入后续独立 Design Change ／ Closure |
-| `GSD-2` | P0 Design Goal 的 canonical wording boundary | ① 只继承 `FROZEN` 表述；② 继承 ＋ 引用 `§2` ～ `§5` 作为「如何满足 P0」的 approved downstream facts（限定引用深度） | ② 更具可审计的 composition，但需界定引用范围，避免把 downstream design 写成 goal 本身 | §1 goal 段落形态 |
+| `GSD-2` | P0 Design Goal 的 canonical wording boundary | ① 只继承 `FROZEN` 表述；② 继承 ＋ 引用 `§2` ～ `§5` 作为「如何满足 P0」的 approved downstream facts（限定引用深度）**← `SELECTED`（`REGISTERED`，Issue #96；**strict limited-reference interpretation**）** | ② 更具可审计的 composition，但需界定引用范围，避免把 downstream design 写成 goal 本身 | §1 goal 段落形态 |
 | `GSD-3` | POC Success Boundary 的层次结构 | ① design-time ／ runtime-test evidence ／ business-value evidence 三层；② 其他分层 | 三层与 `FZ-4` 各项一一映射，且天然阻止「已成功」误读 | §1 success 段落语义（`S-5` ／ `S-9`） |
 | `GSD-4` | In Scope 的 canonical categories | ① P0 capability scope ＋ supporting infrastructure ＋ quality ／ safety boundary 三类；② 其他 | ① 直接支撑 `S-3`，避免 supporting infrastructure 被读成新 P0 场景 | §1 In Scope 结构 |
 | `GSD-5` | Out of Scope ／ P1 ／ Prohibited ／ Deferred 的分类方式 | ① 四类分离；② 其他 | 四类分离支撑 `S-4`，避免「都不做」式压平 | §1 Out of Scope 结构 |
@@ -383,7 +383,9 @@ candidate 判断：
 | `GSD-7` | 是否接受 proposed minimum closure criteria `S-1` ～ `S-14`？ | 接受 ／ 调整 ／ 拒绝 | 若调整，需给出替代 criteria | §1 后续 closure gate |
 | `GSD-8` | 是否授权后续独立 §1 Design Change ／ Closure PR？ | 授权 ／ 不授权 | 授权后方可由该 PR 登记 §1 的 canonical goal ／ scope 与状态转换 | §1 是否可离开 `DESIGN PENDING` |
 
-> **current-state（Issue #94）：** `GSD-1` = **`REGISTERED`**（选择 **`§1 Option 2` —— Inherited scope ＋ downstream composition contract**，见 **`§1.11`**）；**`GSD-2` ～ `GSD-8` 仍为 `PENDING`**。
+> **current-state（Issue #94 ／ #96）：** `GSD-1` = **`REGISTERED`**（**`§1 Option 2`**，见 **`§1.11`**）；
+> `GSD-2` = **`REGISTERED`**（**Option ② —— FROZEN inheritance ＋ limited downstream composition references**，**strict limited-reference interpretation**，见 **`§1.12`**）；
+> **`GSD-3` ～ `GSD-8` 仍为 `PENDING`**。
 
 **已被 `FROZEN` 唯一决定、因此**不**列为 Human Decision 的事项：**
 
@@ -437,7 +439,8 @@ implementation code ／ schema ／ Mock API ／ Mock Dataset
 §1 In Scope                        = DESIGN PENDING   ← 本 Review 未推进；GSD-1 registration 亦未推进
 §1 Out of Scope                    = DESIGN PENDING   ← 本 Review 未推进；GSD-1 registration 亦未推进
 §1 closure model（GSD-1）           = REGISTERED（§1 Option 2 —— Inherited scope ＋ downstream composition contract）
-GSD-2 ～ GSD-8                     = PENDING
+§1 P0 Goal wording boundary（GSD-2）= REGISTERED（Option ② ＋ strict limited-reference interpretation；见 §1.12）
+GSD-3 ～ GSD-8                     = PENDING
 S-1 ～ S-14                        = candidate（not Human-approved）
 §2 P0 Business Rules               = DESIGN RESOLVED
 §3 System Boundary                 = DESIGN RESOLVED（Implementation = NOT STARTED）
@@ -453,8 +456,9 @@ POC success                        = 未声明（需 runtime ／ test evidence �
 **本 Review 不作出任何 Human Decision。**
 **本 Review 未创建任何 runtime artifact ／ 未选择 architecture ／ 未修改 `FROZEN` Discovery。**
 
-> **current-state（Issue #94）：** `GSD-1` = **`REGISTERED`**（`§1 Option 2`，见 **`§1.11`**）；
-> `GSD-2` ～ `GSD-8` = **`PENDING`**；`S-1` ～ `S-14` = **candidate（not Human-approved）**；
+> **current-state（Issue #94 ／ #96）：** `GSD-1` = **`REGISTERED`**（`§1 Option 2`，见 **`§1.11`**）；
+> `GSD-2` = **`REGISTERED`**（Option ② ＋ strict limited-reference interpretation，见 **`§1.12`**）；
+> `GSD-3` ～ `GSD-8` = **`PENDING`**；`S-1` ～ `S-14` = **candidate（not Human-approved）**；
 > §1 四项 top-level status **仍为 `DESIGN PENDING`**。
 
 ### 1.11 Human Decision Record —— `GSD-1`（`SIMULATED POC Design Policy` ＋ `Human-approved`）
@@ -546,6 +550,149 @@ Mock API ／ Mock Dataset。
 ```
 GSD-1                             = REGISTERED（§1 Option 2 —— Inherited scope ＋ downstream composition contract）
 GSD-2 ～ GSD-8                    = PENDING
+S-1 ～ S-14                       = candidate（not Human-approved）
+§1 P0 设计目标                     = DESIGN PENDING ← 本 Decision 不推进状态
+§1 POC 成功边界                    = DESIGN PENDING ← 本 Decision 不推进状态
+§1 In Scope                       = DESIGN PENDING ← 本 Decision 不推进状态
+§1 Out of Scope                   = DESIGN PENDING ← 本 Decision 不推进状态
+POC Design v0.2                   = DRAFT
+```
+
+### 1.12 Human Decision Record —— `GSD-2`（`SIMULATED POC Design Policy` ＋ `Human-approved`）
+
+**Registration Status：`REGISTERED`**
+
+依据 **Issue #96 Human Decision**。本记录**只**登记已批准的 `GSD-2`（P0 Design Goal 的 canonical wording
+authority 与引用深度），并执行最小必要 current-state synchronization —— **不**决定 `GSD-3` ～ `GSD-8`、
+**不**接受 `S-1` ～ `S-14`、**不**写 final §1 canonical wording、**不**推进 §1 四项 top-level status、
+**不**创建 §1 closure gate、**不**修改 `FROZEN` Discovery 与 `§2` ～ `§5` approved policy。
+
+```
+Decision Scope     = §1.8 `GSD-2`（P0 Design Goal canonical wording boundary）
+Decision Authority = Human（Issue #96）
+Selected Option    = Option ② —— FROZEN inheritance ＋ limited downstream composition references
+Interpretation     = strict limited-reference
+Write Scope        = docs/design/poc-design-v0.2.md §1
+```
+
+**`GSD-2.1` Goal authority（APPROVED）**
+
+P0 Design Goal 的**唯一业务目标来源**仍是 `FROZEN` Discovery：`§10` POC Problem Statement 与 `§11` P0 Scope。
+§1 后续 canonical wording **不得**通过 downstream design 创建新的业务目标、扩大 P0、改变 P0 闭环或重新解释 `FROZEN`。
+
+```
+P0 Design Goal = design-level expression of FROZEN Problem Statement ＋ P0 Scope
+P0 Design Goal ≠ summary of every downstream design detail
+```
+
+**`GSD-2.2` Allowed downstream references（APPROVED）**
+
+§1 P0 Design Goal ／ composition 说明**允许有限引用** current Human-approved downstream facts，
+**仅**用于说明「当前设计**如何支撑**既有 `FROZEN` Goal」：
+
+```
+§2 —— deterministic business rules support the business calculation
+§3 —— controlled system boundary ／ read-write boundary ／ draft-only boundary
+§4 —— canonical data ／ validation ／ mapping ／ integration boundary
+§5 —— AI ／ deterministic logic ／ Tool ／ Agent responsibility boundary
+```
+
+这些引用**只能**作为 **composition pointers ／ approved supporting facts**；authoritative 内容仍在各 downstream 章节。
+
+**`GSD-2.3` Prohibited reference depth（APPROVED）**
+
+§1 **不得复制或展开**：
+
+```
+具体 BR-* deterministic rule formulas ／ calculation detail
+字段级 data dictionary
+schema ／ carrier ／ enum ／ Validation Reason ／ Category
+Snapshot ／ Import Contract 详细条款
+Adapter ／ Package Assembly 详细 responsibility contract
+mapping rule ／ mapping_basis 详细语义
+concrete source-field mapping
+Tool ／ API ／ function schema
+implementation detail
+Architecture ／ technology choice
+§6 ～ §10 尚未 Human-approved 的具体设计
+```
+
+若必须理解某细节，应**引用 authoritative downstream section**，而不是把它复制到 §1。
+
+**`GSD-2.4` Downstream facts are not new Goal（APPROVED）**
+
+```
+approved downstream fact
+≠ new P0 Goal
+≠ new P0 scenario
+≠ scope expansion
+```
+
+例：`Controlled Export ／ Snapshot` 是支撑「受控数据获取」的 approved design fact，**不是**新的 P0 business goal；
+`Data Validation ／ Mapping ／ Adapter` 是 supporting infrastructure，**不是**新的 P0 business scenario；
+`§5` AI ／ Tool boundary 是「如何满足可解释 ／ 可控」的 responsibility design，**不是**新的 P0 business outcome。
+
+**`GSD-2.5` Downstream facts are not success evidence（APPROVED）**
+
+```
+§2 ～ §5 DESIGN RESOLVED
+≠ POC success achieved
+```
+
+§1 **不得**因引用 approved downstream design 就声称：data correctness 已被 runtime 证明；
+deterministic calculations 已被测试通过；Tool selection ／ runtime behavior 已验证；business value 已证明；
+customer baseline 已取得；POC 已 success；production-ready。上述属后续 `GSD-3` ／ `§9` ／
+implementation ／ test ／ business evidence 等边界。
+
+**`GSD-2.6` Intended canonical shape（保持 —— 不构成 final wording）**
+
+本 Decision **只**批准 **wording boundary ／ reference depth**，**不**批准最终句子。后续 §1 Design Change
+可形成类似以下结构：
+
+```
+P0 Design Goal
+  = FROZEN-derived goal statement
+
+Supporting composition
+  - §2 defines deterministic business calculation
+  - §3 defines controlled system / write boundary
+  - §4 defines canonical data & integration boundary
+  - §5 defines AI / Tool responsibility boundary
+
+Authoritative details remain in §2 ～ §5.
+```
+
+具体 final canonical wording **仍待后续独立 Design Change ／ Closure**，**不得**在本 registration task 中提前定稿。
+
+**`GSD-2.7` 明确未决定（保留为 pending Human Decision）**
+
+```
+GSD-3 POC Success Boundary 分层                        = PENDING
+GSD-4 In Scope canonical categories                    = PENDING
+GSD-5 Out of Scope ／ P1 ／ Prohibited ／ Deferred 分类方式 = PENDING
+GSD-6 §6 ～ §10 pending 是否阻止 §1 conceptual closure  = PENDING
+GSD-7 是否接受 S-1 ～ S-14                              = PENDING
+GSD-8 是否授权后续独立 §1 Design Change ／ Closure PR     = PENDING
+```
+
+> 上列各项**不因本 Decision 被推定**；`S-1` ～ `S-14` 继续为 **candidate（not Human-approved）**。
+
+**`GSD-2.8` `FROZEN` ／ downstream boundaries preserved（保持）**
+
+本 Decision **未**修改 `FROZEN` Discovery 与 Problem Statement；**未**新增 ／ 删除 ／ 重定义 P0 场景；
+**未**把 P1 升级为 P0；**未**改变 P0 闭环（缺料分析 → 采购建议 → HITL）；**未**把正式采购执行纳入 P0；
+**未**发明真实客户 KPI ／ baseline ／ frequency ／ adoption evidence；**未**把 `FROZEN` failure conditions
+写成已发生事实。**未**修改 `§2` ～ `§5` approved policy；**未**把 downstream summary 变成 duplicate
+canonical source；**未**设计 `§6` ～ `§9`；**未**选择 `§10` Architecture；**未**创建 ADR；
+**未**写 implementation code ／ schema ／ API ／ runtime；**未**选择 framework ／ DB ／ auth ／ deployment；
+**未** blanket-authorize implementation。
+
+**执行状态（本 Registration 时点）**
+
+```
+GSD-1                             = REGISTERED（§1 Option 2 —— Inherited scope ＋ downstream composition contract）
+GSD-2                             = REGISTERED（Option ② ＋ strict limited-reference interpretation）
+GSD-3 ～ GSD-8                    = PENDING
 S-1 ～ S-14                       = candidate（not Human-approved）
 §1 P0 设计目标                     = DESIGN PENDING ← 本 Decision 不推进状态
 §1 POC 成功边界                    = DESIGN PENDING ← 本 Decision 不推进状态
