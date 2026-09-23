@@ -23241,8 +23241,8 @@ Status Change  = NONE（Adapter Boundary 保持 DESIGN PENDING）
 | `AC-19` | `sourcing_status` **不建立全局 source enum**；`source vocabulary → canonical eligibility condition` 为 mapping contract；`Warehouse` **不是** canonical entity（source ／ mapping ／ scope context） | `§4.5.11` ／ `§4.5.12` |
 | `AC-20` | Physical carrier **design** 已关闭（FCM ／ FIC = `DESIGN RESOLVED`）；**仍未实现**的是 runtime ／ source-specific ／ **Adapter realization** | `§4.3.16` ／ `§4.3.17` |
 | `AC-21` | `RBAC` ／ `Data Scope` ／ `Tool Permission` ／ `Secret Handling` = **`DESIGN PENDING`**；**不得**将真实企业 credentials 放入 Git，**不得**将 secrets 写入 prompt ／ logs；`AI Effective Permission = User Permission ∩ Data Scope ∩ Tool Permission ∩ Workflow State ∩ POC Policy` | `§7` |
-| `AC-22` | **current approved canonical policy 对 Adapter 及相关层有明确规定的事项**（**仅**列**已被批准文本明确规定**者；**不**引用任何 Review Finding，**亦不**把「可从批准文本推导」当作已批准 ownership）：<br>• **`§3` read boundary**：POC business data **只能**经 Controlled Export 进入 Data Landing Zone；**不得**直连 source system ／ 绕过 Controlled Export（`§3.1` ／ `§3.3` ／ `§3.4`）；unavailable ⇒ fail closed（`§3.10`）<br>• **source-specific semantic mapping responsibility ＋ mapping constraints**：具体 `source value ／ field → canonical value` 由 **source-specific mapping ／ Adapter** 提供，且 mapping **必须** deterministic ／ explicit ／ traceable ／ reproducible，**不得** fuzzy ／ similarity ／ LLM 选择；Adapter **不得**重新定义 canonical semantic（逐条对应各 Human-approved mapping records：`§4.5.21` `effective_arrival_date`、`§4.5.11` `sourcing_status`、`§4.5.2` 一般原则）<br>• **`Data Validation`** = Layer 2 ～ Layer 4 conceptual semantics ＋ validation layering（`§4.4.2` ／ `§4.4.3`）<br>• **`Final Import Contract`** = acceptance ／ rejection 判定与 package disposition（`§4.3.28 F` ／ `§4.3.29`）<br>• **`FCM`** = record ／ dataset carrier shape 与 approved literals（`§4.3.25` ／ `§4.3.28 E`）<br>• **Adapter Boundary 通用职责（`Decision 1(a)`，**Issue #72 Human-approved**）**：在 **Controlled Export ／ Data Landing Zone 之后** —— 读取 ／ 提取 exported artifacts ／ source records、`exported-artifact format ／ protocol handling`、`generic source-field identification`、`source-specific mapping execution ／ realization`（`§4.6.10` Decision 1 Human Decision Record）；**明确不含** source-system connectivity ／ Controlled Export 上游链路 ／ export-side protocol ／ credentials<br><br>**本行仍不包含** `Package identity` ／ `manifest` generation 与任何 **producer ownership** 主张 —— 该等仍为 open（`AC-23` ／ **`Decision 2` only**） | `§3.1` ／ `§3.3` ／ `§3.4` ／ `§3.10` ／ `§4.3.25` ／ `§4.3.28` ／ `§4.3.29` ／ `§4.4.2` ／ `§4.4.3` ／ `§4.5.2` ／ `§4.5.11` ／ `§4.5.21` ／ `§4.6.10`（`Decision 1` HD Record） |
-| `AC-23` | **Adapter Boundary 的 ownership 列表**只在其**已获批准的部分**才成立；未获批部分**不得**写成 inherited：<br>① `RIF-11` 属 PR #65 的 **review-only Review Finding**，**不构成**已批准 policy（`AB-01`）；<br>② **仅凭「可由批准文本推导」不得**把 Adapter 的通用职责写成 inherited（`AB-05`）；<br>③ **`Decision 1(a)` 已于 Issue #72 获 Human Approval**，因此 `4.6.5 A` 中的**读取 ／ 提取、format ／ protocol handling、generic source-field identification、source-specific mapping execution** 现为 **registered**（见 `AC-22`）。<br>**仍未获批者** —— **`Package identity` ／ `manifest` generation**、**任何 producer ownership**、**unresolved carrier**、**security 接口** —— **仍为本层 finding ／ option**，交 Human Decision（`4.6.5 A` 开放表 ／ **Decision 2** ／ **Decision 3** ／ **Decision 7**） | `§4.3.28`（Bundle 1 ～ 6 登记范围）＋ 本 Review `AB-01` ／ `AB-05` ＋ `§4.6.10`（`Decision 1` HD Record） |
+| `AC-22` | **current approved canonical policy 对 Adapter 及相关层有明确规定的事项**（**仅**列**已被批准文本明确规定**者；**不**引用任何 Review Finding，**亦不**把「可从批准文本推导」当作已批准 ownership）：<br>• **`§3` read boundary**：POC business data **只能**经 Controlled Export 进入 Data Landing Zone；**不得**直连 source system ／ 绕过 Controlled Export（`§3.1` ／ `§3.3` ／ `§3.4`）；unavailable ⇒ fail closed（`§3.10`）<br>• **source-specific semantic mapping responsibility ＋ mapping constraints**：具体 `source value ／ field → canonical value` 由 **source-specific mapping ／ Adapter** 提供，且 mapping **必须** deterministic ／ explicit ／ traceable ／ reproducible，**不得** fuzzy ／ similarity ／ LLM 选择；Adapter **不得**重新定义 canonical semantic（逐条对应各 Human-approved mapping records：`§4.5.21` `effective_arrival_date`、`§4.5.11` `sourcing_status`、`§4.5.2` 一般原则）<br>• **`Data Validation`** = Layer 2 ～ Layer 4 conceptual semantics ＋ validation layering（`§4.4.2` ／ `§4.4.3`）<br>• **`Final Import Contract`** = acceptance ／ rejection 判定与 package disposition（`§4.3.28 F` ／ `§4.3.29`）<br>• **`FCM`** = record ／ dataset carrier shape 与 approved literals（`§4.3.25` ／ `§4.3.28 E`）<br>• **Adapter Boundary 通用职责（`Decision 1(a)`，**Issue #72 Human-approved**）**：在 **Controlled Export ／ Data Landing Zone 之后** —— 读取 ／ 提取 exported artifacts ／ source records、`exported-artifact format ／ protocol handling`、`generic source-field identification`、`source-specific mapping execution ／ realization`（`§4.6.10` Decision 1 Human Decision Record）；**明确不含** source-system connectivity ／ Controlled Export 上游链路 ／ export-side protocol ／ credentials<br>• **producer ／ Package Assembly ownership（`Decision 2`，**Issue #74 Human-approved**）**：**每个 Adapter** 拥有其 **canonical dataset artifact production**，并负责将其自身掌握的 source-derived **record-level provenance ／ evidence locator ／ `mapping_basis`** 写入**已批准 carrier**（且**不**生成 package-level acceptance ／ disposition）；**独立 `Package Assembly`（conceptual responsibility）** 拥有 `snapshot_package_id` ／ Manifest 生成、package-level artifact references ／ package organization 以及**完整、原子** Snapshot Package 的组装，并将完整 package 提交 `Final Import Contract`；`Final Import Contract` **只**验证 ／ disposition，**不生产** artifacts ／ Manifest ／ package（`§4.6.10` Decision 2 Human Decision Record）<br><br>**授权来源区分（**不得混同**）：** 上述 **`§3` ／ `§4.3` ／ `§4.4` ／ `§4.5` 条目为历史 **`Inherited Constraint`**；**`Decision 1(a)` ／ `Decision 1(b)`（Issue #72）与 `Decision 2`（Issue #74）为本层 newly Human-approved registered policy** —— 二者同属 **current approved policy**，但**后者不得**被表述为 inherited constraint | `§3.1` ／ `§3.3` ／ `§3.4` ／ `§3.10` ／ `§4.3.25` ／ `§4.3.28` ／ `§4.3.29` ／ `§4.4.2` ／ `§4.4.3` ／ `§4.5.2` ／ `§4.5.11` ／ `§4.5.21` ／ `§4.6.10`（`Decision 1` ／ `Decision 2` HD Records） |
+| `AC-23` | **Adapter Boundary 的 ownership 列表**只在其**已获批准的部分**才成立；未获批部分**不得**写成 inherited：<br>① `RIF-11` 属 PR #65 的 **review-only Review Finding**，**不构成**已批准 policy（`AB-01`）；<br>② **仅凭「可由批准文本推导」不得**把 Adapter 的通用职责写成 inherited（`AB-05`）；<br>③ **`Decision 1(a)` 已于 Issue #72 获 Human Approval**，因此 `4.6.5 A` 中的**读取 ／ 提取、format ／ protocol handling、generic source-field identification、source-specific mapping execution** 现为 **registered**（见 `AC-22`）；<br>④ **`Decision 2` 已于 Issue #74 获 Human Approval**，因此 **producer ownership 与 `Package identity` ／ `manifest` generation** **不再属于未获批项** ⇒ 已 **registered**（见 `AC-22`）。<br>**仍未决者（仅剩真正 pending 项）** —— **unresolved marker 的 carrier ／ interface 归属**（`Decision 3` ／ `ADEP-12`）与 **Adapter ／ `Permission & Security` 接口**（`Decision 7` ／ `ADEP-7`）；二者**仍为本层 finding ／ option**，交 Human Decision | `§4.3.28`（Bundle 1 ～ 6 登记范围）＋ 本 Review `AB-01` ／ `AB-05` ＋ `§4.6.10`（`Decision 1` ／ `Decision 2` HD Records） |
 
 **本 Review 未发现**上述约束之间存在冲突；`AC-18` ／ `AC-19` 是**已经唯一确定**的行为，
 **不得**在本层被重新打开为自由选项。
@@ -23310,11 +23310,11 @@ Status Change  = NONE（Adapter Boundary 保持 DESIGN PENDING）
 
 | # | Scenario | 既有约束要求的行为 | 性质 |
 | --- | --- | --- | --- |
-| `AS-15` | 某 producer 提交 canonical artifact set，供 Snapshot / Import Contract 接受 | **producer-neutral invariant（`P-1`）**：任何提交给 `Final Import Contract` 的 package 内容**必须可被**其验证（`IC-1` ／ `IC-3` ／ `IC-8` ／ `IC-22` ＋ `AC-15`），且**不得**自行宣告 `Accepted`；**若 Adapter 是被选中的 producer，则同样受此约束**。**谁**是 producer ⇒ **open**（`P-2` ／ **Decision 2**） | **`IC`**（invariant）＋ **`open`**（producer ownership） |
+| `AS-15` | 某 producer 提交 canonical artifact set，供 Snapshot / Import Contract 接受 | **producer-neutral invariant（`P-1`）**：任何提交给 `Final Import Contract` 的 package 内容**必须可被**其验证（`IC-1` ／ `IC-3` ／ `IC-8` ／ `IC-22` ＋ `AC-15`），且**不得**自行宣告 `Accepted`。**current-state（`Decision 2` ／ Issue #74）：** 每个 Adapter 产出其职责范围内的 canonical dataset artifact（`P-2`）；只有经 **Package Assembly** 形成的**完整 package** 才可提交 `Final Import Contract`，partial artifacts **不得单独**被视为可接受 package | **`IC`**（invariant）＋ **`Registered`**（producer ownership，`P-2`） |
 | `AS-16` | Artifact 的 digest 与 **producer 提交 ／ acceptance 所验证的 exact raw bytes** 不一致 | `IG-raw` = exact raw bytes ⇒ **fail closed**（package-level）；**任何** producer ／ 写入者 **不得**静默重算 ／ 覆盖（若 Adapter 为被选中的 producer 则同受此约束） | **`IC`** |
 | `AS-17` | acceptance 过程中 artifact 被替换 ／ 重读得到不同视图 | `Decision 10A`：验证结果**必须**绑定实际被接受的同一 stable content view（`AC-15`） | **`IC`** |
-| `AS-18` | 某 producer 在 canonical artifact 中写入 `"_meta"` provenance association 与 mapping basis | **carrier obligation（`Inherited Constraint`）**：shape 与 approved literals **已由 FCM ／ FIC 唯一确定**（`AC-12` ／ `AC-13` ／ `AC-14`），写入者**必须**遵守；**谁负责写入该 metadata（producer ownership）** 与 **generation 机制** ⇒ **open ⇒ `Decision 2` only**（`P-2` ／ `ADEP-4` ／ `ADEP-11`） | **`IC`**（carrier obligation）＋ **`open`**（producer ／ generation ownership） |
-| `AS-19` | **提交给 downstream ／ `Final Import Contract` 的 candidate package** 缺少某 capability 所需的 logical evidence role | 属 **`EVIDENCE_AVAILABILITY`**（Layer 2）capability 后果，**不是** 任何 producer 自定的 package structural failure（`AC-16`）；**producer ownership 仍 open**（`P-2` ／ **Decision 2**） | **`IC`**（semantic）＋ **`open`**（producer ownership） |
+| `AS-18` | 某 producer 在 canonical artifact 中写入 `"_meta"` provenance association 与 mapping basis | **carrier obligation（`Inherited Constraint`）**：shape 与 approved literals **已由 FCM ／ FIC 唯一确定**（`AC-12` ／ `AC-13` ／ `AC-14`），写入者**必须**遵守。**current-state（`Decision 2` ／ Issue #74）：** **每个 Adapter 负责写入其自身掌握的 source-derived record-level provenance ／ evidence locator ／ `mapping_basis`**，且**只能**使用已批准 carrier ／ literals（`P-2` ／ `ADEP-4` ／ `ADEP-11`） | **`IC`**（carrier obligation）＋ **`Registered`**（metadata producer） |
+| `AS-19` | **提交给 downstream ／ `Final Import Contract` 的 candidate package** 缺少某 capability 所需的 logical evidence role | 属 **`EVIDENCE_AVAILABILITY`**（Layer 2）capability 后果，**不是** 任何 producer 自定的 package structural failure（`AC-16`）；**producer ownership 已由 `Decision 2` 登记**（Adapter 产出其 artifact ／ Package Assembly 组装完整 package，`P-2` ／ `ADEP-11`） | **`IC`**（semantic）＋ **`Registered`**（producer ownership） |
 | `AS-20` | Adapter 想要**直接标记** `REJECTED` ／ `UNUSABLE` 或自行生成 Validation Issue | **不得** —— disposition 由 `Final Import Contract` 判定（`§4.3.29` `RD-B`）；Validation Issue 由 Data Validation 依 taxonomy 产生（`AC-16`） | **`IC`** |
 | `AS-21` | 同一 source 的两次 mapping 在同一输入下给出不同结果 | 违反 `deterministic` ／ `reproducible`（`AC-6`） | **`IC`** |
 
@@ -23346,37 +23346,51 @@ Status Change  = NONE（Adapter Boundary 保持 DESIGN PENDING）
 
 **A. Adapter Owns ／ Does Not Own（Q1）**
 
-**`Inherited Constraint`（**仅** `AC-22` —— current approved canonical policy **明确规定**者）：**
+**A-1. 继承约束（`Inherited Constraint`）—— 历史已批准来源（`AC-22` 前 5 项）：**
 
-| 已批准 policy 明确规定 | 依据 |
+| `Inherited Constraint` 明确规定 | 依据 |
 | --- | --- |
 | Adapter 受 `§3` read boundary 约束：只处理经 Controlled Export 进入 **Data Landing Zone** 的业务数据，**不得**直连 source system；unavailable ⇒ fail closed | `§3.1` ／ `§3.3` ／ `§3.4` ／ `§3.10` |
 | **source-specific semantic mapping responsibility ＋ mapping constraints**：具体 `source value ／ field → canonical value` 由 source-specific mapping ／ Adapter 提供；mapping **必须** deterministic ／ explicit ／ traceable ／ reproducible（禁 fuzzy ／ similarity ／ LLM 选择）；Adapter **不得**重新定义 canonical semantic | `§4.5.2` ／ `§4.5.11` ／ `§4.5.21`（各 Human-approved mapping record 的实际范围） |
 | `Stable Source Evidence Locator` 与 `Mapping ／ Resolution Basis` 的 **carrier obligation**（**任何**写入者的写入形态要求；carrier shape 与 literals 归 `FCM`） | `§4.3.28 E` ／ `§4.5.2`（traceable requirement） |
 | **不得**：定义 canonical entity ／ field ／ enum 与 `BR-*` semantic；宣告 `Accepted` ／ package disposition；定义 record ／ artifact carrier shape 与 approved literals；生成 Layer 2 ～ Layer 4 validation outcome；设计 RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling | `§4.4.2` ／ `§4.4.3` ／ `§4.3.25` ／ `§4.3.28` ／ `§4.3.29` ／ `§7` |
+
+**A-2. 本层 newly Human-approved registered policy（**不是** historical inherited）：**
+
+| 已登记政策（`REGISTERED`） | 依据 |
+| --- | --- |
 | **Adapter Boundary 通用职责（`Decision 1(a)`，Issue #72 Human-approved，`REGISTERED`）**：在 Controlled Export ／ Data Landing Zone **之后** —— 读取 ／ 提取 exported artifacts ／ source records；`exported-artifact format ／ protocol handling`；`generic source-field identification`；`source-specific mapping execution ／ realization`。**明确不含** source-system connectivity ／ Controlled Export 上游链路 ／ export-side protocol ／ credentials（若要纳入须另走 Human-approved `§3` design change） | `§4.6.10` `Decision 1` Human Decision Record（Issue #72） |
 | **Adapter 可在内部定义 source-specific resolution rules（`Decision 1(b)`，Issue #72 Human-approved，`REGISTERED`）**：**必须** explicit ／ deterministic ／ traceable ／ reproducible；**不得** LLM guess ／ fuzzy ／ similarity ／ silent normalization；**不得**修改或重新定义 canonical semantic；**不得**建立 global source-field precedence；**不得**越过已 `DESIGN RESOLVED` 的 canonical mapping contracts | `§4.6.10` `Decision 1` Human Decision Record（Issue #72） |
+| **Adapter 拥有其 canonical dataset artifact production（`Decision 2`，Issue #74 Human-approved，`REGISTERED`）**：每个 Adapter 负责其职责范围内的 `source-specific mapping ／ resolution`、产出对应的 **canonical dataset artifact**、将其掌握的 source-derived provenance ／ evidence locator ／ `mapping_basis` 写入**已批准 carrier**、保持 deterministic ／ explicit ／ traceable ／ reproducible；**不生成** package-level acceptance ／ disposition | `§4.6.10` `Decision 2` Human Decision Record（Issue #74） |
+| **Package Assembly 拥有 package production（`Decision 2`，Issue #74 Human-approved，`REGISTERED`）**：独立的 **conceptual responsibility** 负责汇集一个或多个 Adapter 产出的 canonical artifacts、生成 ／ 绑定 `snapshot_package_id`、生成 Manifest、建立 package-level artifact references ／ package organization、形成满足既有 Snapshot / Import Contract 的**完整、原子** Snapshot Package、并将完整 package 提交给 `Final Import Contract`。**不选择**其运行形态（service ／ module ／ job ／ library ／ workflow node ／ framework ／ database ／ queue ／ API ／ deployment） | `§4.6.10` `Decision 2` Human Decision Record（Issue #74） |
+| **`Final Import Contract` 只验证 ／ disposition，**不**生产 package（`Decision 2`，Issue #74 Human-approved，`REGISTERED`）**：不生产 canonical artifacts ／ Manifest ／ package；不改变既有 FIC ／ FCM contract | `§4.6.10` `Decision 2` Human Decision Record（Issue #74）＋ `§4.3.28` ／ `§4.3.29` |
 
-**本层开放 —— Finding ／ Human Decision（**无直接 approved source**；依 `AC-23`）：**
+**A-3. 本层开放 —— Finding ／ Human Decision（**仅真正 pending 项**；依 `AC-23`）：**
 
 | # | 开放 ownership ／ responsibility 问题 | 落点 |
 | --- | --- | --- |
-| 1 | **`Package identity` ／ `manifest` generation 与 producer ownership** 归谁；Adapter 是直接产出完整 canonical artifact set，还是先产出 intermediate result 再由 assembly 形成 package | **Decision 2** ＋ `ADEP-11` |
-| 2 | **unresolved marker** 是否需要一个**新的 interface ／ carrier**、由谁承载 | **Decision 3** ＋ `ADEP-12` |
-| 3 | Adapter 与 `Permission & Security` 的接口期待（Data Landing Zone 侧读取所需的 scope ／ secret） | **Decision 7** ＋ `ADEP-7` |
+| 1 | **unresolved marker** 是否需要一个**新的 interface ／ carrier**、由谁承载 | **Decision 3** ＋ `ADEP-12` |
+| 2 | Adapter 与 `Permission & Security` 的接口期待（Data Landing Zone 侧读取所需的 scope ／ secret） | **Decision 7** ＋ `ADEP-7` |
 
-> **已由 `Decision 1` 关闭的开放项（Issue #72）：** ① `source extraction` 责任；
+> **已由 `Decision 1` 登记（Issue #72）：** ① `source extraction` 责任；
 > ② `generic source-field identification ownership`；③ `exported-artifact format ／ protocol handling` ownership；
 > ④ Adapter 与 `Master Data Mapping` 的 mapping decision 分工（`Decision 1(b)`）。
-> 上述四项**不再是 open**，其内容见上表 `REGISTERED` 行与 `AC-22`。
+> 上述四项**不再是 open**，其内容见 **A-2** 与 `AC-22`。
+>
+> **已由 `Decision 2` 登记（Issue #74）：** ⑤ **producer ownership** ——
+> Adapter 拥有**其** canonical dataset artifact production 与 record-level provenance 写入；
+> **Package Assembly**（独立 conceptual responsibility）拥有 `snapshot_package_id` ／ Manifest ／
+> package organization ／ 完整 package 组装；`Final Import Contract` **只**验证 ／ disposition。
+> **该行已从本开放表移出**，其内容见 **A-2** 与 **`§4.6.10` `Decision 2` Human Decision Record**（`P-2` ／ `ADEP-11`）。
 
 ```
 Adapter 不得重新定义 canonical semantic；也不得在未获 Human authorization 的情况下
 自行承担 source-system connectivity 或 package-level 职责。
 
-已批准（Decision 1）：Data Landing Zone 之后的读取 ／ 提取、format ／ protocol handling、
+已登记（Decision 1）：Data Landing Zone 之后的读取 ／ 提取、format ／ protocol handling、
                       generic source-field identification、source-specific mapping execution
-仍 open（Decision 2）：谁直接产出 canonical artifact ／ package ／ manifest ／ provenance metadata
+已登记（Decision 2）：谁直接产出 canonical artifact ／ package ／ manifest ／ provenance metadata
+仍 open（Decision 3 ／ 7）：unresolved marker 的 carrier ／ interface；Adapter ／ Permission & Security 接口
 ```
 
 **B. Adapter Input ／ Output Conceptual Contract（Q2）**
@@ -23393,17 +23407,19 @@ Adapter 不得重新定义 canonical semantic；也不得在未获 Human authori
 > | # | 命题 | 性质 |
 > | --- | --- | --- |
 > | **P-1** | **FIC-valid output invariant**：任何**进入** `Final Import Contract` 的 package ／ artifacts **必须**符合 canonical carrier ／ contract（`AC-15`），否则由 `Final Import Contract` 判定为 structural failure；Adapter **不得**宣告 `Accepted` | **`Inherited Constraint`**（`§4.3.25` ／ `§4.3.28` ／ `§4.3.29`） |
-> | **P-2** | **producer ownership**：**谁直接产出**该 canonical artifact set —— 由 Adapter 直接产出完整 artifact set，**还是** Adapter 先产出 intermediate result、再由（可能独立的）assembly 步骤形成 package ／ manifest | **本层 open**（**Decision 2** ／ `ADEP-11`） |
+> | **P-2** | **producer ownership**：**谁直接产出** canonical artifacts ／ package ／ manifest —— 已由 **`Decision 2`（Issue #74）登记为 Option ②**：每个 Adapter 产出其 canonical dataset artifact（含其 source-derived provenance ／ locator ／ `mapping_basis`），独立 **Package Assembly** 形成完整 package；`Final Import Contract` **只**验证 ／ disposition | **`Registered`（`Decision 2` ／ `ADEP-11`）** |
 >
 > `AO-1` **只**表达 **P-1**（output **必须**是 FIC-valid），**不**表达 **P-2**。
 > 其他 producer 形态（例如 intermediate＋assembly）**同样**受 `P-1` 约束，
 > **不得**被理解为与 `P-1` 冲突。
 
 **`Inherited Constraint`：** `AI-1` ＋ **`P-1`（FIC-valid output invariant）**。
-**开放：** **`P-2`（producer ownership）** 与 output 的**组织与提交方式**
-（**`Package identity` ／ `manifest` generation 归谁**、Adapter 是否直接产出完整 artifact set、
-多 Adapter 是否各自产出部分 artifact 并由 assembly 步骤生成 manifest）
-—— 见 **Decision 2** ／ `ADEP-11`；该问题**不**由 `AI-1` ／ `P-1` 决定。
+**已登记（`Decision 2` ／ Issue #74）：** **`P-2`（producer ownership）** —— Adapter 产出其 canonical dataset
+artifact（含 source-derived provenance ／ locator ／ `mapping_basis`），**Package Assembly** 负责汇集、
+生成 `snapshot_package_id` ／ Manifest 与 package organization，形成**完整、原子** Snapshot Package；
+多 Adapter 的 partial artifacts **不得单独**视为可接受 package，**禁止 dataset-level partial acceptance**。
+Package Assembly 为 **conceptual responsibility**，其运行形态与 technology **不在**本 Decision 范围内。
+见 **`§4.6.10` `Decision 2` Human Decision Record** ／ `ADEP-11`。
 
 **C. Deterministic ／ Fail-safe Requirements（Q3 ／ Q4）**
 
@@ -23481,8 +23497,10 @@ Adapter 的 fail-safe 行为与**上报形态** —— 见 Decision 3（**不等
 **任何** producer 写入 canonical artifact 时，**必须**依 `§4.3.28 E` 的 `"evidence"` ／ `"mapping_basis"`
 carrier 形态写入 locator ／ basis，并满足 `§4.5.2` 的 traceable requirement
 （`§4.3.28 E` ／ `§4.5.2`；**不**依赖 `RIF-11`）。
-**开放：** ① **谁**是该 metadata 的 producer（producer ownership ⇒ **`Decision 2` only**；`P-2` ／ `ADEP-4` ／ `ADEP-11`）；
-② **basis 字符串的语义粒度**（见 Decision 5）。
+**已登记（`Decision 2` ／ Issue #74）：** ① **谁**是该 metadata 的 producer ——
+**每个 Adapter 负责写入其自身掌握的 source-derived record-level provenance ／ evidence locator ／
+`mapping_basis`**，且**只能**使用已批准 carrier ／ literals（`P-2` ／ `ADEP-4` ／ `ADEP-11`）。
+**仍未决：** ② **basis 字符串的语义粒度**（见 Decision 5）。
 
 **F. Multi-source ／ Multi-Adapter Canonical Semantic Stability（Q6）**
 
@@ -23522,12 +23540,12 @@ carrier 形态写入 locator ／ basis，并满足 `§4.5.2` 的 traceable requi
 | --- | --- | --- | --- |
 | `AI-1`（只接受 Controlled Export 产物） | **`Inherited Constraint`（`AC-1` ／ `AC-2`）** | 最低 | 唯一合法 input 通道 |
 | `AI-2`（直连 source system） | **`NOT COMPATIBLE`** | — | 违反 hard boundary；非开放选项 |
-| `AO-1`（output **必须** FIC-valid）**—— 仅 `P-1` invariant** | **`Inherited Constraint`** | 中 | output **必须**可被 FIC 验证；Adapter 不宣告 acceptance。**producer ownership（`P-2`）仍 open**（Decision 2） |
+| `AO-1`（output **必须** FIC-valid）**—— 仅 `P-1` invariant** | **`Inherited Constraint`** | 中 | output **必须**可被 FIC 验证；Adapter 不宣告 acceptance。**producer ownership（`P-2`）已由 `Decision 2`（Issue #74）登记** |
 | `AO-2`（Adapter 自行宣告 acceptance） | **`NOT COMPATIBLE`** | — | 与已批准 policy（acceptance 判定归 `Final Import Contract`）／ `AS-20` 冲突 |
 | `UF-1`（显式 unresolved marker） | **条件性** —— **仅**在「不新增 carrier，root-condition 区分依赖 mapping declaration」的解读下成立（`AC-9` ／ `AC-10`） | 低 | **不**标为 inherited；若要求在 package 内承载 unresolved 事实 ⇒ 依赖单独 Human-authorized carrier ／ interface design change（`ADEP-12`） |
 | `UF-2`（halt dataset 并等待修复） | **条件性** —— 需承载「该 unresolved source ／ 该 attempt 未通过」，已批准 carrier **无**对应位置 ⇒ **依赖单独 Human-authorized design change** | 中 | 更强 fail-safe；「何时可重跑」亦需登记 |
 | `UF-3`（静默省略 unresolved records） | **`NOT COMPATIBLE`（`AC-8`）** | — | silent exclusion 被明确禁止 |
-| `PE-1`（**producer-neutral**：写入者必须把 locator ／ basis 写入已固定 carrier 并保持原始值） | **`Inherited Constraint`（carrier obligation；`§4.3.28 E` ／ `§4.5.2`）** | 中 | carrier shape 已由 FCM 固定；**producer ownership 仍 open ⇒ `Decision 2` only**（`P-2` ／ `ADEP-11`） |
+| `PE-1`（**producer-neutral**：写入者必须把 locator ／ basis 写入已固定 carrier 并保持原始值） | **`Inherited Constraint`（carrier obligation；`§4.3.28 E` ／ `§4.5.2`）** | 中 | carrier shape 已由 FCM 固定；**metadata producer 已由 `Decision 2`（Issue #74）登记为「每个 Adapter 写入其自身掌握的 source-derived provenance」**（`P-2` ／ `ADEP-4` ／ `ADEP-11`） |
 | `PE-2`（下游补 provenance） | **`NOT COMPATIBLE`** | — | 下游无 source-level 信息 |
 | `MS-1`（canonical-first ＋ source-specific mapping） | **`Inherited Constraint`（`AC-18` ／ `AC-19`）** | 低 ／ 中 | 与 Human-approved Option B ／ Option D 一致 |
 | `MS-2`（precedence-first） | **`NOT COMPATIBLE`（`AC-18`）** | — | global precedence 已 `NOT ADOPTED` |
@@ -23542,39 +23560,48 @@ carrier 形态写入 locator ／ basis，并满足 `§4.5.2` 的 traceable requi
 
 | # | Dependency | 说明 |
 | --- | --- | --- |
-| `ADEP-1` | **任何提交给 `Final Import Contract` 的 package 内容（producer-neutral）↔ acceptance** | **producer-neutral invariant**：**任何**提交给 `Final Import Contract` 的 package 内容**必须**满足 `IC-1` ／ `IC-3` ／ `IC-8` ／ `IC-22` 与 `AC-15`；digest 为 `IG-raw`（exact raw bytes）⇒ **被选中的 producer 不得**在 acceptance 之后改写字节（**若** Adapter 是被选中的 producer，则同样受此约束）。**谁**是 producer ⇒ **open**（`P-2` ／ **Decision 2** ／ `ADEP-11`） |
+| `ADEP-1` | **任何提交给 `Final Import Contract` 的 package 内容（producer-neutral）↔ acceptance** | **producer-neutral invariant**：**任何**提交给 `Final Import Contract` 的 package 内容**必须**满足 `IC-1` ／ `IC-3` ／ `IC-8` ／ `IC-22` 与 `AC-15`；digest 为 `IG-raw`（exact raw bytes）⇒ **被选中的 producer 不得**在 acceptance 之后改写字节。**current-state（`Decision 2` ／ Issue #74）：** 只有经 **Package Assembly** 形成的**完整 package** 才可提交 `Final Import Contract`；多个 Adapter 的 partial artifacts **不得单独**提交 ／ 视为可接受 package（**禁止 dataset-level partial acceptance**；`IC-13`） |
 | `ADEP-2` | **mapping decision ↔ `Master Data Mapping` ownership** | canonical identity ／ relationship resolution contract 已 `DESIGN RESOLVED`；Adapter **只**提供 source-specific 实现，**不**改 contract。**责任交接点已由 `Decision 1(b)`（Issue #72）登记**：Adapter **允许**在内部定义 source-specific resolution rules，但须 explicit ／ deterministic ／ traceable ／ reproducible，且**不得**越过已 `DESIGN RESOLVED` 的 canonical mapping contracts ／ 建立 global precedence |
 | `ADEP-3` | **unresolved mapping ↔ Data Validation taxonomy** | unresolved 必须以既有 reason（`SEMANTIC_UNRESOLVED` ／ `MISSING` ／ `INVALID_TYPE`）表达；**不得**新增 reason（`AC-16`） |
-| `ADEP-4` | **evidence locator ／ basis 的 carrier obligation（producer-neutral）↔ FCM ／ FIC carrier** | carrier 位置与 literals 已固定（`"_meta"` ／ `provenance_associations` ／ `observation` ／ `evidence` ／ `mapping_basis`）：**任何**写入者**必须**依该 shape 写入，**不**得自定义 shape。**谁**负责生成该 metadata 内容（producer ownership）⇒ **open ⇒ `Decision 2` only**（`P-2` ／ `ADEP-11`） |
+| `ADEP-4` | **evidence locator ／ basis 的 carrier obligation（producer-neutral）↔ FCM ／ FIC carrier** | carrier 位置与 literals 已固定（`"_meta"` ／ `provenance_associations` ／ `observation` ／ `evidence` ／ `mapping_basis`）：**任何**写入者**必须**依该 shape 写入，**不**得自定义 shape。**谁**负责生成该 metadata 内容（producer ownership）⇒ **已由 `Decision 2`（Issue #74）登记**：**每个 Adapter 写入其自身掌握的 source-derived record-level provenance ／ locator ／ `mapping_basis`**，且只能使用已批准 carrier ／ literals（`P-2` ／ `ADEP-11`） |
 | `ADEP-5` | **multi-source canonical stability ↔ `Global Source-Field Precedence = NOT ADOPTED`** | 跨 source precedence **不得**被 Adapter 重新引入（`AC-18`）；drift 防护须以显式 mapping 与 unresolved 表达实现 |
 | `ADEP-6` | **Adapter failure 表达 ↔ Layer 1 ／ Layer 2 归属** | artifact 结构问题归 `Final Import Contract`；semantic ／ field 问题归 Data Validation；Adapter **不**自行产生 disposition 或新 reason（`AC-16` ／ `AC-22`） |
 | `ADEP-7` | **Adapter ↔ `Permission & Security`（`§7` = `DESIGN PENDING`）** | **Data Landing Zone 侧**的读取范围 ／ secret 边界未定 ⇒ 本层**不得**设计，只能登记依赖与接口期待（Decision 7）；**不**涉及 source-system credentials 或 export-side protocol（`ADEP-9`） |
 | `ADEP-8` | **Adapter ↔ Architecture Decisions（尚无 ADR）** | framework ／ technology ／ deployment 选择属 `§10`；本层**不得**预选 |
 | `ADEP-9` | **Adapter ↔ `Data Landing Zone` 之前链路** | Controlled Export 与 **source-system connectivity**（连接源系统、export-side protocol ／ credentials）由 source system 侧完成（`§3.1` ／ `§3.3`）；Adapter **不**设计 export 侧实现，**不**扩大 source access。若未来要把 source-system connectivity 纳入 Adapter，**必须**另走 **Human-approved `§3` design change** |
 | `ADEP-10` | **Adapter ↔ real source field 未知** | 真实 ERP field 未知 **≠** design pending（`AC-17`）；Adapter 的存在**不**要求现在选定真实 field |
-| `ADEP-11` | **Decision 2 ↔ 已批准 policy 的职责指派范围** | 已批准 policy **未**指派 `Package identity` ／ `manifest` generation 的职责 ⇒ 该 ownership 为 **open**，**不得**写成 inherited；其结论决定 `A-3` 的登记内容与 Adapter 与他方（或独立 assembly 步骤）的接口 |
+| `ADEP-11` | **`Decision 2` ↔ package ／ manifest producer ownership** | **历史（Decision 1 时点）：** 已批准 policy **未**指派 `Package identity` ／ `manifest` generation 的职责 ⇒ 当时为 **open**。**current-state（Issue #74）：** 已由 **`Decision 2`（Option ②）登记** —— 每个 Adapter 产出其 canonical dataset artifact（含其 source-derived provenance ／ locator ／ `mapping_basis`）；独立 **Package Assembly** 汇集 artifacts 并生成 ／ 绑定 `snapshot_package_id`、生成 Manifest、建立 package organization、形成**完整、原子** package 后提交 `Final Import Contract`；`Final Import Contract` **不**生产 package。**Package Assembly 为 conceptual responsibility**，其运行形态与 technology **不在**本 Decision 范围 |
 | `ADEP-12` | **Decision 3（`UF-1` ／ `UF-2` ／ quarantine）↔ 已批准 carrier contract** | `UF-1` 若要求 package 内承载 unresolved 事实，或 `UF-2` ／ quarantine 需要新的 interface ／ artifact ／ operational state ⇒ 已批准 carrier（`§4.3.25` ／ `§4.3.28 E`，unknown `"_meta"` member ⇒ reject）**无**对应位置 ⇒ **依赖单独 Human-authorized design change**；未完成前该选项**不得**声称可用 |
-| `ADEP-13` | **`source extraction` ／ generic field-identification ／ exported-artifact format ／ protocol handling ownership ↔ 已批准 policy 的覆盖范围** | **历史（AB-05 时点）：** `§3` 批准的是 **read boundary**；`§4.5` 系列批准的是 **source-specific mapping responsibility ＋ mapping constraints**；**二者均未**批准上述**通用 ownership** ⇒ 当时该等职责为 open。**current-state：** 已由 **`Decision 1(a)`（Issue #72 Human-approved）** 明确指派给 **Adapter Boundary**（在 Controlled Export ／ Data Landing Zone **之后**），并**不含** source-system connectivity ／ export-side protocol ／ credentials ⇒ 该 ownership **已登记**（见 `AC-22` ／ `4.6.5 A`）；**producer ownership 仍 open**（`Decision 2`） |
+| `ADEP-13` | **`source extraction` ／ generic field-identification ／ exported-artifact format ／ protocol handling ownership ↔ 已批准 policy 的覆盖范围** | **历史（AB-05 时点）：** `§3` 批准的是 **read boundary**；`§4.5` 系列批准的是 **source-specific mapping responsibility ＋ mapping constraints**；**二者均未**批准上述**通用 ownership** ⇒ 当时该等职责为 open。**current-state：** 已由 **`Decision 1(a)`（Issue #72 Human-approved）** 明确指派给 **Adapter Boundary**（在 Controlled Export ／ Data Landing Zone **之后**），并**不含** source-system connectivity ／ export-side protocol ／ credentials ⇒ 该 ownership **已登记**（见 `AC-22` ／ `4.6.5 A`）；**producer ownership 亦已登记**（`Decision 2`，见 `ADEP-11`） |
 
 ---
 
 #### 4.6.8 Review Findings
 
 **`ARF-1`（Q1 Ownership）**
-**`Inherited Constraint`：** **只有** `AC-22` 列出的、被 current approved policy
-**明确规定**者 —— ① `§3` read boundary（只处理 Data Landing Zone 业务数据、**不**直连 source system、
-unavailable ⇒ fail closed）；② **source-specific semantic mapping responsibility ＋ mapping constraints**
-（按 `§4.5.2` ／ `§4.5.11` ／ `§4.5.21` 各自实际范围）；③ evidence locator ／ basis 的 **carrier obligation**
-（`§4.3.28 E`）；④ 各层**明确**的 does-not-own 与 `FCM` ／ `Data Validation` ／ `FIC` 职责；
+**历史 `Inherited Constraint`（`AC-22` 前 5 项）：** ① `§3` read boundary（只处理 Data Landing Zone
+业务数据、**不**直连 source system、unavailable ⇒ fail closed）；② **source-specific semantic mapping
+responsibility ＋ mapping constraints**（按 `§4.5.2` ／ `§4.5.11` ／ `§4.5.21` 各自实际范围）；
+③ evidence locator ／ basis 的 **carrier obligation**（`§4.3.28 E`）；④ 各层**明确**的 does-not-own 与
+`FCM` ／ `Data Validation` ／ `FIC` 职责。
+**本层 newly Human-approved registered policy（**不是** historical inherited）：**
 ⑤ **`Decision 1(a)`（Issue #72）** —— Data Landing Zone **之后**的读取 ／ 提取、
 `exported-artifact format ／ protocol handling`、`generic source-field identification`、
-`source-specific mapping execution ／ realization` 归 Adapter（**不含** source-system connectivity）。
+`source-specific mapping execution ／ realization` 归 Adapter（**不含** source-system connectivity）；
+⑥ **`Decision 2`（Issue #74）** —— **producer ／ Package Assembly ownership**：Adapter 拥有其
+canonical dataset artifact production 与 record-level provenance ／ locator ／ `mapping_basis` 写入；
+独立 **Package Assembly**（conceptual responsibility）拥有 `snapshot_package_id` ／ Manifest ／
+package organization ／ 完整 package 组装；`Final Import Contract` **只**验证 ／ disposition。
 `AC-23` 同时确认 **ownership 列表只在已批准部分成立**。
-**已由 `Decision 1` 关闭的开放项：** `source extraction` 责任、generic source-field identification ownership、
+**已由 `Decision 1` 登记：** `source extraction` 责任、generic source-field identification ownership、
 `exported-artifact format ／ protocol handling` ownership、Adapter 与 `Master Data Mapping` 的 mapping decision 分工
-（`Decision 1(b)`）—— 见 `4.6.5 A` 的 `REGISTERED` 行与 **`§4.6.10` `Decision 1` Human Decision Record**。
-**仍未决（**不得**写成 inherited）：** `Package identity` ／ `manifest` generation 归属与 **producer ownership**
-（`ADEP-11` ／ **Decision 2**）；unresolved marker 的 carrier ／ interface 归属（`ADEP-12` ／ **Decision 3**）；
+（`Decision 1(b)`）—— 见 `4.6.5 A` 的 **A-2** registered 表与 **`§4.6.10` `Decision 1` Human Decision Record**。
+**已由 `Decision 2` 登记（Issue #74）：** `Package identity` ／ `manifest` generation 与
+**producer ownership** —— 每个 Adapter 产出其 canonical dataset artifact 并写入其 source-derived
+provenance ／ locator ／ `mapping_basis`；独立 **Package Assembly**（conceptual responsibility）
+负责 `snapshot_package_id` ／ Manifest ／ package organization ／ 完整 package 组装；
+`Final Import Contract` **只**验证 ／ disposition（`ADEP-11` ／ **`§4.6.10` `Decision 2` HD Record**）。
+**仍未决（**不得**写成 inherited，**亦不得**写成已登记）：** unresolved marker 的 carrier ／ interface 归属（`ADEP-12` ／ **Decision 3**）；
 与 `Permission & Security` 的接口（`ADEP-7` ／ **Decision 7**）。
 **另：** `source-system connectivity`（连接 source system ／ export-side credentials ／ protocol）
 **不属** POC Adapter boundary（`AB-02` ／ `ADEP-9`）；若要纳入须另走 Human-approved `§3` design change。
@@ -23582,10 +23609,13 @@ unavailable ⇒ fail closed）；② **source-specific semantic mapping responsi
 **`ARF-2`（Q2 Input ／ Output Contract）**
 **`Inherited Constraint`：** input **只能**是 Data Landing Zone 中的 Controlled Export 产物（`AI-1`）；
 output **必须** FIC-valid（**`P-1` invariant**）。
-**开放：** **producer ownership（`P-2`）** 与 output 的**组织 ／ 提交方式**，
-含 `Package identity` ／ `manifest` generation 归属与「Adapter 直接产出完整 artifact set vs intermediate＋assembly」
-（Decision 2 ／ `ADEP-11`）。
-**本 Review 不写**任何 connector 或 runtime 流程，**不**假设 Adapter 与 source system 的连接。
+**已登记（`Decision 2` ／ Issue #74）：** **producer ownership（`P-2`）** —— 每个 Adapter 产出其
+canonical dataset artifact（含其 source-derived provenance ／ locator ／ `mapping_basis`）；
+独立 **Package Assembly** 汇集 artifacts、生成 `snapshot_package_id` ／ Manifest 与 package organization，
+形成**完整、原子** Snapshot Package 后提交 `Final Import Contract`；partial artifacts **不得单独**
+视为可接受 package（**禁止 dataset-level partial acceptance**）。
+**本 Review 不写**任何 connector 或 runtime 流程，**不**假设 Adapter 与 source system 的连接，
+**亦不**选择 Package Assembly 的运行形态。
 
 **`ARF-3`（Q3 Determinism ／ Fail-safe）**
 **`Inherited Constraint`：** `AC-5` ～ `AC-10` 已唯一确定
@@ -23608,8 +23638,10 @@ producer **必须**把 `locator` ／ `basis` 内容写入**已固定**的 carrie
 依据 `§4.3.28 E` 的 `"evidence"` ／ `"mapping_basis"` 与 `§4.5.2` 的 traceable requirement）。
 carrier shape 与 literals 已由 FCM ／ FIC 固定，**本层不得**新增。
 `AC-13` 要求 locator 保持原始 identity value：**禁止** trim ／ case ／ Unicode ／ numeric coercion。
-**开放：** ① **谁**是该 metadata 的 producer（producer ownership ⇒ **`Decision 2` only**；`P-2` ／ `ADEP-11`）；
-② `mapping_basis` 字符串的**语义粒度**（**Decision 5**）。
+**已登记（`Decision 2` ／ Issue #74）：** ① **谁**是该 metadata 的 producer ——
+**每个 Adapter 负责写入其自身掌握的 source-derived record-level provenance ／ evidence locator ／
+`mapping_basis`**，且**只能**使用已批准 carrier ／ literals。**仍未决：** ② `mapping_basis` 字符串的
+**语义粒度**（**Decision 5**）。
 
 **`ARF-6`（Q6 Multi-source Stability）**
 **`Inherited Constraint`：`MS-1`**；`MS-2` = `NOT COMPATIBLE`（`AC-18`）。
@@ -23653,14 +23685,14 @@ unresolved / unsupported / not-evaluable
 
 | # | Criterion | 类别 |
 | --- | --- | --- |
-| `A-1` | Adapter **owns ／ does not own** 边界已登记，且**只**把 current approved policy **明确规定**的事项写成 inherited。**已登记（`Decision 1(a)`，Issue #72）：** Data Landing Zone **之后**的读取 ／ 提取、`exported-artifact format ／ protocol handling`、`generic source-field identification`、`source-specific mapping execution ／ realization` ⇒ Adapter **owns**；**明确不含** `source-system connectivity` ／ Controlled Export 上游 ／ export-side protocol ／ credentials。**仍 open（绑定 Decision）：** `Package identity` ／ `manifest` generation 与 **producer ownership**（`ADEP-11` ／ **Decision 2**）、unresolved carrier（`ADEP-12` ／ **Decision 3**）、security 接口（`ADEP-7` ／ **Decision 7**）；**未**以任何 Review Finding 或推导作为 inherited authority | MANDATORY CLOSURE CRITERION |
+| `A-1` | Adapter **owns ／ does not own** 边界已登记，且**只**把 current approved policy **明确规定**的事项写成 approved；**并区分授权来源**（historical `Inherited Constraint` vs 本层 newly Human-approved registered policy）。**历史 inherited：** `§3` read boundary ／ `§4.5` mapping responsibility ＋ constraints ／ locator ／ basis carrier obligation ／ 各层 does-not-own 与 `FCM` ／ `Data Validation` ／ `FIC` 职责。**已登记（`Decision 1(a)`，Issue #72）：** Data Landing Zone **之后**的读取 ／ 提取、`exported-artifact format ／ protocol handling`、`generic source-field identification`、`source-specific mapping execution ／ realization` ⇒ Adapter **owns**；**明确不含** `source-system connectivity` ／ Controlled Export 上游 ／ export-side protocol ／ credentials。**已登记（`Decision 2`，Issue #74）：** `Package identity` ／ `manifest` generation 与 **producer ownership** ⇒ 每个 Adapter 产出其 canonical dataset artifact（含其 source-derived provenance ／ locator ／ `mapping_basis`）；独立 **Package Assembly** 负责 `snapshot_package_id` ／ Manifest ／ package organization ／ 完整 package 组装（`ADEP-11`）。**仍 open（绑定 Decision）：** unresolved carrier（`ADEP-12` ／ **Decision 3**）、security 接口（`ADEP-7` ／ **Decision 7**）；**未**以任何 Review Finding 或推导作为 approved authority | MANDATORY CLOSURE CRITERION |
 | `A-2` | Adapter **input conceptual contract** 已登记（只接受 Data Landing Zone 中的 Controlled Export 产物；**不**含 source-system connectivity；无直连 ／ 无 source access 扩大） | MANDATORY CLOSURE CRITERION |
-| `A-3` | Adapter **output conceptual contract** 已登记（canonical artifact set ＋ mapping evidence；**不**宣告 acceptance ／ disposition；`Package identity` ／ `manifest` generation 归属按 Decision 2 结果登记） | MANDATORY CLOSURE CRITERION |
+| `A-3` | Adapter **output conceptual contract** 已登记（canonical artifact set ＋ mapping evidence；**不**宣告 acceptance ／ disposition）；**producer ownership 已由 `Decision 2`（Issue #74）登记**：Adapter 产出其 canonical dataset artifact 并写入其 source-derived provenance ／ locator ／ `mapping_basis`；`snapshot_package_id` ／ `manifest` ／ package organization 归 **Package Assembly**（独立 conceptual responsibility）；只有**完整 package** 可提交 `Final Import Contract`，partial artifacts **不得单独**视为可接受 package（**禁止 dataset-level partial acceptance**） | MANDATORY CLOSURE CRITERION |
 | `A-4` | **Determinism 要求**已登记（deterministic ／ explicit ／ traceable ／ reproducible；禁 fuzzy ／ similarity ／ LLM choose ／ silent normalization），且**不依赖** implementation 选择；**并含 `Decision 1(b)`（Issue #72）**：Adapter **允许**在内部定义 source-specific resolution rules，但**必须**满足同一 determinism 要求，且**不得**修改 ／ 重新定义 canonical semantic、**不得**建立 global source-field precedence、**不得**越过已 `DESIGN RESOLVED` 的 canonical mapping contracts | MANDATORY CLOSURE CRITERION |
 | `A-5` | **Fail-safe 要求**已登记：unresolved ／ unsupported ／ not-evaluable 时**不得**猜测 ／ 静默省略 ／ fallback 到未批准来源；且区分 `absent` 与 `unresolved` | MANDATORY CLOSURE CRITERION |
 | `A-6` | **unresolved mapping 的 Adapter-side contract** 已登记（`UF-1` ／ `UF-2` 之一，或明确两者的适用条件），映射到**既有** validation reason（**不新增** reason），**且**明确其**承载方式** —— 使用既有 approved carrier，或**已获**单独 Human-authorized carrier ／ interface design change（`ADEP-12`）；**未完成该授权前不得声称可用** | MANDATORY CLOSURE CRITERION |
 | `A-7` | **unsupported ／ 未批准 source field** 的 fail-safe 行为与**上报形态**已登记，且明确 Adapter **不**自行产生 package disposition 或新 Validation Reason | MANDATORY CLOSURE CRITERION |
-| `A-8` | `Stable Source Evidence Locator` 与 `Mapping ／ Resolution Basis` 的 **producer-neutral carrier obligation** 已登记（**任何**写入 canonical artifact 的 producer **必须**依 FCM ／ FIC 已固定 carrier 写入并保持原始值，**不新增** carrier），且保持 `AC-13` 的「保持原始 identity value」要求；**谁**是该 metadata 的 producer（producer ownership）**明确**留给 **`Decision 2` only**（`P-2` ／ `ADEP-11`），**未**写成 Adapter 的 inherited 责任 | MANDATORY CLOSURE CRITERION |
+| `A-8` | `Stable Source Evidence Locator` 与 `Mapping ／ Resolution Basis` 的 **producer-neutral carrier obligation** 已登记（**任何**写入 canonical artifact 的 producer **必须**依 FCM ／ FIC 已固定 carrier 写入并保持原始值，**不新增** carrier），且保持 `AC-13` 的「保持原始 identity value」要求；**谁**是该 metadata 的 producer（producer ownership）**已由 `Decision 2`（Issue #74）登记**：**每个 Adapter 负责写入其自身掌握的 source-derived record-level provenance ／ evidence locator ／ `mapping_basis`**，且**只能**使用已批准 carrier ／ literals（`P-2` ／ `ADEP-4` ／ `ADEP-11`） | MANDATORY CLOSURE CRITERION |
 | `A-9` | **多 source ／ 多 Adapter semantic stability** 要求已登记（canonical-first；**不**建立跨 source precedence；冲突表达为 unresolved ／ consistency issue） | MANDATORY CLOSURE CRITERION |
 | `A-10` | **跨层边界**已登记：`Permission & Security`（scope ／ tool permission ／ secret）／ Architecture（technology）／ Implementation（runtime）各自归属明确，且本层**未**越过 | MANDATORY CLOSURE CRITERION |
 | `A-11` | **Adapter 与 `Permission & Security` 的接口期待**已登记（Adapter 需要什么、由谁提供），且**未**设计 RBAC ／ secret 机制 | MANDATORY CLOSURE CRITERION |
@@ -23700,8 +23732,8 @@ unresolved / unsupported / not-evaluable
 - **Dependencies：** `AC-22` ／ `AC-23` ／ `AC-5` ／ `AC-6` ／ `AC-18` ／ `ADEP-2` ／ **`ADEP-13`**；
   **Human Decision Record 见本 Decision 条目之后**（Issue #72）。
 - **What changes：** `A-1` ／ `A-4` 的可判定性；`§4.5` 契约与 Adapter 文档的责任划分表述；
-  **哪些通用职责**进入 `4.6.5 A` 的 inherited 列 —— **已由 `Decision 1(a)` 登记**（`REGISTERED`），
-  **producer ownership 仍 open**（`Decision 2`）。
+  **哪些通用职责**进入 `4.6.5 A` 的 registered 列 —— **已由 `Decision 1(a)` 登记**（`REGISTERED`），
+  **producer ownership 亦已由 `Decision 2` 登记**（Issue #74）。
 - **注意：** **不得**仅凭 `§3` read boundary 或 `§4.5` mapping duty **推导**通用 ownership（`AB-05`）；
   所有选项**均不得**修改 canonical identity ／ relationship resolution contract，
   **亦不得**引入 source-system connectivity。
@@ -23782,6 +23814,88 @@ POC Design v0.2                   = DRAFT
   列为 inherited `does not own`；各 option **均不得**引入 dataset-level partial acceptance，
   **不得**新增 carrier ／ literal。
 
+**Decision 2 —— Human Decision Record —— `SIMULATED POC Design Policy` ＋ `Human-approved`**
+
+**Registration Status：`REGISTERED`**
+
+依据 **Issue #74 Human Decision**。本记录**只**登记已批准的 Decision 2，并执行最小必要 synchronization ——
+**不**选择 Decision 3 ～ 8、**不**推进 `Adapter Boundary` 状态、**不**选择任何实现技术。
+
+```
+Decision Scope     = §4.6.10 Decision 2（Adapter output organization ／ producer ownership）
+Decision Authority = Human（Issue #74）
+Selected Option    = Option ② —— Multi-Adapter artifacts ＋ independent Package Assembly
+Write Scope        = docs/design/poc-design-v0.2.md
+```
+
+**A. Adapter responsibility（APPROVED）**
+
+每个 Adapter 负责其职责范围内的：
+
+```
+source-specific mapping ／ resolution
+产出对应的 canonical dataset artifact
+将其掌握的 source-derived provenance ／ evidence locator ／ mapping_basis 写入已批准 carrier
+保持 deterministic ／ explicit ／ traceable ／ reproducible
+不生成 package-level acceptance ／ disposition
+```
+
+**B. Package Assembly responsibility（APPROVED —— conceptual responsibility）**
+
+独立的 **Package Assembly conceptual responsibility** 负责：
+
+```
+汇集一个或多个 Adapter 产出的 canonical artifacts
+生成 ／ 绑定 snapshot_package_id
+生成 Manifest
+建立 package-level artifact references ／ package organization
+形成满足既有 Snapshot / Import Contract 的完整、原子 Snapshot Package
+将完整 package 提交给 Final Import Contract
+```
+
+**C. Final Import Contract responsibility（保持 —— 不新增职责）**
+
+```
+Final Import Contract 只负责验证与 acceptance ／ rejection ／ unusable 等既有 disposition semantics
+Final Import Contract 不负责生产 canonical artifacts ／ Manifest ／ package
+不改变既有 FIC ／ FCM contract
+```
+
+**D. Mandatory Boundary（APPROVED —— 不可让步）**
+
+```
+多个 Adapter 可以各自产出部分 canonical artifacts
+这些 partial artifacts 不得单独被视为可接受 package
+禁止 dataset-level partial acceptance
+只有经过 Package Assembly 形成的完整 package 才可提交 Final Import Contract
+```
+
+**E. Package Assembly 的形态（本 Decision 不选择）**
+
+Package Assembly 是 **conceptual responsibility ／ boundary**；本 Decision **不选择**其运行形态：
+
+```
+不决定它是独立 service ／ module ／ job ／ library ／ workflow node 或其他技术实现
+不选择 framework ／ database ／ queue ／ API ／ deployment
+```
+
+**F. 边界（不受本 Decision 影响）**
+
+- `§3` hard boundary（Controlled Export ／ read boundary ／ no Production write）**未修改**；
+- `§4.3` FCM ／ FIC 与 Snapshot / Import Contract 已 `DESIGN RESOLVED` 的 contract **未重开**；
+- 不新增 carrier ／ literal ／ Validation Reason ／ Validation Category ／ status enum；
+- **Decision 3 ～ 8 保持未决**。
+
+**执行状态（本 Registration 时点）**
+
+```
+Adapter Boundary                  = DESIGN PENDING ← 本 Decision 不推进状态
+Human Decision 2                  = RECORDED（Option ②）
+Decision 3 ～ 8                    = 未决
+P-2（producer ownership）          = RESOLVED BY DECISION 2
+POC Design v0.2                   = DRAFT
+```
+
 **Decision 3 —— unresolved ／ unsupported mapping 的 Adapter-side contract 与其承载方式**
 - **Question：** 采用 `UF-1`（显式产出 unresolved marker，由 Data Validation 表达后果）、`UF-2`（halt 该 source ／ dataset 的输出并等待人工修复），还是按情形组合？另需裁定：① **unsupported ／ 未批准 source field** 出现时，Adapter 是 skip ／ quarantine ／ 或 stop？② unresolved 事实**如何被承载** —— 若要求在 package 内承载（或 quarantine 需要新 artifact ／ state），**是否**授权单独 carrier ／ interface design change？
 - **Options：** `UF-1` ／ `UF-2` ／ 明确条件的组合；(skip ／ quarantine ／ stop) 之一或组合；承载方式 = 既有 approved carrier（root-condition 区分依赖 mapping declaration）／ 单独 Human-authorized carrier ／ interface design change。
@@ -23833,12 +23947,12 @@ POC Design v0.2                   = DRAFT
 **本 Review 不作出上述任何决定。** 后续必须由 **Human Decision** 裁定；
 **不得**由 Agent 自行选择 final adapter model ／ mapping 表达方式 ／ unresolved 策略。
 
-> **current-state（Issue #72）：** **`Decision 1` 已登记** —— 见上方
-> **`Decision 1 —— Human Decision Record`**（`Registration Status：REGISTERED`）
-> 与 **`§4.6.14` Decision 1 Registration Synchronization**。
-> **`Decision 2` ～ `Decision 8` 保持未决**；**producer ownership**（artifact ／ package ／ manifest ／
-> provenance metadata 的 producer）**仍由 `Decision 2` 决定**，**未**由 `Decision 1` 偷渡决定。
-> `Adapter Boundary` **仍为 `DESIGN PENDING`**。
+> **current-state（Issue #72 ／ Issue #74）：** **`Decision 1`（Issue #72）与 `Decision 2`（Issue #74）已登记** ——
+> 见上方各自的 **Human Decision Record**（`Registration Status：REGISTERED`）、
+> **`§4.6.13` Decision 1 Registration Synchronization** 与 **`§4.6.14` Decision 2 Registration Synchronization**。
+> **`Decision 3` ～ `Decision 8` 保持未决**；**producer ownership**（artifact ／ package ／ manifest ／
+> provenance metadata 的 producer）**已由 `Decision 2` 决定**（Option ②），**未**由 `Decision 1` 决定。
+> `Adapter Boundary` **仍为 `DESIGN PENDING`**；`POC Design v0.2` 仍 `DRAFT`。
 
 ---
 
@@ -23887,7 +24001,7 @@ ADR ／ Architecture Decision
 
 ---
 
-#### 4.6.14 Decision 1 Registration Synchronization（Issue #72 —— current-state）
+#### 4.6.13 Decision 1 Registration Synchronization（Issue #72 —— current-state）
 
 > 本节记录 **Issue #72 登记 `Decision 1`** 后所执行的**最小必要一致性同步**。
 > 本节**只**登记已批准的 `Decision 1(a)` ／ `1(b)`，并使其与 current-state canonical wording 一致 ——
@@ -23971,7 +24085,98 @@ producer-neutral carrier obligation（carrier shape ／ literals ／ 原始值�
 
 ---
 
-#### 4.6.13 Current Status（本 Review 时点）
+#### 4.6.14 Decision 2 Registration Synchronization（Issue #74 —— current-state）
+
+> 本节记录 **Issue #74 登记 `Decision 2`** 后所执行的**最小必要一致性同步**。
+> 本节**只**登记已批准的 `Decision 2`（Option ②），并使其与 current-state canonical wording 一致 ——
+> **未**选择 `Decision 3` ～ `8`、**未**推进 `Adapter Boundary` 状态、**未**新增 carrier ／ literal ／
+> reason ／ enum、**未**选择任何实现技术。
+
+**A. Human Decision registered**
+
+`Decision 2`（Adapter output organization ／ producer ownership）已以 **Human Decision Record** 形式
+登记于 **`§4.6.10`**（`Registration Status：REGISTERED`）。
+
+```
+Decision 2 = Option ②  Multi-Adapter artifacts ＋ independent Package Assembly
+```
+
+**B. Minimum synchronization applied**
+
+| # | 位置 | 同步内容 |
+| --- | --- | --- |
+| 1 | `§4.6.2` `AC-22` ／ `AC-23` | 保持既有已批准事项；`Package identity` ／ `manifest` ／ **producer ownership** 由 `Decision 2` 登记（原 `AC-23` 开放项之一） |
+| 2 | `§4.6.4` `AS-15` | 增列 current-state：Adapter 产出其 canonical dataset artifact；只有经 **Package Assembly** 形成的**完整 package** 才可提交 `Final Import Contract`；partial artifacts 不得单独视为可接受 package |
+| 3 | `§4.6.4` `AS-18` | 增列 current-state：**每个 Adapter 负责写入其自身掌握的 source-derived record-level provenance ／ locator ／ `mapping_basis`**，且只能使用已批准 carrier ／ literals |
+| 4 | `§4.6.4` `AS-19` | `producer ownership` 由 open 改为 **registered**（`Decision 2`） |
+| 5 | `§4.6.5 A` | inherited 表新增 3 行：**Adapter artifact production**、**Package Assembly package production**、**FIC 只验证 ／ 不生产**；开放表第 1 项（producer ownership）改为已登记 |
+| 6 | `§4.6.5 B` ／ `§4.6.5 E` | **`P-2`** 由 `本层 open` 改为 **`Registered`（`Decision 2`）**；`PE-1` 开放项之一改为已登记（仅剩 `mapping_basis` 粒度 → `Decision 5`） |
+| 7 | `§4.6.6` | `AO-1` 备注改为「producer ownership 已由 `Decision 2` 登记」；`PE-1` 备注改为「metadata producer 已由 `Decision 2` 登记」 |
+| 8 | `§4.6.7` `ADEP-1` | 增列 current-state：只有**完整 package** 可提交 FIC；partial artifacts 不得单独提交（**禁止 dataset-level partial acceptance**） |
+| 9 | `§4.6.7` `ADEP-4` | metadata producer 由 open 改为 **已登记**（每个 Adapter 写入其自身掌握的 source-derived provenance） |
+| 10 | `§4.6.7` `ADEP-11` | 保留 **Decision 1 时点**历史结论，新增 **current-state**：`Decision 2`（Option ②）已登记 Adapter ／ Package Assembly ／ FIC 的职责划分 |
+| 11 | `§4.6.7` `ADEP-13` | 「producer ownership 仍 open」改为**已登记**（`Decision 2`） |
+| 12 | `§4.6.8` `ARF-1` | 新增「已由 `Decision 2` 关闭的开放项」；未决项收敛为 unresolved carrier ／ security 接口 |
+| 13 | `§4.6.8` `ARF-2` ／ `ARF-5` | `P-2` 改为已登记；`ARF-5` 仅保留 `mapping_basis` 粒度未决 |
+| 14 | `§4.6.9` `A-1` ／ `A-3` ／ `A-8` | `A-1` 的 open 项收敛；`A-3` 登记 Adapter ／ Package Assembly ／ FIC 的产出口径；`A-8` metadata producer 改为已登记 |
+
+**C. 明确保留（未被本 Decision 决定）**
+
+```
+Decision 3 ～ 8                     = 未决
+unresolved marker carrier（Decision 3） = OPEN
+mapping_basis 语义粒度（Decision 5）  = OPEN
+multi-Adapter governance（Decision 6） = OPEN
+Adapter ／ Permission & Security 接口（Decision 7） = OPEN
+package closure（Decision 8）         = OPEN
+Adapter Boundary                   = DESIGN PENDING ← 未推进
+POC Design v0.2                    = DRAFT
+```
+
+**D. Scope / Non-Decision 核验**
+
+- **未**选择或登记 `Decision 3` ～ `8`；
+- **未**设计 unresolved carrier ／ quarantine ／ failure reporting shape、mapping rule implementation carrier、
+  `mapping_basis` 语义粒度、multi-Adapter governance ／ drift detection、Permission & Security interface
+  或 Adapter Boundary closure；
+- **未**修改 `§3` hard boundary 与 `§4.1` ～ `§4.5` 已批准 policy；**未**重开 FCM ／ FIC ／ Snapshot & Import Contract；
+- **未**新增 carrier ／ literal ／ Validation Reason ／ Validation Category ／ status enum；
+- **未**创建 Adapter ／ Package Assembly ／ parser ／ serializer ／ runtime code；
+- **未**选择真实 ERP table ／ column ／ proprietary field；**未**选择 architecture ／ technology ／ deployment；
+- **未**修改 Discovery `FROZEN` docs 或 governance docs；
+- **Package Assembly 保持 conceptual responsibility**，其运行形态（service ／ module ／ job ／ library ／
+  workflow node）与 technology **均未被选择**。
+
+**本次修正的 review-only 边界（自我核验）：**
+
+```
+未选择任何 Decision 3 ～ 8
+未推进 Adapter Boundary 状态（仍 DESIGN PENDING）
+未新增 carrier ／ literal ／ Validation Reason ／ Category ／ status enum
+未修改 §3 ／ §4.1 ～ §4.5 任何已登记 policy 与历史记录
+未创建 runtime code ／ schema ／ sample package
+```
+
+**E. Authoritative Boundary Synchronization（`AD2-REG-01` —— current-state）**
+
+> **历史保留：** 本节 A ～ D、`§4.6.12` Review Revision Log 与 **`§4.6.13` Decision 1 Registration
+> Synchronization** 中的**时点表述保留未改**（含 Decision 1 时点的 `producer ownership = OPEN`）。
+
+`Decision 2` 登记后，**上游 authoritative boundary** 亦同步为 current-state：
+
+| # | 位置 | 同步内容 |
+| --- | --- | --- |
+| 1 | `§4.6.2` `AC-22` | **正式登记 `Decision 2` 已批准的 producer ／ Package Assembly ownership**（Adapter artifact production ＋ record-level provenance 写入；Package Assembly 拥有 `snapshot_package_id` ／ Manifest ／ package organization ／ 完整 package 组装；FIC 只验证 ／ disposition），并**删除**「`Package identity` ／ `manifest` 与 producer ownership 仍为 open」尾注 |
+| 2 | `§4.6.2` `AC-23` | 新增第 ④ 项：**`Decision 2` 已于 Issue #74 获 Human Approval** ⇒ **producer ownership ／ `Package identity` ／ `manifest` generation 不再属于未获批项**；**仍未决者仅剩** unresolved marker 的 carrier ／ interface（`Decision 3`）与 security 接口（`Decision 7`） |
+| 3 | `§4.6.2` `AC-22` 尾注 | 新增**授权来源区分**：`§3` ／ `§4.3` ／ `§4.4` ／ `§4.5` 为 **historical `Inherited Constraint`**；`Decision 1(a)` ／ `1(b)`（Issue #72）与 `Decision 2`（Issue #74）为 **本层 newly Human-approved registered policy**，**不得**表述为 inherited |
+| 4 | `§4.6.5 A` | 结构改为 **A-1 `Inherited Constraint`（历史）** ／ **A-2 本层 newly Human-approved registered policy** ／ **A-3 本层开放**；**producer ownership 行已从开放表移出**，开放表**只**保留真正 pending 项（unresolved carrier ／ security 接口） |
+| 5 | `§4.6.8` `ARF-1` | 分列 **历史 inherited** 与 **本层 registered policy**（含 `Decision 2`）；未决项收敛为 unresolved carrier ／ security 接口 |
+| 6 | `§4.6.9` `A-1` | 明确区分 inherited ／ newly Human-approved registered；`Decision 2` 已登记的 `owns` 项与仍 open 项分列 |
+| 7 | `§4.6.10` `Decision 1` 的 `What changes` | 「producer ownership 仍 open」改为「**亦已由 `Decision 2` 登记**（Issue #74）」 —— 该行属 Decision source 的 current-state 描述，**非** time-point record |
+
+---
+
+#### 4.6.15 Current Status（本 Review 时点）
 
 ```
 Snapshot / Import Contract overall = DESIGN RESOLVED
