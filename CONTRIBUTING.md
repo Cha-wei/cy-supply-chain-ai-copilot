@@ -1,7 +1,7 @@
 # CONTRIBUTING.md
 
 **项目：** Yunnan CY Group Supply Chain AI Copilot
-**文档版本：** v0.2
+**文档版本：** v0.3
 **文档状态：** `APPROVED`
 **生效范围：** 本项目日常工程协作流程
 
@@ -585,6 +585,32 @@ Agent 已完成当前 Task 的全部自主执行工作，并满足所有**适用
 
 一个 Concern 原则上只有一个 Canonical Source，避免同一规则在多处各写一份并产生分歧。
 
+### Issue / PR / Review 记录职责
+
+（本节**只**明确各记录的**操作性职责与分工**；**不**新增 approval ／ gate ／ workflow 语义，
+**不**改变 `Canonical Source` 原则，也**不**替代任何既有规范。）
+
+**各记录的职责：**
+
+| 记录 | 职责 |
+| --- | --- |
+| Canonical documents | authoritative long-term project ／ design memory |
+| Issue | task boundary、objective、scope、acceptance criteria、authoritative references |
+| PR body | current change summary、validation、state transition、remaining gaps、next gate |
+| Review comments | findings ／ required actions only |
+
+**不得重复复制：** 当 authoritative repository source **已存在**时，Issue ／ PR body **不得**
+重复复制完整的 Human Decisions、历史 Review ／ Closure 记录或 canonical design content ——
+应**引用**该 canonical source（含其位置），而不是二次保存。这样可以降低重复内容与状态漂移。
+
+**历史不追溯清理：** 本规则**自后续任务开始执行**；
+**不要求**对新规则生效**之前**创建的 Issue ／ PR 作追溯性清理，
+也**不得**因此回写历史 Issue ／ PR 或历史 Review ／ Closure 记录。
+
+**边界：** 本节**不**新增 governance 文档，**不**修改 `AGENTS.md`，
+**不**改变 Human Approval、DoR ／ DoD、Required Gates、Git ／ PR 语义、Rule Precedence
+或 Multi-Agent role 规则。
+
 ### 生命周期
 
 正式文档按需使用：
@@ -740,14 +766,15 @@ DRAFT → REVIEW → APPROVED → FROZEN → DEPRECATED
 ## Document Control
 
 **Document:** CONTRIBUTING
-**Version:** v0.2
+**Version:** v0.3
 **Status:** `APPROVED`
 
-本文档的**当前已批准 baseline** 为 **`v0.2`**（文档级状态 `APPROVED`）。
-**`v0.1`** 为其**此前**的已批准 baseline。
+本文档的**当前已批准 baseline** 为 **`v0.3`**（文档级状态 `APPROVED`）。
+**`v0.2`** ／ **`v0.1`** 为其**此前**的已批准 baseline。
 
 - **`v0.1`：** 此前已批准的工程协作基线（已完成实际文件 Review 并获 `APPROVAL`）；**不再**是 current baseline。
-- **`v0.2`：** 经**明确授权的 Governance Task** 引入第 4 节 `### Multi-Agent Execution` 与第 5 节 `### Workspace ／ Worktree Isolation`，并在第 11 节增加一个**条件性** `Write Owner` 字段；已随 **PR #54 merge** 生效，**现为 current `APPROVED` baseline**。**未**修改 Human Approval、DoR、DoD、Required Gate、Git / PR 规则、Rule Precedence 或 Governance Protection；**未**新增 governance artifact；`AGENTS.md` **未修改**。
+- **`v0.2`：** 经**明确授权的 Governance Task** 引入第 4 节 `### Multi-Agent Execution` 与第 5 节 `### Workspace ／ Worktree Isolation`，并在第 11 节增加一个**条件性** `Write Owner` 字段；已随 **PR #54 merge** 生效；**不再**是 current baseline。**未**修改 Human Approval、DoR、DoD、Required Gate、Git / PR 规则、Rule Precedence 或 Governance Protection；**未**新增 governance artifact；`AGENTS.md` **未修改**。
+- **`v0.3`：** 经**明确授权的 Governance Task**（Issue #68）在第 9 节 `### Canonical Source` 之后新增 `### Issue / PR / Review 记录职责`，明确 Canonical docs ／ Issue ／ PR body ／ Review comments 的操作性职责、anti-duplication 规则与「历史不追溯清理」边界；**现为 current `APPROVED` baseline**。**未**修改 Human Approval、DoR、DoD、Required Gates、Git / PR 语义、Rule Precedence 或 Multi-Agent role 规则；**未**新增 governance 文档；`AGENTS.md` **未修改**；`Canonical Source` 原则**未改动**。
 - 本文档**尚未** `FROZEN`，因此仍可通过治理 Task 修订。
 - 实质修改需通过明确授权的 Governance Task，并按第 12 节处理冲突。
 - 非实质修正（typo、坏链接、格式）可直接修正，无需扩大为架构决策。
