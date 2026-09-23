@@ -6219,6 +6219,19 @@ Snapshot Package **必须支持未来验证**：
 integrity evidence is required
 ```
 
+> **current-state clarification（**不**回写上述时点边界）：** integrity algorithm 已由
+> **Issue #66 Human Decision（Bundle 4）** 登记、并写为 authoritative current policy
+> （见 **§4.3.28 D.1** ／ **D.2**，closure 见 **§4.3.29**）：
+>
+> ```
+> current design policy = SHA-256（IG-alg-1）＋ IG-raw（digest exact raw artifact bytes）
+>                       ＋ "integrity_evidence" = 64-character lowercase hexadecimal SHA-256 digest
+> ```
+>
+> 上文「本 Task 不决定 **implementation**」的**原时点边界仍然成立** ——
+> **仍未完成的是 runtime implementation**（hash computation ／ validator ／ importer），
+> **不是** algorithm 的 design decision。
+
 #### 4.3.16 Provenance Boundary
 
 每个 imported dataset **必须能够追溯到**：
@@ -6243,10 +6256,26 @@ Snapshot Package
 ```
 
 **logical carrier resolved** **不表示** physical serialization 已完成 ——
-后者仍属 **§4.3 `Field Carrier Mapping` ／ `Final Import Contract`**。
+后者属 **§4.3 `Field Carrier Mapping` ／ `Final Import Contract`**（**当时**为后续设计；
+**current-state：** 现均已 **`DESIGN RESOLVED`**，见下方 boundary）。
+
+**current-state boundary（**不**回写历史时点语义）：**
+
+```
+Logical Provenance Contract             = DESIGN RESOLVED
+Physical Carrier ／ Import-contract Design = DESIGN RESOLVED
+  （Field Carrier Mapping 见 §4.3.25 ／ §4.3.27；Final Import Contract 见 §4.3.28 ／ §4.3.29）
+Runtime ／ Source-specific ／ Adapter Realization = NOT IMPLEMENTED ／ DESIGN PENDING（Adapter Boundary）
+
+logical contract  ≠  physical design  ≠  runtime realization
+```
 
 > **controlled export provenance** 的 **logical carrier contract** 已由 **§4.5.22** Review 提出
-> （**Option D**）；该 Review **未改变**本边界，且 **physical serialization** 仍属后续设计（**未**完成）。
+> （**Option D**）；该 Review **未改变**本边界。
+> **当时状态（保留以便追溯）：** `physical serialization` 属后续设计、**尚未完成**。
+> **current-state 更新：** physical carrier ／ import-contract **design** 已由 **§4.3** 关闭
+> （**`DESIGN RESOLVED`**；见 **§4.3.25** ／ **§4.3.27** ／ **§4.3.28** ／ **§4.3.29**，**Issue #66 Closure**）；
+> **仍未实现**的是 runtime ／ source-specific ／ **Adapter realization**（属 **`Adapter Boundary` = `DESIGN PENDING`**）。
 
 #### 4.3.17 Unresolved Carrier Boundary
 
