@@ -23709,7 +23709,9 @@ revision reference**：该 exact JSON string 只标识本次 mapping ／ resolut
 **不**承载 source evidence ／ rule logic ／ explanation ／ rationale ／ mini-schema；
 `evidence` ／ `mapping_basis` ／ approved mapping rule **三者职责分离**，可复现性由三者组合建立；
 **具体 string syntax ／ encoding 仍属 Architecture ／ Implementation**。
-**仍未决：** 仅 `Decision 7` ～ `8` 所辖事项。
+**仍未决：** 仅 **`Decision 8`** 所辖事项（`Decision 7` 的 interface expectation **已登记**；
+`§7` RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling 的**具体设计**仍为 `DESIGN PENDING`，
+但该 `DESIGN PENDING` **不等于** `Decision 7` 未决）。
 
 **`ARF-6`（Q6 Multi-source Stability）**
 **`Inherited Constraint`：`MS-1`**；`MS-2` = `NOT COMPATIBLE`（`AC-18`）。
