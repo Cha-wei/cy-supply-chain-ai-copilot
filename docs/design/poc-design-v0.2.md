@@ -9879,19 +9879,30 @@ Manifest Carrier Model = M-B Grouped Nested Manifest
   package-level metadata group  ≠  dataset collection group   （物理分组，boundary 已固定）
 ```
 
-**package-level metadata（语义集合 —— 依 `§4.3.8`，本层**不**发明 literal 名称）：**
+**（1）Manifest must express —— 总体 semantic set（依 `§4.3.8`）：**
 `snapshot_package_id` ／ contract version ／ export ／ package creation time ／
 environment ／ evidence classification ／ included logical datasets ／ dataset-level provenance reference ／
 dataset-level record count ／ integrity evidence ／ package completeness state。
 
-**dataset-entry scope（与对应 logical dataset entry 关联）：**
-dataset-level `record_count` ／ dataset-level provenance reference ／
-**对具体 dataset artifact 的 integrity evidence**。
+> **本层**不**发明 literal property name ／ grouping name**（见 **Decision Gap `G-1`**）。
+> `§4.3.8` 的**总体 semantic set** **不等于** `M-B` 的 **package-level group** —— 二者**必须**分开解读。
+
+**（2）package-level group —— package-scoped concepts：**
+`snapshot_package_id` ／ contract version ／ export ／ package creation time ／
+environment ／ evidence classification ／ package completeness state。
+
+**（3）dataset collection ／ dataset-entry scope（与**对应** logical dataset entry 关联）：**
+included logical dataset role ／ `role → artifact` association ／ dataset-level `record_count` ／
+dataset-level provenance reference ／ **对具体 dataset artifact 的 integrity evidence**。
 
 ```
 dataset-artifact integrity evidence  →  dataset-entry scope   （NOT package block）
 integrity algorithm                  →  Final Import Contract
 ```
+
+**分组 boundary（已固定）：** `（2）` 与 `（3）` 为**物理上不同**的 group；
+`（3）` 的各 concept **必须**与**对应 logical dataset entry** 关联，**不得**上提到 package-level group。
+**literal grouping 名称**仍属 **`G-1`**（未授权，未登记）。
 
 **B. Dataset Entry Policy（正式登记）**
 
@@ -9916,10 +9927,15 @@ business dataset artifact 中 不得 重复 dataset-level metadata
 
 ```
 top-level carrier = B-A bare record array
-included ＋ record_count = 0  →  artifact 存在，payload = 空 record array（可判定的 empty records representation）
-not included                  →  artifact 不存在
+included ＋ record_count = 0  →  对应 artifact REQUIRED，payload = 空 record array
+                                 （可判定的 empty records representation）
+not included                  →  对应 artifact NOT REQUIRED
 not included                  ≠  included with zero records
 ```
+
+**Presence boundary（恢复既有 `§4.3.23` F policy）：** `not included` **只**表示**不要求**对应 artifact 存在；
+本层**不**断言该 artifact **不得存在**，也**不**定义「目录中存在未被 Manifest include ／ reference 的
+额外 JSON artifact」时的处理 —— 其 acceptance ／ rejection 属 **`Final Import Contract`**。
 
 **E. Record Carrier（正式登记）**
 
@@ -10046,7 +10062,7 @@ integrity algorithm（hash ／ checksum ／ signature）= Final Import Contract
 | `F-2` | `logical dataset role → artifact reference` carrier 形态已登记 ＋ cardinality ／ uniqueness invariant | 决定 2（`D-A` ＋ invariant） | **`PASS`** |
 | `F-3` | presence metadata 与 `role → artifact` 可确定、唯一、可判定地关联 | 决定 2 | **`PASS`** |
 | `F-4` | business dataset top-level carrier 形态已登记，且与 `K-2` 兼容 | 决定 3（`B-A` bare record array；与 one-artifact-per-dataset 兼容） | **`PASS`** |
-| `F-5` | `included ＋ record_count = 0` 与 `not included` 可区分 | 决定 3 ＋ `C-8` | **`PASS`** |
+| `F-5` | `included ＋ record_count = 0` 与 `not included` 可区分 | 决定 3 ＋ `C-8`（**不**需要新增 MUST-NOT-EXIST 规则） | **`PASS`** |
 | `F-6` | record carrier 形态已登记（含是否强制 JSON object ／ 是否允许 carrier-level 属性） | 决定 5（强制 JSON object）＋ 决定 6（carrier-level technical metadata **允许**，须受控 namespace）。**permission 与 boundary 已登记**；namespace **literal 名称**属 `G-2`，不影响本 criterion 的**形态**判定 | **`PASS`** |
 | `F-7` | canonical field carrier policy 已登记，且不改变 canonical field semantic | 决定 7（`F-A`；无第二层 mapping；无 silent fix-up） | **`PASS`** |
 | `F-8` | carrier 不违反 `C-1` ～ `C-10` | 决定 3 ／ 5 ／ 7 ／ 10（含 `C-2` ／ `C-9` ／ `C-10`） | **`PASS`** |
