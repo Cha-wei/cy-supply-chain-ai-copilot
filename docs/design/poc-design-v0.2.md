@@ -4531,7 +4531,7 @@ Canonical model **不得通过默认值隐藏缺失**。
 | **`effective_arrival_date` source mapping policy** | **`DESIGN RESOLVED`** | **不建立 global source field** —— concrete source field = **`SOURCE-SPECIFIC` / Adapter-defined**；canonical mapping contract 见 **§4.2.6** ／ **§4.5.21**；**真实 ERP field 当前仍未知**（**未知 ≠ Design Pending**） |
 | Allocation 与 demand window 的关联机制 | **`DESIGN RESOLVED`** | 已由 **§4.5.9** 解析为 **canonical allocation applicability mapping contract**（**Target Applicability** ＋ **Source Reservation Overlap**）；concrete source evidence = **`SOURCE-SPECIFIC` / Adapter-defined**；**未新增** canonical field |
 | `ApplicableMOQ` 的来源 | **`DESIGN RESOLVED`** | canonical applicability resolution 由 **§4.5.22 Option D Implementation Record** 解析：owner = **exact Procurement Recommendation Context**（`plant_id` + `material_code` + `RecommendationNeedDate`）；source semantic role = **`SOURCE-SPECIFIC` purchasing-policy evidence**；resolution contract = **exactly one applicable `ApplicableMOQ` or `unresolved`**；**未新增** canonical field / entity，**未**修改 Recommendation grain；physical carrier **仍 SOURCE-SPECIFIC / not yet defined**（**§4.2.9** ／ **§4.4.67**） |
-| Provenance 的具体承载方式 | **`DESIGN RESOLVED`** | **Layered Logical Provenance Contract** 已由 **§4.5.22 Option D Implementation Record** 实施：`Snapshot Package Identity` + `Logical Dataset Role` + **`Stable Source Evidence Locator`** + `Mapping / Resolution Basis`（when applicable）+ `Analysis Run linkage`；**logical carrier ≠ physical carrier**（**§4.3** `Field Carrier Mapping` / `Final Import Contract` 仍 `DESIGN PENDING`）；**未新增** canonical field / entity（见 §4.1.8） |
+| Provenance 的具体承载方式 | **`DESIGN RESOLVED`** | **Layered Logical Provenance Contract** 已由 **§4.5.22 Option D Implementation Record** 实施：`Snapshot Package Identity` + `Logical Dataset Role` + **`Stable Source Evidence Locator`** + `Mapping / Resolution Basis`（when applicable）+ `Analysis Run linkage`；**logical carrier ≠ physical carrier** —— physical carrier **design** 已由 **§4.3** 关闭（`Field Carrier Mapping` 见 **§4.3.25** ／ **§4.3.27**；`Final Import Contract` 见 **§4.3.28** ／ **§4.3.29**，**Issue #66 Closure**）；**但** actual **source-specific ／ Adapter realization 仍 `NOT STARTED`**，**不得**被声称已完成；**未新增** canonical field / entity（见 §4.1.8） |
 
 > 以上条目**不影响** `Canonical Data Model = DESIGN RESOLVED` ——
 > 它们属于**后续 Master Data Mapping / Adapter Boundary** 的范围，
@@ -6266,21 +6266,25 @@ Snapshot Package
 - `ApplicableMOQ` source —— **已由 §4.5.22 Option D Implementation Record 解析**（Procurement Recommendation Context ＋ exactly-one-or-unresolved resolution contract）
 - provenance carrier —— **logical carrier 已由 §4.5.22 Option D Implementation Record 解析**
   （**Layered Logical Provenance Contract**，`DESIGN RESOLVED`）；
-  **physical carrier realization** 仍属 **§4.3 `Field Carrier Mapping` ／ `Final Import Contract`** 后续设计
+  **physical carrier design** 已由 **§4.3** 关闭
+  （`Field Carrier Mapping` 见 **§4.3.25** ／ **§4.3.27**；
+  `Final Import Contract` 见 **§4.3.28** ／ **§4.3.29**，**Issue #66 Closure**）
 
 **因此（current-state boundary）：**
 
 ```
-Logical Provenance Carrier       = DESIGN RESOLVED
-Physical Carrier Realization     = DESIGN PENDING
-  （属 §4.3 Field Carrier Mapping ／ Final Import Contract）
+Logical Provenance Carrier          = DESIGN RESOLVED
+Physical Carrier Design             = DESIGN RESOLVED
+  （Field Carrier Mapping ／ Final Import Contract，见 §4.3.25 ／ §4.3.27 ／ §4.3.28 ／ §4.3.29）
+Source-Specific ／ Adapter Realization = NOT IMPLEMENTED（属 Adapter Boundary，DESIGN PENDING）
 
-logical provenance contract  ≠  physical carrier realization
+logical provenance contract  ≠  physical carrier design  ≠  runtime / source-specific realization
 ```
 
 `provenance carrier` **不再**是未分类的 unresolved item ——
-它是 **logical provenance contract（`DESIGN RESOLVED`）** 与
-**physical carrier realization（`DESIGN PENDING`）** 的合称，两者**必须分开解读**。
+它是 **logical provenance contract（`DESIGN RESOLVED`）**、
+**physical carrier design（`DESIGN RESOLVED`）** 与
+**runtime ／ source-specific Adapter realization（仍未实现）** 的合称，三者**必须分开解读**。
 
 因此本 Task **不得为了完成 Snapshot Contract** 擅自决定这些字段属于哪个
 **physical dataset / file**。
@@ -6289,10 +6293,11 @@ logical provenance contract  ≠  physical carrier realization
 
 **不得**自行挂到 Production Requirement / Material / BOM Component / Plant-Material 之一。
 
-这些**在 physical 层面必须继续保持未决定状态** ——
-`physical dataset / file / field representation` **仍属**
-**`§4.3 Field Carrier Mapping` ＋ `Final Import Contract`**，
-且 **`Snapshot / Import Contract` overall 仍为 `DESIGN PENDING`**。
+这些**已由 physical carrier design 决定**（`physical dataset / file / field representation`
+属 **`§4.3 Field Carrier Mapping` ＋ `Final Import Contract`**，现均为 **`DESIGN RESOLVED`**；
+**`Snapshot / Import Contract` overall 亦为 `DESIGN RESOLVED`**，见 **§4.3.29**）——
+**但** actual **source-specific extraction ／ Adapter realization 仍未实现**，
+**不得**据此声称已完成。
 
 #### 4.3.18 Import Fail-Closed Principle
 
@@ -11527,6 +11532,71 @@ contract semantics 已完整（authoritative source、binding、missing 行为�
 可声称范围齐备），且**不依赖**任何未完成设计（无新 carrier ／ literal ／ trust mechanism ／
 key-management contract）⇒ 满足 `CL-2`；`I-10` 的 PASS 依据即本项。
 
+#### D4. Acceptance Boundary ＋ Validation Partial Order（authoritative current policy）
+
+> 本小节是 **`I-1`（acceptance boundary）** 与 **`I-3`（acceptance partial order）** 的
+> **authoritative registered basis**。
+> 它**只**合成**既有 inherited constraints ＋ 本记录 Bundle 1 ～ 5 的已批准选择**，
+> **不新增**任何 Human choice、**不**新增 status enum、**不**规定线性 parser algorithm。
+> PR #65 `RIF-2` 保留为 **review evidence**，但**不**作为本 policy 的唯一依据。
+
+**D4.1 Acceptance gate（package 何时成为 `Accepted`）**
+
+```
+manifest readable
+  → strict JSON parse（IC-8）
+  → required manifest structure ／ identity ／ contract_version 可判定（IC-14 ／ IC-16）
+  → version exact-match gate（VC-1；supported token = "v0.2"）
+  → applicable contract ／ known member set 已确定
+  → Manifest ／ dataset-entry unknown-content checks（UX-A reject）
+  → role ／ cardinality ／ artifact reference ／ path checks（IC-1 ／ IC-3 ／ IC-2 ／ PN-1）
+  → declared artifact existence ／ readability（IC-14）
+  → artifact-level checks（见 D4.2 ／ D4.3）
+
+all acceptance-producing results
+  → 必须绑定同一 stable package content view（Decision 10A）
+  → 所有 required 且 prerequisite-reachable 的 Layer-1 gate 均通过
+  → Accepted
+```
+
+- Package 只有在**全部** applicable Layer-1 gate 均对**同一 stable content view** 成立后才可 `Accepted`；
+- **失败**结果按 **`RD-B`** 表达：import-time ／ structural acceptance failure ⇒ `REJECTED`；
+  此前已 `Accepted` 而之后不可信 ／ 不可用 ⇒ `UNUSABLE`；
+- `"completeness_state"` **不**参与本 gate（**`CF-1`**）；
+- Package **未** `Accepted` ⇒ **不得**创建依赖它的正常 Analysis Run（`IC-18`）。
+
+**D4.2 Artifact raw-byte integrity（位置为 partial-order edge，不是固定序号）**
+
+```
+artifact raw-byte SHA-256:
+  - 在 raw bytes 可读取后即可执行
+  - 不依赖 JSON parse ／ record_count
+```
+
+- 依据 **Bundle 4 `IG-raw`**（digest = exact raw artifact bytes）与 **`IC-22`**（mandatory ＋
+  不可验证 ⇒ structural ＋ fail closed）；
+- 因而**不**存在「必须先完成 `record_count` 检查才能验证 integrity」的约束；
+- **不得**把 `record_count → integrity` 的顺序当作已登记 policy（同 PR #65 `RIF-2` 的结论）。
+
+**D4.3 Artifact JSON parse 之后的结构检查**
+
+```
+artifact JSON parse（IC-8）
+  → record carrier ／ canonical-field ／ "_meta" shape checks（IC-6 ／ IC-7 ＋ Bundle 5）
+  → record_count consistency（Manifest authoritative presence metadata；IC-4 ／ IC-16）
+```
+
+**D4.4 Partial order 性质（显式声明）**
+
+- 上述流程登记为 **partial order（prerequisite edges）**，**不是**线性 parser algorithm；
+  同一 prerequisite 层内不要求固定执行顺序；
+- **inherited prerequisite edges**（D4.1 ／ D4.3）**不得**被实现为「各项独立成功即可接受」；
+- `FR-3` 的 **collect-all** 可在 **prerequisite 可达范围**内执行：
+  prerequisite 受阻的 downstream check 记 **`not evaluable due to prerequisite`**，**不是** passed；
+- **已知** edge：`Manifest 不可 strict-parse` ⇒ declared artifact set **不可知** ⇒
+  其 downstream artifact-level checks **not evaluable**（不是「漏报」）；
+- Manifest 自身可信性由 **D.3（`IG-self-C`）** 提供；**Manifest self-integrity 不在此处新增 carrier**。
+
 #### E. Bundle 5 —— `"_meta"` Known Member Set（Decision 11）
 
 **E.1 已登记的 controlled member shape（authoritative）**
@@ -11598,6 +11668,9 @@ selected-decision composition check = MANDATORY
 - **未**新增 canonical entity ／ business field ／ enum、**未**修改 `BR-*`、
   **未**修改 Validation Taxonomy、**未**新增 Validation Reason；
 - **未**修改 `AGENTS.md` ／ `CONTRIBUTING.md` ／ Discovery `FROZEN` docs；
+- **`D4` 只**合成依既有 inherited constraints 与本记录 Bundle 1 ～ 5 已批准选择而**唯一确定**的
+  acceptance boundary ／ partial order —— **未**新增 Human choice、**未**新增 status enum ／
+  Validation Reason ／ carrier ／ literal、**未**规定线性 parser algorithm；
 - 本层 **design resolution ≠ runtime implementation**。
 
 **执行状态（本 Registration 时点）**
@@ -11658,9 +11731,9 @@ Decision Gap（新增） = NONE
 
 | # | Criterion | 满足依据（registered decision ／ inherited constraint） | `CL` | 结果 |
 | --- | --- | --- | --- | --- |
-| `I-1` | acceptance boundary 已登记 | Bundle 2（`FR-3` ／ `CF-1`）＋ Bundle 3（`10A` stable-view binding）＋ Bundle 4（integrity mandatory）＋ `IC-19` conceptual lifecycle；package 只有在全部 gate 均对**同一 stable content view** 成立后才成为 `Accepted` | **`CL-1`** | **`PASS`** |
+| `I-1` | acceptance boundary 已登记 | **`§4.3.28 D4.1`**（authoritative acceptance gate：manifest readable → strict parse → structure ／ identity ／ `contract_version` 可判定 → version exact-match → applicable contract ／ known member set → unknown-content checks → role ／ cardinality ／ reference ／ path checks → declared artifact existence ／ readability → artifact-level checks → 同一 stable content view ＋ 全部 applicable Layer-1 gate 通过 ⇒ `Accepted`）＋ **`§4.3.28 D4.4`**（partial order 性质）＋ Bundle 2（`RD-B` 失败表达 ／ `CF-1` 非 gate）＋ Bundle 3 `10A` ＋ Bundle 4（`IC-22`）＋ `IC-18` ／ `IC-19` | **`CL-1`** | **`PASS`** |
 | `I-2` | `REJECTED` ／ `UNUSABLE` contract-level usage 已登记（不新增 enum） | Bundle 2 `RD-B`：`REJECTED` = import-time ／ structural acceptance failure（从未 Accepted）；`UNUSABLE` = 此前 Accepted、之后不可信 ／ 不可用；`IC-21` 保持 disposition ≠ reason | **`CL-1`** | **`PASS`** |
-| `I-3` | acceptance partial order 已登记（含 integrity 位置依 digest 目标） | `RIF-2` inherited 前置边（`IC-8` ／ `IC-14` ／ `IC-16` ／ `IC-2` ／ `IC-3` ／ `IC-6`）＋ Bundle 3 `10A` 一致视图义务；Bundle 4 `IG-raw` ⇒ integrity **可**在 parse ／ `record_count` 之前完成，且**不得**提前固定 `record_count → integrity` 顺序 | **`CL-1`** | **`PASS`** |
+| `I-3` | acceptance partial order 已登记（含 integrity 位置依 digest 目标） | **`§4.3.28 D4.2` ＋ `D4.3` ＋ `D4.4`**（authoritative partial order：artifact raw-byte SHA-256 在 raw bytes 可读取后即可执行、**不依赖** JSON parse ／ `record_count`；artifact JSON parse ⇒ record carrier ／ canonical-field ／ `"_meta"` shape ⇒ `record_count` consistency；显式声明为 partial order、`FR-3` collect-all 受 prerequisite 可达范围限定、`not evaluable` 不等于 passed）；`RIF-2` **保留为 review evidence**，**非**唯一依据 | **`CL-1`** | **`PASS`** |
 | `I-4` | `IS-*` structural 集合已登记，且 `IC + open` 项 disposition wording 已登记 | Bundle 1（`UX-A`）／ Bundle 2（`RD-B` ＋ `FR-3`）／ Bundle 3（`PN-1` ＋ `10A` ＋ `MG-2`）／ Bundle 4（`IG-raw` ＋ SHA-256 ＋ `IG-self-C`）；`IS-2` ／ `IS-7` ／ `IS-10` ／ `IS-24` 的 wording 由 Bundle 2 ／ 3 收敛；`IC` 结论未被重开 | **`CL-1`** | **`PASS`** |
 | `I-5` | unknown ／ undeclared content policy 已逐类登记，且 applicable contract ／ known member set 的确定前提已给出 | Bundle 1：version dispatch（`"v0.2"` exact-match）**先**确定 applicable contract 与 known member set，**再**应用 `UX-A reject`（Manifest ／ dataset-entry ／ canonical record ／ unreferenced artifact 四类）；`"_meta"` 归 Bundle 5 | **`CL-1`** | **`PASS`** |
 | `I-6` | path resolution ／ boundary enforcement semantics 已登记（含 alias ／ link 边界） | Bundle 3 `PN-1` 七项语义（single package-root-level filename ／ exact match ／ 无 normalization ／ 无 `.` ／ `..` ／ 无 absolute ／ external ／ URI ／ 无 symlink ／ junction ／ alias indirection）；`IC-2` invariant 保持 | **`CL-1`** | **`PASS`** |
@@ -11704,6 +11777,8 @@ Blocking Contradiction = NONE
 | 12 | `CF-1` ↔ `I-14` `10A` | `CF-1` 不 gate acceptance；`10A` 的一致视图义务**独立**成立（`Decision 9` 的既有边界保持） | **`NO CONTRADICTION`** |
 | 13 | `IC-22` integrity mandatory ↔ Bundle 4 fixed SHA-256 | mandatory ＋ unverifiable ⇒ structural ＋ fail closed 未变；固定算法只确定 verification contract，**不**降级 mandatory 性 | **`NO CONTRADICTION`** |
 | 14 | `IC-17` 三层语义 ↔ Bundle 2 ／ 4 | Bundle 2 ／ 4 的判定均属 Layer 1 structural ／ integrity，**未**提升 Layer 2 ～ Layer 4 问题 | **`NO CONTRADICTION`** |
+| 15 | `D4` acceptance gate ／ partial order ↔ `IC-2` ／ `IC-3` ／ `IC-8` ／ `IC-14` ／ `IC-16` ／ `IC-18` ／ `IC-22` | `D4` 只排列**已 inherited** 的 prerequisite edges，并嵌入 Bundle 1 ／ 3 ／ 4 的已批准 gate；**未**新增条件、**未**固定线性顺序、**未**引入 dataset-level partial outcome（`IC-13`） | **`NO CONTRADICTION`** |
+| 16 | `D4.2`（raw-byte SHA-256 早于 parse 可执行）↔ `D4.3`（`record_count` 在 parse 之后） | 两者是**不同**的 prerequisite 分支，**不**构成 `record_count → integrity` 的顺序约束；`IG-raw` 无需 canonicalization | **`NO CONTRADICTION`** |
 
 **`I-21` 结论：`Blocking Contradiction = NONE`；无 hidden cross-decision conflict。**
 
@@ -14493,7 +14568,7 @@ Design DoD = PASS（17 / 17）
 
 | 依赖领域 | Status |
 | --- | --- |
-| Snapshot / Import Contract | **`DESIGN RESOLVED`**（**Issue #66 Closure**，见 **§4.3.28** ／ **§4.3.29**；本表原记 `DESIGN PENDING` 为 **Data Validation Closure 时点**值） |
+| Snapshot / Import Contract | `DESIGN PENDING` |
 | Master Data Mapping | **`DESIGN RESOLVED`** |
 | Adapter Boundary | `DESIGN PENDING` |
 
@@ -16855,10 +16930,11 @@ configuration format、API、field name。
 
 > POC Inventory Scope 的 **logical / source-semantic boundary** 已由现有 **Master Data Mapping** Design 解析
 > （**`Other Source-Semantic Mapping` 现为 `DESIGN RESOLVED`**，见 **§4.5.22 Option D Implementation Record**）；
-> 但 **physical membership evidence / source representation** 仍属**后续 source-specific /
-> physical mapping realization** —— 该部分**不属于** `Master Data Mapping` scope
-> （**`Final Master Data Mapping` 现为 `DESIGN RESOLVED`**），
-> 而属 **`§4.3 Field Carrier Mapping` ／ `Final Import Contract`**（**仍为 `DESIGN PENDING`**）。
+> **physical carrier design** 已由 **`§4.3 Field Carrier Mapping`**（见 **§4.3.25** ／ **§4.3.27**）
+> 与 **`Final Import Contract`**（见 **§4.3.28** ／ **§4.3.29**，**Issue #66 Closure**）关闭，二者**均为 `DESIGN RESOLVED`**；
+> 但 **actual source representation ／ extraction** 仍属 **source-specific / Adapter realization**
+> —— 该部分**不属于** `Master Data Mapping` scope（**`Final Master Data Mapping` 现为 `DESIGN RESOLVED`**），
+> 而属 **`Adapter Boundary`**（**`DESIGN PENDING`**），**仍未实现**，**不得**被声称已完成。
 
 **两种可接受的 Source Evidence Shape**
 
