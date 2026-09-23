@@ -9771,7 +9771,9 @@ verification 结果**不依赖 implementation 选择**」。
 >    **由谁提供**、以及**哪些输入缺失即视为不可建立**（否则该表述只是目标陈述，**不可判定**）；
 > 2. **后续动作的归类与完成状态** —— 规定 mechanism ／ carrier（例如 Manifest-self carrier ／ sidecar ／
 >    自引用排除规则）的**后续动作**必须具名，并明确归入
->    **(a)** 不影响 acceptance 判定的 implementation detail residual（可作为 `CL-2`，**不阻塞** Human Decision readiness），**或**
+>    **(a)** **不影响 acceptance semantics 的 implementation detail residual**
+>    ⇒ 标为 **non-blocking implementation residual（outside the FIC acceptance criterion）**，
+>    **既不是 `CL-2`，也不作为本层 closure 依据**（依 `§7.1` 强制规则 2），**或**
 >    **(b)** 影响 acceptance 判定的 contract prerequisite（**未完成即 `CL-3`**，见 `§7.1`）；
 >    **归类后，其「完成状态」必须已满足 —— 仅登记 gate 不足。**
 > 3. **对选中分支的重新评估** —— 已关闭层（`§4.3.27` D）记录的 FCM non-blocking residual
@@ -10158,7 +10160,7 @@ hash ／ sign 的方案都可能需要 **detached evidence ／ sidecar ／ packa
 
 | Level | 名称 | 含义（可作为本层 closure 结论的条件） |
 | --- | --- | --- |
-| **`CL-1`** | **unconditional** | 该 criterion 的行为**已由 inherited constraint 或已登记的 contract 语义唯一确定**；**不**依赖任何未决选择或未提供输入，**无**后续前置条件 |
+| **`CL-1`** | **unconditional** | 该 criterion 的行为**已由 inherited constraint 或已登记的 contract 语义唯一确定**；**不**依赖任何未决选择或未提供输入，**无**后续前置条件（**contract semantics 已完整且无未决输入的 design criterion 亦属此级**） |
 | **`CL-2`** | **conditional（仅限 parameterized external input contract）** | 该 criterion 的 **contract semantics 本身已完整**：对同一输入，**所有 conforming importer 必须得到相同 disposition**。**此时唯一仍未定的只能是运行时可缺失的 external parameter 的值**，且**必须**同时登记：① **authoritative parameter ／ input 的来源**、② **版本 ／ 绑定关系**、③ **缺失或不可用时的确定性行为**（fail closed ／ `not evaluable`）、④ **同一输入下结果唯一**（conformance determinism）、⑤ **可声称的 closure 范围**。**①～⑤ 全部满足**才可记为 **PASS（conditional）** —— 因为此时 **contract 已闭合**，缺的只是运行时取值 |
 | **`CL-3`** | **not claimable** | 该 criterion 的**接受判定**依赖一个**尚未完成的 design prerequisite**（其 contract semantics 尚未定义到「conforming importers 会得出相同 disposition」）⇒ **不可记为 PASS**；只能记为 **`BLOCKED` ／ 不可判定**，并标记所需跨层变更，直至该 prerequisite **实际完成** |
 
@@ -10178,13 +10180,19 @@ hash ／ sign 的方案都可能需要 **detached evidence ／ sidecar ／ packa
    `CL-2` **只**适用于**类别 ①**（contract 已闭合、仅运行时 external parameter 待定）；
    凡属**类别 ②（未完成的 design prerequisite）**，**无论** completion gate 登记得多完整，
    在 prerequisite **实际完成前**一律为 **`CL-3`**，**不得**记为 PASS。
-2. **区分 (a) 与 (b)：**
-   **(a) 不影响 acceptance 判定的 implementation detail residual**（例如内部命名、
-   不影响判定结果的表示细节）**可以**作为 `CL-2` 且**不阻塞** Human Decision readiness；
-   **(b) 影响 acceptance 判定的 contract prerequisite**（例如 known member set、
-   verification key 信任源、acceptance-time 一致输入视图、新 carrier ／ sidecar ／ literal）
-   **必须**先**实际完成到第 ① 类标准**（contract 闭合）才可 PASS；否则为 `CL-3`。
-   判断归属的依据是 **「该项缺失时，acceptance 结果是否仍可唯一确定」**。
+2. **implementation residual 不得归入 `CL-2`（依 `CL-2` 的「only」定义）：**
+   `CL-2` **只**适用于**类别 ① parameterized external input contract**。
+   三项必须分开处理，**不得**互相泛化：
+   - **不影响 acceptance semantics 的 implementation detail residual**（例如内部命名、
+     不影响判定结果的表示细节）⇒ **明确标为 non-blocking implementation residual，
+     即 outside the FIC acceptance criterion** —— 它**既不是** `CL-2`，**也不**作为本层 closure 依据；
+   - **contract semantics 已完整且无未决输入的 design criterion** ⇒ 记为 **`CL-1`**
+     （**不**因附带 implementation residual 而降级为有条件 PASS）；
+   - **影响 acceptance semantics 的 contract prerequisite**（例如 known member set、
+     verification key 信任源、acceptance-time 一致输入视图、新 carrier ／ sidecar ／ literal）
+     ⇒ 按类别 ① ／ ② 判定：**contract 已闭合**者 `CL-2`，**尚未完成者 `CL-3`**。
+   判断归属的依据是 **「该项缺失时，acceptance 结果是否仍可唯一确定」**；
+   同时须回答 **「它是否参与 FIC acceptance criterion 本身」**。
 3. **跨层变更的 gate：** 对选中方案必需的跨层变更（`DEP-9` ／ `DEP-10` ／ `DEP-11`）
    **不得**写成「已标记为 separate change ⇒ 本 criterion PASS」，**亦不得**写成
    「已登记 completion gate ⇒ 本 criterion PASS」；
@@ -10212,6 +10220,9 @@ hash ／ sign 的方案都可能需要 **detached evidence ／ sidecar ／ packa
 > **`CL-2` 缺少上述任一项 → `CL-3`**；**依赖未完成 design prerequisite（类别 ②，
 > 含新 carrier ／ sidecar ／ literal、未定义 trust mechanism、未完成 key-management ／ security contract）
 > → 一律 `CL-3`，且「已登记 completion gate」不改变该结论，直至 prerequisite 实际完成。**
+> **不影响 acceptance semantics 的 implementation detail residual 标为
+> non-blocking implementation residual（outside the FIC acceptance criterion）——
+> 既不归入 `CL-2`，也不作为 closure 依据；contract semantics 已完整且无未决输入者记为 `CL-1`。**
 > 本表**不**预先判定任何选项，**不**改变任何 status。
 
 | # | Criterion | 类别 |
@@ -10232,7 +10243,7 @@ hash ／ sign 的方案都可能需要 **detached evidence ／ sidecar ／ packa
 | `I-14` | **双向**登记（均**不得**重开 immutability）：**(10A)** acceptance-time **一致输入视图 ／ binding guarantee** —— 验证结果绑定实际被接受、随后供 Analysis Run 使用的同一 package 内容视图，无法建立一致性时为 **fail closed ／ not evaluable**（`IS-24` ／ `RIF-13`），其 **contract-level guarantee ／ detection boundary** 由 **Decision 10A** 裁定；**(10B)** **post-accept** mutation 的 **detection ／ re-verification ／ binding** 要求（**Decision 10B**）。**`I-14` 的 PASS 必须显式映射到这两条 Decision path**（10A ／ 10B）；任一子项为 `CL-3` 时，`I-14` 整体**不得**记为 PASS | MANDATORY CLOSURE CRITERION |
 | `I-15` | failure reporting 的 **shape**（fail-fast ／ collect-all **受 prerequisite 边界限定**、ordering、auditable 最小内容、`not evaluable due to prerequisite` 与 `evaluated` 的区分）已登记，且 root-issue 沿用 inherited `PACKAGE_STRUCTURE` ／ `STRUCTURAL_INCONSISTENCY` | MANDATORY CLOSURE CRITERION |
 | `I-16` | layer ownership boundary 已登记，且**不**把 Layer 2 ～ Layer 4 问题提升为 structural failure（`IC-17`） | MANDATORY CLOSURE CRITERION |
-| `I-17` | unknown-`"_meta"` member policy 的**前置条件**已处置：**或**升级为**独立 naming decision**（`CL-1`），**或**登记 abstract policy **并**证明其属 `§7.1` **类别 ①** —— **authoritative member set 的来源 ／ 版本绑定 ／ 缺失时确定性行为（fail closed ／ not evaluable）／ 同一输入下结果唯一 ／ 可声称 closure 范围**全部已登记 ⇒ `CL-2`。**若 member set 的缺失使 policy 在该前提下不可判定（即属类别 ② 未完成 design prerequisite），则一律 `CL-3`：仅登记完成 gate 不构成 PASS** | MANDATORY CLOSURE CRITERION |
+| `I-17` | unknown-`"_meta"` member policy 的**前置条件**已处置，**且按 prerequisite 是否已实际满足取级**：**(i)** Human 在当前 ／ 补充决定中**实际登记 authoritative known member set（或 literal set）并完成 binding** ⇒ `CL-1`；**(ii)** 仅决定「后续另开 naming decision」⇒ 在**该 naming decision 实际完成前为 `CL-3`** —— **「另开 naming decision」本身不产生 known member set，不构成 PASS**；**(iii)** 登记 **parameterized external member-set contract**，且**证明其属 `§7.1` 类别 ①**（authoritative member set 的来源 ／ 版本绑定 ／ 缺失时确定性行为（fail closed ／ not evaluable）／ 同一输入下结果唯一 ／ 可声称 closure 范围**全部**已登记，且不依赖任何未完成设计）⇒ `CL-2`。**若 member set 缺失使 policy 在该前提下不可判定（类别 ②），一律 `CL-3`** | MANDATORY CLOSURE CRITERION |
 | `I-18` | **integrity verification algorithm contract** 已达 **deterministic 可判定**状态：algorithm strategy ／ supported algorithm contract ／ **algorithm identifier 语义**已登记（`IG-alg-*` 之一，必要时含 evidence 表示）；**若**含 signature ／ authenticity 分支，则 **verification key ／ trust input 的确定方式**（来源、绑定、不一致时的处置）**必须已完整定义到「conforming importers 得出相同 disposition」**（`§7.1` 类别 ①）才可 PASS。**若 deterministic verification 仍依赖未完成的 security ／ trust contract（类别 ②），则该分支为 `CL-3`，不得以「已登记 future gate」判 PASS** | MANDATORY CLOSURE CRITERION |
 | `I-21` | 跨选择无阻塞矛盾已显式核验：对**已选**的 option 组合，逐项确认不存在 `IC` 冲突（`NOT COMPATIBLE` 项未被隐式选中）；**且**逐项确认**没有**任何拟记为 `CL-2` 的 criterion 实际依赖**未完成的 design prerequisite**（`§7.1` 类别 ②），并已记录每项 `CL-2` 的「同一输入结果唯一」判定测试结果 | MANDATORY CLOSURE CRITERION |
 | `I-19` | Human Inspectability（acceptance outcome 与 defect 可被人工检视） | POC DESIGN OBJECTIVE |
@@ -10366,15 +10377,21 @@ hash ／ sign 的方案都可能需要 **detached evidence ／ sidecar ／ packa
 **Decision 11 —— unknown `"_meta"` member policy 的前置条件**
 - **Question：** 是否把 P-A ／ MB-A 的 **known member set** 升为**独立 naming decision**，还是**允许**先登记 **abstract unknown-member policy**（implementation 前再定 literal）？
 - **Options：** 独立 naming decision ／ abstract policy now ＋ literal later。
-- **Trade-offs（更正 —— 依 `§7.1` 的类别 ① ／ ② 判定）：** 前者使 `IS-15` 立即可判定（`CL-1`）；
-  后者**只**在能证明其属 **类别 ① parameterized external input contract** 时成立（`CL-2`）——
-  即 member set 的 **来源**、**版本 ／ 绑定**、**缺失时确定性行为（fail closed ／ `not evaluable`）**、
-  **同一输入下结果唯一**、**可声称 closure 范围**全部已由 contract 完整规定。
+- **Trade-offs（更正 —— 依 `§7.1` 的类别 ① ／ ② 判定；关键在 prerequisite 是否已实际满足）：**
+  - **(i) 本次即实际登记 authoritative known member set（或 literal set）并完成 binding** ⇒ `IS-15` 立即可判定，**`CL-1`**；
+  - **(ii) 仅决定「后续另开 naming decision」** ⇒ **在该 naming decision 实际完成前为 `CL-3`** ——
+    **「另开 naming decision」本身不产生 known member set，「已登记 future gate」不构成 PASS**；
+  - **(iii) 登记 parameterized external member-set contract 并证明属类别 ①** ⇒ `CL-2` ——
+    即 member set 的 **来源**、**版本 ／ 绑定**、**缺失时确定性行为（fail closed ／ `not evaluable`）**、
+    **同一输入下结果唯一**、**可声称 closure 范围**全部已由 contract 完整规定，
+    **且不依赖任何未完成设计**。
   **若** member set 缺失使 policy 在该前提下**不可判定**（属 **类别 ② 未完成 design prerequisite**），
-  则**一律 `CL-3`**：**仅登记 completion gate 不构成 PASS**。
+  则**一律 `CL-3`**。
   **不得**一面承认 policy 在 known member set 未定时不可判定，一面无条件宣称本层已处理该依赖。
+  **不得**把 (ii) 表述为 `CL-1`。
 - **Dependencies：** `DEP-8` ／ `DEP-10`；`IC-7`（内部 member 名称未批准）；`§7.1`。
-- **What changes：** `I-17` 的处置**与 closure 强度**；是否需要在 `Final Import Contract` 之外新增 naming task。
+- **What changes：** `I-17` 的处置**与 closure 强度**；是否需要在 `Final Import Contract` 之外新增 naming task
+  （**新增 naming task 本身不等于 prerequisite 已满足**）。
 - **注意：** **不得**由 Agent 自行发明 provenance ／ basis 内部 property name。
 
 **Decision 12 —— Minimum closure criteria 接受与 follow-up 授权**
@@ -10458,6 +10475,8 @@ Package Structural Failure
 | `FIC-13` | `CL-2` ／ `CL-3` 收紧 | `§7.1` 重写 **`CL-2`**（**仅限 category ① parameterized external input contract**：contract semantics 已完整、同一输入下 conforming importers 结果唯一；运行时 external parameter 可缺失且缺失行为已确定）与 **`CL-3`**（**category ② unfinished design prerequisite**：新 carrier ／ sidecar ／ literal、未定义 trust mechanism、未完成 key-management ／ security contract ⇒ **completion gate 必须已满足，仅已登记不构成 PASS**）；新增**判别表**、**判定测试**与 5 条强制规则；同步 `D.5`、`DEP-8` ／ `DEP-9` ／ `DEP-11`、`RIF-6`、`I-10` ／ `I-17` ／ `I-18` ／ `I-21`、`Decision 7` ／ `Decision 11` |
 | `FIC-14` | acceptance-time Human Decision path | `IS-24` 明确 **`IC + open` 的归属**（inherited = 必须绑定同一稳定视图 ＋ fail closed；open = contract-level guarantee ／ detection boundary 与报告表述）；新增 **`Decision 10A`（acceptance-time stable view ／ binding guarantee）** 与 **`Decision 10B`（post-accept mutation）** 双子边界；`I-14` **必须**显式映射 10A ＋ 10B；`RIF-13` 增加 **二选一规则**（若 Human 判定已被 inherited 唯一确定 ⇒ `IS-24` 改标 `IC`、`10A` 折叠；二者**不得**同时成立）。**未**设计 lock ／ transaction ／ atomic rename，**未**新增体系 |
 | `FIC-15` | closure-count consistency | 统一 Review 内所有 closure-count 表述为 **`I-1` ～ `I-18` ＋ `I-21`（MANDATORY，共 19 项）＋ `I-19` ／ `I-20`（objectives，共 2 项）**，并注明 `I-21` 为 mandatory（编号位于 objectives 之后，属编号顺序而非类别差异）；同步 `RIF-12` 与 `Decision 12` |
+| `FIC-16` | `CL-2` 「only」语义统一 | **删除**「implementation detail residual 可作为 `CL-2`」表述：`§7.1` 强制规则 2 改为**三分**——不影响 acceptance semantics 的 residual ⇒ **non-blocking implementation residual（outside the FIC acceptance criterion）**，**既不归入 `CL-2` 也不作为 closure 依据**；contract semantics 已完整且无未决输入的 design criterion ⇒ **`CL-1`**；影响 acceptance semantics 的 contract prerequisite ⇒ 按类别 ① ／ ② 判 `CL-2` ／ `CL-3`。同步 `CL-1` 定义、`§8` closure 强度约定与 **`D.5`** 第 2 项。**`I-17` ／ `Decision 11` 更正**：**(i)** 本次实际登记 authoritative known member set（或 literal set）并完成 binding ⇒ `CL-1`；**(ii)** 仅决定「后续另开 naming decision」⇒ 该 naming decision **实际完成前为 `CL-3`**（「另开 naming decision」本身不产生 known member set）；**(iii)** parameterized external member-set contract 满足类别 ① ⇒ `CL-2` |
+| `PR-META-01` | PR metadata cleanup | 更新 PR body 的 **current summary ／ Validation ／ Next gate**，使其反映 latest HEAD（coverage 改为 `IS-* 25` ／ `RIF-* 13` ／ `DEP-* 11` ／ `I-* 21`；Next gate 改为 Coordinator final check → Human Decision，**Codex independent review 已完成**）。**未**修改任何历史 review comment |
 
 **本次修正的 review-only 边界（自我核验）：**
 
