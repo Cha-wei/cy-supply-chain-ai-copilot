@@ -70,19 +70,19 @@
 | --- | --- | --- |
 | P0 Business Rules ／ System Boundary & Integration | **`DESIGN RESOLVED`** | §2；§3（status 见 §3.14）；§11 Open Design Backlog |
 | Canonical Data Model ／ Data Dictionary | **`DESIGN RESOLVED`** | §4.1；§4.2 |
-| **Snapshot / Import Contract overall** | **`DESIGN PENDING`** | §4.3；status 见 §4.3.21 |
+| **Snapshot / Import Contract overall** | **`DESIGN RESOLVED`** | §4.3；status 见 §4.3.21 |
 | ├ Package Envelope ／ Atomicity ／ Immutability ／ Analysis Run Linkage | `DESIGN RESOLVED` | §4.3 |
 | ├ Serialization Format | **`DESIGN RESOLVED`** | §4.3.22 |
 | ├ Physical Dataset Layout | **`DESIGN RESOLVED`** | §4.3.23；closure 见 §4.3.24 |
 | ├ Field Carrier Mapping | **`DESIGN RESOLVED`** | §4.3.25；closure 见 §4.3.27 |
-| └ Final Import Contract | **`DESIGN PENDING`** | 尚未设计 |
+| └ Final Import Contract | **`DESIGN RESOLVED`** | §4.3.28；closure 见 §4.3.29 |
 | Data Validation | **`DESIGN RESOLVED`** | §4.4；closure 见 §4.4.101 |
 | Master Data Mapping | **`DESIGN RESOLVED`**（11 / 11 层） | §4.5；status 见 §4.5.24；scope 见 §4.5.25 |
 | **Adapter Boundary** | **`DESIGN PENDING`** | §4 子章节状态表 |
 | AI / Tool Boundary、HITL、Permission & Security、Audit & Observability、Test & AI Eval | 见对应章节 status boundary | §5 ～ §9（§5 status 见 §5.18） |
 | Architecture Decisions | **尚无正式 ADR**；技术栈明确未决定 | §10；`## Explicit Non-Decisions` |
 
-**§4 仍有 2 个 `DESIGN PENDING` 子领域：** `Snapshot / Import Contract`、`Adapter Boundary`。
+**§4 仍有 1 个 `DESIGN PENDING` 子领域：** `Adapter Boundary`。
 **不得声称整个 §4 已完成。**
 
 ---
@@ -91,10 +91,12 @@
 
 **当前 Phase：** `POC Design v0.2`（**`DRAFT`**，尚未 `APPROVED` / `FROZEN`）。
 
-**最近已完成的 Gate：** `Field Carrier Mapping` Closure Re-run —— **`PASS`**
-（authoritative 记录见 `docs/design/poc-design-v0.2.md` **§4.3.27**；本文档**不复制** closure rationale）。
+**最近已完成的 Gate：** `Final Import Contract` Closure Validation —— **`PASS`**
+（`Final Import Contract` 与 `Snapshot / Import Contract overall` 均 → **`DESIGN RESOLVED`**；
+authoritative 记录见 `docs/design/poc-design-v0.2.md` **§4.3.28** ／ **§4.3.29**；
+本文档**不复制** closure rationale）。
 
-**其余 pending design areas 包括** `Final Import Contract` ／ `Adapter Boundary`；
+**其余 pending design areas 包括** `Adapter Boundary`；
 状态与入口见 **§5 Major Design State**（本文档**不建立**其执行顺序）。
 
 任务完成／合并判定见 `CONTRIBUTING.md` §7 Definition of Done 与 §5 Git & GitHub Workflow。
