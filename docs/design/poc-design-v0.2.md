@@ -145,6 +145,305 @@ AI **不可以**：
 
 > P1 能力（RAG、高级供应商比较、自然语言供应链查询、自动报告）以 `FROZEN` Discovery Brief §12 为准。
 
+### 1.1 Review Authority / Scope（review-only）
+
+> **本节为 review-only Design Review 产出，不是 approved policy。**
+> `Review Finding` ≠ approved policy；`Candidate Option` ≠ selected option；
+> `Proposed Closure Criteria` ≠ Human-approved closure criteria；
+> **只有 Human Decision 才能把候选转为 canonical policy。**
+
+```
+Review Type    = 独立 Design Review（只产出 Review Finding）
+Review Object  = §1 Design Goals & Scope（当前 4 项 = DESIGN PENDING）
+Decision Power = NONE —— 本 Review 不作出任何 Human Decision
+Write Scope    = §1 内 review-only 子结构（＋ project-index navigation-only sync）
+Status Change  = NONE（§1 保持 DESIGN PENDING）
+```
+
+本 Review **只**做：① 从 `FROZEN` Discovery 提取 §1 必须继承的 scope ／ success ／ failure 约束；
+② 从 current canonical `§2` ～ `§5` 提取会影响 §1 表述的已批准 downstream design facts；
+③ 区分 inherited fact ／ approved downstream fact ／ design gap ／ Human Decision Required；
+④ 建立 candidate options ／ trade-offs；⑤ 提出 candidate minimum closure criteria；
+⑥ 列出需 Human 逐项裁定的问题。
+
+本 Review **不做**：选择 final option、修改 P0 ／ P1、把 §1 推进为 `DESIGN RESOLVED`、
+设计 `§6` ～ `§10` 或 implementation、修改 `FROZEN` Discovery。
+
+**identifier 约定（本节局部，不与既有 identifier family 冲突）：**
+`FZ-*` = inherited `FROZEN` constraint；`GSF-*` = §1 Review Finding；`S-*` = candidate closure criterion；
+`GSD-*` = Human Decision Required 条目；`§1 Option 0 ／ 1 ／ 2` = 本节 candidate conceptual approach
+（**不**沿用 `§4.3` ／ `§10` 等其他章节的 Option 编号）。
+
+### 1.2 Inherited FROZEN Constraints（不得重新打开）
+
+| # | 继承约束（`FROZEN`） | 来源 |
+| --- | --- | --- |
+| `FZ-1` | **Problem Statement**：AI 基于企业已有生产计划、BOM、库存、在途采购与必要供应商信息，完成**受控**的跨系统数据获取，通过**确定性业务规则**计算缺料风险，并生成**有数据依据、可解释、可追溯**的采购建议。三个核心要求 = **受控** ／ **可解释** ／ **可追溯** | Discovery Brief `§10` |
+| `FZ-2` | **P0 = 一条业务闭环**：缺料分析（P0-1）→ 采购建议（P0-2）→ Human-in-the-loop（P0-3）。AI **只能**生成**采购申请草稿**，**不得**直接产生正式采购执行 | `§11` |
+| `FZ-3` | **P1 = 后续增强**：企业知识库 ／ RAG、高级供应商比较、自然语言供应链查询、自动供应链分析报告 —— **不属于**第一阶段 POC 成败核心 | `§12` |
+| `FZ-4` | **成功标准**：`POC 成功 ≠ Demo 能够运行`；至少覆盖 数据正确 ／ 计算正确 ／ 工具正确 ／ 可解释 ／ 安全 ／ 业务价值；LLM 不得自行生成库存 ／ 订单 ／ 价格等事实；相同输入下确定性计算稳定、一致、可复现；不得明显无意义或越权调用工具；关键风险必须含数据依据 ＋ 规则依据；未经人工批准禁止高风险写操作；至少证明一种明确业务改善；**真实 KPI 数值必须等待客户真实 baseline** | `§16` |
+| `FZ-5` | **失败 ／ 重估条件**（`FROZEN` failure boundary，**不是**当前已发生事实）：关键数据无法可靠获取；主数据无法稳定关联；现有 `MRP` ／ `ERP` 已高效解决全部目标问题；使用频率过低；AI ／ Agent 使流程更复杂、步骤更多、业务负担上升 | `§17` |
+
+> `FZ-1` ～ `FZ-5` 为**已冻结的继承事实** —— 本 Review **不得**重新设计、重新解释、改变其语义，
+> 也**不得**把 `FZ-4` 的 success dimensions 写成已达成、把 `FZ-5` 的 failure conditions 写成已发生事实。
+> `FROZEN` `§19`（v0.2 Entry Criteria）的 P0 scope 表述（`缺料分析 → 采购建议 → HITL`、`POC 不承担完整 ERP/MRP 替代职责`）
+> 与 `FZ-2` 一致，作为 inherited 参照，**不**新增 scope 语义。
+
+### 1.3 Current Approved Downstream Facts（`§2` ～ `§5`）
+
+| 章节 | 已批准 downstream design fact | 当前状态 |
+| --- | --- | --- |
+| `§2` | P0 business rules `§2.1` ～ `§2.7` **全部** `DESIGN RESOLVED`（`BR-SHORTAGE-001` ／ `BR-INVENTORY-001` ／ `BR-SUBSTITUTE-001` ／ `BR-REQUIREMENT-001` ／ `BR-PROCUREMENT-001` ／ `BR-INBOUND-001` ／ `BR-SUPPLIER-RISK-001`）；本节范围内无 `DESIGN PENDING` 项；并明确**不表示** `POC Design v0.2` 整体完成 | `DESIGN RESOLVED` |
+| `§3` | System Boundary：Integration Pattern = **Controlled Export / Snapshot**；`READ` **只能**经 controlled exported snapshot；`WRITE = DENIED`；`Production Write-back = OUT OF SCOPE`；`Implementation Status = NOT STARTED` | `DESIGN RESOLVED` |
+| `§4` | Canonical Data Model ／ Data Dictionary ／ Snapshot ／ Import Contract ／ Data Validation ／ Master Data Mapping ／ Adapter Boundary **全部** `DESIGN RESOLVED`（`§4` 现有 **0** 个 `DESIGN PENDING` 子领域）；`Adapter Boundary` 为 **conceptual closure** —— 其 runtime ／ source-specific realization 仍 `NOT IMPLEMENTED` 且**未**获 implementation 授权 | `DESIGN RESOLVED`（conceptual） |
+| `§5` | AI ／ Tool Boundary：`LLM` ／ deterministic business logic ／ `Tool` ／ Agent orchestration 四层的 responsibility ／ behavioral boundary `DESIGN RESOLVED`；`§5.3` 登记 **6 个 P0 User Questions** 的 **`SIMULATED`** high-frequency question baseline（`SC-EXPLAIN-001`）；`Implementation Status = NOT STARTED`；`FROZEN` `H4` **未** resolved | `DESIGN RESOLVED`（boundary） |
+| `§6` ／ `§7` ／ `§8` ／ `§9` | HITL state machine ／ `RBAC`-`Data Scope`-`Tool Permission`-`Secret Handling` ／ Audit & Observability ／ Test & AI Eval | `DESIGN PENDING`（`§7` 仅 `Read / Write Boundary` 为 `DESIGN RESOLVED`） |
+| `§10` | Architecture Decisions | **尚无正式 ADR**；技术栈未决定 |
+
+> **必须区分（candidate interpretation，供 Human 裁定）：** 上述 `DESIGN RESOLVED` **只**表示
+> **conceptual ／ canonical design boundary 已定义**，**不表示** `IMPLEMENTED` ／ `TESTED` ／
+> business accepted ／ production-ready（与 `§3` ／ `§5` 头部及 `§7` ／ `§8` ／ `§9` status boundary 一致）。
+> 因此 §1 **不得**因为 `§2` ～ `§5` 已 `DESIGN RESOLVED` 就宣称 POC success 已满足（见 `S-9`）。
+
+### 1.4 Scope Composition Review
+
+**A. §1 的职责边界（Q1 —— candidate）**
+
+§1 **应只**登记：
+
+```
+POC design goals（goal 层，不是 architecture 层）
+POC success boundary（design-time ／ evidence ／ business-value 分层）
+In Scope（P0 capability scope ＋ supporting design ／ quality ／ safety infrastructure 的分类）
+Out of Scope（business out-of-scope ／ deferred ／ prohibited ／ P1 四类分离）
+与 §2 ～ §10 的 composition ／ dependency boundary
+```
+
+§1 **不得**成为：architecture 章节、产品需求大全、implementation plan、测试计划、客户验收结果。
+以上为 **candidate**；最终职责边界由 `GSD-1` ／ `GSD-2` 裁定。
+
+**B. In Scope 候选分类（Q4 —— candidate）**
+
+| 分类 | 候选内容 | 与 `FROZEN` 的关系 |
+| --- | --- | --- |
+| **P0 capability scope** | deterministic 缺料分析（需求 ／ 预计可用量 ／ 预计缺口 ／ 基础风险）；采购建议；`Procurement Request Draft`；POC 内 Human `Review` ／ `Modify` ／ `Approve` ／ `Reject`；explanation（解释结果） | 直接对应 `FZ-1` ／ `FZ-2`（P0-1 ／ P0-2 ／ P0-3） |
+| **P0 supporting data capability** | Controlled Export ／ Snapshot 数据获取；Data Validation；Master Data Mapping；Adapter conceptual boundary；`Stable Source Evidence Locator` ／ `Mapping ／ Resolution Basis` | `FZ-1`「受控」＋「可追溯」的实现方式；`FZ-2` 的输入前提 |
+| **P0 quality ／ safety boundary** | fail-closed；traceability；evidence requirement；determinism；no silent exclusion；Human approval before high-risk write | `FZ-1`「可解释 ／ 可追溯」＋ `FZ-4` 的 数据正确 ／ 计算正确 ／ 工具正确 ／ 安全 |
+| **不是 In Scope 的新业务场景** | 任何不在 `FROZEN` `§11` P0 闭环内的业务场景（例如完整 MRP 替代、Production 采购执行、P1 能力） | 违反 `FZ-2` ／ `FZ-3` |
+
+> **candidate 要求：** supporting design ／ quality ／ safety infrastructure **只**作为 **supporting infrastructure** 登记，
+> **不得**被改写成新的 P0 business scenario（见 `S-3` ／ `S-4`）。
+
+**C. Out of Scope 候选分类（Q5 —— candidate）**
+
+四类**必须分开**，不得压平为一个「都不做」：
+
+**分类规则（candidate —— 供 `GSD-5` 裁定）：** 四个 label 是**互斥 bucket**，**不是**同一 item 可重复落入的维度标签。
+每条候选 item **只**归入一个 bucket；判定按以下顺序进行，先命中者为准：
+
+```
+1. Prohibited（hard boundary —— 行为禁止）
+   —— 该行为是否被 current approved canonical text（§3 hard boundary ／ FZ-4 等）明确禁止？
+2. P1
+   —— 该能力是否属 FZ-3 列出的后续增强？
+3. Deferred
+   —— 该事项是否属本 POC 范围，但当前设计层未完成（§6 ～ §10）或 implementation 未开始？
+4. Business scope out-of-scope
+   —— 其余：不属于本 POC 业务闭环的业务能力 ／ 结果
+```
+
+| 分类 | 判定问题（互斥） | 候选内容 | canonical 依据 |
+| --- | --- | --- | --- |
+| **Business scope out-of-scope**（业务能力 ／ 结果**不属**本 POC） | 「本 POC **是否提供**该业务能力 ／ 结果？」→ **否** | 正式 `ERP` `Purchase Request` ／ `Purchase Order` execution；完整 `ERP` ／ `MRP` replacement；其他明确不属 P0 闭环的业务结果（例如完整供应链 Copilot 平台能力） | `FZ-2`（P0 = 缺料分析 → 采购建议 → HITL；AI 只产出采购申请草稿）；`FROZEN` `§19`（POC 不承担完整 ERP ／ MRP 替代职责） |
+| **Deferred**（本 POC 范围内、当前**未完成**） | 「该事项是否属本 POC 范围，但当前设计 ／ 实现**未完成**？」→ **是** | `§6` HITL state machine；`§7` `RBAC` ／ `Data Scope` ／ `Tool Permission` ／ `Secret Handling`；`§8` audit ／ observability；`§9` test ／ eval ／ acceptance method；`§10` Architecture ／ ADR；implementation | `§6` ～ `§10` status boundary（`DESIGN PENDING` ／ `No ADR created yet`）；`§3` ／ `§5` `Implementation Status = NOT STARTED` |
+| **Prohibited**（hard boundary —— **行为禁止**） | 「**执行该行为**是否被 current approved canonical text **明确禁止**？」→ **是** | direct source-system ／ Production DB access（即**绕过 Controlled Export**）；在本 POC 当前 `§3` boundary 下执行 production write-back ／ write API 调用；未经人工批准的高风险写操作；LLM 自行生成库存 ／ 订单 ／ 价格事实；silent exclusion ／ silent normalization；把 unsupported ／ unresolved 压平为正常 missing | `§3`（`READ` 只能经 controlled exported snapshot；`WRITE = DENIED`；`Production Write-back = OUT OF SCOPE`）；`FZ-1`「受控」；`FZ-4`（LLM 不得自行生成事实；未经人工批准禁止高风险写操作）；`§4` 已批准 policy（no silent exclusion ／ normalization；absent ≠ unresolved） |
+| **P1**（后续增强） | 「该能力是否属 `FZ-3` 列出的后续增强？」→ **是** | 企业知识库 ／ RAG；高级供应商比较；自然语言供应链查询；自动供应链分析报告 | `FZ-3`；**不属于**第一阶段 POC 成败核心 |
+
+**去重说明（消除隐式重叠 —— 每条 item 只归一 bucket）：**
+
+- **`direct source-system ／ Production DB access` 只登记于 `Prohibited`。** 它在直觉上也像「业务范围之外」，
+  但在 current canonical text 中它是**被明确禁止的行为**（`§3` read boundary；`AC-1` ／ `AC-2`），
+  因此按判定顺序第 1 条归入 **Prohibited**，**不**再重复出现在 Business scope out-of-scope。
+  同一禁止路径的另一种表述（**绕过 Controlled Export**）已在**同一** bucket 内合并为**同一** item，不再跨 bucket 出现。
+- **`Production write-back` 在 `§3` 中有两个不同 canonical 表述**：`Production Write-back = OUT OF SCOPE`（**scope 维度**）
+  与 `WRITE = DENIED`（**behavior 维度**）。本候选表把**行为禁止**归入 `Prohibited`，并**以 `§3` 的 scope 表述作为其依据引用**，
+  **不**把同一对象登记为两个 bucket 的 item。若 Human 希望将其显式拆成两条 item（capability exclusion ＋ behavior prohibition），
+  由 `GSD-5` 裁定；本 Review **不**自行选择该拆法。
+
+**D. Scope drift check（Q6 —— 以 `§2` ～ `§5` 为对象）**
+
+| # | 检查项 | 与 `FROZEN` P0 的关系 | 核验结论 |
+| --- | --- | --- | --- |
+| 1 | deterministic shortage analysis | P0-1 核心（`§2.1` `BR-SHORTAGE-001`） | **P0 capability scope**；无扩张 |
+| 2 | available inventory ／ safety stock | P0-1 计算要素（`§2.2` `BR-INVENTORY-001`） | 同上；无扩张 |
+| 3 | substitute material | P0-1 计算要素（`§2.3` `BR-SUBSTITUTE-001`） | 同上；无扩张 |
+| 4 | requirement ／ scrap-loss | P0-1 计算要素（`§2.4` `BR-REQUIREMENT-001`） | 同上；无扩张 |
+| 5 | effective inbound | P0-1 输入（`§2.6` `BR-INBOUND-001`；对应 `§11`「有效在途」） | 同上；无扩张 |
+| 6 | procurement recommendation ／ `MOQ` | P0-2（`§2.5` `BR-PROCUREMENT-001`） | **P0 capability scope**；无扩张 |
+| 7 | supplier risk ／ risk evidence | `§11` P0-2 输出已含「风险证据」⇒ `§2.7` `BR-SUPPLIER-RISK-001` 属 **P0-2 的 risk-evidence 维度**，**不是** `§12` P1「高级供应商比较」 | **无扩张**；但 §1 wording 必须显式区分（`GSF-4`） |
+| 8 | explanation ／ LLM 解释 | `FZ-1`「可解释」＋ `§11` P0-1「AI 负责组织和解释结果」 | **P0 capability scope**；无扩张 |
+| 9 | `§5.3` 的 6 个 P0 User Questions | 属 **P0 explanation ／ interaction support** 的 `SIMULATED` baseline；**不等于** `§12` P1「自然语言供应链查询」 | **无扩张**；P1 **未**升级为 P0（`GSF-4`） |
+| 10 | `Procurement Request Draft` | P0-3 核心输出（`§11`） | **P0 capability scope**；无扩张 |
+| 11 | POC 内 Human `Review` ／ `Modify` ／ `Approve` ／ `Reject` | P0-3；**不**等于 Production execution（`§3` `WRITE = DENIED`） | 无扩张；`§6` state machine 仍 `DESIGN PENDING`（属 deferred） |
+| 12 | Controlled Export ／ Snapshot | `FZ-1`「受控」的数据获取方式 | **supporting infrastructure**；不是新业务场景 |
+| 13 | Data Validation ／ Master Data Mapping ／ Adapter conceptual boundary | `FZ-1`「可追溯」＋ `FZ-4`「数据正确」的实现边界 | **supporting infrastructure**；不是新业务场景 |
+| 14 | fail-closed ／ traceability ／ evidence | `FZ-1` ＋ `FZ-4` 的 quality ／ safety boundary | **supporting infrastructure**；不是新业务场景 |
+
+**核验结论：** 以 current approved `§2` ～ `§5` 为准，**未发现**任何无法由 `FROZEN` baseline ＋
+current approved design 解释的 scope expansion；亦**未发现**需要新增 P0 场景的已批准内容。
+（`§5` 的 `SIMULATED` question baseline、`Supplier Risk`、`Adapter` ／ `Package Assembly`、
+POC 内 Human approval、Data Validation ／ Mapping 均落在上表第 7 ～ 14 行的既有边界内。）
+
+**E. §1 closure 依赖 ／ 不依赖什么（Q7 —— candidate）**
+
+```
+可能需要在 §1 本层关闭：
+  goals wording；P0 ／ P1 boundary mapping；In ／ Out scope；success boundary semantics；
+  failure boundary relationship；current downstream composition consistency
+
+明确留给其他层：
+  §6 HITL state machine；§7 detailed RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling；
+  §8 audit ／ observability details；§9 concrete test ／ eval ／ acceptance method；
+  §10 Architecture ／ ADR；implementation
+
+candidate 判断：
+  上述 pending layers 不阻止 §1 conceptual closure —— §1 只需登记 goal ／ boundary ／
+  interface ／ dependency expectation，而不设计这些层；
+  但 §1 closure 依赖这些层继续保持诚实的 DESIGN PENDING 表述（不得声称已完成）。
+```
+
+### 1.5 Gap / Conflict Findings
+
+| # | 类型 | Finding | 影响 |
+| --- | --- | --- | --- |
+| `GSF-1` | **Design gap** | §1 当前**只有占位符**：P0 设计目标 ／ POC 成功边界 ／ In Scope ／ Out of Scope 四项均为 `DESIGN PENDING`，缺少 design-level 的 goal 与 scope boundary | POC 总目标 ／ success ／ scope 在 design 层无 canonical boundary；`§6` ～ `§10` 缺少上层 composition 参照 |
+| `GSF-2` | **Navigation drift（non-blocking）** | `docs/project-index.md` 的 pending-area wording 只指向 `§5` ～ `§9`，**未**列入 `§1 Design Goals & Scope`（其 `DESIGN PENDING` 为真实状态） | 冷启动导航可能误判 §1 已完成；本 PR 做**最小 navigation-only sync** |
+| `GSF-3` | **Wording risk** | `FROZEN` `§16` 同时包含 design 可支撑的 success dimensions、runtime ／ test evidence 要求与 business-value 要求；若 §1 只用一层「成功标准」表述，`§2` ～ `§5 DESIGN RESOLVED` 容易被误读为 POC 已成功 | 需在 §1 采用**分层** success boundary（`S-5` ／ `GSD-3`） |
+| `GSF-4` | **Wording risk** | `§5.3` 的 6 个 P0 questions 与 `§12` P1「自然语言供应链查询」、`§2.7` `Supplier Risk` 与 P1「高级供应商比较」在字面上接近 | §1 必须显式区分 P0 support 与 P1 能力，避免被误读为 P1 已升级为 P0（`S-2`） |
+| `GSF-5` | **Wording risk** | Out of Scope 若只列一份清单，`business out-of-scope` ／ `deferred` ／ `prohibited` ／ `P1` 四类会被压平 | 需按四类分开登记（`S-4` ／ `GSD-5`） |
+| `GSF-6` | **Verification result（non-finding）** | `§2` ～ `§5` scope drift check（1.4 D，14 项）**未发现**未登记的 scope expansion 或 blocking scope conflict | 无需在本层修复；作为 `S-7` ／ `S-14` 的证据 |
+| `GSF-7` | **Dependency boundary（non-blocking）** | `§6` ～ `§10` 仍 `DESIGN PENDING` ／ `No ADR created yet` | 需在 §1 登记 dependency expectation；**不**阻止 §1 conceptual closure（1.4 E ／ `GSD-6`） |
+
+> 本 Review **未**发现需要 blocking escalation 的 scope contradiction；
+> `GSF-1` ～ `GSF-7` 均为**待 Human 裁定的 design gap ／ wording ／ navigation 事项**。
+
+### 1.6 Candidate Options / Trade-offs
+
+> **这些是 candidate conceptual approaches，不是 selected option。**
+> `§1 Option 0 ／ 1 ／ 2` 为本节局部编号，**不**沿用其他章节的 Option 编号。
+
+| Option | 含义 | 好处 | 风险 ／ 代价 | 对 `§6` ～ `§10` 的影响 |
+| --- | --- | --- | --- | --- |
+| **`§1 Option 0`** | **Keep §1 placeholders** —— 保持现状，不做 §1 canonical closure | 零新增；无新决策负担 | POC 总目标 ／ success ／ scope 继续缺少 design-level canonical boundary；`GSF-1` 持续存在；success 分层与 In ／ Out scope 分类继续缺失 | `§6` ～ `§10` 继续无上层 goal ／ scope 参照；后续 closure 仍需回到本问题 |
+| **`§1 Option 1`** | **Minimal inherited-scope registration** —— 只把 `FROZEN` `§10` ／ `§11` ／ `§12` ／ `§16` ／ `§17` 转写为 design 层的 goal ／ scope ／ success boundary ／ failure boundary ／ dependency pointers，**不重新发明业务范围** | 最小、与 inherited baseline 一致性最高；直接消除 `GSF-1` | 未登记与 `§2` ～ `§5` 的 composition；success boundary 分层与 In ／ Out scope 分类仍可能含糊（`GSF-3` ／ `GSF-5`） | 为 `§6` ～ `§10` 提供 goal ／ scope 参照，但不显式登记依赖关系 |
+| **`§1 Option 2`** | **Inherited scope ＋ downstream composition contract** —— 在 `§1 Option 1` 基础上进一步登记：`§2` ～ `§5` 如何实现 ／ 支撑 P0；`§6` ～ `§10` 哪些仍为 pending dependency；§1 conceptual closure 是否可在这些 dependency 未完成时成立；`design closure ≠ implemented ≠ tested ≠ business accepted ≠ production-ready` 的层次关系 | 消除 `GSF-1` ／ `GSF-3` ／ `GSF-5` ／ `GSF-7`；为后续 closure 与其他层提供显式 composition 边界 | 登记内容最多；需 Human 裁定若干 wording boundary（`GSD-2` ／ `GSD-3` ／ `GSD-5`） | 明确 `§6` ～ `§10` 的 dependency expectation，**不**设计它们 |
+| **其他** | 由 Human 提出的其他 conceptual approach | —— | —— | —— |
+
+> **Reviewer Recommendation（非 Human Decision、非 canonical policy、不构成选择）：**
+> 就 trade-off 完整性而言，`§1 Option 2` 覆盖 `GSF-1` ／ `GSF-3` ／ `GSF-5` ／ `GSF-7` 最完整；
+> `§1 Option 1` 为最小可行方案；`§1 Option 0` 不能消除 `GSF-1`。
+> 该 recommendation **不**登记为任何 Decision，最终选择由 `GSD-1` 裁定。
+
+### 1.7 Proposed Minimum Closure Criteria（candidate —— 待 Human 批准）
+
+| # | Criterion | 类别 |
+| --- | --- | --- |
+| `S-1` | P0 Goal 与 `FROZEN` Problem Statement（`FZ-1`）／ `§11`（`FZ-2`）一致，且不改变 P0 闭环（缺料分析 → 采购建议 → HITL） | MANDATORY CLOSURE CRITERION |
+| `S-2` | P1（`FZ-3`）**不**被升级为 P0；`§5.3` `SIMULATED` question baseline 与 `§2.7` `Supplier Risk` **不**被写成 P1 升级 | MANDATORY CLOSURE CRITERION |
+| `S-3` | In Scope **不新增** `FROZEN` 之外的 business scenario；supporting design ／ quality ／ safety infrastructure **不**被写成新 P0 场景 | MANDATORY CLOSURE CRITERION |
+| `S-4` | Out of Scope ／ `deferred` ／ `prohibited` ／ P1 **四类不混淆**，且各自可被单独引用；分类须遵循 `§1.4 C` 的判定规则（每条 item **只**归一 bucket；跨维度引用须显式标注，不得隐式重叠） | MANDATORY CLOSURE CRITERION |
+| `S-5` | `FROZEN` `§16` 的 success dimensions **全部**被 design-level success boundary 映射（design-time ／ runtime-test evidence ／ business-value evidence 三层） | MANDATORY CLOSURE CRITERION |
+| `S-6` | `FROZEN` `§17` failure ／ reassessment boundary 被保留，且**不**被伪装成已验证事实 | MANDATORY CLOSURE CRITERION |
+| `S-7` | current `§2` ～ `§5` 与 P0 scope **无未登记冲突**（1.4 D 核验可复现） | MANDATORY CLOSURE CRITERION |
+| `S-8` | `§6` ～ `§10` pending dependencies 的**责任边界**清楚（哪些留给其他层、§1 只登记 expectation） | MANDATORY CLOSURE CRITERION |
+| `S-9` | `Design closure` ≠ `Implemented` ≠ `Tested` ≠ `Business accepted` ≠ `Production-ready` 的层次关系已在 §1 显式登记 | MANDATORY CLOSURE CRITERION |
+| `S-10` | **不**发明真实 KPI、客户 baseline、使用频率、adoption 或生产系统事实 | MANDATORY CLOSURE CRITERION |
+| `S-11` | **无** architecture ／ technology selection（`§10` 仍无 ADR） | MANDATORY CLOSURE CRITERION |
+| `S-12` | **无** `FROZEN` Discovery 的修改或重新解释 | MANDATORY CLOSURE CRITERION |
+| `S-13` | current-state ／ `docs/project-index.md` navigation 一致性（含 `§1` pending 表述） | MANDATORY CLOSURE CRITERION |
+| `S-14` | **无**未登记的 blocking scope conflict（`GSF-6` 结论保持成立，或新冲突已被登记） | MANDATORY CLOSURE CRITERION |
+
+> `S-1` ～ `S-14` 为 **candidate**；**不得**在本 Review 中被标为 Human-approved。
+> 是否接受、调整或拒绝由 `GSD-7` 裁定。
+
+### 1.8 Human Decision Required
+
+| # | Human Decision Question | Options | Trade-offs ／ 说明 | 影响 |
+| --- | --- | --- | --- | --- |
+| `GSD-1` | §1 采用哪种 conceptual closure model？ | `§1 Option 0` ／ `Option 1` ／ `Option 2` ／ 其他 | 见 1.6 | §1 是否进入后续独立 Design Change ／ Closure |
+| `GSD-2` | P0 Design Goal 的 canonical wording boundary | ① 只继承 `FROZEN` 表述；② 继承 ＋ 引用 `§2` ～ `§5` 作为「如何满足 P0」的 approved downstream facts（限定引用深度） | ② 更具可审计的 composition，但需界定引用范围，避免把 downstream design 写成 goal 本身 | §1 goal 段落形态 |
+| `GSD-3` | POC Success Boundary 的层次结构 | ① design-time ／ runtime-test evidence ／ business-value evidence 三层；② 其他分层 | 三层与 `FZ-4` 各项一一映射，且天然阻止「已成功」误读 | §1 success 段落语义（`S-5` ／ `S-9`） |
+| `GSD-4` | In Scope 的 canonical categories | ① P0 capability scope ＋ supporting infrastructure ＋ quality ／ safety boundary 三类；② 其他 | ① 直接支撑 `S-3`，避免 supporting infrastructure 被读成新 P0 场景 | §1 In Scope 结构 |
+| `GSD-5` | Out of Scope ／ P1 ／ Prohibited ／ Deferred 的分类方式 | ① 四类分离；② 其他 | 四类分离支撑 `S-4`，避免「都不做」式压平 | §1 Out of Scope 结构 |
+| `GSD-6` | `§6` ～ `§10` remaining pending 是否阻止 §1 conceptual closure？ | ① 不阻止，§1 只登记 interface ／ dependency expectation；② 阻止，需先完成相关层；③ 条件性 | ① 与「§1 是 goal ／ scope 层」一致；② 会把 §1 与多章设计耦合 | §1 closure 时点与顺序 |
+| `GSD-7` | 是否接受 proposed minimum closure criteria `S-1` ～ `S-14`？ | 接受 ／ 调整 ／ 拒绝 | 若调整，需给出替代 criteria | §1 后续 closure gate |
+| `GSD-8` | 是否授权后续独立 §1 Design Change ／ Closure PR？ | 授权 ／ 不授权 | 授权后方可由该 PR 登记 §1 的 canonical goal ／ scope 与状态转换 | §1 是否可离开 `DESIGN PENDING` |
+
+**已被 `FROZEN` 唯一决定、因此**不**列为 Human Decision 的事项：**
+
+```
+P0 闭环 = 缺料分析 → 采购建议 → HITL（FZ-2）
+P1 能力集合 = RAG ／ 高级供应商比较 ／ 自然语言供应链查询 ／ 自动报告（FZ-3）
+success dimensions 集合 = 数据正确 ／ 计算正确 ／ 工具正确 ／ 可解释 ／ 安全 ／ 业务价值（FZ-4）
+failure ／ reassessment conditions 集合（FZ-5）
+不得发明真实 KPI ／ baseline（FZ-4）
+不得发生未经人工批准的高风险写操作（FZ-4）
+不得把正式采购执行纳入 P0（FZ-2）
+```
+
+> 上述内容为 **inherited constraint**，**不得**被重新包装成新的 Human Decision。
+> `GSD-1` ～ `GSD-8` 为**有限、可逐项裁定**的清单；本 Review **未**作出其中任何一项决定。
+
+### 1.9 Explicit Non-Decisions
+
+本 Review **不创建**：
+
+```
+§1 approved goal ／ scope ／ success boundary 文字（仅 candidate structure 与 criteria）
+P0 ／ P1 的任何修改
+success 已达成 ／ failure 已发生的任何声明
+真实 KPI ／ customer baseline ／ adoption ／ frequency evidence
+§6 HITL state machine 设计
+§7 RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling 设计
+§8 audit event schema ／ observability implementation
+§9 concrete tests ／ eval harness ／ acceptance method
+§10 Architecture ／ framework ／ database ／ API ／ deployment 选择
+ADR
+implementation code ／ schema ／ Mock API ／ Mock Dataset
+```
+
+**本 Review 的 status 边界（自我核验）：**
+
+```
+未选择任何 §1 Option
+未修改 P0 ／ P1
+未把 §1 推进为 DESIGN RESOLVED
+未修改 §2 ～ §5 任何已批准 policy
+未修改 FROZEN Discovery
+未新增 Validation Reason ／ Category ／ status enum ／ carrier
+```
+
+### 1.10 Current Status（本 Review 时点）
+
+```
+§1 P0 设计目标                      = DESIGN PENDING   ← 本 Review 未推进
+§1 POC 成功边界                     = DESIGN PENDING   ← 本 Review 未推进
+§1 In Scope                        = DESIGN PENDING   ← 本 Review 未推进
+§1 Out of Scope                    = DESIGN PENDING   ← 本 Review 未推进
+§2 P0 Business Rules               = DESIGN RESOLVED
+§3 System Boundary                 = DESIGN RESOLVED（Implementation = NOT STARTED）
+§4 Data & Integration Design       = DESIGN RESOLVED（0 个 DESIGN PENDING 子领域）
+§5 AI ／ Tool Boundary              = DESIGN RESOLVED（Implementation = NOT STARTED；H4 未 resolved）
+§6 HITL ／ §8 Audit ／ §9 Test      = DESIGN PENDING
+§7 Permission & Security           = PARTIAL（Read ／ Write Boundary = DESIGN RESOLVED；其余 DESIGN PENDING）
+§10 Architecture                   = 尚无正式 ADR
+POC Design v0.2                    = DRAFT
+POC success                        = 未声明（需 runtime ／ test evidence 与真实客户 baseline）
+```
+
+**本 Review 不作出任何 Human Decision。**
+**本 Review 未创建任何 runtime artifact ／ 未选择 architecture ／ 未修改 `FROZEN` Discovery。**
+
 ---
 
 ## 2. P0 Business Rules

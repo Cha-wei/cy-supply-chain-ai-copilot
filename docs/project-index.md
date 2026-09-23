@@ -68,6 +68,7 @@
 
 | 设计领域 | 状态 | 入口 |
 | --- | --- | --- |
+| **POC Design Goals & Scope（§1）** | **`DESIGN PENDING`** | §1（review-only design analysis 见 §1.1 ～ §1.10） |
 | P0 Business Rules ／ System Boundary & Integration | **`DESIGN RESOLVED`** | §2；§3（status 见 §3.14）；§11 Open Design Backlog |
 | Canonical Data Model ／ Data Dictionary | **`DESIGN RESOLVED`** | §4.1；§4.2 |
 | **Snapshot / Import Contract overall** | **`DESIGN RESOLVED`** | §4.3；status 见 §4.3.21 |
@@ -101,8 +102,8 @@
 （`Final Import Contract` 与 `Snapshot / Import Contract overall` 均 → **`DESIGN RESOLVED`**；
 authoritative 记录见 **§4.3.28** ／ **§4.3.29**）。
 
-**其余 pending areas（§5 ～ §9 对应章节的 status boundary，例如 `Permission & Security` 的
-`RBAC` / `Data Scope` / `Tool Permission` / `Secret Handling`）** 见 **§5 Major Design State**；
+**其余 pending areas（`§1 Design Goals & Scope`；`§6` ～ `§9` 对应章节的 status boundary，例如
+`Permission & Security` 的 `RBAC` / `Data Scope` / `Tool Permission` / `Secret Handling`）** 见 **§5 Major Design State**；
 `Adapter Boundary` 的 **implementation / Architecture / §7 / §8 等后续工作未由 closure 授权**，
 须以独立、明确授权的 task / PR 进行（本文档**不建立**其执行顺序）。
 
