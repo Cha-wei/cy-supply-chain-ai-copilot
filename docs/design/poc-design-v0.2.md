@@ -5796,7 +5796,7 @@ data validated、implemented、tested。
 
 > **本节 overall `DESIGN RESOLVED` 仅**表示其 **conceptual boundary 已定义**，
 > **不表示**：import implementation exists、data validated、tested。
-> `Adapter Boundary` 为**独立子领域**，**保持 `DESIGN PENDING`**。
+> `Adapter Boundary` 为**独立子领域**，其 **conceptual design 已由 Issue #90 Closure Validation = `PASS`** 登记为 **`DESIGN RESOLVED`**（见 **§4.6.21** ／ **§4.6.22**）；其 **runtime ／ source-specific realization 仍为 `NOT IMPLEMENTED`** —— **design 状态与实现状态必须分开解读**。
 
 #### 4.3.1 Purpose & Scope
 
@@ -6265,7 +6265,8 @@ Snapshot Package
 Logical Provenance Contract             = DESIGN RESOLVED
 Physical Carrier ／ Import-contract Design = DESIGN RESOLVED
   （Field Carrier Mapping 见 §4.3.25 ／ §4.3.27；Final Import Contract 见 §4.3.28 ／ §4.3.29）
-Runtime ／ Source-specific ／ Adapter Realization = NOT IMPLEMENTED ／ DESIGN PENDING（Adapter Boundary）
+Runtime ／ Source-specific ／ Adapter Realization = NOT IMPLEMENTED
+  （其设计归属 Adapter Boundary；Adapter Boundary design = DESIGN RESOLVED，见 §4.6.21；realization 未实现）
 
 logical contract  ≠  physical design  ≠  runtime realization
 ```
@@ -6275,7 +6276,7 @@ logical contract  ≠  physical design  ≠  runtime realization
 > **当时状态（保留以便追溯）：** `physical serialization` 属后续设计、**尚未完成**。
 > **current-state 更新：** physical carrier ／ import-contract **design** 已由 **§4.3** 关闭
 > （**`DESIGN RESOLVED`**；见 **§4.3.25** ／ **§4.3.27** ／ **§4.3.28** ／ **§4.3.29**，**Issue #66 Closure**）；
-> **仍未实现**的是 runtime ／ source-specific ／ **Adapter realization**（属 **`Adapter Boundary` = `DESIGN PENDING`**）。
+> **仍未实现**的是 runtime ／ source-specific ／ **Adapter realization** —— 该 realization 属 **`Adapter Boundary`** 的范围，而 **`Adapter Boundary` 的 conceptual design 已由 Issue #90 Closure Validation = `PASS` 登记为 `DESIGN RESOLVED`**（见 **§4.6.21**）；**实现状态（`NOT IMPLEMENTED`）与 design 状态必须分开解读**，**不得**因 design closure 而声称已实现。
 
 #### 4.3.17 Unresolved Carrier Boundary
 
@@ -6305,7 +6306,8 @@ logical contract  ≠  physical design  ≠  runtime realization
 Logical Provenance Carrier          = DESIGN RESOLVED
 Physical Carrier Design             = DESIGN RESOLVED
   （Field Carrier Mapping ／ Final Import Contract，见 §4.3.25 ／ §4.3.27 ／ §4.3.28 ／ §4.3.29）
-Source-Specific ／ Adapter Realization = NOT IMPLEMENTED（属 Adapter Boundary，DESIGN PENDING）
+Source-Specific ／ Adapter Realization = NOT IMPLEMENTED
+  （属 Adapter Boundary 范围；Adapter Boundary design = DESIGN RESOLVED，见 §4.6.21；realization 未实现）
 
 logical provenance contract  ≠  physical carrier design  ≠  runtime / source-specific realization
 ```
@@ -10578,7 +10580,7 @@ Import Atomicity、Immutability、Analysis Run linkage。
 > Blocking Contradiction = NONE）后为 **`DESIGN RESOLVED`**（见 **§4.3.29**）；
 > 因此 **`Snapshot / Import Contract` overall 现为 `DESIGN RESOLVED`**
 > —— `import contract determined` 已**移出**上述「不表示」清单。
-> `Adapter Boundary` **仍为 `DESIGN PENDING`**（独立子领域，不在本 closure 范围）。
+> `Adapter Boundary` 为**独立子领域**，**不在本 closure 范围**；其 **conceptual design 已由 Issue #90 Closure Validation = `PASS`** 登记为 **`DESIGN RESOLVED`**（见 **§4.6.21** ／ **§4.6.22**），其 **runtime ／ source-specific realization 仍为 `NOT IMPLEMENTED`**。
 
 #### 4.3.22 Serialization Format Design（Registered Strategy & Representation Policy）
 
@@ -11738,6 +11740,12 @@ POC Design v0.2                    = DRAFT
 > 本状态块为 **current-state**；其下 A ～ I 各节中的 `DESIGN PENDING` 表述
 > （例如 A.4 的首次 `Decision Gap` 判定输入、以及上文 Registration 的时点状态块）
 > 属**本 Closure 过程内的时点记录**，**未**回写。
+>
+> **时点说明 ／ supersede（Issue #90）：** 本状态块是 **Issue #66 ／ `Final Import Contract` closure 时点**的
+> status snapshot；其 `Adapter Boundary = DESIGN PENDING` 为**当时值**，**保留不回写**，
+> 但**不再代表 latest repository-wide current state** —— 该值**已被 Issue #90 Closure Validation = `PASS` supersede**：
+> `Adapter Boundary` 现为 **`DESIGN RESOLVED`**（conceptual closure；runtime ／ source-specific realization 仍 `NOT IMPLEMENTED`）。
+> 最新 Adapter status 见 **§4.6.21** ／ **§4.6.22**。（本节其余 `Adapter Boundary = DESIGN PENDING` 表述同属当时值，保留不回写。）
 
 **A. Precondition**
 
@@ -14601,6 +14609,11 @@ Design DoD = PASS（17 / 17）
 | Master Data Mapping | **`DESIGN RESOLVED`** |
 | Adapter Boundary | `DESIGN PENDING` |
 
+> **时点说明 ／ supersede：** 本表为 **`§4.4 Data Validation` closure 时点**的 dependency snapshot
+> （历史值**保留不回写**，**不**代表 latest current state）—— 其中 `Snapshot / Import Contract` 已由
+> **Issue #66 Closure**、`Adapter Boundary` 已由 **Issue #90 Closure Validation = `PASS`** 分别 supersede；
+> 最新状态见 **§4.3.29** ／ **§4.6.22**。
+
 `Data Validation = DESIGN RESOLVED` **不要求**且**不表示**：
 
 - serialization format / physical file layout / field carrier mapping 已完成
@@ -16963,7 +16976,7 @@ configuration format、API、field name。
 > 与 **`Final Import Contract`**（见 **§4.3.28** ／ **§4.3.29**，**Issue #66 Closure**）关闭，二者**均为 `DESIGN RESOLVED`**；
 > 但 **actual source representation ／ extraction** 仍属 **source-specific / Adapter realization**
 > —— 该部分**不属于** `Master Data Mapping` scope（**`Final Master Data Mapping` 现为 `DESIGN RESOLVED`**），
-> 而属 **`Adapter Boundary`**（**`DESIGN PENDING`**），**仍未实现**，**不得**被声称已完成。
+> 而属 **`Adapter Boundary`** 的范围 —— 其 **conceptual design 已由 Issue #90 Closure Validation = `PASS`** 登记为 **`DESIGN RESOLVED`**（见 **§4.6.21**）；但 **source-specific ／ runtime realization 仍 `NOT IMPLEMENTED`**，**不得**被声称已完成（**design closure ≠ implemented**）。
 
 **两种可接受的 Source Evidence Shape**
 
@@ -22109,6 +22122,11 @@ Master Data Mapping overall = DESIGN PENDING
 | `§4.3 Snapshot / Import Contract` | 4 `DESIGN RESOLVED` ＋ **4 `DESIGN PENDING`**（`Serialization Format` ／ `Physical Dataset Layout` ／ `Field Carrier Mapping` ／ `Final Import Contract`） |
 | `§4` 子领域表 | `Master Data Mapping` ／ `Snapshot / Import Contract` ／ `Adapter Boundary` = `DESIGN PENDING` |
 
+> **时点说明 ／ supersede：** 本表为 **Final Master Data Mapping closure 时点**的 registry snapshot
+> （历史值**保留不回写**，**不**代表 latest current state）；其后 `Snapshot / Import Contract overall` 已由
+> **Issue #66 Closure**、`Adapter Boundary` 已由 **Issue #90 Closure Validation = `PASS`** 分别关闭 ⇒
+> 最新状态见 **§4.3.29** ／ **§4.6.22**。
+
 **10 Questions Assessment（摘要）**
 
 | # | 问题 | 结论 |
@@ -23085,6 +23103,11 @@ Master Data Mapping layers         = 11 / 11 DESIGN RESOLVED
 Snapshot / Import Contract overall = DESIGN PENDING   ← 未关闭（独立）
 Adapter Boundary                   = DESIGN PENDING
 ```
+
+> **时点说明 ／ supersede：** 本节的状态块（含上方 `本记录时点` 块与 **Final Master Data Mapping closure 实施块**）
+> 均为**该 closure 时点**的 snapshot（历史值**保留不回写**，**不**代表 latest current state）；
+> 其中 `Snapshot / Import Contract overall` 已由 **Issue #66 Closure**、`Adapter Boundary` 已由
+> **Issue #90 Closure Validation = `PASS`** 分别 supersede ⇒ 最新状态见 **§4.3.29** ／ **§4.6.22**。
 
 `DESIGN RESOLVED` **只**表示 **canonical / conceptual Master Data Mapping design 已完成**，
 **不表示** real ERP mapping ／ source table ／ column known ／ physical schema exists ／
