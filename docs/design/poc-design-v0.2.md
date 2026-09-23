@@ -23311,10 +23311,10 @@ Status Change  = NONE（Adapter Boundary 保持 DESIGN PENDING）
 | # | Scenario | 既有约束要求的行为 | 性质 |
 | --- | --- | --- | --- |
 | `AS-15` | 某 producer 提交 canonical artifact set，供 Snapshot / Import Contract 接受 | **producer-neutral invariant（`P-1`）**：任何提交给 `Final Import Contract` 的 package 内容**必须可被**其验证（`IC-1` ／ `IC-3` ／ `IC-8` ／ `IC-22` ＋ `AC-15`），且**不得**自行宣告 `Accepted`；**若 Adapter 是被选中的 producer，则同样受此约束**。**谁**是 producer ⇒ **open**（`P-2` ／ **Decision 2**） | **`IC`**（invariant）＋ **`open`**（producer ownership） |
-| `AS-16` | Artifact 的 digest 与 Adapter 产出时的字节不一致 | `IG-raw` = exact raw bytes ⇒ **fail closed**（package-level），Adapter **不得**静默重算 ／ 覆盖 | **`IC`** |
+| `AS-16` | Artifact 的 digest 与 **producer 提交 ／ acceptance 所验证的 exact raw bytes** 不一致 | `IG-raw` = exact raw bytes ⇒ **fail closed**（package-level）；**任何** producer ／ 写入者 **不得**静默重算 ／ 覆盖（若 Adapter 为被选中的 producer 则同受此约束） | **`IC`** |
 | `AS-17` | acceptance 过程中 artifact 被替换 ／ 重读得到不同视图 | `Decision 10A`：验证结果**必须**绑定实际被接受的同一 stable content view（`AC-15`） | **`IC`** |
 | `AS-18` | 某 producer 在 canonical artifact 中写入 `"_meta"` provenance association 与 mapping basis | **carrier obligation（`Inherited Constraint`）**：shape 与 approved literals **已由 FCM ／ FIC 唯一确定**（`AC-12` ／ `AC-13` ／ `AC-14`），写入者**必须**遵守；**谁负责写入该 metadata** 与 **generation 机制** ⇒ **open**（`P-2` ／ **Decision 1** ／ **Decision 2** ／ `ADEP-4`） | **`IC`**（carrier obligation）＋ **`open`**（producer ／ generation ownership） |
-| `AS-19` | Adapter 未产出某 required logical evidence role | 属 **`EVIDENCE_AVAILABILITY`**（Layer 2）capability 后果，**不是** Adapter 自定的 package structural failure（`AC-16`） | **`IC`** |
+| `AS-19` | **提交给 downstream ／ `Final Import Contract` 的 candidate package** 缺少某 capability 所需的 logical evidence role | 属 **`EVIDENCE_AVAILABILITY`**（Layer 2）capability 后果，**不是** 任何 producer 自定的 package structural failure（`AC-16`）；**producer ownership 仍 open**（`P-2` ／ **Decision 2**） | **`IC`**（semantic）＋ **`open`**（producer ownership） |
 | `AS-20` | Adapter 想要**直接标记** `REJECTED` ／ `UNUSABLE` 或自行生成 Validation Issue | **不得** —— disposition 由 `Final Import Contract` 判定（`§4.3.29` `RD-B`）；Validation Issue 由 Data Validation 依 taxonomy 产生（`AC-16`） | **`IC`** |
 | `AS-21` | 同一 source 的两次 mapping 在同一输入下给出不同结果 | 违反 `deterministic` ／ `reproducible`（`AC-6`） | **`IC`** |
 
@@ -23793,7 +23793,7 @@ ADR ／ Architecture Decision
 
 #### 4.6.12 Review Revision Log（Coordinator Review 修正 —— review-only）
 
-> 本节记录 **PR #71 Coordinator Review `AB-01` ～ `AB-06`** 的修正，
+> 本节记录 **PR #71 Coordinator Review `AB-01` ～ `AB-07`** 的修正，
 > 用于说明本 Review 的 inherited-authority 依据、边界收窄与 carrier 可行性判定。
 > **仍不选择任何方案**、**不**登记 policy、**不**改变任何 status、**不**创建 runtime artifact。
 
@@ -23805,6 +23805,7 @@ ADR ／ Architecture Decision
 | `AB-04` | manifest ／ package generation ownership 自相矛盾 | ownership 表的 `Package identity ／ manifest generation` 从 **inherited does-not-own** 移出，改列为本层 **open**（`AC-23`）；新增 **`ADEP-11`**；`Decision 2` 扩展为「谁生成 manifest ／ package identity」并注明**各 option 均不得**被判为与 inherited does-not-own 冲突；`4.6.5 B` ／ `4.6.6` ／ `A-3` 同步 |
 | `AB-05` | `AC-22` 仍把**未获批准**的 Adapter ownership 写成「已批准部分」 | **`AC-22` 再次收窄为 current approved policy 明确规定者**：① `§3` read boundary；② **source-specific semantic mapping responsibility ＋ mapping constraints**（按 `§4.5.2` ／ `§4.5.11` ／ `§4.5.21` **各自实际范围**）；③ evidence locator ／ basis 取值与保留；④ 各层明确 does-not-own 与 `FCM` ／ `Data Validation` ／ `FIC` 职责。**`source extraction` 责任**、**generic source-field identification ownership**、**`exported-artifact format ／ protocol handling` ownership** **移出** inherited，改为本层 **open finding ／ Human Decision**（`4.6.5 A` 开放表 ／ **`ADEP-13`** ／ **Decision 1**）；`AC-23` 补充「**仅凭可由批准文本推导**不得写成 inherited」；`ARF-1` ／ `A-1` 同步；**新增 `P-1` ／ `P-2` 拆分**：`AO-1` **只**表达 **FIC-valid output invariant**（`P-1`，inherited），**producer ownership**（`P-2`：Adapter 直接产出完整 artifact set vs intermediate＋assembly）明确留在 **Decision 2**；`4.6.5 B` ／ `4.6.6` ／ `ARF-2` 同步 |
 | `AB-06` | 旧场景 ／ dependency 仍把 open producer ownership 写回 Adapter 的 inherited responsibility | **统一改为 producer-neutral invariant**：`AS-3`（改述为「若某 producer 提交 mapped result，则必须与 logical dataset 一致」，producer ⇒ `P-2` ／ Decision 2）、`AS-15`（任何提交给 FIC 的 package **必须** FIC-valid；**若 Adapter 是被选中的 producer 则同样受约束**）、`AS-18`（carrier obligation inherited；**谁写入 metadata ⇒ open**）、`PE-1` ／ `ARF-5`（改为「**任何**写入者必须依已固定 carrier 写入并保持原始值」）、`ADEP-1`（producer-neutral：任何提交给 FIC 的 package 内容必须满足 contract；若 Adapter 为 producer 则同受约束）、`ADEP-4`（carrier obligation inherited；metadata producer ⇒ open）、`A-8`（producer-neutral carrier obligation；producer 归属留给 Decision 1 ／ 2）。**保留** Human-approved 的 **source-specific semantic mapping responsibility**（`AC-22` ②）；**「谁把 mapped result ／ provenance metadata 写成最终 canonical artifact ／ package」继续留给 Decision 2**。**未**新增 Decision、**未**改 option、**未**推进状态 |
+| `AB-07` | producer-neutral cleanup 残余（**consistency-only**） | ① **`AS-16`** 由「Artifact 的 digest 与 **Adapter 产出时**的字节不一致」改为「与 **producer 提交 ／ acceptance 所验证的 exact raw bytes** 不一致」，invariant 仍为 `IG-raw` ⇒ **fail closed**；② **`AS-19`** 由「**Adapter 未产出**某 required logical evidence role」改为「**提交给 downstream ／ `Final Import Contract` 的 candidate package** 缺少 capability 所需的 logical evidence role」，Layer 2 **`EVIDENCE_AVAILABILITY`** 语义保持，**producer ownership 仍 open**（`P-2` ／ Decision 2）；③ PR body 的 inherited 结论同步为 producer-neutral carrier obligation。**未**改 Decision ／ option ／ closure criteria 集合、**未**新增 canonical policy、**未**推进状态 |
 
 **本次修正的 review-only 边界（自我核验）：**
 
