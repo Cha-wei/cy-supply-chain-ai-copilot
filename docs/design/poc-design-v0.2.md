@@ -346,7 +346,7 @@ candidate 判断：
 >
 > **current-state（Issue #94）：** `GSD-1` 已 **`REGISTERED`** —— 选择 **`§1 Option 2`**（见 **`§1.11`**）。
 > 上表其余内容仍为其时的 candidate 描述，**未**因该选择而改写；`§1 Option 2` 的具体 canonical wording
-> 仍待 `GSD-3` ～ `GSD-8` 裁定（**`GSD-2` 已于 Issue #96 登记 wording boundary**，见 **`§1.12`**），§1 四项 top-level status **仍为 `DESIGN PENDING`**。
+> 仍待 `GSD-4` ～ `GSD-8` 裁定（**`GSD-2` ／ `GSD-3` 已于 Issue #96 ／ #98 分别登记 wording boundary 与 success boundary layering**，见 **`§1.12`** ／ **`§1.13`**），§1 四项 top-level status **仍为 `DESIGN PENDING`**。
 
 ### 1.7 Proposed Minimum Closure Criteria（candidate —— 待 Human 批准）
 
@@ -376,16 +376,17 @@ candidate 判断：
 | --- | --- | --- | --- | --- |
 | `GSD-1` | §1 采用哪种 conceptual closure model？ | `§1 Option 0` ／ `Option 1` ／ `Option 2` ／ 其他 | 见 1.6 | §1 是否进入后续独立 Design Change ／ Closure |
 | `GSD-2` | P0 Design Goal 的 canonical wording boundary | ① 只继承 `FROZEN` 表述；② 继承 ＋ 引用 `§2` ～ `§5` 作为「如何满足 P0」的 approved downstream facts（限定引用深度）**← `SELECTED`（`REGISTERED`，Issue #96；**strict limited-reference interpretation**）** | ② 更具可审计的 composition，但需界定引用范围，避免把 downstream design 写成 goal 本身 | §1 goal 段落形态 |
-| `GSD-3` | POC Success Boundary 的层次结构 | ① design-time ／ runtime-test evidence ／ business-value evidence 三层；② 其他分层 | 三层与 `FZ-4` 各项一一映射，且天然阻止「已成功」误读 | §1 success 段落语义（`S-5` ／ `S-9`） |
+| `GSD-3` | POC Success Boundary 的层次结构 | ① design-time ／ runtime-test evidence ／ business-value evidence 三层**← `SELECTED`（`REGISTERED`，Issue #98）**；② 其他分层 | 三层与 `FZ-4` 各项一一映射，且天然阻止「已成功」误读 | §1 success 段落语义（`S-5` ／ `S-9`） |
 | `GSD-4` | In Scope 的 canonical categories | ① P0 capability scope ＋ supporting infrastructure ＋ quality ／ safety boundary 三类；② 其他 | ① 直接支撑 `S-3`，避免 supporting infrastructure 被读成新 P0 场景 | §1 In Scope 结构 |
 | `GSD-5` | Out of Scope ／ P1 ／ Prohibited ／ Deferred 的分类方式 | ① 四类分离；② 其他 | 四类分离支撑 `S-4`，避免「都不做」式压平 | §1 Out of Scope 结构 |
 | `GSD-6` | `§6` ～ `§10` remaining pending 是否阻止 §1 conceptual closure？ | ① 不阻止，§1 只登记 interface ／ dependency expectation；② 阻止，需先完成相关层；③ 条件性 | ① 与「§1 是 goal ／ scope 层」一致；② 会把 §1 与多章设计耦合 | §1 closure 时点与顺序 |
 | `GSD-7` | 是否接受 proposed minimum closure criteria `S-1` ～ `S-14`？ | 接受 ／ 调整 ／ 拒绝 | 若调整，需给出替代 criteria | §1 后续 closure gate |
 | `GSD-8` | 是否授权后续独立 §1 Design Change ／ Closure PR？ | 授权 ／ 不授权 | 授权后方可由该 PR 登记 §1 的 canonical goal ／ scope 与状态转换 | §1 是否可离开 `DESIGN PENDING` |
 
-> **current-state（Issue #94 ／ #96）：** `GSD-1` = **`REGISTERED`**（**`§1 Option 2`**，见 **`§1.11`**）；
+> **current-state（Issue #94 ／ #96 ／ #98）：** `GSD-1` = **`REGISTERED`**（**`§1 Option 2`**，见 **`§1.11`**）；
 > `GSD-2` = **`REGISTERED`**（**Option ② —— FROZEN inheritance ＋ limited downstream composition references**，**strict limited-reference interpretation**，见 **`§1.12`**）；
-> **`GSD-3` ～ `GSD-8` 仍为 `PENDING`**。
+> `GSD-3` = **`REGISTERED`**（**Option ① —— design-time ／ runtime-test evidence ／ business-value evidence 三层 POC Success Boundary**，见 **`§1.13`**）；
+> **`GSD-4` ～ `GSD-8` 仍为 `PENDING`**。
 
 **已被 `FROZEN` 唯一决定、因此**不**列为 Human Decision 的事项：**
 
@@ -440,7 +441,9 @@ implementation code ／ schema ／ Mock API ／ Mock Dataset
 §1 Out of Scope                    = DESIGN PENDING   ← 本 Review 未推进；GSD-1 registration 亦未推进
 §1 closure model（GSD-1）           = REGISTERED（§1 Option 2 —— Inherited scope ＋ downstream composition contract）
 §1 P0 Goal wording boundary（GSD-2）= REGISTERED（Option ② ＋ strict limited-reference interpretation；见 §1.12）
-GSD-3 ～ GSD-8                     = PENDING
+§1 POC Success Boundary（GSD-3）    = REGISTERED（Option ① —— design-time ／ runtime-test evidence ／ business-value evidence 三层；见 §1.13）
+GSD-4 ～ GSD-8                     = PENDING
+POC success                        = NOT CLAIMED（需 runtime-test evidence ＋ business-value evidence）
 S-1 ～ S-14                        = candidate（not Human-approved）
 §2 P0 Business Rules               = DESIGN RESOLVED
 §3 System Boundary                 = DESIGN RESOLVED（Implementation = NOT STARTED）
@@ -456,10 +459,11 @@ POC success                        = 未声明（需 runtime ／ test evidence �
 **本 Review 不作出任何 Human Decision。**
 **本 Review 未创建任何 runtime artifact ／ 未选择 architecture ／ 未修改 `FROZEN` Discovery。**
 
-> **current-state（Issue #94 ／ #96）：** `GSD-1` = **`REGISTERED`**（`§1 Option 2`，见 **`§1.11`**）；
+> **current-state（Issue #94 ／ #96 ／ #98）：** `GSD-1` = **`REGISTERED`**（`§1 Option 2`，见 **`§1.11`**）；
 > `GSD-2` = **`REGISTERED`**（Option ② ＋ strict limited-reference interpretation，见 **`§1.12`**）；
-> `GSD-3` ～ `GSD-8` = **`PENDING`**；`S-1` ～ `S-14` = **candidate（not Human-approved）**；
-> §1 四项 top-level status **仍为 `DESIGN PENDING`**。
+> `GSD-3` = **`REGISTERED`**（Option ① —— 三层 POC Success Boundary，见 **`§1.13`**）；
+> `GSD-4` ～ `GSD-8` = **`PENDING`**；`S-1` ～ `S-14` = **candidate（not Human-approved）**；
+> §1 四项 top-level status **仍为 `DESIGN PENDING`**；**POC success = NOT CLAIMED**。
 
 ### 1.11 Human Decision Record —— `GSD-1`（`SIMULATED POC Design Policy` ＋ `Human-approved`）
 
@@ -698,6 +702,163 @@ S-1 ～ S-14                       = candidate（not Human-approved）
 §1 POC 成功边界                    = DESIGN PENDING ← 本 Decision 不推进状态
 §1 In Scope                       = DESIGN PENDING ← 本 Decision 不推进状态
 §1 Out of Scope                   = DESIGN PENDING ← 本 Decision 不推进状态
+POC Design v0.2                   = DRAFT
+```
+
+### 1.13 Human Decision Record —— `GSD-3`（`SIMULATED POC Design Policy` ＋ `Human-approved`）
+
+**Registration Status：`REGISTERED`**
+
+依据 **Issue #98 Human Decision**。本记录**只**登记已批准的 `GSD-3`（POC Success Boundary 的三层结构与
+claim semantics），并执行最小必要 current-state synchronization —— **不**决定 `GSD-4` ～ `GSD-8`、
+**不**接受 `S-1` ～ `S-14`、**不**写 final §1 canonical success wording、**不**定义具体 test ／ KPI ／
+threshold ／ Eval harness、**不**推进 §1 四项 top-level status、**不**创建 §1 closure gate、
+**不**修改 `FROZEN` Discovery 与 `§2` ～ `§5` approved policy。
+
+```
+Decision Scope     = §1.8 `GSD-3`（POC Success Boundary layering）
+Decision Authority = Human（Issue #98）
+Selected Option    = Option ① —— design-time ／ runtime-test evidence ／ business-value evidence 三层
+Write Scope        = docs/design/poc-design-v0.2.md §1
+```
+
+该分层用于把 `FROZEN` `§16` 的 success dimensions 放入正确责任层，避免把 `DESIGN RESOLVED` 误写成 `POC SUCCESS`。
+
+**`GSD-3.1` Layer 1 —— Design-time success boundary（APPROVED）**
+
+本层回答：**设计上是否已经定义清楚「系统必须如何满足 POC 目标与成功条件」**。可覆盖的 design-time boundary 包括
+`FROZEN` Problem Statement ／ P0 ／ P1 boundary、deterministic business-rule definitions、controlled system boundary、
+canonical data ／ validation ／ mapping ／ integration boundary、AI ／ deterministic logic ／ Tool ／ Agent
+responsibility boundary、`§6` ～ `§9` 应满足的 responsibility ／ dependency expectations、以及
+safety ／ traceability ／ explainability ／ fail-closed 等设计要求。
+
+本层**只能**证明 `design boundary defined`；**不能证明** runtime data correctness、deterministic calculation
+correctness under implementation、Agent ／ Tool runtime behavior、actual authorization enforcement、test pass、
+business-value improvement、customer acceptance、POC success、production readiness：
+
+```
+Design-time boundary satisfied
+≠ Runtime validated
+≠ Business value proven
+≠ POC success
+```
+
+**`GSD-3.2` Layer 2 —— Runtime ／ test evidence boundary（APPROVED）**
+
+本层回答：**实现完成后，系统是否真的按设计正确运行**。至少应能由未来 `§9 Test & AI Eval`、
+implementation ／ integration testing 与 runtime evidence 去证明 `FROZEN` `§16` 的技术与行为维度：
+
+```
+Data correctness        —— 结构化业务数据来自正确、授权的数据来源；不由 LLM 自行生成库存 ／ 订单 ／ 价格等业务事实；
+                           data validation ／ mapping ／ import behavior 与 approved design 一致
+Calculation correctness —— 相同输入下 deterministic shortage ／ procurement ／ risk calculation 稳定、一致、可复现；
+                           implementation 与 approved business rules 一致
+Tool correctness        —— Agent 调用正确、授权的 Tool；无无意义调用；不越权；不绕过 controlled path
+Explainability ／
+evidence fidelity       —— 关键结论有数据依据 ＋ 规则依据；explanation 不篡改 deterministic results；
+                           missing ／ invalid ／ unavailable evidence 不被静默补全
+Safety ／ permission
+enforcement             —— 高风险行为受 Human ／ workflow ／ permission boundary 控制；
+                           current POC hard boundaries 在 runtime 被真正 enforce；fail-closed 可被验证
+```
+
+本层负责 **evidence**；`§1` **不**自行定义具体测试实现。
+
+**`GSD-3.3` Layer 3 —— Business-value evidence boundary（APPROVED）**
+
+本层回答：**该 POC 是否对真实业务产生了值得继续投入的改善**。继承 `FROZEN` `§16`：至少应证明一种明确业务改善
+（减少系统切换 ／ 减少人工汇总 ／ 降低分析时间 ／ 提高异常解释效率 ／ 其他经真实客户确认的改善）。限制：
+
+```
+不得现在发明 KPI 数值
+customer baseline 必须来自真实客户 ／ 真实流程 evidence
+usage frequency ／ adoption ／ business acceptance 不得由模拟设计直接推出
+business-value evidence 不得由「设计完成」或「Demo 能运行」替代
+
+Demo runs ≠ Business value proven
+Simulated design evidence ≠ Real customer business-value evidence
+```
+
+**`GSD-3.4` Mapping to `FROZEN` `§16`（APPROVED）**
+
+`FROZEN` `§16` success dimensions **不变**（数据正确 ／ 计算正确 ／ 工具正确 ／ 可解释 ／ 安全 ／ 业务价值）；
+本 Decision **不修改**这些 dimensions，只登记其责任分层：
+
+```
+Design-time layer              = defines how each dimension must be supported
+Runtime ／ test evidence layer = proves data ／ calculation ／ tool ／ explainability ／ safety behavior in implementation
+Business-value evidence layer  = proves actual workflow ／ business improvement against real baseline
+```
+
+部分 dimension 可同时拥有 design obligation ＋ runtime evidence obligation；三层**不是**把 success dimensions
+机械拆成互斥 bucket，而是 **evidence maturity ／ responsibility layers**。
+
+**`GSD-3.5` POC success claim rule（APPROVED）**
+
+> **`POC SUCCESS` 是 evidence claim，不是 design status。**
+
+**不得**从以下任一事实单独推出 `POC SUCCESS`：`§1 DESIGN RESOLVED`；`§2` ～ `§5 DESIGN RESOLVED`；
+`§6` ～ `§10` 未来 `DESIGN RESOLVED`；Architecture ADR 完成；implementation complete；Demo 可运行；
+单一 test pass；单一 simulated scenario pass。
+
+真正的 POC success claim 必须基于后续 Human-approved acceptance ／ evidence policy，至少综合 applicable
+runtime ／ test evidence、applicable business-value evidence 与 `FROZEN` success dimensions 的满足情况。
+本 Decision **不定义最终 success gate**，只定义分层与 claim boundary。
+
+**`GSD-3.6` Relationship to `§9`（APPROVED）**
+
+本 Decision 只定义 **`§9` 未来需要提供什么类别的 evidence**；**不设计** concrete test cases、test datasets、
+pass ／ fail thresholds、deterministic unit-test ／ integration-test implementation、AI Eval rubric、judge model、
+scoring system、acceptance threshold、CI test tooling、eval framework —— 均属未来 `§9 Test & AI Eval` 的独立设计。
+
+**`GSD-3.7` Relationship to business baseline（APPROVED）**
+
+不改变 `FROZEN` 要求「实际 KPI 数值必须等待真实客户 baseline」。当前**不得**创建
+「节省 30% 时间」／「减少 50% 人工操作」／「准确率 95%」／「业务接受率 90%」等无真实 evidence 的具体 KPI；
+**可以**定义未来需要比较的 **evidence category**，但**不得**捏造 measurement result。
+
+**`GSD-3.8` Failure ／ reassessment boundary（保持）**
+
+`FROZEN` `§17` failure ／ reassessment conditions 保持独立（data unavailable ／ unreliable；master-data linkage
+unstable；existing `ERP` ／ `MRP` already solves the problem efficiently；usage frequency too low；
+AI ／ Agent makes the process more complex or burdensome）。本 Decision **不**把这些条件写成已发生事实，
+也**不**自动将其并入 success score —— 它们仍是 **future reassessment ／ stop-or-rethink boundary**。
+
+**`GSD-3.9` 明确未决定（保留为 pending Human Decision）**
+
+```
+GSD-4 In Scope canonical categories                    = PENDING
+GSD-5 Out of Scope ／ P1 ／ Prohibited ／ Deferred 分类方式 = PENDING
+GSD-6 §6 ～ §10 pending 是否阻止 §1 conceptual closure  = PENDING
+GSD-7 是否接受 S-1 ～ S-14                              = PENDING
+GSD-8 是否授权后续独立 §1 Design Change ／ Closure PR     = PENDING
+```
+
+> 上列各项**不因本 Decision 被推定**；`S-1` ～ `S-14` 继续为 **candidate（not Human-approved）**。
+> 本 Decision 亦**不**决定 final §1 success wording、final POC acceptance gate、
+> test ／ eval implementation、KPI ／ thresholds、Architecture ／ implementation。
+
+**`GSD-3.10` Boundaries preserved（保持）**
+
+本 Decision **未**修改 `FROZEN` Discovery、`§16` success dimensions、`§17` failure conditions、
+Problem Statement ／ P0 ／ P1；**未**发明 KPI ／ baseline ／ business evidence；
+**未**把 simulated evidence 伪装成 real business evidence。**未**修改 `§2` ～ `§5` approved design；
+**未**设计 `§6` ～ `§9` 具体实现；**未**选择 `§10` Architecture；**未**创建 ADR；
+**未**写 implementation ／ tests ／ eval harness；**未**选择 framework ／ scoring ／ judge model ／ test tooling。
+
+**执行状态（本 Registration 时点）**
+
+```
+GSD-1                             = REGISTERED（§1 Option 2 —— Inherited scope ＋ downstream composition contract）
+GSD-2                             = REGISTERED（Option ② ＋ strict limited-reference interpretation）
+GSD-3                             = REGISTERED（Option ① —— design-time ／ runtime-test evidence ／ business-value evidence 三层）
+GSD-4 ～ GSD-8                    = PENDING
+S-1 ～ S-14                       = candidate（not Human-approved）
+§1 P0 设计目标                     = DESIGN PENDING ← 本 Decision 不推进状态
+§1 POC 成功边界                    = DESIGN PENDING ← 本 Decision 不推进状态
+§1 In Scope                       = DESIGN PENDING ← 本 Decision 不推进状态
+§1 Out of Scope                   = DESIGN PENDING ← 本 Decision 不推进状态
+POC success                       = NOT CLAIMED
 POC Design v0.2                   = DRAFT
 ```
 
