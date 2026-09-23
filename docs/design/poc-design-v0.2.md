@@ -9526,6 +9526,517 @@ POC Design v0.2                    = DRAFT
 
 ---
 
+**Final Import Contract Design Review（Review Finding）**
+
+**Review Authority / Scope**
+
+```
+Review Type    = 独立 Design Review（只产出 Review Finding）
+Review Object  = Final Import Contract（Snapshot / Import Contract 最后一个 DESIGN PENDING 层级）
+Decision Power = NONE —— 本 Review 不作出任何 Human Decision
+Write Scope    = 仅 docs/design/poc-design-v0.2.md
+Status Change  = NONE
+```
+
+本 Review **不选择** acceptance model ／ integrity algorithm ／ compatibility policy，
+**不新增** status enum 或 Validation Reason，**不发明**任何 JSON property name，
+**不实现** importer ／ validator，**不登记** final policy。
+
+> **Inherited Constraint 标注约定：** 若某行为已由既有 canonical constraint **唯一确定**，
+> 本 Review 标记为 **`Inherited Constraint`**，**不**伪装成新的 Human Decision。
+> 若仍有多个合理方案，则**只**呈现 trade-off 与 dependency。
+
+---
+
+**1. Existing Canonical Constraints（Inherited —— 不得重新打开）**
+
+| # | Constraint | Source |
+| --- | --- | --- |
+| `IC-1` | Package = **Flat Directory Package**；Manifest = package-root `manifest.json`；one included logical dataset → one independent **root-level** JSON artifact；nested directories = `NOT ALLOWED`（POC v0.2） | `§4.3.23` |
+| `IC-2` | artifact reference **必须** relative to package root，且 logical resolved target **必须**在当前 package boundary 内；absolute path ／ external path ／ URI **不属于**合法 package layout | `§4.3.23` H |
+| `IC-3` | Manifest **必须**显式建立 `role → artifact reference`；**不得**依赖 filename ／ ordering ／ discovery heuristic | `§4.3.23` E |
+| `IC-4` | `included ＋ record_count = 0` → 对应 artifact `REQUIRED`；`not included` → 对应 artifact `NOT REQUIRED` | `§4.3.23` F ／ `§4.3.13` |
+| `IC-5` | Manifest = **grouped nested** carrier，`"package"` ／ `"datasets"`；approved literal 集合已登记；**membership in `"datasets"` = inclusion 的物理表示**；**不引入**独立的 inclusion boolean | `§4.3.25` A ／ B ／ D |
+| `IC-6` | business dataset top-level = **bare record array**；record = **JSON object**；canonical field identifier **直接**作 JSON property name | `§4.3.25` D ／ E ／ G |
+| `IC-7` | reserved record carrier metadata namespace = `"_meta"`；`P-A` provenance structure 与 `MB-A` basis **位于其中**；**其内部 member 名称未获批准**（non-blocking residual） | `§4.3.25` F ／ H ／ I ／ `§4.3.27` D |
+| `IC-8` | JSON ／ UTF-8 **without BOM**；**strict parse**；**禁止** duplicate object keys ／ comments ／ trailing comma ／ `NaN` ／ `Infinity`；object member order **不得**具有 business semantic | `§4.3.22` `C-1` ／ `C-9` |
+| `IC-9` | JSON `null` = **explicit missing ／ unavailable**；**property omission** = field **not serialized**，语义由 requiredness ＋ applicability ＋ validation semantic 判断；**omission 不自动等于 valid absence** | `§4.3.22` `C-2` |
+| `IC-10` | decimal = base-10 **string**；**禁止** round ／ quantize ／ truncate；date ／ timestamp ／ identifier 依 `C-1` ～ `C-10`；**禁止** silent trim ／ case conversion ／ Unicode normalization ／ numeric coercion | `§4.3.22` |
+| `IC-11` | **`Deterministic Parsing ≠ Byte-for-byte Canonical JSON Encoding`**；byte-level canonicalization 若需要，属本层 | `§4.3.22` D |
+| `IC-12` | 已 **`Accepted`** 的 Snapshot Package **必须视为 immutable**；**不得**原地修改 ／ 部分覆盖 ／ silently replace ／ 同 ID 不同内容；业务数据变化 **必须**形成新 identity | `§4.3.5` |
+| `IC-13` | Import **必须**具有 **package-level atomic meaning**：`ACCEPTED` 或 `REJECTED` ／ `UNUSABLE`；**禁止** silent cross-snapshot mixing | `§4.3.6` ／ `§4.3.7` |
+| `IC-14` | Structural failure **定义收紧**：**只有** Manifest **已声明** `included` 但对应 artifact absent ／ unreadable ／ identity inconsistent ／ integrity unverifiable 才属 Package Structural Inconsistency；**不得**推广为 `Any Dataset Absent → Structural Failure` | `§4.3.12` |
+| `IC-15` | integrity evidence **required**；具体 **algorithm**（hash ／ checksum ／ signature）**未**决定，属本层 | `§4.3.15` |
+| `IC-16` | **Fail-closed**：identity ／ integrity ／ required structural metadata **无法可靠确定**时，**不得**猜测 ／ 自动修复 ／ 用旧 package 补齐 ／ 重读 Production ／ 让 LLM 拼接 | `§4.3.18` |
+| `IC-17` | 三层语义 **不得互相提升或降级**：`Package Structural Failure` ≠ `Capability Evidence Unavailable` ≠ `Business DATA_INCOMPLETE` | `§4.4.3` ／ `§4.3.12` |
+| `IC-18` | 四层 validation model；**Layer 1 = Package Structural Validation 继承 `§4.3`**；**Package 未 `Accepted` → 不得创建依赖它的正常 Analysis Run** | `§4.4.2` |
+| `IC-19` | conceptual import lifecycle：`RECEIVED` → `STRUCTURAL CHECK` → `ACCEPTED` ／ `REJECTED` ／ `UNUSABLE` → Accepted Package may be referenced by Analysis Run；**本层不要求正式 enum** | `§4.3.20` |
+| `IC-20` | Validation Issue Taxonomy = **8 categories ＋ 12 reasons**（`REGISTERED`）；**默认不得新增 Validation Reason** | `§4.4.101` ／ `§4.4.80` ／ `§4.4.81` |
+| `IC-21` | 已关闭层：Package Envelope ／ Atomicity ／ Immutability ／ Analysis Run Linkage ／ Serialization Format ／ Physical Dataset Layout ／ **Field Carrier Mapping** ／ Data Validation = **`DESIGN RESOLVED`** | `§4.3.21` ／ `§4.3.24` ／ `§4.3.27` ／ `§4.4.101` |
+
+---
+
+**2. Exact Review Scope**
+
+**In scope（仅以下问题）：**
+
+1. Import acceptance boundary ／ lifecycle（`IC-19` 之上的 contract 细节）
+2. validation ／ acceptance **ordering** 的 contract dependency
+3. Manifest ↔ artifact consistency 的分类（structural ／ allowed-but-ignored ／ deferred）
+4. unknown ／ undeclared content policy（5 类载体分别评估）
+5. path resolution ／ package boundary enforcement 的 **contract semantics**
+6. integrity verification contract（mandatory 性、覆盖对象、digest 目标、manifest 自身）
+7. `contract_version` compatibility model
+8. partial package ／ failure isolation ／ atomicity 边界
+9. `completeness_state` 与 finality ／ immutability 的 acceptance 角色
+10. deterministic failure reporting（含是否需 import-specific reason）
+11. runtime ownership boundary（Final Import Contract ／ FCM ／ Data Validation ／ Adapter）
+12. Final Import Contract 的 minimum closure criteria 候选
+
+**Out of scope（属其他层或实现）：**
+
+- parser ／ serializer ／ validator **实现**、JSON Schema、sample package
+- hash ／ checksum ／ signature **实现**与 signing infrastructure
+- filesystem security implementation ／ transaction ／ locking ／ atomic filesystem move
+- Adapter ／ connector ／ source extraction ／ source → canonical mapping
+- canonical entity ／ field ／ enum、`BR-*`、Layer 2 ～ Layer 4 validation semantics 的重定义
+- 新 status enum、新 Validation Reason（**除非**证明既有 taxonomy 无法表达 → 转 Human Decision）
+
+---
+
+**3. Critical Scenarios**
+
+| # | Scenario | 既有约束要求的行为 | 本层必须裁定的问题 |
+| --- | --- | --- | --- |
+| `IS-1` | `manifest.json` missing ／ unreadable | Package `REJECTED` ／ `UNUSABLE`（`IC-14` 明示 manifest unavailable） | 归属 structural failure（**Inherited**）；reporting 形态待定 |
+| `IS-2` | `manifest.json` malformed ／ strict-parse 失败（duplicate key 等） | 违反 `IC-8` → 无法可靠确定 package 结构 → fail-closed（`IC-16`） | 与 `IS-1` 是否同一 structural class？ |
+| `IS-3` | **duplicate logical dataset role**（同一 role 出现两次） | 破坏 `IC-3` 唯一性 | 是否 structural failure？（**倾向 Inherited**：association 必须唯一且可判定） |
+| `IS-4` | **多个 role 引用同一 artifact** | `IC-1` 要求 one artifact per included logical dataset；`IC-3` 要求显式 association | 是否 structural failure ／ 是否允许？ |
+| `IS-5` | Manifest 声明 `included` 但 artifact **missing** | **Package Structural Inconsistency**（`IC-14`） | **Inherited** —— 已是 structural failure |
+| `IS-6` | artifact **unreadable**（存在但不可读） | `IC-14` 明示属 structural | **Inherited** |
+| `IS-7` | `record_count` 与实际 record 数 **不一致** | `IC-4` ／ `IC-5`：`record_count` 是 presence metadata | 是否 structural failure？是否属 integrity evidence 覆盖范围？ |
+| `IS-8` | 目录中存在**未被 Manifest include ／ reference** 的额外 root-level JSON artifact | `IC-4` 明示 `not included` **不**要求 artifact；**未**规定「不得存在」 | **unknown ／ undeclared content policy**（本层必须裁定） |
+| `IS-9` | `included` role 的 artifact 存在，但**与另一 entry 的 artifact 相同** | 同 `IS-4` | 同 `IS-4` |
+| `IS-10` | `included ＋ record_count = 0` 但 artifact 内容**非空数组** | `IC-4` ／ `IC-6`：empty = 空 record array | 是否 structural failure？ |
+| `IS-11` | package identity ／ contract metadata **inconsistent**（例：`snapshot_package_id` 与 Analysis Run linkage 冲突） | `IC-14` 明示 package identity inconsistent 属 structural | **Inherited**；具体判定规则待定 |
+| `IS-12` | **unknown Manifest property**（`"package"` ／ `"datasets"` 未声明的成员） | 既有 Design **未决定** | unknown-content policy |
+| `IS-13` | **unknown dataset-entry property** | 既有 Design **未决定** | unknown-content policy |
+| `IS-14` | **unknown canonical record property**（business record 内非 canonical field 的 property） | `IC-6`：canonical field identifier 即 property name；`IC-9` 禁止 silent fix-up | unknown-content policy ＋ 与 canonical field boundary 的关系 |
+| `IS-15` | **unknown `"_meta"` member** | `IC-7`：`"_meta"` 为 reserved namespace；内部名称未批准 | unknown-content policy |
+| `IS-16` | artifact reference 含 `.` ／ `..` ／ 平台分隔符 ／ 指向 boundary 之外 | `IC-2`：resolved target **必须**在 boundary 内 | **path normalization semantics**（何时判非法） |
+| `IS-17` | 两个 artifact reference **归一化后指向同一 target**，但字面量不同 | `IC-1` ／ `IC-3` | 是否视为 duplicate reference？ |
+| `IS-18` | `"integrity_evidence"` **missing ／ malformed ／ 无法验证** | `IC-14`（integrity unverifiable 属 structural）＋ `IC-15`（evidence required） | 是否 mandatory verification？缺失的 acceptance effect？ |
+| `IS-19` | `"contract_version"` 为**不受支持**的版本 | 既有 Design **未决定** compatibility model | 是否 reject？**不得** silent interpretation |
+| `IS-20` | `"completeness_state"` 表示 **incomplete ／ in-progress** 的 package 被提交 | `IC-12` ／ `§4.3.12` A ／ B | 该 metadata 在 acceptance gate 中扮演什么角色？ |
+| `IS-21` | Package 同时存在**多个** structural defect | 既有 Design **未决定** reporting 形态 | fail-fast vs collect-all；ordering 是否 deterministic |
+| `IS-22` | Accepted 后 artifact bytes 发生变化（re-verification 时不一致） | `IC-12`（accepted = immutable；同 ID 不得不同内容） | contract 层是否需要 re-verification／identity binding？（storage 实现**不在**本层） |
+
+---
+
+**4. Candidate Contract Models / Options**
+
+> 以下仅为**候选模型**，**不代表**本 Review 的选择；亦**不**引入任何未批准的 property name。
+
+**A. Acceptance Model（Q1 ／ Q8）**
+
+- `AM-1` —— **Package-level single gate（atomic accept / reject）**
+- `AM-2` —— Package gate ＋ **dataset-level quarantine**（个别 dataset 被隔离而 package 仍 accepted）
+- `AM-3` —— **staged ／ partial acceptance**（部分 dataset 先可用）
+
+**Inherited Constraint：** `IC-13` 要求 import 具有 **package-level atomic meaning**，
+`IC-6`（Atomic Import Boundary）禁止「部分 dataset 用新 snapshot、部分用旧」的混合输入。
+因此 `AM-2` ／ `AM-3` **与 `IC-13` 不兼容** —— **不是**开放选项，而是**已被既有约束排除**。
+**开放问题**是「**哪些条件触发 package-level rejection**」（Q3 ／ Q4）与
+「是否需要**超出既有术语**的 sub-state」，而不是是否允许 partial accept。
+
+**B. Unknown ／ Undeclared Content Policy（Q4）—— 需对 5 类载体分别裁定**
+
+| 载体 | 候选策略 |
+| --- | --- |
+| unknown **Manifest** property（`IS-12`） | `UX-A` reject ／ `UX-B` ignore ／ `UX-C` preserve-but-not-interpret |
+| unknown **dataset-entry** property（`IS-13`） | 同上三选一 |
+| unknown **canonical record** property（`IS-14`） | 同上三选一（另需与 `IC-6` canonical field boundary 一致性检查） |
+| unknown **`"_meta"`member**（`IS-15`） | 同上三选一（`"_meta"` 为 reserved，**不得**被当作 business field） |
+| **unreferenced root-level artifact**（`IS-8`） | `UX-A` reject ／ `UX-B` ignore ／ `UX-C` preserve-but-not-interpret |
+
+**共同 trade-off 维度：**
+
+```
+POC simplicity
+forward compatibility
+typo ／ silent data loss risk
+与 canonical field ／ reserved namespace boundary 的一致性
+```
+
+**C. Path Resolution ／ Boundary Enforcement（Q5）**
+
+- `PN-1` —— **字面量严格匹配**（reference 必须逐字对应 package-root 相对路径；**不**做 normalization）
+- `PN-2` —— **确定性 normalization 后**再做 boundary check（`.` ／ `..` ／ separator 归一化）
+- `PN-3` —— `PN-2` ＋ **平台相关** case ／ symlink ／ junction 处理
+
+**共同不可让步项（Inherited）：** resolved target **必须**在当前 package boundary 内（`IC-2`）；
+absolute ／ external ／ URI **不属于**合法 layout。
+**开放问题：** normalization 的**存在与否**、separator ／ case 语义、symlink ／ alias 是否允许、
+归一化后重复 reference 的处理（`IS-16` ／ `IS-17`）。
+
+**D. Integrity Contract（Q6）**
+
+- `IG-1` —— **mandatory verification**（每个 declared artifact 的 evidence 必须可验证）
+- `IG-2` —— mandatory **但 algorithm 可插拔**（algorithm identifier 与 value 的 contract 归属由本层定义）
+- `IG-3` —— **advisory**（evidence 记录但不阻塞 acceptance）
+
+**digest 目标：**
+- `IG-raw` —— **raw artifact bytes**
+- `IG-canon` —— **canonicalized bytes**（依赖 `IC-11` 的 byte-level canonicalization）
+
+**Manifest 自身 integrity：**
+- `IG-self-A` —— manifest 自身**单独**处理
+- `IG-self-B` —— 与 artifact 同一机制处理
+
+**E. Contract Version Compatibility（Q7）**
+
+- `VC-1` —— **exact-match only**
+- `VC-2` —— **explicit supported-version set**
+- `VC-3` —— **major ／ minor** compatibility model
+
+**共同不可让步项（Inherited）：** **不得**对不受支持版本做 silent interpretation。
+**依赖：** unknown-content policy（`UX-*`）与 version compatibility **互为依赖**。
+
+**F. Failure Reporting（Q10）**
+
+- `FR-1` —— **fail-fast**（遇首个 defect 即终止）
+- `FR-2` —— **collect-all**（收集全部 structural defect 后一次性报告）
+- `FR-3` —— collect-all ＋ **deterministic ordering** 保证
+
+**reason system：**
+- `FR-reuse` —— 复用既有 Validation Taxonomy
+- `FR-new` —— 需 import-contract-specific reason（**默认不允许**；仅在证明既有 taxonomy 无法表达时升级 Human Decision）
+
+**注意：** Package Structural Failure 使用 **import lifecycle 术语**（`ACCEPTED` ／ `REJECTED` ／ `UNUSABLE`，`IC-19`），
+**不是** Validation Reason；二者**不是**同一 vocabulary。
+
+**G. Completeness ／ Finality（Q9）**
+
+- `CF-1` —— `"completeness_state"` 仅作 **Manifest-declared metadata**，**不**直接参与 acceptance gate
+- `CF-2` —— `"completeness_state"` **参与** acceptance gate（例如 incomplete 状态不可 accepted）
+- `CF-3` —— acceptance **要求** final 状态 ＋ 与 `IC-12` immutable 语义绑定
+
+**H. Accepted-then-mutation Gap（Q9）**
+
+- `MG-1` —— **不**在 contract 层提供保证（storage 实现**不在**本层）
+- `MG-2` —— contract 要求 **re-verification**（若 bytes 变化则默认不可信）
+- `MG-3` —— contract 要求 **identity binding**（accepted identity 与其字节内容绑定）
+
+---
+
+**5. Option Comparison**
+
+`—` = 不适用。判定针对**既有 canonical 约束兼容性**与 **POC implementation cost**，**不代表**本 Review 的选择。
+
+| Model | 与既有约束兼容 | POC cost | 备注 |
+| --- | --- | --- | --- |
+| `AM-1` | **兼容（`Inherited Constraint`）** | 最低 | `IC-13` 已要求 package-level atomic |
+| `AM-2` ／ `AM-3` | **`NOT COMPATIBLE`（`IC-13` ／ `IC-6`）** | — | 已被既有约束排除，非开放选项 |
+| `UX-A` reject | 兼容 | 低（但 forward compatibility 最差） | typo 会直接 reject |
+| `UX-B` ignore | 兼容 | 最低 | 有 **silent data loss** 风险 |
+| `UX-C` preserve-but-not-interpret | 兼容 | 中高（需保存未知内容） | forward compatible；需明确不解释 |
+| `PN-1` 严格字面量 | 兼容 | 最低 | 无 normalization ⇒ 可预期性最高、但 platform 差异未处理 |
+| `PN-2` 确定性 normalization | 兼容 | 中 | 需登记 normalization 规则本身 |
+| `PN-3` ＋ 平台 case ／ symlink | 兼容（需显式登记语义） | 中高 | 平台差异会引入非确定性 |
+| `IG-1` ／ `IG-2` mandatory | 兼容（`IC-15` evidence required） | 中 | `IG-2` 需同时定义 algorithm identifier 归属 |
+| `IG-3` advisory | **张力** —— `IC-14` 已包含 `integrity unverifiable → structural` | 低 | 与 `IC-14` 存在实质张力 |
+| `IG-raw` | 兼容（不依赖 `IC-11` 的 canonicalization） | 低 | 与 `IC-11` 的区分得以保持 |
+| `IG-canon` | 兼容（须定义 byte-level canonicalization） | 高 | 直接触发 `IC-11` 的 byte-level 设计 |
+| `VC-1` ／ `VC-2` ／ `VC-3` | 均兼容 | 低 ／ 低 ／ 中 | 差异在演进成本 |
+| `FR-1` fail-fast | 兼容 | 最低 | 单 defect 可判定；多 defect 信息不全 |
+| `FR-2` ／ `FR-3` collect-all | 兼容 | 中 | `FR-3` 需保证 ordering deterministic |
+| `FR-reuse` | 兼容（`IC-20`） | 低 | 默认路径 |
+| `FR-new` | **需 Human Decision** | 中 | 仅在证明既有 taxonomy 无法表达时 |
+| `CF-1` ／ `CF-2` ／ `CF-3` | 均兼容 | 低 ／ 低 ／ 中 | `CF-2` ／ `CF-3` 会改变 acceptance 判定 |
+| `MG-1` ／ `MG-2` ／ `MG-3` | 均兼容（`IC-12` 只要求 semantics） | 低 ／ 中 ／ 中高 | storage 实现均**不**在本层 |
+
+---
+
+**6. Cross-Decision Dependencies**
+
+| # | Dependency | 说明 |
+| --- | --- | --- |
+| `DEP-1` | **unknown-content policy ↔ version compatibility** | 若 unknown property 被 reject，则任何**新增字段**都等价于版本不兼容；`VC-*` 与 `UX-*` **必须**组合裁定 |
+| `DEP-2` | **integrity digest 目标 ↔ byte-level canonicalization（`IC-11`）** | `IG-canon` 会**触发** byte-level canonicalization 设计；`IG-raw` 则**不**触发 |
+| `DEP-3` | **integrity mandatory 性 ↔ `IC-14`** | `IG-3`（advisory）与 `IC-14` 的 `integrity unverifiable → structural` 存在张力，**不可**独立裁定 |
+| `DEP-4` | **`completeness_state` 角色 ↔ acceptance gate** | `CF-2` ／ `CF-3` 会**新增** acceptance 拒绝条件 → 需与 Q3 的 structural 分类一致 |
+| `DEP-5` | **path normalization ↔ `record_count` ／ presence 判定** | 归一化后重复 reference（`IS-17`）会改变「artifact 是否存在」的判定 |
+| `DEP-6` | **failure reporting ↔ Validation Taxonomy（`IC-20`）** | 若采用 `FR-new`，须证明既有 `8 categories ／ 12 reasons` 无法表达；否则违反 `IC-20` |
+| `DEP-7` | **`AM-1`（Inherited）↔ 全部 rejection 条件** | 任何新增 rejection 条件都在 package-level atomic 语义下生效，**不得**被实现为 dataset-level partial outcome |
+
+---
+
+**7. Review Findings**
+
+**`RIF-1`（Q1 Acceptance Boundary ／ Lifecycle）**
+`IC-13` ／ `IC-19` 已经确定 **package-level atomic outcome** 与 lifecycle 术语
+（`RECEIVED` → `STRUCTURAL CHECK` → `ACCEPTED` ／ `REJECTED` ／ `UNUSABLE`）——
+标记为 **`Inherited Constraint`**。**开放问题：** 是否需要**超出既有术语**的 sub-state
+（例如区分「structure 合法但含被忽略内容」）；**不得**未经 Human Decision 新增 status enum。
+
+**`RIF-2`（Q2 Validation ／ Acceptance Ordering）**
+既有约束**未**规定检查顺序，但提供**硬 prerequisite**：
+`manifest` 可 parse（`IC-8`）→ 结构判定（`IC-14`）→ artifact 可定位（`IC-2` ／ `IC-3`）
+→ artifact 可读 → JSON parse → `record_count` 一致性 → integrity 验证 → acceptance。
+**本 Review 判定该顺序的 dependency 方向是 inherited**（后项依赖前项成功）；
+但「是否允许并行 ／ 短路 ／ collect-all」属 **`FR-*`**，需 Human Decision。**不写 parser algorithm。**
+
+**`RIF-3`（Q3 Manifest ↔ Artifact Consistency 分类）**
+**Inherited（已是 structural）：** `IS-1` ／ `IS-5` ／ `IS-6` ／ `IS-11`（`IC-14` 明示）；
+**Inherited（association 必须唯一且可判定）：** `IS-3`（重复 role）—— 与 `IC-3` ＋ `IC-1` 一致；
+**待 Human Decision：** `IS-4` ／ `IS-9`（多 role 引用同一 artifact）、`IS-7`（`record_count` mismatch）、
+`IS-10`（empty 声明与内容不符）、`IS-8`（未引用 artifact），以及
+`IS-2`（malformed manifest 与 `IS-1` 是否同一 class）。
+**本 Review 不选择**其分类（structural ／ allowed-but-ignored ／ deferred）。
+
+**`RIF-4`（Q4 Unknown ／ Undeclared Content）**
+五类载体（`IS-12` ～ `IS-15` ＋ `IS-8`）**均无**既有 canonical 决定 → 全部属 Human Decision。
+**不可让步项：** 任何策略**不得**使 unknown content 被**当作** canonical business field
+（尤其 `"_meta"` 内部与 record 层，见 `IC-6` ／ `IC-7`）；
+**不得**引入 silent fix-up（`IC-10`）；**不得**借 unknown policy 扩展 canonical field 集合。
+
+**`RIF-5`（Q5 Path ／ Boundary Enforcement）**
+`IC-2` 已确定**边界不可让步项** —— 标记为 **`Inherited Constraint`**。
+**开放问题：** normalization 是否存在、separator ／ case 语义、symlink ／ junction ／ alias 处理、
+归一化后重复 reference 的判定（`IS-16` ／ `IS-17`）。
+**这是 contract ／ validation semantics，不是 security implementation。**
+
+**`RIF-6`（Q6 Integrity Contract）**
+`IC-15` 确定 **integrity evidence required**、算法**未**决定；`IC-14` 确定
+**integrity unverifiable 属 structural** → 「verification 是否 mandatory」**部分为 inherited**，
+但 `IG-3`（advisory）与 `IC-14` 存在**实质张力**，**须**Human 明确；
+另外 **digest 目标**（`IG-raw` vs `IG-canon`）与 **manifest 自身 integrity** 属开放问题。
+**不得**在本 Review 选择算法。
+
+**`RIF-7`（Q7 Contract Version Compatibility）**
+既有 Design **未**决定 compatibility model。**不可让步项：** **不得**对不受支持版本做
+silent interpretation。`VC-*` 与 `UX-*` **互为依赖**（`DEP-1`），**必须**组合裁定。
+
+**`RIF-8`（Q8 Partial Package ／ Failure Isolation）**
+`AM-2` ／ `AM-3`（dataset-level partial acceptance）**与 `IC-13` ／ `IC-6` 不兼容** ——
+标记为 **`Inherited Constraint`**（**不是**开放选项）。
+artifact parse failure ／ integrity failure ／ missing declared artifact **同属 Layer 1 structural**
+（`IC-14` ／ `IC-18`），**不得**与 `Capability Evidence Unavailable` 混为一层（`IC-17`）。
+
+**`RIF-9`（Q9 Completeness ／ Finality）**
+`IC-12` 已确定 accepted package **immutable**（`Inherited`）。
+**开放问题：** `"completeness_state"` 是否**参与** acceptance gate（`CF-1` ／ `CF-2` ／ `CF-3`），
+以及 accepted-then-mutation gap 在 **contract 层**如何表达（`MG-1` ／ `MG-2` ／ `MG-3`）。
+**不实现** transaction ／ locking ／ atomic filesystem move。
+
+**`RIF-10`（Q10 Deterministic Failure Reporting）**
+既有 taxonomy（`IC-20`）是 **Data Validation** 的 reason system；
+Package Structural Failure 使用 **import lifecycle 术语**（`IC-19`）—— 二者**不是**同一 vocabulary。
+**因此不可直接假定**「复用 taxonomy」即可满足 structural failure reporting。
+**开放问题：** fail-fast vs collect-all、ordering 是否必须 deterministic、auditable 最小内容、
+以及是否需要 import-contract-specific reason（**默认不允许**，需 Human Decision，`DEP-6`）。
+
+**`RIF-11`（Q11 Runtime Ownership Boundary）**
+**Final Import Contract owns：** acceptance ／ rejection contract、runtime structural checks、
+version compatibility、path validation semantics、unknown ／ undeclared content behavior、
+integrity verification contract、package atomic acceptance semantics、parser ／ validator 的 contract-level requirements。
+**FCM owns：** carrier shapes ／ approved literals ／ metadata placement。
+**Data Validation owns：** Layer 2 ～ Layer 4 conceptual semantics ＋ existing failure taxonomy。
+**Adapter Boundary owns：** source extraction ／ source → canonical mapping ／ connector ／ source protocol。
+**本 Review 未发现** ownership 冲突。
+
+**`RIF-12`（Q12 Minimum Closure Criteria）**
+见下方候选 `I-1` ～ `I-16`；**是否登记为正式 criteria 属 Human Decision**。
+
+**`RIF-X1`（跨层风险）**
+若 `UX-B`（ignore）被广泛采用，将**削弱** `IC-8` 的 strict-parse 精神在**结构层**的一致性：
+strict parse 禁止 implementation-specific extension，但 ignore 策略会**静默接受**未知内容。
+二者**并非**直接冲突（一个是语法层、一个是语义层），但**必须**显式说明其边界。
+
+**`RIF-X2`（跨层风险）**
+`IS-7`（`record_count` mismatch）的分类会**同时**影响：
+`IC-4`（presence metadata）、`IG-*`（integrity 覆盖对象）、`IC-14`（structural 定义）——
+**不可**单独裁定。
+
+**`RIF-X3`（边界发现）**
+`IS-14`（unknown canonical record property）与 `IS-15`（unknown `"_meta"` member）
+在**物理上同层**（同一个 record object），但语义归属**不同**（business vs reserved carrier metadata）。
+若采用**同一** unknown policy，**必须**确认不会把 `"_meta"` 内容误读为 business field。
+
+**`RIF-X4`（依赖发现）**
+`DEP-1` 与 `DEP-3` 表明：**unknown policy** 与 **integrity mandatory 性** 均与
+既有 `IC-14` ／ `IC-20` 存在耦合，**建议** Human 以**组合**方式裁定，而非逐项独立裁定。
+
+---
+
+**8. Proposed Minimum Closure Criteria（candidate —— 待 Human 批准）**
+
+| # | Criterion | 类别 |
+| --- | --- | --- |
+| `I-1` | acceptance boundary 已登记：哪些检查完成后 package 才可 `Accepted` | MANDATORY CLOSURE CRITERION |
+| `I-2` | `REJECTED` ／ `UNUSABLE` 的使用条件已登记（**不新增** status enum，除非 Human 明确授权） | MANDATORY CLOSURE CRITERION |
+| `I-3` | validation ／ acceptance ordering 的 **dependency 方向**已登记 | MANDATORY CLOSURE CRITERION |
+| `I-4` | 每个 Manifest ↔ artifact 一致性情景（`IS-1` ～ `IS-11`）已分类为 structural ／ allowed-but-ignored ／ deferred | MANDATORY CLOSURE CRITERION |
+| `I-5` | 5 类载体的 unknown ／ undeclared content policy 已逐类登记 | MANDATORY CLOSURE CRITERION |
+| `I-6` | path resolution ／ boundary enforcement semantics 已登记（含 normalization 与 case ／ symlink 语义） | MANDATORY CLOSURE CRITERION |
+| `I-7` | normalized duplicate reference 的判定语义已登记 | MANDATORY CLOSURE CRITERION |
+| `I-8` | integrity verification 的 mandatory 性与 acceptance effect 已登记 | MANDATORY CLOSURE CRITERION |
+| `I-9` | integrity 覆盖对象 ＋ digest 目标（raw vs canonical）已登记，且与 `IC-11` 一致 | MANDATORY CLOSURE CRITERION |
+| `I-10` | Manifest 自身 integrity 的处理归属已登记 | MANDATORY CLOSURE CRITERION |
+| `I-11` | `contract_version` compatibility model 已登记，且**禁止** unsupported version 的 silent interpretation | MANDATORY CLOSURE CRITERION |
+| `I-12` | package-level atomic acceptance 语义已登记（**无** dataset-level partial outcome） | MANDATORY CLOSURE CRITERION |
+| `I-13` | `"completeness_state"` 在 acceptance gate 中的角色已登记 | MANDATORY CLOSURE CRITERION |
+| `I-14` | accepted-then-mutation gap 的 contract-level 处理已登记 | MANDATORY CLOSURE CRITERION |
+| `I-15` | failure reporting 形态（fail-fast ／ collect-all、ordering、auditable 最小内容）已登记，且**不**违反 `IC-20` | MANDATORY CLOSURE CRITERION |
+| `I-16` | layer ownership boundary 已登记，且**不**把 Layer 2 ～ Layer 4 问题提升为 structural failure（`IC-17`） | MANDATORY CLOSURE CRITERION |
+| `I-17` | Human Inspectability（acceptance outcome 与 defect 可被人工检视） | POC DESIGN OBJECTIVE |
+| `I-18` | Implementation Simplicity（contract 结构最小化） | POC DESIGN OBJECTIVE |
+
+`I-17` ／ `I-18` **必须评估**，但**不作为**独立 hard closure blocker；
+**不得**把主观判断变成不可验证的 closure Gate。
+
+---
+
+**9. Human Decision Required**
+
+**Decision 1 —— Unknown content policy（逐类）**
+- **Question：** 5 类载体（`IS-12` ～ `IS-15` ＋ `IS-8`）各自采用 reject ／ ignore ／ preserve-but-not-interpret？
+- **Options：** `UX-A` ／ `UX-B` ／ `UX-C`，按载体分别裁定。
+- **Trade-offs：** reject = forward compatibility 最差但 typo 最安全；ignore = 成本最低但有 silent data loss 风险；preserve = forward compatible 但需明确「不解释」。
+- **Dependencies：** `DEP-1`（与 `VC-*` 耦合）、`RIF-X3`（record 层两个载体的归属差异）、`IC-6` ／ `IC-7`。
+- **What changes：** 决定哪些情景进 `I-4`（structural）或 `I-5`（allowed-but-ignored）；影响版本演进策略。
+
+**Decision 2 —— Contract version compatibility model**
+- **Question：** `VC-1` exact-match ／ `VC-2` explicit supported set ／ `VC-3` major-minor？
+- **Options：** 同上三选一。
+- **Trade-offs：** `VC-1` 成本最低但任何字段新增即不兼容；`VC-3` 灵活但引入演进体系设计成本。
+- **Dependencies：** `DEP-1`（与 Decision 1 **必须**组合裁定）。
+- **What changes：** unsupported version 的 acceptance 结果；unknown property 是否等价于不兼容。
+
+**Decision 3 —— Manifest ↔ artifact consistency 分类（未定项）**
+- **Question：** `IS-4` ／ `IS-7` ／ `IS-8` ／ `IS-9` ／ `IS-10` ／ `IS-2` 各自属 structural ／ allowed-but-ignored ／ deferred？
+- **Options：** 三类归属逐项裁定。
+- **Trade-offs：** 归为 structural 提高一致性但降低容错；归为 deferred 保留灵活性但延后判定。
+- **Dependencies：** `RIF-X2`（`IS-7` 同时影响 `IC-4` ／ `IG-*` ／ `IC-14`）。
+- **What changes：** `I-4` 的最终分类表；acceptance 拒绝条件集合。
+
+**Decision 4 —— Path resolution ／ normalization semantics**
+- **Question：** `PN-1` 严格字面量 ／ `PN-2` 确定性 normalization ／ `PN-3` ＋ 平台语义？
+- **Options：** 同上；另需裁定 separator ／ case ／ symlink ／ junction ／ alias 与 normalized duplicate。
+- **Trade-offs：** `PN-1` 可预期性最高但不处理平台差异；`PN-3` 覆盖最全但引入非确定性风险。
+- **Dependencies：** `DEP-5`；`IC-2` 为**不可让步**项。
+- **What changes：** 哪些 reference 被判非法；`IS-16` ／ `IS-17` 的判定结果。
+
+**Decision 5 —— Integrity verification 的 mandatory 性与 acceptance effect**
+- **Question：** `IG-1` ／ `IG-2` mandatory，还是 `IG-3` advisory？
+- **Options：** 同上三选一。
+- **Trade-offs：** mandatory 与 `IC-14` 一致但提高门槛；advisory 成本低但与 `IC-14` 存在**实质张力**。
+- **Dependencies：** `DEP-3`（**不可**独立于 `IC-14` 裁定）。
+- **What changes：** `IS-18`（missing ／ malformed ／ unverifiable）是否导致 `REJECTED`。
+
+**Decision 6 —— Integrity 覆盖对象与 digest 目标**
+- **Question：** digest 针对 **raw artifact bytes**（`IG-raw`）还是 **canonicalized bytes**（`IG-canon`）？覆盖哪些对象？Manifest 自身是否单独处理？
+- **Options：** `IG-raw` ／ `IG-canon`（后者触发 byte-level canonicalization，`IC-11`）；`IG-self-A` ／ `IG-self-B`。
+- **Trade-offs：** `IG-raw` 成本低且与 `IC-11` 的区分保持；`IG-canon` 允许跨序列化比较但需定义 canonicalization。
+- **Dependencies：** `DEP-2`；与 Decision 5 **必须**一致。
+- **What changes：** 是否需要在 `§4.3.22` D 之外新增 byte-level canonicalization 设计。
+
+**Decision 7 —— Integrity algorithm identifier ／ value 的 contract ownership**
+- **Question：** algorithm identifier 与 value 的表示与归属由本层定义，还是留给实现？
+- **Options：** 本层定义 contract-level requirement ／ 仅要求「可验证」不指定表示。
+- **Trade-offs：** 定义过多会越权进入实现；定义过少则 `IC-15` 的 evidence 不可判定。
+- **Dependencies：** Decision 5 ／ 6。
+- **What changes：** `I-8` ／ `I-9` 的可判定性。
+- **注意：** 本 Review **不选**任何具体算法。
+
+**Decision 8 —— Failure reporting 形态与 reason system**
+- **Question：** `FR-1` fail-fast ／ `FR-2` collect-all ／ `FR-3` collect-all ＋ deterministic ordering？是否采用 `FR-new`？
+- **Options：** 三选一；reason system 默认 `FR-reuse`。
+- **Trade-offs：** fail-fast 成本低但多 defect 信息不全；collect-all 信息完整但需 ordering 保证；`FR-new` 违反 `IC-20` 默认。
+- **Dependencies：** `DEP-6`。
+- **What changes：** auditable 最小内容；是否需要新增 Validation Reason（**默认不允许**）。
+
+**Decision 9 —— `"completeness_state"` 的 acceptance 角色**
+- **Question：** `CF-1` 纯 metadata ／ `CF-2` 参与 gate ／ `CF-3` 要求 final 状态？
+- **Options：** 同上三选一。
+- **Trade-offs：** `CF-1` 不改变判定、成本最低；`CF-2` ／ `CF-3` 会新增拒绝条件。
+- **Dependencies：** `DEP-4`。
+- **What changes：** incomplete ／ in-progress package 是否可被读取或 accepted。
+
+**Decision 10 —— Accepted-then-mutation gap 的 contract 处理**
+- **Question：** `MG-1` 不在 contract 层保证 ／ `MG-2` 要求 re-verification ／ `MG-3` 要求 identity binding？
+- **Options：** 同上三选一。
+- **Trade-offs：** `MG-1` 最简；`MG-2` ／ `MG-3` 提高可信度但接近 storage 实现。
+- **Dependencies：** `IC-12`（semantics 已 inherited）。
+- **What changes：** `IS-22` 的 contract 判定；是否触发 re-verification 要求。
+
+**Decision 11 —— 是否需要 import-contract-specific Validation Reason**
+- **Question：** 既有 `8 categories ／ 12 reasons` 是否足以表达 structural failure reporting？
+- **Options：** 复用既有 taxonomy ／ 新增 import-specific reason（需 Human 明确授权）。
+- **Trade-offs：** 复用保持 `IC-20`；新增会扩大 registered taxonomy。
+- **Dependencies：** `DEP-6`；与 Decision 8 组合。
+- **What changes：** Validation Taxonomy 是否被扩展（**默认不得**）。
+
+**Decision 12 —— Minimum closure criteria 接受与 follow-up 授权**
+- **Question：** 是否接受 `I-1` ～ `I-16` 作为 minimum closure criteria？是否授权后续独立
+  `Final Import Contract` Design Change ／ Implementation PR（登记选择 ＋ 同步 current-state），
+  并在满足 closure criteria 时允许 `DESIGN PENDING → DESIGN RESOLVED`？
+- **Options：** 接受 ／ 调整 ／ 拒绝；授权 ／ 不授权。
+- **Trade-offs：** 授权推进 closure；不授权保持 `DESIGN PENDING`。
+- **Dependencies：** Decision 1 ～ 11。
+- **What changes：** 本层是否可进入 closure。
+
+**本 Review 不作出上述任何决定。** 后续必须由 **Human Decision** 裁定；
+**不得**由 Agent 自行选择最终 acceptance model ／ integrity algorithm ／ compatibility policy。
+
+---
+
+**10. Explicit Non-Decisions**
+
+本 Review **不创建**：
+
+```
+JSON Schema
+sample package ／ real manifest.json
+parser ／ serializer ／ runtime validator
+import service
+database schema
+Adapter ／ connector
+filesystem security implementation
+hash ／ checksum ／ signature algorithm 实现
+signing infrastructure
+retry ／ queue ／ logging implementation
+source-system mapping
+new canonical field ／ entity ／ enum
+```
+
+**未**新增 status enum，**未**新增 Validation Reason，**未**发明任何 JSON property name，
+**未**把任何 illustrative placeholder 当作 authoritative property name。
+
+---
+
+**11. Current Status（本 Review 时点）**
+
+```
+Snapshot / Import Contract overall = DESIGN PENDING
+  Package Envelope ／ Atomicity Boundary ／ Immutability Boundary ／ Analysis Run Linkage = DESIGN RESOLVED
+  Serialization Format             = DESIGN RESOLVED
+  Physical Dataset Layout          = DESIGN RESOLVED
+  Field Carrier Mapping            = DESIGN RESOLVED
+  Final Import Contract            = DESIGN PENDING   ← 本 Review 对象；未关闭
+Adapter Boundary                   = DESIGN PENDING
+POC Design v0.2                    = DRAFT
+
+Package Structural Failure
+  ≠ Capability Evidence Unavailable
+  ≠ Business DATA_INCOMPLETE
+
+本 Review 不选择任何 Option。
+本 Review 未创建任何 runtime artifact。
+```
+
+---
+
 #### 4.3.21 Status Boundary
 
 `Snapshot / Import Contract` **整体仍为 `DESIGN PENDING`**。
