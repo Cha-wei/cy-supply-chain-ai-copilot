@@ -5768,9 +5768,11 @@ data validated、implemented、tested。
 >
 > 本节已完成**第一层**（Package Envelope ／ Atomicity Boundary ／ Immutability Boundary ／
 > Analysis Run Linkage）、**`Serialization Format`**（**PR #51 Human Decision** ＋
-> **PR #52 Closure Re-run = `PASS`**，见 **§4.3.22**）与 **`Physical Dataset Layout`**
-> （**PR #53 Human Decision** ＋ **本层 Closure Validation = `PASS`**，见 **§4.3.23**）；
-> `Field Carrier Mapping` ／ `Final Import Contract` **仍为 `DESIGN PENDING`**。
+> **PR #52 Closure Re-run = `PASS`**，见 **§4.3.22**）、**`Physical Dataset Layout`**
+> （**PR #53 Human Decision** ＋ **本层 Closure Validation = `PASS`**，见 **§4.3.23**）与
+> **`Field Carrier Mapping`**（**PR #63 Human Decision ＋ Supplementary Human Naming Decision** ＋
+> **本层 Closure Re-run = `PASS`**，见 **§4.3.25** ／ **§4.3.27**）；
+> `Final Import Contract` **仍为 `DESIGN PENDING`**。
 
 **层级状态登记：**
 
@@ -5782,7 +5784,7 @@ data validated、implemented、tested。
 | Analysis Run Linkage | **`DESIGN RESOLVED`** |
 | Serialization Format | **`DESIGN RESOLVED`** |
 | Physical Dataset Layout | **`DESIGN RESOLVED`** |
-| Field Carrier Mapping | `DESIGN PENDING` |
+| Field Carrier Mapping | **`DESIGN RESOLVED`** |
 | Final Import Contract | `DESIGN PENDING` |
 
 > **不得**提前把整个 `Snapshot / Import Contract` 标记为 `DESIGN RESOLVED`。
@@ -9437,6 +9439,75 @@ G-2  record-level reserved carrier-metadata namespace 的 exact property name
 依 **决定 1** ／ **决定 6**：**不得自行发明** ／ **不得自行选择名称** → **记录 Decision Gap 并停止 closure**。
 详细判定与最小解除条件见 **§4.3.26**。
 
+> **后续状态：** `G-1` ／ `G-2` 已由下方 **Supplementary Human Naming Decision（`G-1` ／ `G-2`）** 解除。
+> 本块保留为 **Human Decision 时点**的 gap 记录；closure 复跑结果见 **§4.3.27**。
+
+**Supplementary Human Naming Decision（`G-1` ／ `G-2`）—— `SIMULATED POC Design Policy` ＋ `Human-approved`**
+
+**Decision Authority：** Human
+**Purpose：** **仅**解除 **Decision Gap `G-1` ／ `G-2`**（naming only）。
+
+**`G-1` —— Manifest naming（approved literal JSON names）**
+
+```
+top-level grouping
+  package-level block                  = "package"
+  dataset collection                   = "datasets"
+
+package-scoped properties
+  snapshot package identity            = "snapshot_package_id"
+  contract version                     = "contract_version"
+  export ／ package creation timestamp  = "created_at"
+  environment                          = "environment"
+  evidence classification              = "evidence_classification"
+  package completeness                 = "completeness_state"
+
+dataset-entry properties
+  logical dataset role                 = "role"
+  artifact reference                   = "artifact"
+  record count                         = "record_count"
+  dataset provenance ref               = "provenance_ref"
+  integrity evidence                   = "integrity_evidence"
+```
+
+**Included logical datasets：** 该 logical dataset role 的 entry **出现在 `"datasets"` collection 内**
+即为 **Manifest carrier 层 inclusion 的物理表示**。
+
+- **不引入**独立的 `"included"` boolean；
+- `not included` **仍**由既有 **Presence Semantics**（对应 artifact `NOT REQUIRED`）治理，
+  **不**引入 MUST-NOT-EXIST 规则。
+
+**`G-2` —— Reserved record metadata namespace**
+
+```
+reserved record carrier metadata namespace = "_meta"
+```
+
+`"_meta"` **保留**给已批准的 record-level technical ／ carrier metadata，
+**不得**被视为 canonical business field。
+
+**Boundaries（保持）**
+
+本补充决定**仅**解决 **naming**，**不授权**：
+
+```
+new carrier family
+JSON Schema ／ parser ／ serializer ／ validator implementation
+integrity algorithm（hash ／ checksum ／ signature）policy
+unknown-property runtime behavior
+Adapter ／ source-system field mapping
+canonical business semantic 的任何变更
+```
+
+**执行状态（Supplementary Human Naming Decision 时点）**
+
+```
+G-1                                = RESOLVED
+G-2                                = RESOLVED
+Field Carrier Mapping              = DESIGN PENDING   ← closure 需复跑
+Closure                            = NOT YET RE-RUN
+```
+
 **执行状态（Field Carrier Mapping Human Decision 时点）**
 
 ```
@@ -9462,10 +9533,9 @@ POC Design v0.2                    = DRAFT
 **历史（原 `Package Envelope` Task 时点）：** 该 Task **仅**完成其第一层：Package Envelope、
 Import Atomicity、Immutability、Analysis Run linkage。
 
-`DESIGN RESOLVED` 的**六个**层级**仅**表示其 **conceptual boundary 已定义**，
+`DESIGN RESOLVED` 的**七个**层级**仅**表示其 **conceptual boundary 已定义**，
 **不表示**：
 
-- field carrier mapping determined
 - import implementation exists
 - data validated
 - tested
@@ -9480,9 +9550,9 @@ Import Atomicity、Immutability、Analysis Run linkage。
 > `Field Carrier Mapping` ／ `Final Import Contract` **仍为 `DESIGN PENDING`**。
 >
 > **current-state 更新（Field Carrier Mapping）：** `Field Carrier Mapping` 的 **Human Decision 已登记**
-> （见 **§4.3.25**），但 **closure gate 未满足** —— `F-1` = **`BLOCKED`**，并存在
-> **Decision Gap `G-1` ／ `G-2`**（未授权的 exact property naming；见 **§4.3.26** E）。
-> 因此 **保持 `DESIGN PENDING`**，**未**发生状态转换。
+> （见 **§4.3.25**）；**Decision Gap `G-1` ／ `G-2`** 已由 **Supplementary Human Naming Decision** 解除
+> （approved literal names 已登记），**Closure Re-run = `PASS`**（见 **§4.3.27**），
+> 因此现为 **`DESIGN RESOLVED`** —— `field carrier mapping determined` 已**移出**上述「不表示」清单。
 
 #### 4.3.22 Serialization Format Design（Registered Strategy & Representation Policy）
 
@@ -9862,15 +9932,16 @@ validator 等），本层**未**创建 —— **design registration ≠ runtime 
 
 #### 4.3.25 Field Carrier Mapping Design（Registered Carrier Policy）
 
-**Registration Status：`REGISTERED`（**partial** —— closure `BLOCKED`）** ——
-依据 **Field Carrier Mapping Human Decision Record**（决定 1 ～ 12），见上方。
+**Registration Status：`REGISTERED`** ——
+依据 **Field Carrier Mapping Human Decision Record**（决定 1 ～ 12）与
+**Supplementary Human Naming Decision（`G-1` ／ `G-2`）**，见上方。
 
-本小节登记 **authoritative current policy**；但 **`Field Carrier Mapping` 仍为 `DESIGN PENDING`** ——
-closure gate **未满足**（见 **§4.3.26** 与 **Decision Gap `G-1` ／ `G-2`**）。
+本小节登记 **authoritative current policy**；**`Field Carrier Mapping` 现为 `DESIGN RESOLVED`** ——
+closure gate 已由 **Closure Re-run = `PASS`** 满足（见 **§4.3.27**）。
 
-> **命名边界：** 本小节**不登记任何 literal JSON property name ／ grouping name ／ namespace name** ——
-> 既有 approved terminology **不足以**唯一确定它们（见 **§4.3.26** E）。
-> **不得**把任何 illustrative placeholder 当作 authoritative property name。
+> **命名边界：** 本小节登记的 literal 名称**仅限** Human 已批准者
+> （见 **Supplementary Human Naming Decision**）；**不得**由 Agent 扩展、推断或新增其他
+> property ／ grouping ／ namespace 名称。
 
 **A. Manifest Carrier Policy（正式登记）**
 
@@ -9884,35 +9955,55 @@ Manifest Carrier Model = M-B Grouped Nested Manifest
 environment ／ evidence classification ／ included logical datasets ／ dataset-level provenance reference ／
 dataset-level record count ／ integrity evidence ／ package completeness state。
 
-> **本层**不**发明 literal property name ／ grouping name**（见 **Decision Gap `G-1`**）。
 > `§4.3.8` 的**总体 semantic set** **不等于** `M-B` 的 **package-level group** —— 二者**必须**分开解读。
 
-**（2）package-level group —— package-scoped concepts：**
-`snapshot_package_id` ／ contract version ／ export ／ package creation time ／
-environment ／ evidence classification ／ package completeness state。
+**（2）package-level group —— package-scoped concepts（literal 名称由 Human 批准）：**
 
-**（3）dataset collection ／ dataset-entry scope（与**对应** logical dataset entry 关联）：**
-included logical dataset role ／ `role → artifact` association ／ dataset-level `record_count` ／
-dataset-level provenance reference ／ **对具体 dataset artifact 的 integrity evidence**。
+| concept | approved literal |
+| --- | --- |
+| grouping（package-level block） | `"package"` |
+| snapshot package identity | `"snapshot_package_id"` |
+| contract version | `"contract_version"` |
+| export ／ package creation timestamp | `"created_at"` |
+| environment | `"environment"` |
+| evidence classification | `"evidence_classification"` |
+| package completeness | `"completeness_state"` |
+
+**（3）dataset collection ／ dataset-entry scope（literal 名称由 Human 批准）：**
+
+| concept | approved literal |
+| --- | --- |
+| grouping（dataset collection） | `"datasets"` |
+| logical dataset role | `"role"` |
+| artifact reference | `"artifact"` |
+| record count | `"record_count"` |
+| dataset provenance reference | `"provenance_ref"` |
+| integrity evidence（dataset-artifact scope） | `"integrity_evidence"` |
 
 ```
-dataset-artifact integrity evidence  →  dataset-entry scope   （NOT package block）
+dataset-artifact integrity evidence  →  "integrity_evidence"（dataset-entry scope，NOT package block）
 integrity algorithm                  →  Final Import Contract
 ```
 
-**分组 boundary（已固定）：** `（2）` 与 `（3）` 为**物理上不同**的 group；
-`（3）` 的各 concept **必须**与**对应 logical dataset entry** 关联，**不得**上提到 package-level group。
-**literal grouping 名称**仍属 **`G-1`**（未授权，未登记）。
+**分组 boundary（已固定）：** `"package"` 与 `"datasets"` 为**物理上不同**的 group；
+dataset-scoped concept **必须**与**对应 logical dataset entry** 关联，**不得**上提到 `"package"`。
+
+**本小节登记的 literal 名称仅限上表**（`G-1` 已由 **Supplementary Human Naming Decision** 解除）；
+**不得**由 Agent 扩展、推断或新增其他名称。
 
 **B. Dataset Entry Policy（正式登记）**
 
 ```
-Dataset Entry Model = D-A array of dataset entry objects
+Dataset Entry Model   = D-A array of dataset entry objects
+  collection literal  = "datasets"
+  entry  properties   = "role" ／ "artifact" ／ "record_count" ／ "provenance_ref" ／ "integrity_evidence"
 one included logical role → one authoritative artifact association   （INVARIANT）
 ```
 
 - role ／ artifact reference ／ presence metadata 对**同一 logical dataset scope** **必须** **确定、唯一、可判定** 地关联；
 - **不得**依赖 filename inference ／ ordering ／ discovery heuristic；
+- **inclusion 的物理表示** = 该 logical dataset role 的 entry **出现在 `"datasets"` collection 内**；
+  **不引入**独立的 `"included"` boolean；
 - runtime 如何检测 ／ reject duplicate 或 conflicting entry 属 **`Final Import Contract`**。
 
 **C. Dataset-Level Metadata Authority（正式登记）**
@@ -9931,6 +10022,8 @@ included ＋ record_count = 0  →  对应 artifact REQUIRED，payload = 空 rec
                                  （可判定的 empty records representation）
 not included                  →  对应 artifact NOT REQUIRED
 not included                  ≠  included with zero records
+inclusion 的物理表示           = 该 role 的 entry 出现在 Manifest "datasets" collection 内
+                                 （不引入独立的 "included" boolean）
 ```
 
 **Presence boundary（恢复既有 `§4.3.23` F policy）：** `not included` **只**表示**不要求**对应 artifact 存在；
@@ -9954,7 +10047,11 @@ record-level technical ／ carrier metadata = ALLOWED
 不得与 canonical business fields 任意混杂
 ```
 
-**exact namespace 名称 = `NOT DEFINED`**（见 **Decision Gap `G-2`** / **§4.3.26** E）。
+**reserved namespace 名称（Human 批准）= `"_meta"`** ——
+`"_meta"` **仅**用于已批准的 record-level technical ／ carrier metadata，
+**不得**被视为 canonical business field，**不得**与 canonical business fields 任意混杂。
+
+`P-A` nested provenance structure 与 `MB-A` basis（与其同一 nested structure）**位于 `"_meta"` 之内**。
 
 **G. Canonical Field Carrier（正式登记）**
 
@@ -10150,6 +10247,101 @@ Human Decision                     = RECORDED
 Closure                            = BLOCKED
 State Transition                   = NOT EXECUTED
 Blocking Gap                       = G-1 ／ G-2
+
+Final Import Contract              = DESIGN PENDING
+Snapshot / Import Contract overall = DESIGN PENDING
+Adapter Boundary                   = DESIGN PENDING
+POC Design v0.2                    = DRAFT
+```
+> **后续状态：** 本记录保留为**首次 closure attempt 的时点记录**（`NOT SATISFIED`）。
+> `G-1` ／ `G-2` 解除后已执行 **Closure Re-run**（见 **§4.3.27**），结果 **`PASS`** 并已发生状态转换。
+
+---
+
+#### 4.3.27 Field Carrier Mapping Closure Re-run Record
+
+**Closure Re-run Result：`PASS`**
+
+**State Transition：`Field Carrier Mapping` = `DESIGN PENDING` → `DESIGN RESOLVED`**
+
+**A. Precondition —— Decision Gap 解除**
+
+```
+G-1  Manifest 的 exact property name ／ grouping name                      = RESOLVED（Human 批准 literal names）
+G-2  record-level reserved carrier-metadata namespace 的 exact property name = RESOLVED（"_meta"）
+```
+
+依据 **Supplementary Human Naming Decision（`G-1` ／ `G-2`）**，见上方 **Human Decision Record**。
+该补充决定**仅**解决 naming —— **未**新增 carrier family，**未**改变 layer ownership，
+**未**修改任何 canonical business semantic。
+
+**B. Conditional Closure Gate（决定 12 复跑）**
+
+| # | 条件 | 结果 |
+| --- | --- | --- |
+| 1 | Human decisions fully registered | **`PASS`**（决定 1 ～ 12 ＋ **Supplementary Human Naming Decision**） |
+| 2 | `F-1` ～ `F-14` ＋ `F-17` = ALL PASS | **`PASS`** |
+| 3 | New Blocking Contradiction = NONE | **`PASS`** |
+
+**C. `F-1` ～ `F-14` ＋ `F-17` 复跑逐项**
+
+| # | Criterion | 复跑依据 | 结果 |
+| --- | --- | --- | --- |
+| `F-1` | Manifest carrier model 已显式登记（含 package-level property 集合与 grouping boundary） | **`G-1` 解除** —— `"package"` ／ `"datasets"` grouping literal 与 package-scoped ／ dataset-entry property literal 已登记（**§4.3.25** A ／ B） | **`PASS`**（原 `BLOCKED`） |
+| `F-2` | `role → artifact` carrier 形态 ＋ cardinality ／ uniqueness invariant | 决定 2；entry literal `"role"` ／ `"artifact"` 已登记 | **`PASS`** |
+| `F-3` | presence metadata 与 `role → artifact` 可确定、唯一、可判定地关联 | 决定 2；`"record_count"` ＋ `"datasets"` membership 为 inclusion 的物理表示 | **`PASS`** |
+| `F-4` | business dataset top-level carrier 形态 ＋ `K-2` 兼容 | 决定 3（`B-A` bare record array） | **`PASS`** |
+| `F-5` | `included ＋ record_count = 0` 与 `not included` 可区分 | 决定 3 ＋ `C-8`；membership 表示 inclusion；**不**引入 MUST-NOT-EXIST 规则 | **`PASS`** |
+| `F-6` | record carrier 形态（含是否强制 JSON object ／ 是否允许 carrier-level 属性） | 决定 5（强制 JSON object）＋ 决定 6；**`G-2` 解除** —— reserved namespace literal `"_meta"` 已登记（**§4.3.25** F） | **`PASS`** |
+| `F-7` | canonical field carrier policy ＋ 不改变 canonical field semantic | 决定 7（`F-A`） | **`PASS`** |
+| `F-8` | carrier 不违反 `C-1` ～ `C-10` | 决定 3 ／ 5 ／ 7 ／ 10 | **`PASS`** |
+| `F-9` | dataset-level provenance reference 的 carrier 已登记 | 决定 4（Manifest 为 authoritative）＋ `"provenance_ref"` | **`PASS`** |
+| `F-10` | locator carrier ＋ 分层不混合 ＋ `K-16` 关联 ／ cardinality | 决定 8（`P-A`，位于 `"_meta"` 内；observation-level；双向 cardinality） | **`PASS`** |
+| `F-11` | `Mapping ／ Resolution Basis` carrier ＋ 确定性关联 | 决定 9（`MB-A`，与 `P-A` 同一 nested structure，位于 `"_meta"` 内） | **`PASS`** |
+| `F-12` | carrier 层不压平 `valid absence` ／ `missing` ／ `not applicable` 的语义 | 决定 10（沿用 `C-2`） | **`PASS`** |
+| `F-13` | carrier 层无 silent fix-up | 决定 7 | **`PASS`** |
+| `F-14` | 已知 option combination 的 dependency ／ incompatibility 已显式登记，且无未登记的跨选择冲突 | **§4.3.26** C（决定 1 ～ 12 组合一致性）＋ naming 决定**未**引入新组合约束 | **`PASS`** |
+| `F-17` | integrity evidence 的 physical carrier（位置与 grouping boundary）已登记，且不与 business field 混淆 | 决定 1 ＋ `"integrity_evidence"`（**dataset-entry scope**）；algorithm 仍属 `Final Import Contract` | **`PASS`** |
+
+**Gate 2 结论：`F-1` ～ `F-14` ＋ `F-17` = **ALL `PASS`**。
+
+**D. Residual（非 blocking —— 透明记录）**
+
+`P-A` nested provenance structure 与 `MB-A` basis 的**位置**已固定（位于 `"_meta"` 内，见 **§4.3.25** F）；
+其**内部 member 名称**不在 `G-1` ／ `G-2` 的授权范围内，且**无**任何 mandatory criterion
+（`F-1` ～ `F-14` ＋ `F-17`）要求其内部 property 集合 —— 因此**不构成** blocking gap。
+若后续 implementation 需要固定这些内部名称，属**独立 naming decision**，**不得**由 Agent 自行推断。
+
+**E. Non-Implementation Confirmation**
+
+**未**创建 package directory ／ JSON sample ／ `manifest.json` 实际文件 ／ dataset artifact ／ ZIP ／ archive ／
+JSON Schema ／ parser ／ serializer ／ validator ／ Adapter；
+**未**定义 integrity algorithm ／ unknown-property runtime behavior ／ path validation implementation。
+本记录**仅**完成 design registration 与 closure validation —— **design resolution ≠ runtime implementation**。
+
+**F. Downstream Boundary（保持 —— 未越界）**
+
+```
+Final Import Contract              = DESIGN PENDING
+Snapshot / Import Contract overall = DESIGN PENDING
+Adapter Boundary                   = DESIGN PENDING
+POC Design v0.2                    = DRAFT
+```
+
+**G. Historical Preservation**
+
+`§4.3.26`（首次 closure attempt = `NOT SATISFIED`）与其中记录的 **Decision Gap `G-1` ／ `G-2`**
+**保留**为**时点记录**，**未**回写；PR #61 `Field Carrier Mapping Design Review（Review Finding）`
+**完整保留**（含 `RF-X1` ～ `RF-X6` 与 illustrative 声明）。
+
+**执行状态（本 Closure Re-run 时点）**
+
+```
+Field Carrier Mapping              = DESIGN RESOLVED
+Human Decision                     = RECORDED
+Naming Decision（G-1 ／ G-2）       = RECORDED
+Closure                            = PASS
+State Transition                   = EXECUTED
 
 Final Import Contract              = DESIGN PENDING
 Snapshot / Import Contract overall = DESIGN PENDING
