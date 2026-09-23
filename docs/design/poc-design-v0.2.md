@@ -346,7 +346,7 @@ candidate 判断：
 >
 > **current-state（Issue #94）：** `GSD-1` 已 **`REGISTERED`** —— 选择 **`§1 Option 2`**（见 **`§1.11`**）。
 > 上表其余内容仍为其时的 candidate 描述，**未**因该选择而改写；`§1 Option 2` 的具体 canonical wording
-> 仍待 `GSD-4` ～ `GSD-8` 裁定（**`GSD-2` ／ `GSD-3` 已于 Issue #96 ／ #98 分别登记 wording boundary 与 success boundary layering**，见 **`§1.12`** ／ **`§1.13`**），§1 四项 top-level status **仍为 `DESIGN PENDING`**。
+> 仍待 `GSD-5` ～ `GSD-8` 裁定（**`GSD-2` ／ `GSD-3` ／ `GSD-4` 已于 Issue #96 ／ #98 ／ #100 分别登记 wording boundary、success boundary layering 与 In Scope canonical categories**，见 **`§1.12`** ／ **`§1.13`** ／ **`§1.14`**），§1 四项 top-level status **仍为 `DESIGN PENDING`**。
 
 ### 1.7 Proposed Minimum Closure Criteria（candidate —— 待 Human 批准）
 
@@ -377,16 +377,17 @@ candidate 判断：
 | `GSD-1` | §1 采用哪种 conceptual closure model？ | `§1 Option 0` ／ `Option 1` ／ `Option 2` ／ 其他 | 见 1.6 | §1 是否进入后续独立 Design Change ／ Closure |
 | `GSD-2` | P0 Design Goal 的 canonical wording boundary | ① 只继承 `FROZEN` 表述；② 继承 ＋ 引用 `§2` ～ `§5` 作为「如何满足 P0」的 approved downstream facts（限定引用深度）**← `SELECTED`（`REGISTERED`，Issue #96；**strict limited-reference interpretation**）** | ② 更具可审计的 composition，但需界定引用范围，避免把 downstream design 写成 goal 本身 | §1 goal 段落形态 |
 | `GSD-3` | POC Success Boundary 的层次结构 | ① design-time ／ runtime-test evidence ／ business-value evidence 三层**← `SELECTED`（`REGISTERED`，Issue #98）**；② 其他分层 | 三层与 `FZ-4` 各项一一映射，且天然阻止「已成功」误读 | §1 success 段落语义（`S-5` ／ `S-9`） |
-| `GSD-4` | In Scope 的 canonical categories | ① P0 capability scope ＋ supporting infrastructure ＋ quality ／ safety boundary 三类；② 其他 | ① 直接支撑 `S-3`，避免 supporting infrastructure 被读成新 P0 场景 | §1 In Scope 结构 |
+| `GSD-4` | In Scope 的 canonical categories | ① P0 capability scope ＋ supporting infrastructure ＋ quality ／ safety boundary 三类**← `SELECTED`（`REGISTERED`，Issue #100）**；② 其他 | ① 直接支撑 `S-3`，避免 supporting infrastructure 被读成新 P0 场景 | §1 In Scope 结构 |
 | `GSD-5` | Out of Scope ／ P1 ／ Prohibited ／ Deferred 的分类方式 | ① 四类分离；② 其他 | 四类分离支撑 `S-4`，避免「都不做」式压平 | §1 Out of Scope 结构 |
 | `GSD-6` | `§6` ～ `§10` remaining pending 是否阻止 §1 conceptual closure？ | ① 不阻止，§1 只登记 interface ／ dependency expectation；② 阻止，需先完成相关层；③ 条件性 | ① 与「§1 是 goal ／ scope 层」一致；② 会把 §1 与多章设计耦合 | §1 closure 时点与顺序 |
 | `GSD-7` | 是否接受 proposed minimum closure criteria `S-1` ～ `S-14`？ | 接受 ／ 调整 ／ 拒绝 | 若调整，需给出替代 criteria | §1 后续 closure gate |
 | `GSD-8` | 是否授权后续独立 §1 Design Change ／ Closure PR？ | 授权 ／ 不授权 | 授权后方可由该 PR 登记 §1 的 canonical goal ／ scope 与状态转换 | §1 是否可离开 `DESIGN PENDING` |
 
-> **current-state（Issue #94 ／ #96 ／ #98）：** `GSD-1` = **`REGISTERED`**（**`§1 Option 2`**，见 **`§1.11`**）；
+> **current-state（Issue #94 ／ #96 ／ #98 ／ #100）：** `GSD-1` = **`REGISTERED`**（**`§1 Option 2`**，见 **`§1.11`**）；
 > `GSD-2` = **`REGISTERED`**（**Option ② —— FROZEN inheritance ＋ limited downstream composition references**，**strict limited-reference interpretation**，见 **`§1.12`**）；
 > `GSD-3` = **`REGISTERED`**（**Option ① —— design-time ／ runtime-test evidence ／ business-value evidence 三层 POC Success Boundary**，见 **`§1.13`**）；
-> **`GSD-4` ～ `GSD-8` 仍为 `PENDING`**。
+> `GSD-4` = **`REGISTERED`**（**Option ① —— P0 capability scope ／ supporting infrastructure ／ quality ／ safety boundary 三类 In Scope canonical categories**，见 **`§1.14`**）；
+> **`GSD-5` ～ `GSD-8` 仍为 `PENDING`**。
 
 **已被 `FROZEN` 唯一决定、因此**不**列为 Human Decision 的事项：**
 
@@ -442,8 +443,9 @@ implementation code ／ schema ／ Mock API ／ Mock Dataset
 §1 closure model（GSD-1）           = REGISTERED（§1 Option 2 —— Inherited scope ＋ downstream composition contract）
 §1 P0 Goal wording boundary（GSD-2）= REGISTERED（Option ② ＋ strict limited-reference interpretation；见 §1.12）
 §1 POC Success Boundary（GSD-3）    = REGISTERED（Option ① —— design-time ／ runtime-test evidence ／ business-value evidence 三层；见 §1.13）
-GSD-4 ～ GSD-8                     = PENDING
-POC success                        = NOT CLAIMED（需 runtime-test evidence ＋ business-value evidence）
+§1 In Scope categories（GSD-4）     = REGISTERED（Option ① —— P0 capability scope ／ supporting infrastructure ／ quality ／ safety boundary 三类；见 §1.14）
+GSD-5 ～ GSD-8                     = PENDING
+POC success                        = NOT CLAIMED（需 runtime-test evidence ＋ business-value evidence；真实 KPI 需真实客户 baseline）
 S-1 ～ S-14                        = candidate（not Human-approved）
 §2 P0 Business Rules               = DESIGN RESOLVED
 §3 System Boundary                 = DESIGN RESOLVED（Implementation = NOT STARTED）
@@ -453,16 +455,16 @@ S-1 ～ S-14                        = candidate（not Human-approved）
 §7 Permission & Security           = PARTIAL（Read ／ Write Boundary = DESIGN RESOLVED；其余 DESIGN PENDING）
 §10 Architecture                   = 尚无正式 ADR
 POC Design v0.2                    = DRAFT
-POC success                        = 未声明（需 runtime ／ test evidence 与真实客户 baseline）
 ```
 
 **本 Review 不作出任何 Human Decision。**
 **本 Review 未创建任何 runtime artifact ／ 未选择 architecture ／ 未修改 `FROZEN` Discovery。**
 
-> **current-state（Issue #94 ／ #96 ／ #98）：** `GSD-1` = **`REGISTERED`**（`§1 Option 2`，见 **`§1.11`**）；
+> **current-state（Issue #94 ／ #96 ／ #98 ／ #100）：** `GSD-1` = **`REGISTERED`**（`§1 Option 2`，见 **`§1.11`**）；
 > `GSD-2` = **`REGISTERED`**（Option ② ＋ strict limited-reference interpretation，见 **`§1.12`**）；
 > `GSD-3` = **`REGISTERED`**（Option ① —— 三层 POC Success Boundary，见 **`§1.13`**）；
-> `GSD-4` ～ `GSD-8` = **`PENDING`**；`S-1` ～ `S-14` = **candidate（not Human-approved）**；
+> `GSD-4` = **`REGISTERED`**（Option ① —— 三类 In Scope canonical categories，见 **`§1.14`**）；
+> `GSD-5` ～ `GSD-8` = **`PENDING`**；`S-1` ～ `S-14` = **candidate（not Human-approved）**；
 > §1 四项 top-level status **仍为 `DESIGN PENDING`**；**POC success = NOT CLAIMED**。
 
 ### 1.11 Human Decision Record —— `GSD-1`（`SIMULATED POC Design Policy` ＋ `Human-approved`）
@@ -853,6 +855,141 @@ GSD-1                             = REGISTERED（§1 Option 2 —— Inherited s
 GSD-2                             = REGISTERED（Option ② ＋ strict limited-reference interpretation）
 GSD-3                             = REGISTERED（Option ① —— design-time ／ runtime-test evidence ／ business-value evidence 三层）
 GSD-4 ～ GSD-8                    = PENDING
+S-1 ～ S-14                       = candidate（not Human-approved）
+§1 P0 设计目标                     = DESIGN PENDING ← 本 Decision 不推进状态
+§1 POC 成功边界                    = DESIGN PENDING ← 本 Decision 不推进状态
+§1 In Scope                       = DESIGN PENDING ← 本 Decision 不推进状态
+§1 Out of Scope                   = DESIGN PENDING ← 本 Decision 不推进状态
+POC success                       = NOT CLAIMED
+POC Design v0.2                   = DRAFT
+```
+
+### 1.14 Human Decision Record —— `GSD-4`（`SIMULATED POC Design Policy` ＋ `Human-approved`）
+
+**Registration Status：`REGISTERED`**
+
+依据 **Issue #100 Human Decision**。本记录**只**登记已批准的 `GSD-4`（In Scope 的 canonical organization
+structure），并执行最小必要 current-state synchronization —— **不**决定 `GSD-5` ～ `GSD-8`、
+**不**接受 `S-1` ～ `S-14`、**不**新增任何 P0 ／ business scenario、**不**写 final §1 In Scope canonical wording、
+**不**决定 Out of Scope ／ P1 ／ Prohibited ／ Deferred 分类、**不**推进 §1 四项 top-level status、
+**不**做 Architecture ／ implementation 选择、**不**修改 `FROZEN` Discovery 与 `§2` ～ `§5` approved policy。
+
+```
+Decision Scope     = §1.8 `GSD-4`（In Scope canonical categories）
+Decision Authority = Human（Issue #100）
+Selected Option    = Option ① —— P0 capability scope ＋ supporting infrastructure ＋ quality ／ safety boundary 三类
+Write Scope        = docs/design/poc-design-v0.2.md §1
+```
+
+本 Decision 只决定 **In Scope 的 canonical organization structure**，**不**新增任何 P0 业务目标、场景、能力或
+success claim。
+
+**`GSD-4.1` Category 1 —— P0 capability scope（APPROVED）**
+
+承载 **`FROZEN` Discovery 已批准的 P0 业务能力及其被 §1 合法继承的 scope**。边界：
+
+```
+只能来自已批准的 FROZEN P0 ／ Problem Statement ／ P1 boundary，
+以及已批准 downstream design 对这些 P0 能力的受限 supporting facts
+不得因本次分类新增新业务场景
+不得把 supporting infrastructure 或 quality ／ safety requirement 反向提升成新的 P0 capability
+不得把未批准 candidate 写成 canonical P0 scope
+不得借 GSD-4 重写或扩大 FROZEN scope
+
+In Scope classification ≠ New P0 capability authorization
+```
+
+**`GSD-4.2` Category 2 —— Supporting infrastructure（APPROVED）**
+
+承载 **为已批准 P0 capability 提供必要支撑的系统 ／ 数据 ／ integration ／ Agent ／ Tool 等 supporting design
+obligations**；目的是避免把这些必要支撑误读成「新的业务目标」。边界：
+
+```
+supporting infrastructure 必须可追溯到已批准 P0 capability 或其必要 design dependency
+「In Scope」只表示它属于当前 POC 的设计 ／ 实现边界，不表示它本身成为新的 P0
+不得因其被列为 In Scope 而扩大业务范围
+不得在本 Decision 中选择具体 Architecture ／ framework ／ database ／ API ／ deployment
+不得在本 Decision 中创建 runtime implementation authorization
+
+Supporting infrastructure in scope
+≠ New business scope
+≠ New P0
+≠ Architecture choice
+≠ Implementation authorization
+```
+
+**`GSD-4.3` Category 3 —— Quality ／ safety boundary（APPROVED）**
+
+承载 **当前 POC 必须满足的 quality ／ safety ／ control obligations**，可包括当前 canonical design 已批准或继承的
+约束类别：explainability ／ traceability；permission ／ authorization boundary；fail-closed ／ fail-safe expectation；
+deterministic ／ evidence fidelity requirement；auditability；data ／ calculation ／ Tool correctness expectations；
+其他已批准的 quality ／ safety obligations。边界：
+
+```
+本 category 是 quality ／ control boundary，不是新的业务功能列表
+不得把 quality ／ safety requirement 误写成新的 P0 capability
+不得在本 Decision 中补定义具体 test case ／ threshold ／ KPI ／ Eval harness
+不得因此声明 POC SUCCESS
+不得因此把 §7 ／ §9 ／ §10 等尚未完成的设计状态自动推进
+
+Quality ／ safety in scope
+≠ New business capability
+≠ Test pass
+≠ POC success
+```
+
+**`GSD-4.4` Category semantics（APPROVED）**
+
+```
+P0 capability scope      = what business capability the POC is intended to support
+Supporting infrastructure = what enabling system ／ data ／ integration ／ Agent ／ Tool boundary
+                            is required to support that approved capability
+Quality ／ safety boundary = what non-functional ／ control ／ evidence ／ safety obligations
+                            the POC must satisfy
+```
+
+三类用于 **canonical organization ／ readability ／ auditability**；**不要求**成为互斥技术 bucket；
+某些 design fact 可同时具有 supporting ＋ quality obligation，但其 canonical placement **必须**避免重复定义或
+scope inflation；分类结构本身**不改变** `FROZEN` authority；final §1 In Scope wording 仍属后续独立
+Design Change ／ Closure 工作。
+
+**`GSD-4.5` Relationship to `GSD-5`（保持）**
+
+本 Decision **不决定** Out of Scope、P1、Prohibited、Deferred —— 仍属 **`GSD-5`**。因此当前**不得**借 GSD-4：
+把任何内容放入 final Out of Scope；关闭 P1；创建新的 prohibited list；创建新的 deferred list；
+决定四类之间的 final classification rule。
+
+**`GSD-4.6` Relationship to `GSD-6` ～ `GSD-8`（保持）**
+
+本 Decision **不决定** `GSD-6`（§6 ～ §10 remaining pending 是否阻止 §1 conceptual closure）、
+`GSD-7`（是否接受 `S-1` ～ `S-14`）、`GSD-8`（是否授权后续独立 §1 Design Change ／ Closure PR）。因此：
+
+```
+GSD-5 ～ GSD-8 = PENDING
+S-1 ～ S-14 = candidate（not Human-approved）
+§1 four top-level status = DESIGN PENDING
+POC Design v0.2 = DRAFT
+POC success = NOT CLAIMED
+```
+
+**`GSD-4.7` Boundaries preserved（保持）**
+
+本 Decision **未**修改 `FROZEN` Discovery、Problem Statement ／ P0 ／ P1；**未**新增业务目标 ／ 场景 ／ capability；
+**未**把 supporting infrastructure 或 quality ／ safety obligations 变成新的 P0；**未**发明 KPI ／ baseline ／
+business evidence；**未**把 simulated design evidence 写成 real business evidence。**未**修改 `§2` ～ `§5` 已批准
+design policy；**未**提前决定 `§6` ～ `§10` remaining design；**未**选择 Architecture；**未**创建 ADR；
+**未**写 runtime implementation；**未**定义具体 test ／ eval ／ KPI；**未**创建 credential ／ secret；
+**未**推进 §1 four top-level status。
+
+**执行状态（本 Registration 时点）**
+
+```
+GSD-1                             = REGISTERED（§1 Option 2 —— Inherited scope ＋ downstream composition contract）
+GSD-2                             = REGISTERED（Option ② ＋ strict limited-reference interpretation）
+GSD-3                             = REGISTERED（Option ① —— design-time ／ runtime-test evidence ／ business-value evidence 三层）
+GSD-4                             = REGISTERED（Option ① —— P0 capability scope ／ supporting infrastructure ／
+                                     quality ／ safety boundary 三类 In Scope canonical categories）
+GSD-5 ～ GSD-8                    = PENDING
 S-1 ～ S-14                       = candidate（not Human-approved）
 §1 P0 设计目标                     = DESIGN PENDING ← 本 Decision 不推进状态
 §1 POC 成功边界                    = DESIGN PENDING ← 本 Decision 不推进状态
