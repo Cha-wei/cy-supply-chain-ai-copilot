@@ -23241,8 +23241,8 @@ Status Change  = NONE（Adapter Boundary 保持 DESIGN PENDING）
 | `AC-19` | `sourcing_status` **不建立全局 source enum**；`source vocabulary → canonical eligibility condition` 为 mapping contract；`Warehouse` **不是** canonical entity（source ／ mapping ／ scope context） | `§4.5.11` ／ `§4.5.12` |
 | `AC-20` | Physical carrier **design** 已关闭（FCM ／ FIC = `DESIGN RESOLVED`）；**仍未实现**的是 runtime ／ source-specific ／ **Adapter realization** | `§4.3.16` ／ `§4.3.17` |
 | `AC-21` | `RBAC` ／ `Data Scope` ／ `Tool Permission` ／ `Secret Handling` = **`DESIGN PENDING`**；**不得**将真实企业 credentials 放入 Git，**不得**将 secrets 写入 prompt ／ logs；`AI Effective Permission = User Permission ∩ Data Scope ∩ Tool Permission ∩ Workflow State ∩ POC Policy`。**current-state（`Decision 7` ／ Issue #86）：** Adapter Boundary **只**登记 **Adapter ↔ `Permission & Security` 的 interface expectation**（**Option ① —— declarative access-requirement interface**：Adapter 声明执行已批准职责所需的 **minimum authorized access requirements**，**不**拥有 authorization decision ／ credential lifecycle ／ Secret Handling；required authorized access 不可用 ／ 不满足 ／ 失效 ／ 无法可靠确认 ⇒ **fail closed**）；`RBAC` ／ `Data Scope` ／ `Tool Permission` ／ `Secret Handling` **仍为 `DESIGN PENDING`**，`§7` **未**关闭 | `§7` ／ `§4.6.10` `Decision 7` Human Decision Record（Issue #86） |
-| `AC-22` | **current approved canonical policy 对 Adapter 及相关层有明确规定的事项**（**仅**列**已被批准文本明确规定**者；**不**引用任何 Review Finding，**亦不**把「可从批准文本推导」当作已批准 ownership）：<br>• **`§3` read boundary**：POC business data **只能**经 Controlled Export 进入 Data Landing Zone；**不得**直连 source system ／ 绕过 Controlled Export（`§3.1` ／ `§3.3` ／ `§3.4`）；unavailable ⇒ fail closed（`§3.10`）<br>• **source-specific semantic mapping responsibility ＋ mapping constraints**：具体 `source value ／ field → canonical value` 由 **source-specific mapping ／ Adapter** 提供，且 mapping **必须** deterministic ／ explicit ／ traceable ／ reproducible，**不得** fuzzy ／ similarity ／ LLM 选择；Adapter **不得**重新定义 canonical semantic（逐条对应各 Human-approved mapping records：`§4.5.21` `effective_arrival_date`、`§4.5.11` `sourcing_status`、`§4.5.2` 一般原则）<br>• **`Data Validation`** = Layer 2 ～ Layer 4 conceptual semantics ＋ validation layering（`§4.4.2` ／ `§4.4.3`）<br>• **`Final Import Contract`** = acceptance ／ rejection 判定与 package disposition（`§4.3.28 F` ／ `§4.3.29`）<br>• **`FCM`** = record ／ dataset carrier shape 与 approved literals（`§4.3.25` ／ `§4.3.28 E`）<br>• **Adapter Boundary 通用职责（`Decision 1(a)`，**Issue #72 Human-approved**）**：在 **Controlled Export ／ Data Landing Zone 之后** —— 读取 ／ 提取 exported artifacts ／ source records、`exported-artifact format ／ protocol handling`、`generic source-field identification`、`source-specific mapping execution ／ realization`（`§4.6.10` Decision 1 Human Decision Record）；**明确不含** source-system connectivity ／ Controlled Export 上游链路 ／ export-side protocol ／ credentials<br>• **producer ／ Package Assembly ownership（`Decision 2`，**Issue #74 Human-approved**）**：**每个 Adapter** 拥有其 **canonical dataset artifact production**，并负责将其自身掌握的 source-derived **record-level provenance ／ evidence locator ／ `mapping_basis`** 写入**已批准 carrier**（且**不**生成 package-level acceptance ／ disposition）；**独立 `Package Assembly`（conceptual responsibility）** 拥有 `snapshot_package_id` ／ Manifest 生成、package-level artifact references ／ package organization 以及**完整、原子** Snapshot Package 的组装，并将完整 package 提交 `Final Import Contract`；`Final Import Contract` **只**验证 ／ disposition，**不生产** artifacts ／ Manifest ／ package（`§4.6.10` Decision 2 Human Decision Record）<br>• **unresolved ／ unsupported mapping 策略 ＋ Failure ／ Quarantine Interface 授权（`Decision 3`，**Issue #76 Human-approved**）**：**条件组合，以 `UF-2` ／ fail-closed 为主** —— approved missing（mapping contract 明确允许 source absence → canonical `null` ／ missing）为**正常 missing**；unresolved ／ ambiguous ／ conflicting ／ unsupported 时 Adapter 对 **affected dataset artifact fail closed**，**不产出** canonical artifact，**禁止** silent skip ／ 强制压成 `null` ／ fuzzy ／ similarity ／ LLM guess ／ silent normalization ／ 自行扩展 canonical semantic ／ enum ／ mapping contract；该 failure context 由**已授权单独设计**的 **non-canonical Adapter Failure ／ Quarantine Interface** 承载（**不得**进入 Snapshot Package、**不得**新增现有 canonical record ／ dataset ／ `"_meta"` 字段、**不得**改现有 FCM ／ FIC carrier 与 canonical schema ／ semantic；**物理形态 ／ schema 仍未定**，**尚未** operationally available）；Package Assembly **不得**补 mapping ／ placeholder ／ 把 unresolved 当成正常 `null`（`§4.6.10` Decision 3 Human Decision Record）<br>• **source-specific mapping rule representation boundary（`Decision 4`，**Issue #78 Human-approved**）**：**Option ① —— 只登记 contract requirements，representation carrier deferred** —— 任何 source-specific mapping ／ resolution rule **必须** explicit ／ deterministic ／ traceable ／ reproducible、明确 source ／ source scope 与 logical dataset ／ canonical target、具有可审计可复现的 rule ／ revision identity 且可追溯「某 canonical result 出自哪一 approved rule ／ revision」；**不得**依赖 hidden default ／ fuzzy ／ similarity ／ LLM guess ／ silent normalization、**不得**重新定义或扩展 canonical semantic ／ enum ／ mapping contract、**不得**建立 Global Source-Field Precedence、**不得**越过已 `DESIGN RESOLVED` 的 canonical mapping contracts；missing ／ conflicting ／ 非确定性 rule ⇒ 服从 **`Decision 3`** fail-closed；**representation carrier（YAML ／ JSON ／ DB ／ code ／ rule engine ／ service 等）与强制 `Mapping Registry` component 均不规定**，留给 Architecture ／ Implementation（`§4.6.10` Decision 4 Human Decision Record）<br>• **`Mapping ／ Resolution Basis` semantic granularity（`Decision 5`，**Issue #82 Human-approved**）**：**Option ① —— minimal rule ／ revision reference** —— `mapping_basis` 以一个 **exact JSON string** 标识本次 semantic mapping ／ resolution 使用的 **approved mapping rule identity ＋ revision identity**（可回答「该 canonical result 出自哪一 approved rule 的哪一 revision」）；**职责分离**：`evidence` 承载 Stable Source Evidence Locator、`mapping_basis` 只标识 approved rule ＋ revision、approved mapping rule 承载 deterministic mapping ／ resolution logic，**可复现性由三者组合建立**；**不要求、也不允许** `mapping_basis` 承载 source evidence ／ rule logic ／ explanation ／ rationale ／ 自由文本 ／ 新 provenance schema ／ mini-schema；**具体 string syntax ／ encoding（`rule-id@revision` ／ path-like ／ URI-like ／ namespaced ／ hash 等）留属 Architecture ／ Implementation**；保持 exact-string **不 normalize ／ trim ／ case-fold ／ Unicode-normalize ／ numeric coercion** 边界（`§4.6.10` Decision 5 Human Decision Record）<br>• **multi-Adapter governance ／ canonical semantic drift detection（`Decision 6`，**Issue #84 Human-approved**）**：**Option ② —— explicit cross-Adapter consistency obligation** —— 多个 Adapter **可以**拥有不同 source-specific mapping ／ resolution rules，但**只要**指向**相同或重叠**的 canonical entity ／ field ／ semantic ／ relationship ／ applicability scope（或其他共同影响同一 canonical interpretation 的 mapping），其 approved mapping rules ／ revisions **必须**可被检查为：与 current approved canonical contract 一致、与各自声明的 source scope ／ logical dataset ／ canonical target 一致、**不存在**未解释的 semantic contradiction，且**不依赖** implicit Adapter priority ／ first-wins ／ latest-wins ／ source priority ／ LLM ／ heuristic arbitration ／ silent normalization；consistency check 的**两个 conceptual points** = ① rule registration ／ revision change（新 rule ／ 修改 rule ／ 新 revision ／ source scope ／ canonical target 扩展在可被视为 approved ／ usable **之前**）② overlapping canonical use（多 Adapter outputs 被共同用于同一 canonical context ／ Analysis Run **之前**）；**canonical-first（`MS-1`）** 保持 authoritative —— canonical semantic 由 canonical design 定义、Adapter 只做 source-specific mapping ／ realization、**不得**引入第二套 canonical identity ／ vocabulary、**不得**建立 Global Source-Field Precedence（`MS-2 precedence-first` 仍为 `NOT COMPATIBLE`）；unresolved drift **不得** first-wins ／ latest-wins ／ Adapter priority ／ source priority ／ LLM ／ heuristic ／ silent reconciliation，**不得**由 Package Assembly 自行解释或修复，**不得**把 unresolved drift 重新解释为正常 missing ／ `null`；pre-canonical unresolved drift 与 **`Decision 3`** fail-closed 对齐（affected dataset artifact **不产出** canonical artifact，**不**为「让 Data Validation 有东西可报」而先生成错误 canonical artifact），既有 unresolved ／ consistency taxonomy **只**在真实 canonical validation context 中适用；**检测 mechanism（CI ／ test ／ registry validation ／ runtime validator ／ service ／ workflow node ／ DB ／ API ／ manual review 等）与任何 Cross-Adapter Registry ／ Drift Detector component 均不规定**，属 **Architecture ／ Implementation**（`§10`）（`§4.6.10` Decision 6 Human Decision Record）<br>• **Adapter ↔ `Permission & Security` interface expectation（`Decision 7`，**Issue #86 Human-approved**）**：**Option ① —— declarative access-requirement interface** —— Adapter Boundary **只**声明执行其已批准职责所需的 **minimum authorized access requirements ／ security dependencies**，**不**决定 Permission & Security 如何实现授权。Adapter **必须**能够声明至少以下 conceptual requirements：**resource boundary**（仅限其职责所需的 **Data Landing Zone-side** exported artifacts ／ resources）；**operation ／ capability**（完成职责所需的最小 capability；**不得**扩展为 Production write）；**logical data scope**（所需 logical dataset ／ source scope ／ applicable exported-artifact scope）；**security dependency**（运行该 Adapter 需要一个满足上述要求的 **authorized access context**）；**secret dependency（when applicable）**（若未来实现机制确实需要 credential ／ secret，Adapter **只**声明该 dependency ／ requirement 存在，**不**声明 secret value，**不**选择其 provisioning ／ storage ／ retrieval 机制）—— 该声明的语义是「Adapter 需要什么条件才能合法执行」，**不是**「Adapter 有权自行授予或取得什么权限」；**不赋予 Adapter：** RBAC policy、user ／ role definition、Data Scope policy ／ approval、Tool Permission policy ／ approval、authorization decision、authentication mechanism、identity ／ principal model、credential issuance ／ provisioning ／ storage ／ retrieval ／ delivery、secret rotation ／ lifecycle ／ secret manager selection、policy evaluation、permission escalation、emergency ／ break-glass policy（上述仍由 `§7` 后续设计负责，**不**因本 Decision 标为 `DESIGN RESOLVED`）；required authorized access 未提供 ／ 不满足所需 resource ／ scope ／ capability ／ 已失效 ／ 无法被可靠确认 ⇒ Adapter **必须 fail closed ／ do not proceed**，**不得**自行扩大 Data Scope、**不得**自行提升 Tool Permission、**不得**改用更高权限身份、**不得**猜测或选择替代 credential、**不得**使用未批准 credential、**不得**绕过 Permission & Security policy、**不得**绕过 Data Landing Zone、**不得** fallback 到 source-system direct access ／ Production DB ／ API、**不得**把缺少授权伪装成正常 data missing；该 failure 是 **Permission ／ Security dependency failure**，**不得**被重新解释为 canonical mapping unresolved ／ canonical missing ／ `null` ／ business `DATA_INCOMPLETE` ／ Data Validation reason ／ Adapter mapping conflict ／ package disposition，其 reporting ／ audit ／ operational handling 留给 `§7` ／ `§8` ／ Architecture ／ Implementation；**不扩展** `Decision 3` 的 non-canonical Failure ／ Quarantine Interface 的 schema ／ responsibility；**secret boundary**：**不得**在 canonical design 写真实 username ／ password ／ token ／ API key ／ secret value，**不得**在 mapping rule 嵌入真实 credential ／ secret，**不得**在 `mapping_basis` ／ provenance ／ canonical record ／ `"_meta"` 承载 credential ／ secret，**不得**把 secret 写入 prompt ／ log ／ Git，**不选择** Vault ／ Secrets Manager ／ Kubernetes Secret ／ env var ／ OAuth ／ service account ／ API key 等具体 mechanism；该 requirement **严格限于 Data Landing Zone ／ Controlled Export 之后**，**不含** source-system ／ ERP ／ SRM ／ Production DB credentials、export-side protocol credentials、Controlled Export 上游身份、Production API write credential（若要 Adapter 直连 source system 须另走 Human-approved `§3` design change）；**interface expectation ≠ injection mechanism**：**不选择** security layer injection ／ pull ／ push credential delivery ／ broker ／ sidecar ／ environment injection ／ secret mount ／ token exchange ／ identity federation ／ service account ／ policy agent ／ auth middleware ／ API gateway 或任何具体 security runtime mechanism；existing **`AI Effective Permission` invariant 保持不变**（Adapter 的 declared requirement **不能**扩大 effective permission）（`§4.6.10` Decision 7 Human Decision Record）<br><br>**授权来源区分（**不得混同**）：** 上述 **`§3` ／ `§4.3` ／ `§4.4` ／ `§4.5` 条目为历史 **`Inherited Constraint`**；**`Decision 1(a)` ／ `Decision 1(b)`（Issue #72）、`Decision 2`（Issue #74）、`Decision 3`（Issue #76）、`Decision 4`（Issue #78）、`Decision 5`（Issue #82）、`Decision 6`（Issue #84）与 `Decision 7`（Issue #86）为本层 newly Human-approved registered policy** —— 二者同属 **current approved policy**，但**后者不得**被表述为 inherited constraint；`Decision 3` 的 fail-closed policy 与 interface 授权、`Decision 4` 的 contract requirements 与 carrier deferral、`Decision 5` 的 `mapping_basis` semantic 与 syntax deferral、`Decision 6` 的 cross-Adapter consistency obligation 与 canonical-first governance、`Decision 7` 的 declarative access-requirement interface expectation 均属 **registered**，**不是** inherited | `§3.1` ／ `§3.3` ／ `§3.4` ／ `§3.10` ／ `§4.3.25` ／ `§4.3.28` ／ `§4.3.29` ／ `§4.4.2` ／ `§4.4.3` ／ `§4.5.2` ／ `§4.5.11` ／ `§4.5.21` ／ `§4.6.10`（`Decision 1` ／ `Decision 2` ／ `Decision 3` ／ `Decision 4` ／ `Decision 5` ／ `Decision 6` ／ `Decision 7` HD Records） |
-| `AC-23` | **Adapter Boundary 的 ownership 列表**只在其**已获批准的部分**才成立；未获批部分**不得**写成 inherited：<br>① `RIF-11` 属 PR #65 的 **review-only Review Finding**，**不构成**已批准 policy（`AB-01`）；<br>② **仅凭「可由批准文本推导」不得**把 Adapter 的通用职责写成 inherited（`AB-05`）；<br>③ **`Decision 1(a)` 已于 Issue #72 获 Human Approval**，因此 `4.6.5 A` 中的**读取 ／ 提取、format ／ protocol handling、generic source-field identification、source-specific mapping execution** 现为 **registered**（见 `AC-22`）；<br>④ **`Decision 2` 已于 Issue #74 获 Human Approval**，因此 **producer ownership 与 `Package identity` ／ `manifest` generation** **不再属于未获批项** ⇒ 已 **registered**（见 `AC-22`）。<br>⑤ **`Decision 3` 已于 Issue #76 获 Human Approval**，因此 **unresolved ／ unsupported mapping 策略**（条件组合，以 `UF-2` ／ fail-closed 为主）与 **Adapter Failure ／ Quarantine Interface 的授权** 已 **registered**；该 interface 为 **non-canonical**，**不得**进入 Snapshot Package、**不得**新增现有 carrier 字段、**不得**改变 canonical schema ／ semantic，其**物理形态 ／ schema 仍未定**（**尚未** operationally available）。<br>⑥ **`Decision 4` 已于 Issue #78 获 Human Approval**，因此 **source-specific mapping rule 的 contract requirements**（explicit ／ deterministic ／ traceable ／ reproducible；source scope ／ canonical target ／ rule ＋ revision identity；禁 hidden default ／ fuzzy ／ similarity ／ LLM guess ／ silent normalization）与 **representation carrier deferral**（**不**规定 configuration ／ registry ／ code ／ DB ／ rule engine ／ service，**不创建**强制 `Mapping Registry` component）已 **registered**。<br>⑦ **`Decision 5` 已于 Issue #82 获 Human Approval**，因此 **`mapping_basis` 的语义粒度**已 **registered**（**Option ① minimal rule ／ revision reference** —— 只标识 approved mapping rule identity ＋ revision identity；`evidence` ／ `mapping_basis` ／ approved mapping rule 职责分离；不承载 evidence ／ rule logic ／ explanation ／ rationale ／ mini-schema）；**具体 string syntax ／ encoding 属 Architecture ／ Implementation**，**不属**本层待决。<br>⑧ **`Decision 6` 已于 Issue #84 获 Human Approval**，因此 **multi-Adapter governance ／ canonical semantic drift detection** 的边界已 **registered**（**Option ② —— explicit cross-Adapter consistency obligation** —— canonical-first（`MS-1`）保持 authoritative；多 Adapter 指向**相同或重叠**的 canonical entity ／ field ／ semantic ／ relationship ／ applicability scope 时，其 approved mapping rules ／ revisions **必须**满足显式一致性义务；consistency check 的两个 conceptual points = **rule registration ／ revision change** 与 **overlapping canonical use**；**禁止** Adapter priority ／ source priority ／ first-wins ／ latest-wins ／ LLM ／ heuristic ／ silent reconciliation，**不得**由 Package Assembly 自行解释或修复；unresolved drift 与 `Decision 3` fail-closed 对齐）；**具体 detection mechanism 属 Architecture ／ Implementation**，**不属**本层待决。<br>⑨ **`Decision 7` 已于 Issue #86 获 Human Approval**，因此 **Adapter ↔ `Permission & Security` 的 interface expectation** 已 **registered**（**Option ① —— declarative access-requirement interface** —— Adapter **只声明**执行已批准职责所需的 minimum authorized access requirements ／ security dependencies（resource boundary ／ operation ／ logical data scope ／ authorized access context ／ secret dependency），**不**拥有 RBAC ／ Data Scope ／ Tool Permission ／ authorization decision ／ credential lifecycle ／ Secret Handling；required authorized access 不可用 ／ 不满足 ／ 失效 ／ 无法可靠确认 ⇒ **fail closed ／ do not proceed**，禁 privilege expansion ／ 替代 credential 猜测 ／ policy bypass ／ source-system fallback；Permission ／ Security dependency failure **不得**伪装成 canonical missing ／ mapping unresolved ／ `DATA_INCOMPLETE` ／ Data Validation reason ／ package disposition，且**不扩展** `Decision 3` Failure ／ Quarantine Interface；**injection ／ broker ／ secret manager ／ auth runtime mechanism 属 Architecture ／ Implementation**，`§7` 各 remaining item 仍 `DESIGN PENDING`）。<br>**仍未决者（仅剩真正 pending 项）** —— **已授权但尚未设计的 Failure ／ Quarantine Interface 形态**、`Decision 8` 所辖事项（closure）、以及 **mapping rule representation 与 `mapping_basis` string syntax 的 Architecture ／ Implementation 选型**（属 `§10` ／ 实现，非本层待决）；**仍为本层 finding ／ option 者**交 Human Decision | `§4.3.28`（Bundle 1 ～ 6 登记范围）＋ 本 Review `AB-01` ／ `AB-05` ＋ `§4.6.10`（`Decision 1` ／ `Decision 2` ／ `Decision 3` ／ `Decision 4` ／ `Decision 5` ／ `Decision 6` ／ `Decision 7` HD Records） |
+| `AC-22` | **current approved canonical policy 对 Adapter 及相关层有明确规定的事项**（**仅**列**已被批准文本明确规定**者；**不**引用任何 Review Finding，**亦不**把「可从批准文本推导」当作已批准 ownership）：<br>• **`§3` read boundary**：POC business data **只能**经 Controlled Export 进入 Data Landing Zone；**不得**直连 source system ／ 绕过 Controlled Export（`§3.1` ／ `§3.3` ／ `§3.4`）；unavailable ⇒ fail closed（`§3.10`）<br>• **source-specific semantic mapping responsibility ＋ mapping constraints**：具体 `source value ／ field → canonical value` 由 **source-specific mapping ／ Adapter** 提供，且 mapping **必须** deterministic ／ explicit ／ traceable ／ reproducible，**不得** fuzzy ／ similarity ／ LLM 选择；Adapter **不得**重新定义 canonical semantic（逐条对应各 Human-approved mapping records：`§4.5.21` `effective_arrival_date`、`§4.5.11` `sourcing_status`、`§4.5.2` 一般原则）<br>• **`Data Validation`** = Layer 2 ～ Layer 4 conceptual semantics ＋ validation layering（`§4.4.2` ／ `§4.4.3`）<br>• **`Final Import Contract`** = acceptance ／ rejection 判定与 package disposition（`§4.3.28 F` ／ `§4.3.29`）<br>• **`FCM`** = record ／ dataset carrier shape 与 approved literals（`§4.3.25` ／ `§4.3.28 E`）<br>• **Adapter Boundary 通用职责（`Decision 1(a)`，**Issue #72 Human-approved**）**：在 **Controlled Export ／ Data Landing Zone 之后** —— 读取 ／ 提取 exported artifacts ／ source records、`exported-artifact format ／ protocol handling`、`generic source-field identification`、`source-specific mapping execution ／ realization`（`§4.6.10` Decision 1 Human Decision Record）；**明确不含** source-system connectivity ／ Controlled Export 上游链路 ／ export-side protocol ／ credentials<br>• **producer ／ Package Assembly ownership（`Decision 2`，**Issue #74 Human-approved**）**：**每个 Adapter** 拥有其 **canonical dataset artifact production**，并负责将其自身掌握的 source-derived **record-level provenance ／ evidence locator ／ `mapping_basis`** 写入**已批准 carrier**（且**不**生成 package-level acceptance ／ disposition）；**独立 `Package Assembly`（conceptual responsibility）** 拥有 `snapshot_package_id` ／ Manifest 生成、package-level artifact references ／ package organization 以及**完整、原子** Snapshot Package 的组装，并将完整 package 提交 `Final Import Contract`；`Final Import Contract` **只**验证 ／ disposition，**不生产** artifacts ／ Manifest ／ package（`§4.6.10` Decision 2 Human Decision Record）<br>• **unresolved ／ unsupported mapping 策略 ＋ Failure ／ Quarantine Interface 授权（`Decision 3`，**Issue #76 Human-approved**）**：**条件组合，以 `UF-2` ／ fail-closed 为主** —— approved missing（mapping contract 明确允许 source absence → canonical `null` ／ missing）为**正常 missing**；unresolved ／ ambiguous ／ conflicting ／ unsupported 时 Adapter 对 **affected dataset artifact fail closed**，**不产出** canonical artifact，**禁止** silent skip ／ 强制压成 `null` ／ fuzzy ／ similarity ／ LLM guess ／ silent normalization ／ 自行扩展 canonical semantic ／ enum ／ mapping contract；该 failure context 由**已授权单独设计**的 **non-canonical Adapter Failure ／ Quarantine Interface** 承载（**不得**进入 Snapshot Package、**不得**新增现有 canonical record ／ dataset ／ `"_meta"` 字段、**不得**改现有 FCM ／ FIC carrier 与 canonical schema ／ semantic；**物理形态 ／ schema 仍未定**，**尚未** operationally available）；Package Assembly **不得**补 mapping ／ placeholder ／ 把 unresolved 当成正常 `null`（`§4.6.10` Decision 3 Human Decision Record）<br>• **source-specific mapping rule representation boundary（`Decision 4`，**Issue #78 Human-approved**）**：**Option ① —— 只登记 contract requirements，representation carrier deferred** —— 任何 source-specific mapping ／ resolution rule **必须** explicit ／ deterministic ／ traceable ／ reproducible、明确 source ／ source scope 与 logical dataset ／ canonical target、具有可审计可复现的 rule ／ revision identity 且可追溯「某 canonical result 出自哪一 approved rule ／ revision」；**不得**依赖 hidden default ／ fuzzy ／ similarity ／ LLM guess ／ silent normalization、**不得**重新定义或扩展 canonical semantic ／ enum ／ mapping contract、**不得**建立 Global Source-Field Precedence、**不得**越过已 `DESIGN RESOLVED` 的 canonical mapping contracts；missing ／ conflicting ／ 非确定性 rule ⇒ 服从 **`Decision 3`** fail-closed；**representation carrier（YAML ／ JSON ／ DB ／ code ／ rule engine ／ service 等）与强制 `Mapping Registry` component 均不规定**，留给 Architecture ／ Implementation（`§4.6.10` Decision 4 Human Decision Record）<br>• **`Mapping ／ Resolution Basis` semantic granularity（`Decision 5`，**Issue #82 Human-approved**）**：**Option ① —— minimal rule ／ revision reference** —— `mapping_basis` 以一个 **exact JSON string** 标识本次 semantic mapping ／ resolution 使用的 **approved mapping rule identity ＋ revision identity**（可回答「该 canonical result 出自哪一 approved rule 的哪一 revision」）；**职责分离**：`evidence` 承载 Stable Source Evidence Locator、`mapping_basis` 只标识 approved rule ＋ revision、approved mapping rule 承载 deterministic mapping ／ resolution logic，**可复现性由三者组合建立**；**不要求、也不允许** `mapping_basis` 承载 source evidence ／ rule logic ／ explanation ／ rationale ／ 自由文本 ／ 新 provenance schema ／ mini-schema；**具体 string syntax ／ encoding（`rule-id@revision` ／ path-like ／ URI-like ／ namespaced ／ hash 等）留属 Architecture ／ Implementation**；保持 exact-string **不 normalize ／ trim ／ case-fold ／ Unicode-normalize ／ numeric coercion** 边界（`§4.6.10` Decision 5 Human Decision Record）<br>• **multi-Adapter governance ／ canonical semantic drift detection（`Decision 6`，**Issue #84 Human-approved**）**：**Option ② —— explicit cross-Adapter consistency obligation** —— 多个 Adapter **可以**拥有不同 source-specific mapping ／ resolution rules，但**只要**指向**相同或重叠**的 canonical entity ／ field ／ semantic ／ relationship ／ applicability scope（或其他共同影响同一 canonical interpretation 的 mapping），其 approved mapping rules ／ revisions **必须**可被检查为：与 current approved canonical contract 一致、与各自声明的 source scope ／ logical dataset ／ canonical target 一致、**不存在**未解释的 semantic contradiction，且**不依赖** implicit Adapter priority ／ first-wins ／ latest-wins ／ source priority ／ LLM ／ heuristic arbitration ／ silent normalization；consistency check 的**两个 conceptual points** = ① rule registration ／ revision change（新 rule ／ 修改 rule ／ 新 revision ／ source scope ／ canonical target 扩展在可被视为 approved ／ usable **之前**）② overlapping canonical use（多 Adapter outputs 被共同用于同一 canonical context ／ Analysis Run **之前**）；**canonical-first（`MS-1`）** 保持 authoritative —— canonical semantic 由 canonical design 定义、Adapter 只做 source-specific mapping ／ realization、**不得**引入第二套 canonical identity ／ vocabulary、**不得**建立 Global Source-Field Precedence（`MS-2 precedence-first` 仍为 `NOT COMPATIBLE`）；unresolved drift **不得** first-wins ／ latest-wins ／ Adapter priority ／ source priority ／ LLM ／ heuristic ／ silent reconciliation，**不得**由 Package Assembly 自行解释或修复，**不得**把 unresolved drift 重新解释为正常 missing ／ `null`；pre-canonical unresolved drift 与 **`Decision 3`** fail-closed 对齐（affected dataset artifact **不产出** canonical artifact，**不**为「让 Data Validation 有东西可报」而先生成错误 canonical artifact），既有 unresolved ／ consistency taxonomy **只**在真实 canonical validation context 中适用；**检测 mechanism（CI ／ test ／ registry validation ／ runtime validator ／ service ／ workflow node ／ DB ／ API ／ manual review 等）与任何 Cross-Adapter Registry ／ Drift Detector component 均不规定**，属 **Architecture ／ Implementation**（`§10`）（`§4.6.10` Decision 6 Human Decision Record）<br>• **Adapter ↔ `Permission & Security` interface expectation（`Decision 7`，**Issue #86 Human-approved**）**：**Option ① —— declarative access-requirement interface** —— Adapter Boundary **只**声明执行其已批准职责所需的 **minimum authorized access requirements ／ security dependencies**，**不**决定 Permission & Security 如何实现授权。Adapter **必须**能够声明至少以下 conceptual requirements：**resource boundary**（仅限其职责所需的 **Data Landing Zone-side** exported artifacts ／ resources）；**operation ／ capability**（完成职责所需的最小 capability；**不得**扩展为 Production write）；**logical data scope**（所需 logical dataset ／ source scope ／ applicable exported-artifact scope）；**security dependency**（运行该 Adapter 需要一个满足上述要求的 **authorized access context**）；**secret dependency（when applicable）**（若未来实现机制确实需要 credential ／ secret，Adapter **只**声明该 dependency ／ requirement 存在，**不**声明 secret value，**不**选择其 provisioning ／ storage ／ retrieval 机制）—— 该声明的语义是「Adapter 需要什么条件才能合法执行」，**不是**「Adapter 有权自行授予或取得什么权限」；**不赋予 Adapter：** RBAC policy、user ／ role definition、Data Scope policy ／ approval、Tool Permission policy ／ approval、authorization decision、authentication mechanism、identity ／ principal model、credential issuance ／ provisioning ／ storage ／ retrieval ／ delivery、secret rotation ／ lifecycle ／ secret manager selection、policy evaluation、permission escalation、emergency ／ break-glass policy（上述仍由 `§7` 后续设计负责，**不**因本 Decision 标为 `DESIGN RESOLVED`）；required authorized access 未提供 ／ 不满足所需 resource ／ scope ／ capability ／ 已失效 ／ 无法被可靠确认 ⇒ Adapter **必须 fail closed ／ do not proceed**，**不得**自行扩大 Data Scope、**不得**自行提升 Tool Permission、**不得**改用更高权限身份、**不得**猜测或选择替代 credential、**不得**使用未批准 credential、**不得**绕过 Permission & Security policy、**不得**绕过 Data Landing Zone、**不得** fallback 到 source-system direct access ／ Production DB ／ API、**不得**把缺少授权伪装成正常 data missing；该 failure 是 **Permission ／ Security dependency failure**，**不得**被重新解释为 canonical mapping unresolved ／ canonical missing ／ `null` ／ business `DATA_INCOMPLETE` ／ Data Validation reason ／ Adapter mapping conflict ／ package disposition，其 reporting ／ audit ／ operational handling 留给 `§7` ／ `§8` ／ Architecture ／ Implementation；**不扩展** `Decision 3` 的 non-canonical Failure ／ Quarantine Interface 的 schema ／ responsibility；**secret boundary**：**不得**在 canonical design 写真实 username ／ password ／ token ／ API key ／ secret value，**不得**在 mapping rule 嵌入真实 credential ／ secret，**不得**在 `mapping_basis` ／ provenance ／ canonical record ／ `"_meta"` 承载 credential ／ secret，**不得**把 secret 写入 prompt ／ log ／ Git，**不选择** Vault ／ Secrets Manager ／ Kubernetes Secret ／ env var ／ OAuth ／ service account ／ API key 等具体 mechanism；该 requirement **严格限于 Data Landing Zone ／ Controlled Export 之后**，**不含** source-system ／ ERP ／ SRM ／ Production DB credentials、export-side protocol credentials、Controlled Export 上游身份、Production API write credential（若要 Adapter 直连 source system 须另走 Human-approved `§3` design change）；**interface expectation ≠ injection mechanism**：**不选择** security layer injection ／ pull ／ push credential delivery ／ broker ／ sidecar ／ environment injection ／ secret mount ／ token exchange ／ identity federation ／ service account ／ policy agent ／ auth middleware ／ API gateway 或任何具体 security runtime mechanism；existing **`AI Effective Permission` invariant 保持不变**（Adapter 的 declared requirement **不能**扩大 effective permission）（`§4.6.10` Decision 7 Human Decision Record）<br>• **Adapter Boundary closure policy（`Decision 8`，**Issue #88 Human-approved**）**：**Accept `A-1` ～ `A-14` ＋ authorize dedicated Closure Design Change ＋ conditional status advancement；no blanket runtime implementation authorization** —— `A-1` ～ `A-14` = **Human-approved mandatory minimum closure criteria**（`§4.6.9`）；`A-15` ／ `A-16` 保持 **POC DESIGN OBJECTIVE**（必须评估、non-blocking）；**Decision 8 本身不关闭** `Adapter Boundary`（该 Decision registration 时点仍 **`DESIGN PENDING`**）—— 必须先由 **Dedicated Adapter Boundary Closure Design Change PR** 以 current canonical design 为准对 `A-1` ～ `A-14` 逐项做 **PASS ／ FAIL** verification、对 `A-15` ／ `A-16` 做非阻塞评估、并执行 `A-13` selected-decision composition check（确认 `Decision 1` ～ `7` 的组合与 `§3` ／ `§4.3` ／ `§4.4` ／ `§4.5` 之间无未登记冲突）；**只有全部 mandatory criteria PASS** 才允许 `DESIGN PENDING → DESIGN RESOLVED`，任一 FAIL 则保持 `DESIGN PENDING`，**不得**用 Exception ／ waiver ／ reviewer opinion 强行关闭；该状态转换**不表示** IMPLEMENTED ／ TESTED ／ production-ready ／ real ERP ／ source field known ／ runtime Adapter 存在 ／ mapping registry 存在 ／ `mapping_basis` concrete string syntax 已选 ／ cross-Adapter drift detection mechanism 已实现 ／ `Permission & Security` overall 已完成 ／ Failure ／ Quarantine Interface runtime 已实现 ／ Architecture ／ ADR 已完成 ／ POC Design overall APPROVED ／ FROZEN；Failure ／ Quarantine 的 physical shape ／ schema ／ storage ／ API ／ runtime realization 与 `§7` RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling **仍为未完成 ／ `DESIGN PENDING`**，但**不自动阻止** Adapter Boundary **conceptual closure**（`Decision 8` 8.5 ／ 8.6）；**no blanket implementation authorization**（8.8）：Adapter runtime code ／ connector ／ parser ／ serializer ／ mapping registry ／ mapping rule storage ／ Failure ／ Quarantine implementation ／ drift detector ／ runtime validator ／ auth middleware ／ credential ／ secret mechanism ／ database ／ API ／ framework ／ deployment ／ source-system integration **均未**由此授权；Architecture ／ Implementation deferrals（mapping rule representation carrier、`mapping_basis` concrete string syntax ／ encoding、cross-Adapter consistency detection mechanism、Package Assembly runtime shape、Failure ／ Quarantine physical realization、auth ／ credential ／ secret-delivery mechanism、framework ／ database ／ API ／ deployment、ADR）**保持**（`§4.6.10` Decision 8 Human Decision Record）<br><br>**授权来源区分（**不得混同**）：** 上述 **`§3` ／ `§4.3` ／ `§4.4` ／ `§4.5` 条目为历史 **`Inherited Constraint`**；**`Decision 1(a)` ／ `Decision 1(b)`（Issue #72）、`Decision 2`（Issue #74）、`Decision 3`（Issue #76）、`Decision 4`（Issue #78）、`Decision 5`（Issue #82）、`Decision 6`（Issue #84）、`Decision 7`（Issue #86）与 `Decision 8`（Issue #88）为本层 newly Human-approved registered policy** —— 二者同属 **current approved policy**，但**后者不得**被表述为 inherited constraint；`Decision 3` 的 fail-closed policy 与 interface 授权、`Decision 4` 的 contract requirements 与 carrier deferral、`Decision 5` 的 `mapping_basis` semantic 与 syntax deferral、`Decision 6` 的 cross-Adapter consistency obligation 与 canonical-first governance、`Decision 7` 的 declarative access-requirement interface expectation、`Decision 8` 的 closure criteria acceptance 与 closure gate authorization 均属 **registered**，**不是** inherited | `§3.1` ／ `§3.3` ／ `§3.4` ／ `§3.10` ／ `§4.3.25` ／ `§4.3.28` ／ `§4.3.29` ／ `§4.4.2` ／ `§4.4.3` ／ `§4.5.2` ／ `§4.5.11` ／ `§4.5.21` ／ `§4.6.10`（`Decision 1` ／ `Decision 2` ／ `Decision 3` ／ `Decision 4` ／ `Decision 5` ／ `Decision 6` ／ `Decision 7` ／ `Decision 8` HD Records） |
+| `AC-23` | **Adapter Boundary 的 ownership 列表**只在其**已获批准的部分**才成立；未获批部分**不得**写成 inherited：<br>① `RIF-11` 属 PR #65 的 **review-only Review Finding**，**不构成**已批准 policy（`AB-01`）；<br>② **仅凭「可由批准文本推导」不得**把 Adapter 的通用职责写成 inherited（`AB-05`）；<br>③ **`Decision 1(a)` 已于 Issue #72 获 Human Approval**，因此 `4.6.5 A` 中的**读取 ／ 提取、format ／ protocol handling、generic source-field identification、source-specific mapping execution** 现为 **registered**（见 `AC-22`）；<br>④ **`Decision 2` 已于 Issue #74 获 Human Approval**，因此 **producer ownership 与 `Package identity` ／ `manifest` generation** **不再属于未获批项** ⇒ 已 **registered**（见 `AC-22`）。<br>⑤ **`Decision 3` 已于 Issue #76 获 Human Approval**，因此 **unresolved ／ unsupported mapping 策略**（条件组合，以 `UF-2` ／ fail-closed 为主）与 **Adapter Failure ／ Quarantine Interface 的授权** 已 **registered**；该 interface 为 **non-canonical**，**不得**进入 Snapshot Package、**不得**新增现有 carrier 字段、**不得**改变 canonical schema ／ semantic，其**物理形态 ／ schema 仍未定**（**尚未** operationally available）。<br>⑥ **`Decision 4` 已于 Issue #78 获 Human Approval**，因此 **source-specific mapping rule 的 contract requirements**（explicit ／ deterministic ／ traceable ／ reproducible；source scope ／ canonical target ／ rule ＋ revision identity；禁 hidden default ／ fuzzy ／ similarity ／ LLM guess ／ silent normalization）与 **representation carrier deferral**（**不**规定 configuration ／ registry ／ code ／ DB ／ rule engine ／ service，**不创建**强制 `Mapping Registry` component）已 **registered**。<br>⑦ **`Decision 5` 已于 Issue #82 获 Human Approval**，因此 **`mapping_basis` 的语义粒度**已 **registered**（**Option ① minimal rule ／ revision reference** —— 只标识 approved mapping rule identity ＋ revision identity；`evidence` ／ `mapping_basis` ／ approved mapping rule 职责分离；不承载 evidence ／ rule logic ／ explanation ／ rationale ／ mini-schema）；**具体 string syntax ／ encoding 属 Architecture ／ Implementation**，**不属**本层待决。<br>⑧ **`Decision 6` 已于 Issue #84 获 Human Approval**，因此 **multi-Adapter governance ／ canonical semantic drift detection** 的边界已 **registered**（**Option ② —— explicit cross-Adapter consistency obligation** —— canonical-first（`MS-1`）保持 authoritative；多 Adapter 指向**相同或重叠**的 canonical entity ／ field ／ semantic ／ relationship ／ applicability scope 时，其 approved mapping rules ／ revisions **必须**满足显式一致性义务；consistency check 的两个 conceptual points = **rule registration ／ revision change** 与 **overlapping canonical use**；**禁止** Adapter priority ／ source priority ／ first-wins ／ latest-wins ／ LLM ／ heuristic ／ silent reconciliation，**不得**由 Package Assembly 自行解释或修复；unresolved drift 与 `Decision 3` fail-closed 对齐）；**具体 detection mechanism 属 Architecture ／ Implementation**，**不属**本层待决。<br>⑨ **`Decision 7` 已于 Issue #86 获 Human Approval**，因此 **Adapter ↔ `Permission & Security` 的 interface expectation** 已 **registered**（**Option ① —— declarative access-requirement interface** —— Adapter **只声明**执行已批准职责所需的 minimum authorized access requirements ／ security dependencies（resource boundary ／ operation ／ logical data scope ／ authorized access context ／ secret dependency），**不**拥有 RBAC ／ Data Scope ／ Tool Permission ／ authorization decision ／ credential lifecycle ／ Secret Handling；required authorized access 不可用 ／ 不满足 ／ 失效 ／ 无法可靠确认 ⇒ **fail closed ／ do not proceed**，禁 privilege expansion ／ 替代 credential 猜测 ／ policy bypass ／ source-system fallback；Permission ／ Security dependency failure **不得**伪装成 canonical missing ／ mapping unresolved ／ `DATA_INCOMPLETE` ／ Data Validation reason ／ package disposition，且**不扩展** `Decision 3` Failure ／ Quarantine Interface；**injection ／ broker ／ secret manager ／ auth runtime mechanism 属 Architecture ／ Implementation**，`§7` 各 remaining item 仍 `DESIGN PENDING`）。<br>⑩ **`Decision 8` 已于 Issue #88 获 Human Approval**，因此 **Adapter Boundary closure policy** 已 **registered**（**Accept `A-1` ～ `A-14` 为 mandatory minimum closure criteria ＋ 授权 Dedicated Adapter Boundary Closure Design Change PR ＋ 条件性状态转换；无 blanket runtime implementation authorization**）；`A-15` ／ `A-16` 保持 **non-blocking design objectives**；**本 Decision 不推进状态** —— `Adapter Boundary` 仍 `DESIGN PENDING`，closure 与 `DESIGN RESOLVED` 只能由该 Dedicated Closure PR 在全部 mandatory gate `PASS` 后登记。<br>**仍未决者：** 本层**已无**剩余 Human Decision（`Decision 1` ～ `Decision 8` 均已登记）；**下一步 gate = Dedicated Adapter Boundary Closure Design Change PR**（`Decision 8` 授权 —— 逐项验证 `A-1` ～ `A-14`，全部 PASS 后方可登记 `DESIGN RESOLVED`；任一 FAIL 则保持 `DESIGN PENDING`）。**仍未完成但非本层 closure blocker 者：** **已授权但尚未设计的 Failure ／ Quarantine Interface 形态**、`§7` RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling 的**具体设计**、以及 **mapping rule representation 与 `mapping_basis` string syntax 的 Architecture ／ Implementation 选型**（属 `§10` ／ 实现）；**仍为本层 finding ／ option 者**交 Human Decision | `§4.3.28`（Bundle 1 ～ 6 登记范围）＋ 本 Review `AB-01` ／ `AB-05` ＋ `§4.6.10`（`Decision 1` ／ `Decision 2` ／ `Decision 3` ／ `Decision 4` ／ `Decision 5` ／ `Decision 6` ／ `Decision 7` ／ `Decision 8` HD Records） |
 
 **本 Review 未发现**上述约束之间存在冲突；`AC-18` ／ `AC-19` 是**已经唯一确定**的行为，
 **不得**在本层被重新打开为自由选项。
@@ -23375,7 +23375,7 @@ Status Change  = NONE（Adapter Boundary 保持 DESIGN PENDING）
 
 | # | 开放 ownership ／ responsibility 问题 | 落点 |
 | --- | --- | --- |
-| — | **（无）** —— `Decision 1` ～ `Decision 7` 已登记；本表当前**不含** open ownership ／ responsibility 问题 | 仅余 **`Decision 8`** closure gate（见 **`§4.6.10`**） |
+| — | **（无）** —— `Decision 1` ～ `Decision 8` 已登记；本表当前**不含** open ownership ／ responsibility 问题 | 下一步为 **Dedicated Adapter Boundary Closure Design Change PR**（`Decision 8` 授权；`A-1` ～ `A-14` 全部 PASS 后方可登记 `DESIGN RESOLVED`） |
 
 > **已由 `Decision 3` 登记（Issue #76）：** ⑥ **unresolved ／ unsupported mapping 策略** ——
 > 条件组合，**以 `UF-2` ／ fail-closed 为主**；approved missing（`3.1`）与 unresolved（`3.2`）**必须区分**；
@@ -23724,13 +23724,14 @@ determinism ／ fail-safe 要求（`ARF-3`）、unresolved 归属与 Adapter-sid
 locator ／ basis 的 carrier obligation（`ARF-5`）、multi-source 原则（`ARF-6`）、与 `Permission & Security`
 及 Architecture 的接口期待（`ARF-8`）。
 **已由 `Decision 7`（Issue #86）登记：** 与 `Permission & Security` 的**接口期待**（Adapter 声明式 minimum authorized access requirements；authorized access 不可用 ⇒ fail closed）—— 见 `ARF-8` ／ `A-11`。
+**已由 `Decision 8`（Issue #88）登记：** 本层 **minimum closure criteria** = **`A-1` ～ `A-14`**（Human-approved **mandatory**）；`A-15` ／ `A-16` 为 **non-blocking** design objectives；逐项 verification 与**条件性**状态转换由后续 **Dedicated Adapter Boundary Closure Design Change PR** 执行 —— **本 Decision 不推进状态**。
 **明确留给其他层：** RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling 的**具体设计**（`§7`，仍 **`DESIGN PENDING`**）、
 framework ／ technology ／ deployment（`§10`）、runtime 实现、真实 source field 选择。
 **明确留在 POC 之外：** **source-system connectivity ／ export-side protocol ／ export-side credentials**
 （`§3.1` ／ `§3.3`；若要纳入 Adapter 需另走 Human-approved `§3` design change）。
 
 **`ARF-8`（Cross-layer Interface Expectation）**
-**已登记（`Decision 7` ／ Issue #86 —— **registered**，非 inherited）：** Adapter 与 `Permission & Security` 之间的**接口期待** = **Option ① —— declarative access-requirement interface**：Adapter **只声明**其在 **Data Landing Zone 侧读取 exported artifacts** 所需的 minimum authorized access requirements ／ security dependencies（resource boundary ／ operation ／ logical data scope ／ authorized access context ／ secret dependency），**不**决定授权实现、**不**自行放宽权限；authorized access 不可用 ／ 不满足 ／ 失效 ／ 无法可靠确认 ⇒ **fail closed ／ do not proceed**。`§7` 为 `DESIGN PENDING` ⇒ **本层不得**设计 RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling 或 secret mechanism（`AC-21` ／ `ADEP-7`）；**interface expectation ≠ injection mechanism**。该接口**不**涉及 source-system credentials。
+**已登记（`Decision 7` ／ Issue #86 —— **registered**，非 inherited）：** Adapter 与 `Permission & Security` 之间的**接口期待** = **Option ① —— declarative access-requirement interface**：Adapter **只声明**其在 **Data Landing Zone 侧读取 exported artifacts** 所需的 minimum authorized access requirements ／ security dependencies（resource boundary ／ operation ／ logical data scope ／ authorized access context ／ secret dependency），**不**决定授权实现、**不**自行放宽权限；authorized access 不可用 ／ 不满足 ／ 失效 ／ 无法可靠确认 ⇒ **fail closed ／ do not proceed**。`§7` 为 `DESIGN PENDING` ⇒ **本层不得**设计 RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling 或 secret mechanism（`AC-21` ／ `ADEP-7`）；**interface expectation ≠ injection mechanism**。该接口**不**涉及 source-system credentials。**`Decision 8`（Issue #88）：** `§7` 的 RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling 仍 `DESIGN PENDING`，但本层 security interface expectation 已由 `Decision 7` 登记 ⇒ 该 remaining `§7` 设计**不自动阻止** Adapter Boundary **conceptual closure**（`§4.6.10` `Decision 8` 8.6）。
 
 **`ARF-9`（Fail-safe Summary）**
 
@@ -23766,11 +23767,17 @@ record ／ dataset ／ `"_meta"` 偷加字段，不得改现有 FCM ／ FIC carr
 
 ---
 
-#### 4.6.9 Proposed Minimum Closure Criteria（candidate —— 待 Human 批准）
+#### 4.6.9 Minimum Closure Criteria（Human-approved —— `Decision 8` ／ Issue #88）
+
+> **current-state（Issue #88）：** `A-1` ～ `A-14` 已由 **`Decision 8`** Human Approval 接受为 **MANDATORY MINIMUM CLOSURE CRITERIA**；`A-15` ／ `A-16` 保持 **POC DESIGN OBJECTIVE（non-blocking）**。
+> **本层尚未 closure：** `Adapter Boundary` 仍为 **`DESIGN PENDING`**；逐项 **PASS ／ FAIL** verification 由后续
+> **Dedicated Adapter Boundary Closure Design Change PR** 执行 —— 只有 `A-1` ～ `A-14` **全部 PASS** 方可登记
+> `DESIGN PENDING → DESIGN RESOLVED`，任一 FAIL 则保持 `DESIGN PENDING`。
+> 见 **`§4.6.10` `Decision 8` Human Decision Record**。
 
 | # | Criterion | 类别 |
 | --- | --- | --- |
-| `A-1` | Adapter **owns ／ does not own** 边界已登记，且**只**把 current approved policy **明确规定**的事项写成 approved；**并区分授权来源**（historical `Inherited Constraint` vs 本层 newly Human-approved registered policy）。**历史 inherited：** `§3` read boundary ／ `§4.5` mapping responsibility ＋ constraints ／ locator ／ basis carrier obligation ／ 各层 does-not-own 与 `FCM` ／ `Data Validation` ／ `FIC` 职责。**已登记（`Decision 1(a)`，Issue #72）：** Data Landing Zone **之后**的读取 ／ 提取、`exported-artifact format ／ protocol handling`、`generic source-field identification`、`source-specific mapping execution ／ realization` ⇒ Adapter **owns**；**明确不含** `source-system connectivity` ／ Controlled Export 上游 ／ export-side protocol ／ credentials。**已登记（`Decision 2`，Issue #74）：** `Package identity` ／ `manifest` generation 与 **producer ownership** ⇒ 每个 Adapter 产出其 canonical dataset artifact（含其 source-derived provenance ／ locator ／ `mapping_basis`）；独立 **Package Assembly** 负责 `snapshot_package_id` ／ Manifest ／ package organization ／ 完整 package 组装（`ADEP-11`）。**已登记（`Decision 3`，Issue #76）：** unresolved ／ unsupported 的 **fail-closed 策略**、**responsibility 归属**（source-side context 归 non-canonical Failure ／ Quarantine Interface）与 **interface 的单独设计授权** ⇒ **registered**（`ADEP-12`）。**已登记（`Decision 4`，Issue #78）：** source-specific mapping rule 的 contract requirements 与 **representation carrier deferral** ⇒ **registered**（`ADEP-2` ／ `ADEP-8`）。**已登记（`Decision 7`，Issue #86）：** Adapter ↔ `Permission & Security` **interface expectation**（**Option ① declarative access-requirement interface**；Adapter **只声明** minimum authorized access requirements ／ security dependencies，**不**拥有 authorization decision ／ credential lifecycle ／ Secret Handling；authorized access 不可用 ⇒ **fail closed**）⇒ **registered**（`ADEP-7`）。**仍 open（绑定 Decision）：** ① **Failure ／ Quarantine Interface 的 physical shape ／ schema ／ runtime realization**（已授权单独设计，**尚未** operationally available）；② `§7` RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling 的**具体设计**（**`DESIGN PENDING`**，不在本层关闭）。**Decision 3 的 strategy ／ responsibility ／ authorization 本身不得**被重新列为 unresolved Human Decision；**未**以任何 Review Finding 或推导作为 approved authority | MANDATORY CLOSURE CRITERION |
+| `A-1` | Adapter **owns ／ does not own** 边界已登记，且**只**把 current approved policy **明确规定**的事项写成 approved；**并区分授权来源**（historical `Inherited Constraint` vs 本层 newly Human-approved registered policy）。**历史 inherited：** `§3` read boundary ／ `§4.5` mapping responsibility ＋ constraints ／ locator ／ basis carrier obligation ／ 各层 does-not-own 与 `FCM` ／ `Data Validation` ／ `FIC` 职责。**已登记（`Decision 1(a)`，Issue #72）：** Data Landing Zone **之后**的读取 ／ 提取、`exported-artifact format ／ protocol handling`、`generic source-field identification`、`source-specific mapping execution ／ realization` ⇒ Adapter **owns**；**明确不含** `source-system connectivity` ／ Controlled Export 上游 ／ export-side protocol ／ credentials。**已登记（`Decision 2`，Issue #74）：** `Package identity` ／ `manifest` generation 与 **producer ownership** ⇒ 每个 Adapter 产出其 canonical dataset artifact（含其 source-derived provenance ／ locator ／ `mapping_basis`）；独立 **Package Assembly** 负责 `snapshot_package_id` ／ Manifest ／ package organization ／ 完整 package 组装（`ADEP-11`）。**已登记（`Decision 3`，Issue #76）：** unresolved ／ unsupported 的 **fail-closed 策略**、**responsibility 归属**（source-side context 归 non-canonical Failure ／ Quarantine Interface）与 **interface 的单独设计授权** ⇒ **registered**（`ADEP-12`）。**已登记（`Decision 4`，Issue #78）：** source-specific mapping rule 的 contract requirements 与 **representation carrier deferral** ⇒ **registered**（`ADEP-2` ／ `ADEP-8`）。**已登记（`Decision 7`，Issue #86）：** Adapter ↔ `Permission & Security` **interface expectation**（**Option ① declarative access-requirement interface**；Adapter **只声明** minimum authorized access requirements ／ security dependencies，**不**拥有 authorization decision ／ credential lifecycle ／ Secret Handling；authorized access 不可用 ⇒ **fail closed**）⇒ **registered**（`ADEP-7`）。**仍未完成但由 `Decision 8`（Issue #88）明确为 non-blocking（不阻止 Adapter conceptual closure）：** ① **Failure ／ Quarantine Interface 的 physical shape ／ schema ／ runtime realization**（已授权单独设计，**尚未** operationally available）；② `§7` RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling 的**具体设计**（**`DESIGN PENDING`**）；二者**不**构成本层 mandatory closure 的 blocker，**亦不得**被写成已完成。**Decision 3 的 strategy ／ responsibility ／ authorization 本身不得**被重新列为 unresolved Human Decision；**未**以任何 Review Finding 或推导作为 approved authority | MANDATORY CLOSURE CRITERION |
 | `A-2` | Adapter **input conceptual contract** 已登记（只接受 Data Landing Zone 中的 Controlled Export 产物；**不**含 source-system connectivity；无直连 ／ 无 source access 扩大） | MANDATORY CLOSURE CRITERION |
 | `A-3` | Adapter **output conceptual contract** 已登记（canonical artifact set ＋ mapping evidence；**不**宣告 acceptance ／ disposition）；**producer ownership 已由 `Decision 2`（Issue #74）登记**：Adapter 产出其 canonical dataset artifact 并写入其 source-derived provenance ／ locator ／ `mapping_basis`；`snapshot_package_id` ／ `manifest` ／ package organization 归 **Package Assembly**（独立 conceptual responsibility）；只有**完整 package** 可提交 `Final Import Contract`，partial artifacts **不得单独**视为可接受 package（**禁止 dataset-level partial acceptance**） | MANDATORY CLOSURE CRITERION |
 | `A-4` | **Determinism 要求**已登记（deterministic ／ explicit ／ traceable ／ reproducible；禁 fuzzy ／ similarity ／ LLM choose ／ silent normalization），且**不依赖** implementation 选择；**并含 `Decision 1(b)`（Issue #72）**：Adapter **允许**在内部定义 source-specific resolution rules，但**必须**满足同一 determinism 要求，且**不得**修改 ／ 重新定义 canonical semantic、**不得**建立 global source-field precedence、**不得**越过已 `DESIGN RESOLVED` 的 canonical mapping contracts。**已由 `Decision 4`（Issue #78）登记完整的 rule-level contract requirements**：明确 source ／ source scope 与 logical dataset ／ canonical target、可审计可复现的 rule ／ revision identity 与「canonical result ← approved rule ／ revision」可追溯性、**禁 hidden default**；**representation carrier 明确 deferred** 给 Architecture ／ Implementation（**不创建**强制 `Mapping Registry` component）；missing ／ conflicting ／ 非确定性 rule ⇒ 服从 `Decision 3` fail-closed | MANDATORY CLOSURE CRITERION |
@@ -23782,13 +23789,18 @@ record ／ dataset ／ `"_meta"` 偷加字段，不得改现有 FCM ／ FIC carr
 | `A-10` | **跨层边界**已登记：`Permission & Security`（scope ／ tool permission ／ secret）／ Architecture（technology）／ Implementation（runtime）各自归属明确，且本层**未**越过。**已由 `Decision 7`（Issue #86）登记本层侧接口期待**（Adapter **只声明** minimum authorized access requirements；**不**设计 RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling；authorized access 不可用 ⇒ fail closed）；`§7` 各 remaining item 仍 **`DESIGN PENDING`** | MANDATORY CLOSURE CRITERION |
 | `A-11` | **Adapter 与 `Permission & Security` 的接口期待**已登记（Adapter 需要什么、由谁提供），且**未**设计 RBAC ／ secret 机制。**已由 `Decision 7`（Issue #86）登记：** **Option ① —— declarative access-requirement interface** —— Adapter **只声明**执行已批准职责所需的 **minimum authorized access requirements ／ security dependencies**（resource boundary ／ operation ／ logical data scope ／ authorized access context ／ secret dependency）；**「由谁提供」的实现机制不在本层登记**（授权机制 ／ injection ／ credential lifecycle ／ Secret Handling 属 `§7` ／ Architecture ／ Implementation，仍 **`DESIGN PENDING`**）；authorized access 不可用 ／ 失效 ／ 无法可靠确认 ⇒ **fail closed** | MANDATORY CLOSURE CRITERION |
 | `A-12` | Adapter **failure 上报边界**已登记：Layer 1 归 `Final Import Contract`、Layer 2 ～ 4 归 Data Validation；**不新增** category ／ reason | MANDATORY CLOSURE CRITERION |
-| `A-13` | **selected-decision composition check**：已选组合与 `§3` hard boundary、`§4.3` FIC、`§4.4` Data Validation、`§4.5` Master Data Mapping 之间**无未登记的跨选择冲突** | MANDATORY CLOSURE CRITERION |
-| `A-14` | **真实 source field 未知**状态已登记且**不构成** blocker（`DESIGN RESOLVED ≠ real ERP field known ≠ Adapter implemented ≠ tested`） | MANDATORY CLOSURE CRITERION |
-| `A-15` | Human Inspectability（Adapter 的 mapping ／ unresolved 结果可被人工检视与追溯） | POC DESIGN OBJECTIVE |
-| `A-16` | Implementation Simplicity（Adapter contract 结构最小化） | POC DESIGN OBJECTIVE |
+| `A-13` | **selected-decision composition check**：已选组合与 `§3` hard boundary、`§4.3` FIC、`§4.4` Data Validation、`§4.5` Master Data Mapping 之间**无未登记的跨选择冲突**。**`Decision 8`（Issue #88）要求 Dedicated Closure PR 显式执行该 composition check**（`Decision 1` ～ `7` 的组合 ↔ `§3` ／ `§4.3` ／ `§4.4` ／ `§4.5`） | MANDATORY CLOSURE CRITERION |
+| `A-14` | **真实 source field 未知**状态已登记且**不构成** blocker（`DESIGN RESOLVED ≠ real ERP field known ≠ Adapter implemented ≠ tested`）。**`Decision 8`（Issue #88）确认该状态继续 non-blocking**：closure 只能基于 conceptual ／ canonical contract completeness，**不得**把 implementation-time source discovery 变成 design closure prerequisite | MANDATORY CLOSURE CRITERION |
+| `A-15` | Human Inspectability（Adapter 的 mapping ／ unresolved 结果可被人工检视与追溯）。**`Decision 8`：** 必须在 Dedicated Closure PR 中显式评估并给出简洁结论 ／ evidence；保持 **POC DESIGN OBJECTIVE**，**不得**升级为 hard closure gate | POC DESIGN OBJECTIVE |
+| `A-16` | Implementation Simplicity（Adapter contract 结构最小化）。**`Decision 8`：** 必须在 Dedicated Closure PR 中显式评估并给出简洁结论 ／ evidence；保持 **POC DESIGN OBJECTIVE**，**不得**升级为 hard closure gate | POC DESIGN OBJECTIVE |
 
 `A-15` ／ `A-16` **必须评估**，但**不作为**独立 hard closure blocker；
 **不得**把主观判断变成不可验证的 closure Gate。
+
+**`Decision 8`（Issue #88）登记：** `A-1` ～ `A-14` = **Human-approved mandatory minimum closure criteria**；
+`A-15` ／ `A-16` 必须在 Dedicated Closure PR 中**显式评估**并给出简洁结论 ／ evidence，
+但**不得**升级为 hard closure gate、**不得**阻止 closure —— **除非**评估暴露出已触发
+`A-1` ～ `A-14` 中某项 mandatory criterion 的**客观失败**。
 
 ---
 
@@ -24806,7 +24818,218 @@ POC Design v0.2                   = DRAFT
 - **What changes：** `A-10` ／ `A-11` 的登记内容。
 - **注意：** **不得**设计 RBAC ／ Secret Handling；**不得**创建 credentials 或 secrets。
 
+**Decision 8 —— Human Decision Record —— `SIMULATED POC Design Policy` ＋ `Human-approved`**
+
+**Registration Status：`REGISTERED`**
+
+依据 **Issue #88 Human Decision**。本记录**只**登记已批准的 Decision 8（closure policy），并执行最小必要
+current-state synchronization —— **不**在本 registration PR 推进 `Adapter Boundary` 状态、**不**执行 closure、
+**不**伪造 `A-1` ～ `A-14` 的 PASS 结果、**不**授权 blanket runtime implementation、
+**不**关闭 `§7` ／ Failure ／ Quarantine ／ Architecture deferrals。
+
+```
+Decision Scope     = §4.6.10 Decision 8（minimum closure criteria acceptance ／ dedicated closure gate authorization）
+Decision Authority = Human（Issue #88）
+Selected Option    = Accept A-1 ～ A-14 ＋ authorize dedicated Adapter Boundary Closure Design Change ＋
+                     conditional status advancement；no blanket runtime implementation authorization
+Write Scope        = docs/design/poc-design-v0.2.md
+```
+
+**8.1 Mandatory closure criteria（APPROVED）**
+
+正式接受：
+
+```
+A-1 ～ A-14 = MANDATORY MINIMUM CLOSURE CRITERIA
+```
+
+Dedicated Closure PR **必须**逐项验证：
+
+```
+A-1  ownership ／ does-not-own boundary
+A-2  input conceptual contract
+A-3  output conceptual contract ／ Package Assembly boundary
+A-4  determinism ／ rule-level contract
+A-5  fail-safe
+A-6  unresolved Adapter-side contract ／ handoff
+A-7  unsupported source behavior ／ reporting boundary
+A-8  evidence locator ／ mapping_basis carrier ＋ producer ＋ semantic boundary
+A-9  multi-source ／ multi-Adapter semantic stability
+A-10 cross-layer boundary
+A-11 Adapter ↔ Permission & Security interface expectation
+A-12 failure reporting boundary
+A-13 selected-decision composition check
+A-14 real source field unknown is not a design-closure blocker
+```
+
+**8.2 Design objectives remain non-blocking（APPROVED）**
+
+`A-15 Human Inspectability` 与 `A-16 Implementation Simplicity`：
+
+```
+必须在 Closure PR 中显式评估
+必须给出简洁结论 ／ evidence
+仍属 POC DESIGN OBJECTIVE
+不得因主观评价升级为 hard closure gate
+不得阻止 closure —— 除非评估暴露出已触发 A-1 ～ A-14 中某项 mandatory criterion 的客观失败
+```
+
+**8.3 Dedicated Closure PR required（APPROVED）**
+
+Decision 8 **不直接关闭** `Adapter Boundary`。必须先执行一个独立的
+**Adapter Boundary Closure Design Change PR**，其职责**仅**是：
+
+```
+1 以 current canonical design 为准，对 A-1 ～ A-14 逐项做 PASS ／ FAIL verification
+2 对 A-15 ／ A-16 做非阻塞评估
+3 执行 A-13 selected-decision composition check，确认 Decision 1 ～ 7 的组合与
+  §3 hard boundary ／ §4.3 Snapshot ／ Import Contract ／ FCM ／ FIC ／
+  §4.4 Data Validation ／ §4.5 Master Data Mapping 之间不存在未登记冲突
+4 仅在全部 mandatory criteria PASS 时进行状态转换与必要 canonical synchronization
+5 若任一 mandatory criterion FAIL ⇒ Adapter Boundary 保持 DESIGN PENDING；
+  不得用 Exception ／ waiver ／ reviewer opinion 强行关闭；
+  失败项必须作为新的明确 design gap ／ follow-up task 处理
+```
+
+**8.4 Conditional status advancement（APPROVED）**
+
+只有 Dedicated Closure PR 验证：
+
+```
+A-1 ... A-14 = PASS
+```
+
+才允许：
+
+```
+Adapter Boundary
+DESIGN PENDING
+→ DESIGN RESOLVED
+```
+
+该状态转换表示：Adapter 的 **conceptual responsibility ／ behavioral ／ cross-layer boundary** 已达到当前
+POC design closure 标准。它**不表示**：
+
+```
+IMPLEMENTED
+TESTED
+production-ready
+real ERP ／ source field known
+runtime Adapter exists
+mapping registry exists
+mapping_basis concrete string syntax 已选
+cross-Adapter drift detection mechanism 已实现
+Permission & Security overall 已完成
+Failure ／ Quarantine Interface runtime 已实现
+Architecture ／ ADR 已完成
+POC Design overall APPROVED ／ FROZEN
+```
+
+**8.5 Failure ／ Quarantine Interface remains separate（保持）**
+
+`Decision 3` 已关闭的是：unresolved ／ unsupported strategy、fail-closed responsibility、
+non-canonical Failure ／ Quarantine Interface 的 **separate-design authorization**。
+该 interface 的 physical shape ／ schema ／ storage ／ API ／ runtime realization
+**仍未设计 ／ 未 operationally available**。上述**不自动阻止** Adapter Boundary **conceptual closure**
+（只要 `A-1` ～ `A-14` 对 Adapter-side responsibility ／ handoff boundary 已满足）。
+Decision 8 **不授权**其 physical design ／ implementation。
+
+**8.6 `§7` remains independently `DESIGN PENDING`（保持）**
+
+```
+RBAC              = DESIGN PENDING ← 不因 Decision 8 改变
+Data Scope        = DESIGN PENDING ← 不因 Decision 8 改变
+Tool Permission   = DESIGN PENDING ← 不因 Decision 8 改变
+Secret Handling   = DESIGN PENDING ← 不因 Decision 8 改变
+§7 Permission & Security overall = 不得标记为 DESIGN RESOLVED
+```
+
+这些 remaining `§7` items **不自动阻止** Adapter Boundary conceptual closure，
+因为 Adapter 本层的 security interface expectation 已由 `Decision 7` 登记。
+
+**8.7 Real source field unknown remains non-blocking（保持）**
+
+保持 `A-14`：real ERP table ／ column ／ proprietary field unknown、source-specific physical field name
+unknown、runtime credential unknown **不等于** Adapter Boundary design 未完成。Closure **只能**基于
+**conceptual ／ canonical contract completeness**，**不得**把 implementation-time source discovery
+强行变成 design closure prerequisite。
+
+**8.8 No blanket implementation authorization（APPROVED）**
+
+本 Decision **不授权任意 runtime implementation PR**。特别**不**因 Decision 8 自动授权：
+
+```
+Adapter runtime code
+connector ／ parser ／ serializer
+mapping registry ／ mapping rule storage
+Failure ／ Quarantine implementation
+drift detector ／ runtime validator
+auth middleware ／ credential ／ secret mechanism
+database ／ API ／ framework ／ deployment
+source-system integration
+```
+
+后续 implementation **必须**：① 先完成 Adapter Boundary closure；② 按当时 current
+Architecture ／ `§7` ／ `§8` ／ `§9` ／ implementation governance；
+③ 在独立、明确授权的 task ／ PR 中进行。
+
+**8.9 Architecture deferrals preserved（保持）**
+
+Decision 8 **不**关闭以下 Architecture ／ Implementation deferrals：
+
+```
+mapping rule representation carrier
+mapping_basis concrete string syntax ／ encoding
+cross-Adapter consistency detection mechanism
+Package Assembly runtime shape
+Failure ／ Quarantine physical realization
+auth ／ credential ／ secret-delivery mechanism
+framework ／ database ／ API ／ deployment
+ADR
+```
+
+`No ADR created yet` 状态**不因 Decision 8 改变**。
+
+**8.10 Registration-time status（保持）**
+
+```
+Decision 1 ～ 8                = REGISTERED
+Adapter Boundary               = DESIGN PENDING ← 本 registration PR 不推进
+POC Design v0.2                = DRAFT
+Next gate                      = Dedicated Adapter Boundary Closure Design Change PR
+DESIGN RESOLVED                = 只能由该 Closure PR 在全部 mandatory gate PASS 后登记
+```
+
+**8.11 边界（不受本 Decision 影响）**
+
+- `§3` hard boundary、`§4.3` FCM ／ FIC ／ Snapshot & Import Contract、`§4.4` Data Validation、
+  `§4.5` Master Data Mapping 已 `DESIGN RESOLVED` 的 contract **未重开**；
+- `Decision 1` ～ `Decision 7` 已批准内容**未被修改**；
+- **未**伪造任何 `A-1` ～ `A-14` 的 PASS 结果；**未**执行 closure；**未**推进状态；
+- **未**把 `A-15` ／ `A-16` 升级为 hard blocker；
+- **未**新增 canonical carrier ／ `"_meta"` member ／ literal ／ field、Validation Reason ／ Category ／
+  status enum ／ package disposition；
+- **未**创建 runtime code ／ registry ／ detector ／ validator ／ ADR；**未**选择 architecture ／ framework ／
+  database ／ API ／ deployment；
+- **未**创建 credential ／ secret；**未**修改 `§7` 状态。
+
+**执行状态（本 Registration 时点）**
+
+```
+Adapter Boundary                  = DESIGN PENDING ← 本 Decision 不推进状态
+Human Decision 8                  = RECORDED（Accept A-1 ～ A-14 ＋ dedicated Closure PR ＋ conditional advancement）
+Closure criteria                  = A-1 ～ A-14 MANDATORY（Human-approved）；A-15 ／ A-16 non-blocking
+Closure verification              = PENDING（Dedicated Adapter Boundary Closure Design Change PR）
+§7 RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling = DESIGN PENDING（未改变）
+blanket implementation authorization = NOT GRANTED
+Decision 1 ～ 8                    = REGISTERED
+POC Design v0.2                   = DRAFT
+```
+
 **Decision 8 —— Minimum closure criteria 接受与 follow-up 授权**
+
+> **current-state（Issue #88）：** 本条目为 **Decision source（时点记录）**；其结果已登记于上方
+> **`Decision 8 —— Human Decision Record`**（`REGISTERED`）。**该 Decision 不再是 open item。**
 - **Question：** 是否接受 **`A-1` ～ `A-14`** 作为 Adapter Boundary minimum closure criteria（`A-15` ／ `A-16` 为 design objectives）？是否授权后续独立 Adapter Boundary Design Change ／ Implementation PR，并在满足 closure criteria 时允许 `DESIGN PENDING → DESIGN RESOLVED`？
 - **Options：** 接受 ／ 调整 ／ 拒绝；授权 ／ 不授权。
 - **Trade-offs：** 授权推进 closure；不授权保持 `DESIGN PENDING`。
@@ -24816,18 +25039,20 @@ POC Design v0.2                   = DRAFT
 **本 Review 不作出上述任何决定。** 后续必须由 **Human Decision** 裁定；
 **不得**由 Agent 自行选择 final adapter model ／ mapping 表达方式 ／ unresolved 策略。
 
-> **current-state（Issue #72 ／ #74 ／ #76 ／ #78 ／ #82 ／ #84 ／ #86）：** **`Decision 1`（#72）／ `Decision 2`（#74）／ `Decision 3`（#76）／ `Decision 4`（#78）／ `Decision 5`（#82）／ `Decision 6`（#84）／ `Decision 7`（#86）已登记** ——
+> **current-state（Issue #72 ／ #74 ／ #76 ／ #78 ／ #82 ／ #84 ／ #86 ／ #88）：** **`Decision 1`（#72）／ `Decision 2`（#74）／ `Decision 3`（#76）／ `Decision 4`（#78）／ `Decision 5`（#82）／ `Decision 6`（#84）／ `Decision 7`（#86）／ `Decision 8`（#88）已登记** ——
 > 见上方各自的 **Human Decision Record**（`Registration Status：REGISTERED`）与
-> **`§4.6.13`** ／ **`§4.6.14`** ／ **`§4.6.15`** ／ **`§4.6.16`** ／ **`§4.6.17`** ／ **`§4.6.18`** ／ **`§4.6.19`** 的 Registration Synchronization。
-> **`Decision 8` 保持未决**；**producer ownership**（artifact ／ package ／ manifest ／
+> **`§4.6.13`** ／ **`§4.6.14`** ／ **`§4.6.15`** ／ **`§4.6.16`** ／ **`§4.6.17`** ／ **`§4.6.18`** ／ **`§4.6.19`** ／ **`§4.6.20`** 的 Registration Synchronization。
+> **本层已无剩余 undecided Human Decision**；**`Decision 8` 已登记 closure policy**，但 `Adapter Boundary` **未**因此关闭；**producer ownership**（artifact ／ package ／ manifest ／
 > provenance metadata 的 producer）**已由 `Decision 2` 决定**（Option ②）；
 > **unresolved ／ unsupported 策略**已由 `Decision 3` 决定（条件组合，以 `UF-2` ／ fail-closed 为主），
 > 并**授权单独设计** non-canonical **Adapter Failure ／ Quarantine Interface**（形态 ／ schema ／ runtime 未完成，**尚未** operationally available）；
 > **mapping rule representation** 已由 `Decision 4` 决定（**Option ①：只登记 contract requirements，carrier deferred** 给 Architecture ／ Implementation）；
 > **`mapping_basis` 语义粒度**已由 `Decision 5` 决定（**Option ①：minimal rule ／ revision reference**；string syntax ／ encoding 属 Architecture ／ Implementation）；
 > **multi-Adapter governance 与 canonical semantic drift 边界**已由 `Decision 6` 决定（**Option ②：explicit cross-Adapter consistency obligation**；canonical-first 保持；detection mechanism 属 Architecture ／ Implementation）；
-> **Adapter ↔ `Permission & Security` interface expectation** 已由 `Decision 7` 决定（**Option ①：declarative access-requirement interface**；Adapter 只声明 minimum authorized access requirements；authorized access 不可用 ⇒ fail closed；`§7` RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling 仍 `DESIGN PENDING`）。
-> `Adapter Boundary` **仍为 `DESIGN PENDING`**；`POC Design v0.2` 仍 `DRAFT`。
+> **Adapter ↔ `Permission & Security` interface expectation** 已由 `Decision 7` 决定（**Option ①：declarative access-requirement interface**；Adapter 只声明 minimum authorized access requirements；authorized access 不可用 ⇒ fail closed；`§7` RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling 仍 `DESIGN PENDING`）；
+> **minimum closure criteria 与 closure gate** 已由 `Decision 8` 决定（**Accept `A-1` ～ `A-14` 为 mandatory minimum closure criteria ＋ 授权 Dedicated Closure Design Change PR ＋ 条件性状态转换；no blanket runtime implementation authorization**）。
+> `Adapter Boundary` **仍为 `DESIGN PENDING`**（**本 registration PR 不推进状态**）；`POC Design v0.2` 仍 `DRAFT`。
+> **下一步 gate = Dedicated Adapter Boundary Closure Design Change PR** —— 逐项验证 `A-1` ～ `A-14`、评估 `A-15` ／ `A-16`、执行 `A-13` composition check；**全部 PASS** 后方可登记 `DESIGN PENDING → DESIGN RESOLVED`，任一 FAIL 则保持 `DESIGN PENDING`。
 
 ---
 
@@ -25476,7 +25701,107 @@ POC Design v0.2                    = DRAFT
 
 ---
 
-#### 4.6.20 Current Status（本 Review 时点）
+#### 4.6.20 Decision 8 Registration Synchronization（Issue #88 —— current-state）
+
+> 本节记录 **Issue #88 登记 `Decision 8`** 后所执行的**最小必要 current-state consistency synchronization**。
+> 本节**只**登记已批准的 Decision 8（closure policy），并使其与 current-state canonical wording 一致 ——
+> **未**在本 PR 推进 `Adapter Boundary` 状态、**未**执行 closure、**未**伪造 `A-1` ～ `A-14` 的 PASS 结果、
+> **未**把 `A-15` ／ `A-16` 升级为 hard blocker、**未**授权 blanket runtime implementation、
+> **未**关闭 `§7` ／ Failure ／ Quarantine ／ Architecture deferrals、
+> **未**新增 canonical carrier ／ `"_meta"` member ／ literal ／ field 与 Validation Reason ／ Category ／
+> status enum、**未**修改 `Decision 1` ～ `Decision 7` 已批准内容与 FCM ／ FIC ／ `§4.5` canonical semantic。
+
+**A. Human Decision registered**
+
+`Decision 8`（minimum closure criteria acceptance ／ dedicated closure gate authorization）已以
+**Human Decision Record** 形式登记于 **`§4.6.10`**（`Registration Status：REGISTERED`）。
+
+```
+Decision 8 = Accept A-1 ～ A-14 ＋ authorize dedicated Adapter Boundary Closure Design Change
+             ＋ conditional status advancement；no blanket runtime implementation authorization
+8.1  A-1 ～ A-14 = MANDATORY MINIMUM CLOSURE CRITERIA（逐项 PASS ／ FAIL verification 由 Closure PR 执行）
+8.2  A-15 ／ A-16 = POC DESIGN OBJECTIVE（必须评估、non-blocking、不得升级为 hard gate）
+8.3  Dedicated Closure PR required（不在本 Decision 内关闭 Adapter Boundary）
+8.4  Conditional status advancement（A-1 ～ A-14 全 PASS ⇒ 才允许 DESIGN PENDING → DESIGN RESOLVED）
+8.5  Failure ／ Quarantine physical shape ／ schema ／ runtime 仍开放；不自动阻止 conceptual closure
+8.6  §7 RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling 仍 DESIGN PENDING；不自动阻止 conceptual closure
+8.7  real source field unknown 继续 non-blocking
+8.8  no blanket implementation authorization（后续 implementation 须独立、明确授权）
+8.9  Architecture ／ Implementation deferrals 保持；ADR 仍未创建
+8.10 registration-time：Decision 1 ～ 8 = REGISTERED；Adapter Boundary = DESIGN PENDING；POC Design v0.2 = DRAFT
+```
+
+**B. Minimum synchronization applied**
+
+| # | 位置 | 同步内容 |
+| --- | --- | --- |
+| 1 | `§4.6.9` 标题 ／ 状态 | 由「**candidate —— 待 Human 批准**」改为 **Human-approved minimum closure criteria**；新增 current-state 与 closure gate wording（`A-1` ～ `A-14` mandatory；`A-15` ／ `A-16` non-blocking；`Adapter Boundary` 仍 `DESIGN PENDING`；PASS ／ FAIL verification 归 Dedicated Closure PR） |
+| 2 | `§4.6.9` `A-1` | 「仍 open（绑定 Decision）」改为「**仍未完成但由 `Decision 8` 明确为 non-blocking**」（Failure ／ Quarantine 形态、`§7` 具体设计**不**构成 mandatory closure blocker，**亦不得**写成已完成） |
+| 3 | `§4.6.9` `A-13` ／ `A-14` | `A-13` 增列 **Closure PR 必须显式执行 composition check**；`A-14` 增列 **`Decision 8` 确认 real source field unknown 继续 non-blocking** |
+| 4 | `§4.6.9` `A-15` ／ `A-16` | 保持 **POC DESIGN OBJECTIVE**；增列「必须在 Closure PR 显式评估、给出简洁结论 ／ evidence、**不得**升级为 hard closure gate」 |
+| 5 | `§4.6.9` 尾注 | 新增 `Decision 8` 登记说明（mandatory vs non-blocking；唯一例外 = 评估暴露 `A-1` ～ `A-14` 客观失败） |
+| 6 | `§4.6.5 A-3` | 开放表说明更新为 `Decision 1` ～ `Decision 8` 已登记；落点改为 **Dedicated Adapter Boundary Closure Design Change PR** |
+| 7 | `§4.6.8` `ARF-7` | 增列 `Decision 8` 登记：minimum closure criteria = `A-1` ～ `A-14`；逐项 verification 与条件性状态转换归 Dedicated Closure PR（**本 Decision 不推进状态**） |
+| 8 | `§4.6.8` `ARF-8` | 增列 `Decision 8` 8.6：remaining `§7` 设计**不自动阻止** Adapter Boundary conceptual closure |
+| 9 | `§4.6.2` `AC-22` | 新增 **Adapter Boundary closure policy（`Decision 8`，Issue #88 Human-approved）** 条目（mandatory criteria ＋ non-blocking objectives ＋ dedicated Closure PR ＋ conditional advancement ＋ 「不表示什么」清单 ＋ `§7` ／ Failure ／ Quarantine 非阻断 ＋ no blanket implementation authorization ＋ deferrals 保持）；**授权来源区分扩展至 `Decision 8`**；reference list 加入 `Decision 8` HD Record |
+| 10 | `§4.6.2` `AC-23` | 新增第 ⑩ 项：`Decision 8` 已获 Human Approval ⇒ closure policy **registered**；未决项更新为「本层已无剩余 Human Decision；下一步 gate = Dedicated Closure PR」；reference list 加入 `Decision 8` HD Record |
+| 11 | `§4.6.10` Decision 8 source 条目 | 新增 current-state 注记：该条目为 **Decision source（时点记录）** ⇒ **不再是 open item** |
+| 12 | `§4.6.10` current-state note ／ next gate wording | 更新为 `Decision 1` ～ `8` 已登记、本层无剩余 undecided Human Decision；明确 **本 registration PR 不推进状态**；**下一步 gate = Dedicated Adapter Boundary Closure Design Change PR**；Current Status 顺延为 **`4.6.21`** |
+
+**C. 明确保留（未被本 Decision 决定 / 关闭）**
+
+```
+Decision 1 ～ 8                    = REGISTERED
+Adapter Boundary                   = DESIGN PENDING ← 本 PR 未推进
+POC Design v0.2                    = DRAFT
+Closure verification（A-1 ～ A-14） = PENDING ← Dedicated Adapter Boundary Closure Design Change PR
+DESIGN RESOLVED                    = 未登记（不得由本 PR 登记）
+§7 RBAC / Data Scope / Tool Permission / Secret Handling = DESIGN PENDING ← 未改变
+§7 Permission & Security overall   = 不得标记为 DESIGN RESOLVED
+Failure / Quarantine physical shape / schema / storage / API / runtime = 未设计 / 未 operationally available
+mapping rule representation carrier / mapping_basis concrete string syntax / drift detection mechanism /
+  Package Assembly runtime shape / auth / credential / secret-delivery mechanism /
+  framework / database / API / deployment / ADR = ARCHITECTURE / IMPLEMENTATION DEFERRALS（保持）
+blanket runtime implementation authorization = NOT GRANTED
+```
+
+**D. Scope / Non-Decision 核验**
+
+- **未**在本 PR 把 `Adapter Boundary` 改为 `DESIGN RESOLVED`；**未**执行 Adapter Boundary closure；
+- **未**伪造 `A-1` ～ `A-14` 的 PASS 结果；**未**预写 Closure PR 的 verification 结论；
+- **未**把 `A-15` ／ `A-16` 升级为 hard blocker；
+- **未**授权或创建 runtime implementation（Adapter runtime code ／ connector ／ parser ／ serializer ／
+  mapping registry ／ mapping rule storage ／ Failure ／ Quarantine implementation ／ drift detector ／
+  runtime validator ／ auth middleware ／ credential ／ secret mechanism ／ database ／ API ／ framework ／
+  deployment ／ source-system integration 均**未**授权或创建）；
+- **未**设计 Failure ／ Quarantine Interface physical shape ／ schema ／ runtime；
+- **未**设计 RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling；**未**修改 `§7` remaining statuses；
+- **未**选择 architecture ／ framework ／ database ／ API ／ deployment；**未**创建 ADR；
+- **未**定义 mapping rule concrete carrier 或 `mapping_basis` concrete syntax；**未**选择 drift detection mechanism；
+- **未**创建 credential ／ secret；
+- **未**新增 canonical carrier ／ `"_meta"` member ／ literal ／ field、Validation Reason ／ Category ／
+  status enum ／ package disposition；
+- **未**修改 FCM ／ FIC ／ Snapshot & Import Contract、Master Data Mapping canonical semantic、
+  `Decision 1` ～ `Decision 7` 已批准内容；
+- **未**修改 Discovery `FROZEN` docs 或 governance docs。
+
+**本次登记的 review-only 边界（自我核验）：**
+
+```
+未推进 Adapter Boundary 状态（仍 DESIGN PENDING）
+未登记 DESIGN RESOLVED
+未伪造 A-1 ～ A-14 PASS 结果
+未将 A-15 / A-16 升级为 hard blocker
+未授权 blanket implementation
+未改变 §7 各 remaining item 的 DESIGN PENDING 状态
+未新增 canonical carrier / literal / Validation Reason / Category / status enum
+未创建 runtime code / registry / detector / validator / ADR / service / credential / secret
+未修改 §3 / §4.1 ～ §4.5 任何已登记 policy 与历史记录
+```
+
+---
+
+#### 4.6.21 Current Status（本 Review 时点）
 
 ```
 Snapshot / Import Contract overall = DESIGN RESOLVED
