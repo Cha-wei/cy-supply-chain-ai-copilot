@@ -238,12 +238,37 @@ Out of Scope（business out-of-scope ／ deferred ／ prohibited ／ P1 四类�
 
 四类**必须分开**，不得压平为一个「都不做」：
 
-| 分类 | 候选内容 | 含义 |
-| --- | --- | --- |
-| **Business scope out-of-scope** | Production write-back；direct source-system ／ Production DB access；正式 `ERP` `Purchase Request` ／ `Purchase Order` execution；完整 `ERP` ／ `MRP` replacement | **不属本 POC 的业务范围**（`§3` `WRITE = DENIED`；`Production Write-back = OUT OF SCOPE`；`FROZEN` `§19`） |
-| **Deferred（当前 POC design 未完成）** | `§6` HITL state machine；`§7` `RBAC` ／ `Data Scope` ／ `Tool Permission` ／ `Secret Handling`；`§8` audit ／ observability；`§9` test ／ eval ／ acceptance method；`§10` Architecture ／ ADR；implementation | **未设计 ／ 未实现**，但**不是**被禁止的能力 |
-| **Prohibited（明确禁止）** | 未经人工批准的高风险写操作；LLM 自行生成库存 ／ 订单 ／ 价格事实；silent exclusion ／ silent normalization；绕过 Controlled Export ／ 直连 source system；把 unsupported ／ unresolved 压平为正常 missing | `FROZEN` `§10` ／ `§16` ＋ `§3` hard boundary ＋ `§4` 已批准 policy **唯一确定**的禁止项 |
-| **P1（后续增强）** | 企业知识库 ／ RAG；高级供应商比较；自然语言供应链查询；自动供应链分析报告 | `FZ-3`；**不属于**第一阶段 POC 成败核心 |
+**分类规则（candidate —— 供 `GSD-5` 裁定）：** 四个 label 是**互斥 bucket**，**不是**同一 item 可重复落入的维度标签。
+每条候选 item **只**归入一个 bucket；判定按以下顺序进行，先命中者为准：
+
+```
+1. Prohibited（hard boundary —— 行为禁止）
+   —— 该行为是否被 current approved canonical text（§3 hard boundary ／ FZ-4 等）明确禁止？
+2. P1
+   —— 该能力是否属 FZ-3 列出的后续增强？
+3. Deferred
+   —— 该事项是否属本 POC 范围，但当前设计层未完成（§6 ～ §10）或 implementation 未开始？
+4. Business scope out-of-scope
+   —— 其余：不属于本 POC 业务闭环的业务能力 ／ 结果
+```
+
+| 分类 | 判定问题（互斥） | 候选内容 | canonical 依据 |
+| --- | --- | --- | --- |
+| **Business scope out-of-scope**（业务能力 ／ 结果**不属**本 POC） | 「本 POC **是否提供**该业务能力 ／ 结果？」→ **否** | 正式 `ERP` `Purchase Request` ／ `Purchase Order` execution；完整 `ERP` ／ `MRP` replacement；其他明确不属 P0 闭环的业务结果（例如完整供应链 Copilot 平台能力） | `FZ-2`（P0 = 缺料分析 → 采购建议 → HITL；AI 只产出采购申请草稿）；`FROZEN` `§19`（POC 不承担完整 ERP ／ MRP 替代职责） |
+| **Deferred**（本 POC 范围内、当前**未完成**） | 「该事项是否属本 POC 范围，但当前设计 ／ 实现**未完成**？」→ **是** | `§6` HITL state machine；`§7` `RBAC` ／ `Data Scope` ／ `Tool Permission` ／ `Secret Handling`；`§8` audit ／ observability；`§9` test ／ eval ／ acceptance method；`§10` Architecture ／ ADR；implementation | `§6` ～ `§10` status boundary（`DESIGN PENDING` ／ `No ADR created yet`）；`§3` ／ `§5` `Implementation Status = NOT STARTED` |
+| **Prohibited**（hard boundary —— **行为禁止**） | 「**执行该行为**是否被 current approved canonical text **明确禁止**？」→ **是** | direct source-system ／ Production DB access（即**绕过 Controlled Export**）；在本 POC 当前 `§3` boundary 下执行 production write-back ／ write API 调用；未经人工批准的高风险写操作；LLM 自行生成库存 ／ 订单 ／ 价格事实；silent exclusion ／ silent normalization；把 unsupported ／ unresolved 压平为正常 missing | `§3`（`READ` 只能经 controlled exported snapshot；`WRITE = DENIED`；`Production Write-back = OUT OF SCOPE`）；`FZ-1`「受控」；`FZ-4`（LLM 不得自行生成事实；未经人工批准禁止高风险写操作）；`§4` 已批准 policy（no silent exclusion ／ normalization；absent ≠ unresolved） |
+| **P1**（后续增强） | 「该能力是否属 `FZ-3` 列出的后续增强？」→ **是** | 企业知识库 ／ RAG；高级供应商比较；自然语言供应链查询；自动供应链分析报告 | `FZ-3`；**不属于**第一阶段 POC 成败核心 |
+
+**去重说明（消除隐式重叠 —— 每条 item 只归一 bucket）：**
+
+- **`direct source-system ／ Production DB access` 只登记于 `Prohibited`。** 它在直觉上也像「业务范围之外」，
+  但在 current canonical text 中它是**被明确禁止的行为**（`§3` read boundary；`AC-1` ／ `AC-2`），
+  因此按判定顺序第 1 条归入 **Prohibited**，**不**再重复出现在 Business scope out-of-scope。
+  同一禁止路径的另一种表述（**绕过 Controlled Export**）已在**同一** bucket 内合并为**同一** item，不再跨 bucket 出现。
+- **`Production write-back` 在 `§3` 中有两个不同 canonical 表述**：`Production Write-back = OUT OF SCOPE`（**scope 维度**）
+  与 `WRITE = DENIED`（**behavior 维度**）。本候选表把**行为禁止**归入 `Prohibited`，并**以 `§3` 的 scope 表述作为其依据引用**，
+  **不**把同一对象登记为两个 bucket 的 item。若 Human 希望将其显式拆成两条 item（capability exclusion ＋ behavior prohibition），
+  由 `GSD-5` 裁定；本 Review **不**自行选择该拆法。
 
 **D. Scope drift check（Q6 —— 以 `§2` ～ `§5` 为对象）**
 
@@ -326,7 +351,7 @@ candidate 判断：
 | `S-1` | P0 Goal 与 `FROZEN` Problem Statement（`FZ-1`）／ `§11`（`FZ-2`）一致，且不改变 P0 闭环（缺料分析 → 采购建议 → HITL） | MANDATORY CLOSURE CRITERION |
 | `S-2` | P1（`FZ-3`）**不**被升级为 P0；`§5.3` `SIMULATED` question baseline 与 `§2.7` `Supplier Risk` **不**被写成 P1 升级 | MANDATORY CLOSURE CRITERION |
 | `S-3` | In Scope **不新增** `FROZEN` 之外的 business scenario；supporting design ／ quality ／ safety infrastructure **不**被写成新 P0 场景 | MANDATORY CLOSURE CRITERION |
-| `S-4` | Out of Scope ／ `deferred` ／ `prohibited` ／ P1 **四类不混淆**，且各自可被单独引用 | MANDATORY CLOSURE CRITERION |
+| `S-4` | Out of Scope ／ `deferred` ／ `prohibited` ／ P1 **四类不混淆**，且各自可被单独引用；分类须遵循 `§1.4 C` 的判定规则（每条 item **只**归一 bucket；跨维度引用须显式标注，不得隐式重叠） | MANDATORY CLOSURE CRITERION |
 | `S-5` | `FROZEN` `§16` 的 success dimensions **全部**被 design-level success boundary 映射（design-time ／ runtime-test evidence ／ business-value evidence 三层） | MANDATORY CLOSURE CRITERION |
 | `S-6` | `FROZEN` `§17` failure ／ reassessment boundary 被保留，且**不**被伪装成已验证事实 | MANDATORY CLOSURE CRITERION |
 | `S-7` | current `§2` ～ `§5` 与 P0 scope **无未登记冲突**（1.4 D 核验可复现） | MANDATORY CLOSURE CRITERION |
