@@ -37,7 +37,7 @@
 | `CONTRIBUTING.md` | 工程 Workflow：DoR / DoD、Git & GitHub、Testing & Validation、Documentation、Delivery Report、Rule Conflict | 一般 Workflow |
 
 - 规则优先级（Rule Precedence）与规则冲突处理：canonical definition 见 `CONTRIBUTING.md` §1 ／ §12，**本文档不复制其内容**。
-- `CONTRIBUTING.md` 当前 approved baseline = **v0.2**（`APPROVED`，**未** `FROZEN`）。
+- `CONTRIBUTING.md` 当前 approved baseline = **v0.3**（`APPROVED`，**未** `FROZEN`）。
 
 ---
 
