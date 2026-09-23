@@ -14493,7 +14493,7 @@ Design DoD = PASS（17 / 17）
 
 | 依赖领域 | Status |
 | --- | --- |
-| Snapshot / Import Contract | `DESIGN PENDING` |
+| Snapshot / Import Contract | **`DESIGN RESOLVED`**（**Issue #66 Closure**，见 **§4.3.28** ／ **§4.3.29**；本表原记 `DESIGN PENDING` 为 **Data Validation Closure 时点**值） |
 | Master Data Mapping | **`DESIGN RESOLVED`** |
 | Adapter Boundary | `DESIGN PENDING` |
 
