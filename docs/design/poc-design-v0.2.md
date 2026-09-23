@@ -3923,7 +3923,7 @@ conceptual boundary 已定义
 | Snapshot / Import Contract | **`DESIGN RESOLVED`** |
 | Data Validation | **`DESIGN RESOLVED`** |
 | Master Data Mapping | **`DESIGN RESOLVED`** |
-| Adapter Boundary | `DESIGN PENDING` |
+| Adapter Boundary | `DESIGN PENDING`（Design Review 见 **§4.6**） |
 
 > 继承约束（不重新定义）：Integration Pattern = **Controlled Export / Snapshot**。
 > 具体文件格式 = **JSON**（**`Serialization Format` = `DESIGN RESOLVED`**，见 **§4.3.22**）；
@@ -3946,7 +3946,7 @@ conceptual boundary 已定义
 >
 > §4 仍有 **1 个 `DESIGN PENDING` 子领域**：
 >
-> - `Adapter Boundary`
+> - `Adapter Boundary`（**Design Review 已产出**，见 **§4.6**；**状态未推进**，仍为 `DESIGN PENDING`）
 >
 > （`Snapshot / Import Contract` 已由 **Issue #66 Closure = `PASS`** 关闭 ——
 > 见 **§4.3.28** ／ **§4.3.29**；`Master Data Mapping` 已由 **PR #48 Human Decision** 授权并关闭 ——
@@ -23185,6 +23185,506 @@ Final Master Data Mapping          = DESIGN RESOLVED
 Master Data Mapping overall        = DESIGN RESOLVED
 Master Data Mapping layers         = 11 / 11 DESIGN RESOLVED
 ```
+
+---
+
+### 4.6 Adapter Boundary
+
+#### 4.6.1 Adapter Boundary Design Review（Review Finding）
+
+**Review Authority / Scope**
+
+```
+Review Type    = 独立 Design Review（只产出 Review Finding）
+Review Object  = Adapter Boundary（§4 最后一个 DESIGN PENDING 子领域）
+Decision Power = NONE —— 本 Review 不作出任何 Human Decision
+Write Scope    = 仅 docs/design/poc-design-v0.2.md
+Status Change  = NONE（Adapter Boundary 保持 DESIGN PENDING）
+```
+
+本 Review **不选择** transport ／ connector ／ mapping 表达方式，
+**不创建** Adapter ／ connector ／ parser ／ serializer ／ runtime code、JSON Schema、sample package，
+**不新增** canonical entity ／ field ／ enum ／ Validation Reason ／ status，
+**不选择** framework ／ database ／ API technology ／ deployment stack，
+**不设计** RBAC ／ Secret Handling ／ 完整 Permission model，
+**不重新打开**已 `DESIGN RESOLVED` 的 Snapshot / Import Contract、Data Validation 或 Master Data Mapping。
+
+> **Inherited Constraint 标注约定：** 若某行为已由既有 canonical constraint **唯一确定**，
+> 本 Review 标记为 **`Inherited Constraint`**，**不**伪装成新的 Human Decision；
+> **`Inherited Constraint` 不得被实现为可选项。**
+> 若仍有多个合理方案，则**只**呈现 trade-off 与 dependency。
+
+---
+
+#### 4.6.2 Existing Canonical Constraints（Inherited —— 不得重新打开）
+
+| # | Constraint | Source |
+| --- | --- | --- |
+| `AC-1` | Integration Pattern = **Controlled Export / Snapshot**；`READ` **只能**通过 controlled exported snapshot；`WRITE` = **`DENIED`**；`Production Write-back = OUT OF SCOPE` | `§3.1` |
+| `AC-2` | POC **不直接读取 Production DB**；business data **只能**经 `Simulated Enterprise Sources → Controlled Export → POC Data Landing Zone` 进入；**不得**绕过 Controlled Export 直连源系统，**不得**以「只读」为由扩大 source access | `§3.3` ／ `§3.4` |
+| `AC-3` | `Controlled Snapshot unavailable` ／ `Data Landing Zone unavailable` ⇒ **fail closed**；**不得**切换 Production direct access、**不得**让 LLM 用旧数据伪装当前事实 | `§3.10` |
+| `AC-4` | `LLM does not create business truth`；business truth 只能来自 deterministic 路径（`Data Source → Deterministic Data Tool → Structured Result → LLM`） | `§3.11` ／ `§5` |
+| `AC-5` | **`Source Identifier ≠ Canonical Identity`**；只有经**可靠 mapping** 后 source evidence 才能作为 canonical business evidence 使用 | `§4.5.2` |
+| `AC-6` | Mapping **必须** `deterministic` ／ `explicit` ／ `traceable` ／ `reproducible`；**不得**依赖 LLM guess ／ name similarity ／ fuzzy matching ／ human-name intuition ／ silent normalization | `§4.5.2` |
+| `AC-7` | **禁止** auto-reconciliation：`missing → 0`、`invalid → clamp`、unknown status → `AVAILABLE`、unknown relationship → eligible、fuzzy mapping、自动选最新 ／ 最大 ／ 覆盖 conflicting record（除非既有 Business Rule 明确允许） | `§4.4.13` ／ `§4.4.73` |
+| `AC-8` | **`No Silent Exclusion`**：invalid evidence **不得**为了让计算继续而被静默丢弃；`Scope coverage` 无法可靠判断时，**不得**把「无匹配记录」解释为明确 `zero` | `§4.4.9` ／ `§4.4.8` |
+| `AC-9` | 必须区分 **`source evidence absent`** 与 **`source evidence exists but canonical mapping unavailable`**；后者是 identity ／ relationship resolution problem；**不得** `mapping missing → business value = 0` | `§4.5.17` |
+| `AC-10` | `SEMANTIC_UNRESOLVED` **仅在**「capability 确实需要该 semantic」**且**「当前 approved Design 无法可靠解释」**同时成立**时使用；**没有全局 source vocabulary ／ 没有 global source-field precedence 本身不是 Validation Issue** | `§4.4.95` |
+| `AC-11` | Mapping **必须**属于当前 Analysis Run 绑定的 **accepted Snapshot Package context**；**不得** `P1 business evidence ＋ P2 identity mapping` 静默组成同一 Analysis Run；跨 Package **必须**作为新 Design | `§4.5.15` |
+| `AC-12` | Provenance 追溯链：`source identity context → canonical identity → mapping evidence → Snapshot Package`；**logical carrier contract = `DESIGN RESOLVED`**（`P-A` 位于 record `"_meta"`，`MB-A` 与之间层） | `§4.5.14` ／ `§4.3.25` ／ `§4.5.22` |
+| `AC-13` | `Stable Source Evidence Locator` = **opaque JSON string**；**必须**保持原始 identity value，**禁止** trim ／ case conversion ／ Unicode normalization ／ numeric coercion ／ heuristic interpretation | `§4.2` ／ `C-2` ／ `C-10` ／ `§4.3.28 E` |
+| `AC-14` | `Mapping ／ Resolution Basis` = **optional exact JSON string**，**仅**在发生 semantic mapping ／ resolution 时要求，colocated with the relevant association | `§4.3.28 E` |
+| `AC-15` | Package = **Flat Directory Package**（package-root `manifest.json` ＋ 每个 included logical dataset 一个 package-root-level JSON artifact）；`Final Import Contract` 为 **`DESIGN RESOLVED`**：acceptance gate、`PN-1` strict literal path、version dispatch、unknown-content `UX-A reject`、raw-byte SHA-256、`Decision 10A` stable-view binding | `§4.3.23` ／ `§4.3.28` ／ `§4.3.29` |
+| `AC-16` | 四层 validation model；`Package Structural Failure ≠ Capability Evidence Unavailable ≠ Business DATA_INCOMPLETE`；Validation Issue Taxonomy（8 categories ／ 12 reasons）为 `REGISTERED`，**不得**新增 root reason | `§4.4.2` ／ `§4.4.3` ／ `§4.4.80` ／ `§4.4.81` |
+| `AC-17` | 每个 canonical requirement 都有 **logical evidence requirement**；Capability Matrix **不**定义 physical file requirement；physical carrier = **`SOURCE-SPECIFIC`**；`loss_rate` 的 owner ／ grain 与 `ApplicableMOQ` 来源等 canonical resolution contract 均已 `DESIGN RESOLVED`，但**真实 source field 未知 ≠ Design Pending** | `§4.4.7` ／ `§4.2.16` ／ `§4.1.12` |
+| `AC-18` | `effective_arrival_date` 的 **`Option D`**（source-specific mapping → canonical）× **`exactly-one-or-unresolved`** × **`Global Source-Field Precedence = NOT ADOPTED`** × **`single candidate ≠ automatically canonical`** × **`promised_date ≠ expected_arrival_date` 本身不构成 DQ Issue** × **`updated_at ≠ effective_arrival_date`** —— 均为 Human-approved current design | `§4.5.21` |
+| `AC-19` | `sourcing_status` **不建立全局 source enum**；`source vocabulary → canonical eligibility condition` 为 mapping contract；`Warehouse` **不是** canonical entity（source ／ mapping ／ scope context） | `§4.5.11` ／ `§4.5.12` |
+| `AC-20` | Physical carrier **design** 已关闭（FCM ／ FIC = `DESIGN RESOLVED`）；**仍未实现**的是 runtime ／ source-specific ／ **Adapter realization** | `§4.3.16` ／ `§4.3.17` |
+| `AC-21` | `RBAC` ／ `Data Scope` ／ `Tool Permission` ／ `Secret Handling` = **`DESIGN PENDING`**；**不得**将真实企业 credentials 放入 Git，**不得**将 secrets 写入 prompt ／ logs；`AI Effective Permission = User Permission ∩ Data Scope ∩ Tool Permission ∩ Workflow State ∩ POC Policy` | `§7` |
+| `AC-22` | 已关闭层的 **ownership 划分**：`Final Import Contract owns` acceptance ／ rejection contract ＋ runtime structural checks；`FCM owns` carrier shapes ／ approved literals ／ metadata placement；`Data Validation owns` Layer 2 ～ Layer 4 conceptual semantics ＋ failure taxonomy；**`Adapter Boundary owns` source extraction ／ source → canonical mapping ／ connector ／ source protocol** | `§4.3.28`（`RIF-11` 引用） |
+
+**本 Review 未发现**上述约束之间存在冲突；`AC-18` ／ `AC-19` 是**已经唯一确定**的行为，
+**不得**在本层被重新打开为自由选项。
+
+---
+
+#### 4.6.3 Exact Review Scope
+
+**In scope（仅以下问题）：**
+
+1. Adapter owns ／ does not own 什么（含与 `Snapshot / Import Contract`、`Data Validation`、
+   `Master Data Mapping`、`Field Carrier Mapping`、`Permission & Security` 的边界）
+2. Adapter 的**输入**与**输出 conceptual contract**
+3. source → canonical mapping 的 **deterministic ／ fail-safe** 要求
+4. missing ／ ambiguous ／ unsupported source evidence 的**表达归属**（Adapter failure vs Data Validation）
+5. `Stable Source Evidence Locator` 与 `Mapping ／ Resolution Basis` 的 **Adapter-side 生成 ／ 保留责任**
+6. 多 source ／ 多 Adapter 下的 **canonical semantic drift** 防护
+7. 哪些问题**必须本层关闭**，哪些**明确留给** `Permission & Security` ／ `Architecture` ／ Implementation
+8. Adapter Boundary 的 **minimum closure criteria** 候选
+
+**Out of scope（属其他层或实现）：**
+
+- 直连 Production DB ／ API 或任何 Production write
+- 真实 ERP table ／ column ／ proprietary field 选择；framework ／ database ／ API technology ／ deployment stack
+- Adapter ／ connector ／ parser ／ serializer ／ runtime code、JSON Schema、sample package
+- RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling ／ 完整 Permission model
+- canonical entity ／ field ／ enum、`BR-*`、Validation Taxonomy 的修改
+- 重新打开 `Snapshot / Import Contract`、`Data Validation`、`Master Data Mapping`
+- 真实 credentials、sample production integration、runtime artifact
+
+---
+
+#### 4.6.4 Critical Scenarios
+
+`性质` 列：**`IC`** = behavioural outcome 已被 inherited；**`IC + open`** = outcome inherited、
+**表述 ／ 报告细节**仍开放；**`open`** = 真正待 Human Decide。
+
+**A. Input side**
+
+| # | Scenario | 既有约束要求的行为 | 性质 |
+| --- | --- | --- | --- |
+| `AS-1` | Controlled Export ／ Snapshot 产物 unavailable，或 Data Landing Zone 不可用 | **fail closed**（`AC-3`）；**不得**改走 Production direct access，**不得**用旧数据伪装当前事实 | **`IC`** |
+| `AS-2` | 被要求以「只读」为理由直接查询源系统 ／ 绕过 Controlled Export | **拒绝**（`AC-1` ／ `AC-2`）；source access **不得**扩大 | **`IC`** |
+| `AS-3` | 同一 canonical logical dataset 的 source artifact 采用 **source-specific physical shape** | Adapter 负责在**不改变** canonical semantic 的前提下产出 canonical artifact | **`IC`** |
+| `AS-4` | source artifact 中含**未获批准**的 source field ／ 未知 source 结构 | 属**本层未决**：Adapter 应如何 fail-safe（skip ／ quarantine ／ stop） | **`open`** |
+| `AS-5` | 同一 source record 需要按 manifest 声明的 logical dataset 顺序引用 | Adapter **不得**依赖 filename ／ ordering ／ discovery heuristic 推断 role（`IC-3` 边界） | **`IC`** |
+
+**B. Mapping side**
+
+| # | Scenario | 既有约束要求的行为 | 性质 |
+| --- | --- | --- | --- |
+| `AS-6` | source identifier 需要解析成 canonical identity | **deterministic ＋ explicit ＋ traceable ＋ reproducible**；**不得** fuzzy ／ name similarity ／ LLM guess（`AC-5` ／ `AC-6`） | **`IC`** |
+| `AS-7` | 多个 candidate source dates 存在且不同，且**无** approved source-specific mapping | **不得选择任何一个** ⇒ mapping unresolved ⇒ `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`；capability 需要时 `DATA_INCOMPLETE`（`AC-18`） | **`IC`** |
+| `AS-8` | 只有一个 candidate source date 有值 | **仍不得**自动视为 canonical（`single candidate ≠ automatically canonical`，`AC-18`） | **`IC`** |
+| `AS-9` | 需要 source-field precedence（`promised_date` ／ `expected_arrival_date` ／ `ETA` 谁优先） | **Global Source-Field Precedence = `NOT ADOPTED`**；**不得**发明（`AC-18`） | **`IC`** |
+| `AS-10` | Adapter 发现 canonical semantic 本身无法解释某 source value | `SEMANTIC_UNRESOLVED` 边界；Adapter **不得**自行改定义 canonical semantic（`AC-10` ／ `AC-18`） | **`IC`** |
+| `AS-11` | Adapter 需要「补全」缺失值以让 downstream 计算继续 | **禁止** auto-reconciliation ／ `missing → 0` ／ sentinel 代替（`AC-7`） | **`IC`** |
+| `AS-12` | Adapter 需要 trim ／ case-fold ／ Unicode-normalize ／ 数值强转以完成匹配 | **禁止** silent fix-up（`AC-6` ／ `AC-13`） | **`IC`** |
+| `AS-13` | Adapter 需要建立**第二套 canonical identity 或 vocabulary** 以简化映射 | **不得**（`AC-5` ／ `AC-19`）；identity ／ vocabulary 归属本层之外 | **`IC`** |
+| `AS-14` | Adapter 的 mapping 判定规则本身**如何表达**（configuration ／ mapping registry ／ code） | 属实现与 architecture：**本层未决** | **`open`** |
+
+**C. Output side**
+
+| # | Scenario | 既有约束要求的行为 | 性质 |
+| --- | --- | --- | --- |
+| `AS-15` | Adapter 产出 canonical artifact set，供 Snapshot / Import Contract 接受 | 输出**必须可被** `Final Import Contract` 验证（`IC-1` ／ `IC-3` ／ `IC-8` ／ `IC-22` ＋ `AC-15`）；Adapter **不得**自行宣告 `Accepted` | **`IC`** |
+| `AS-16` | Artifact 的 digest 与 Adapter 产出时的字节不一致 | `IG-raw` = exact raw bytes ⇒ **fail closed**（package-level），Adapter **不得**静默重算 ／ 覆盖 | **`IC`** |
+| `AS-17` | acceptance 过程中 artifact 被替换 ／ 重读得到不同视图 | `Decision 10A`：验证结果**必须**绑定实际被接受的同一 stable content view（`AC-15`） | **`IC`** |
+| `AS-18` | Adapter 生成 `"_meta"` provenance association 与 mapping basis | shape 与 approved literals **已由 FCM ／ FIC 唯一确定**（`AC-12` ／ `AC-13` ／ `AC-14`）⇒ **`Inherited Constraint`**；**generation 机制**属 implementation | **`IC`**（generation mechanism = `implementation-only residual`） |
+| `AS-19` | Adapter 未产出某 required logical evidence role | 属 **`EVIDENCE_AVAILABILITY`**（Layer 2）capability 后果，**不是** Adapter 自定的 package structural failure（`AC-16`） | **`IC`** |
+| `AS-20` | Adapter 想要**直接标记** `REJECTED` ／ `UNUSABLE` 或自行生成 Validation Issue | **不得** —— disposition 由 `Final Import Contract` 判定（`§4.3.29` `RD-B`）；Validation Issue 由 Data Validation 依 taxonomy 产生（`AC-16`） | **`IC`** |
+| `AS-21` | 同一 source 的两次 mapping 在同一输入下给出不同结果 | 违反 `deterministic` ／ `reproducible`（`AC-6`） | **`IC`** |
+
+**D. Multi-source / multi-Adapter**
+
+| # | Scenario | 既有约束要求的行为 | 性质 |
+| --- | --- | --- | --- |
+| `AS-22` | Source A 与 Source B 对同一 canonical semantic 使用**不同 source-specific mapping** | **允许**（`AC-18` ／ `AC-19`），**前提**是 canonical semantic 由 canonical design 定义、mapping 显式且可追溯 | **`IC`** |
+| `AS-23` | 两个 Adapter 对同一 canonical field 给出**不同 canonical value**（同一 grain） | **不得** first ／ latest ／ most-frequent wins；应为 unresolved ／ consistency issue（`§4.5.16` 边界 ＋ `AC-7`） | **`IC`** |
+| `AS-24` | Adapter 引入 local convention（默认值 ／ fallback ／ 「合理」推断）并成为事实上的全局语义 | **不得** —— 属 **silent semantic drift**（`AC-6` ／ `AC-7` ／ `AC-10`） | **`IC`** |
+| `AS-25` | 多 Adapter 之间需要共享的 canonical 约定（identifier ／ vocabulary ／ priority）**表达与治理** | 属**本层未决**：须登记其**来源与边界**，**不得**由实现自由决定 | **`open` + prerequisite** |
+| `AS-26` | 同一 source identity 在同一有效 mapping context 中指向多个 canonical identities | 视为 **unresolved identity ／ consistency issue**，限制 blast radius；**不得**自动选择（`AC-7`） | **`IC`** |
+
+**E. Cross-layer / governance**
+
+| # | Scenario | 既有约束要求的行为 | 性质 |
+| --- | --- | --- | --- |
+| `AS-27` | Adapter 需要 credentials ／ secrets 以访问 source | Secret Handling = `DESIGN PENDING`（`AC-21`）；本层**不得**设计，只登记 dependency | **`open` + prerequisite** |
+| `AS-28` | Adapter 的 data scope ／ permission 边界 | `Data Scope` ／ `Tool Permission` = `DESIGN PENDING`（`AC-21`） | **`open` + prerequisite** |
+| `AS-29` | Adapter 需要真实的 source table ／ column 名称 | **不得**在本层选择；真实 source field 未知 **≠** design pending（`AC-17`） | **`IC`** |
+| `AS-30` | Adapter 的 runtime failure（source unreachable ／ artifact malformed）如何上报 | 不得自行定义新 reason；Layer 1 部分属 `Final Import Contract`，Layer 2 ～ 4 部分属 Data Validation（`AC-16`） | **`IC`** |
+
+---
+
+#### 4.6.5 Candidate Options / Trade-offs
+
+> 以下仅为**候选模型**，**不代表**本 Review 的选择。
+> **已被 inherited constraints 排除的模型**显式标注 `NOT COMPATIBLE`，**不**列为开放选项。
+
+**A. Adapter Owns ／ Does Not Own（Q1）**
+
+**`Inherited Constraint`（`AC-22` ＋ `§3`）：**
+
+| Adapter **owns** | Adapter **does not own** |
+| --- | --- |
+| source artifact **extraction**（从 Controlled Export 产物读取 source records） | canonical entity ／ field ／ enum 定义 |
+| source field identification（**source-specific**，**不**写入 canonical model） | `BR-*` business rule semantic |
+| source → canonical **mapping**（显式 ／ 确定性 ／ 可追溯） | `Final Import Contract` acceptance ／ rejection 判定与 package disposition |
+| `Stable Source Evidence Locator` 的**取值与保留** | record ／ artifact **carrier shape** 与 approved literals（FCM） |
+| `Mapping ／ Resolution Basis` 的**取值与保留**（when applicable） | Layer 2 ～ Layer 4 validation outcome 与 Validation Issue 生成 |
+| source-specific **connector** ／ protocol handling（不改变 canonical semantic） | Package identity ／ manifest 生成、`Accepted` 宣告 |
+| mapping **unresolved** 的**显式标记** | RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling |
+
+**唯一开放的 ownership 问题**是「Adapter 与 `Master Data Mapping` 在 **mapping decision** 上的分工
+如何表达」—— 见下方 Decision 1。
+
+**B. Adapter Input ／ Output Conceptual Contract（Q2）**
+
+| 候选 | 含义 |
+| --- | --- |
+| `AI-1` —— **只接受 Controlled Export 产物**（Data Landing Zone 中的 source artifacts ／ records） | input = 已导出快照；**不得**任何直连 |
+| `AI-2` —— 允许直接连接 source system（只读） | **`NOT COMPATIBLE`** —— 违反 `AC-1` ／ `AC-2` |
+| `AO-1` —— 产出 **canonical artifact set**（符合 FCM ／ Layout 的 carrier shape）＋ **mapping evidence**（`P-*` ／ `MB-*` 内容），由 `Final Import Contract` 验证 | output 是**输入给 import contract**的候选 package 内容，**不是** `Accepted` 结论 |
+| `AO-2` —— Adapter 自行宣告 package acceptance ／ disposition | **`NOT COMPATIBLE`** —— 违反 `AC-22` ／ `AS-20` |
+
+**`Inherited Constraint`：** `AI-1` ＋ `AO-1`。
+**开放：** output 的**组织与提交方式**（是否由同一进程生成 manifest、多 Adapter 是否各自产出部分 artifact）—— 见 Decision 2。
+
+**C. Deterministic ／ Fail-safe Requirements（Q3 ／ Q4）**
+
+**`Inherited Constraint`（`AC-5` ～ `AC-10` ／ `AC-18`）：**
+
+```
+同一 source input ＋ 同一 approved mapping contract ⇒ 同一 canonical output（determinism）
+no fuzzy ／ no similarity ／ no LLM choose ／ no silent normalization
+exactly-one-or-unresolved（对需要参与 deterministic business rule 的 semantic）
+missing ／ unresolved ／ invalid 必须区分，不得压平
+```
+
+**开放（本层唯一真正开放的判定语义问题）：** unresolved mapping 的 **Adapter-side contract**：
+
+- `UF-1` —— Adapter **显式产出 unresolved marker**（并在 mapping basis 中给出 enough evidence），
+  downstream 由 Data Validation 依既有 reason 表达后果；
+- `UF-2` —— Adapter **halt** 该 source ／ 该 dataset 的产出，等待人工修复后再重跑；
+- `UF-3` —— Adapter **只**产出已可靠解析的 records，其余**静默省略**。
+
+**`UF-3` 与 `AC-8`（`No Silent Exclusion`）不兼容** ⇒ **`NOT COMPATIBLE`**，**不是**开放选项。
+
+**D. Missing ／ Ambiguous ／ Unsupported 的表达归属（Q4）**
+
+**`Inherited Constraint`（`AC-9` ／ `AC-10` ／ `AC-16` ＋ `§4.5.21` A ／ B ／ C）：**
+
+| Root condition | 归属 | Validation reason（既有，不新增） |
+| --- | --- | --- |
+| approved mapping 存在，但 mapped source value **absent** | Data Validation（Layer 2 ／ 3） | `FIELD_VALUE` ／ `MISSING` |
+| source evidence **存在**，但**无 approved mapping** ／ 无法可靠解析 | Data Validation（Layer 2 ／ 3） | `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED` |
+| approved mapping 已确定，但值**无法解析为合法类型** | Data Validation（Layer 2 ／ 3） | `FIELD_VALUE` ／ `INVALID_TYPE` |
+| source artifact 结构 ／ carrier 层问题（例如 required artifact absent ／ unreadable ／ digest 不符） | **`Final Import Contract`**（Layer 1） | `PACKAGE_STRUCTURE` ／ `STRUCTURAL_INCONSISTENCY` |
+
+**开放的归属问题：** 「不支持 ／ 未批准的 source field 出现」时，
+Adapter 的 fail-safe 行为与**上报形态** —— 见 Decision 3（**不等同于**新增 Validation Reason）。
+
+**E. Evidence Locator ／ Mapping Basis Responsibility（Q5）**
+
+- `PE-1` —— Adapter **负责取值与保留**（`locator` ／ `basis` 字符串内容），carrier shape 依 FCM ／ FIC
+- `PE-2` —— Adapter 只产出 canonical value，provenance 由**下游**补
+  **`NOT COMPATIBLE`** —— `P-A` ／ `MB-A` 为 **record-level carrier**（`AC-12`），
+  下游无 source-level 知识，**无法**补出 locator 与 basis
+
+**`Inherited Constraint`：`PE-1`。** 开放的仅是 **basis 字符串的语义粒度**（见 Decision 5）。
+
+**F. Multi-source ／ Multi-Adapter Canonical Semantic Stability（Q6）**
+
+- `MS-1` —— **canonical-first**：canonical semantic 由 canonical design 定义；
+  每个 source **只**登记自己的 explicit source-specific mapping；**不**建立跨 source precedence
+- `MS-2` —— **precedence-first**：建立跨 source ／ 跨字段优先级来消解差异
+  **`NOT COMPATIBLE`** —— 违反 `AC-18`（`Global Source-Field Precedence = NOT ADOPTED`）
+- `MS-3` —— allowed-but-not-interpret ／ preserve raw source value 供人工判读
+  （**仅**在既有 carrier 已有位置时可考虑；**不得**新增 carrier）
+
+**开放：** 多 Adapter 共享的 canonical 约定（identifier ／ vocabulary ／ priority）如何登记与治理，
+以及 drift 的**检测形态**（见 Decision 6）。
+
+**G. Boundary Ownership with Other Layers（Q7）**
+
+**`Inherited Constraint`：** 见 `AC-22` 与 `§3`；
+
+- `Permission & Security` 拥有 RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling（**`DESIGN PENDING`**）
+- `Architecture` 拥有 framework ／ technology ／ deployment 选择（**尚无 ADR**）
+- Implementation 拥有 connector ／ runtime code ／ scheduling ／ retry
+
+**开放：** Adapter 与 `Permission & Security` 之间的**接口形态**
+（Adapter 声明它需要什么 scope ／ secret，还是由 security 层注入）—— 见 Decision 7。
+
+---
+
+#### 4.6.6 Option Comparison
+
+`—` = 不适用。判定针对**既有 canonical 约束兼容性**与 **POC implementation cost**，
+**不代表**本 Review 的选择。
+
+| Model | 与既有约束兼容 | POC cost | 备注 |
+| --- | --- | --- | --- |
+| `AI-1`（只接受 Controlled Export 产物） | **`Inherited Constraint`（`AC-1` ／ `AC-2`）** | 最低 | 唯一合法 input 通道 |
+| `AI-2`（直连 source system） | **`NOT COMPATIBLE`** | — | 违反 hard boundary；非开放选项 |
+| `AO-1`（产出 canonical artifact set ＋ mapping evidence） | **`Inherited Constraint`** | 中 | 输出**必须**可被 FIC 验证；Adapter 不宣告 acceptance |
+| `AO-2`（Adapter 自行宣告 acceptance） | **`NOT COMPATIBLE`** | — | 与 `AC-22` ／ `AS-20` 冲突 |
+| `UF-1`（显式 unresolved marker） | 兼容（`AC-9` ／ `AC-10`） | 低 | 与既有 taxonomy 对齐；报告形态仍需登记 |
+| `UF-2`（halt dataset 并等待修复） | 兼容 | 中 | 更强 fail-safe，但需定义「何时可重跑」 |
+| `UF-3`（静默省略 unresolved records） | **`NOT COMPATIBLE`（`AC-8`）** | — | silent exclusion 被明确禁止 |
+| `PE-1`（Adapter 负责 locator ／ basis） | **`Inherited Constraint`（`AC-12`）** | 中 | carrier shape 已由 FCM 固定 |
+| `PE-2`（下游补 provenance） | **`NOT COMPATIBLE`** | — | 下游无 source-level 信息 |
+| `MS-1`（canonical-first ＋ source-specific mapping） | **`Inherited Constraint`（`AC-18` ／ `AC-19`）** | 低 ／ 中 | 与 Human-approved Option B ／ Option D 一致 |
+| `MS-2`（precedence-first） | **`NOT COMPATIBLE`（`AC-18`）** | — | global precedence 已 `NOT ADOPTED` |
+| `MS-3`（preserve raw 供人工判读） | 兼容（**仅**限既有 carrier 位置） | 中 | **不得**新增 carrier ／ literal |
+| Adapter-side mapping 表达（Decision 1） | 均兼容 | 低 ／ 中 | 属实现与 architecture 边界 |
+| Adapter 与 Permission & Security 接口（Decision 7） | 均兼容 | 低 ／ 中 | 依赖 `§7` 后续设计 |
+
+---
+
+#### 4.6.7 Cross-Decision Dependencies
+
+| # | Dependency | 说明 |
+| --- | --- | --- |
+| `ADEP-1` | **Adapter output ↔ `Final Import Contract` acceptance** | Adapter 产出的 package 内容**必须**满足 `IC-1` ／ `IC-3` ／ `IC-8` ／ `IC-22` 与 `AC-15`；digest 为 `IG-raw`（exact raw bytes）⇒ Adapter **不得**在 acceptance 之后改写字节 |
+| `ADEP-2` | **mapping decision ↔ `Master Data Mapping` ownership** | canonical identity ／ relationship resolution contract 已 `DESIGN RESOLVED`；Adapter **只**提供 source-specific 实现，**不**改 contract。二者分工的**表达方式**开放（Decision 1） |
+| `ADEP-3` | **unresolved mapping ↔ Data Validation taxonomy** | unresolved 必须以既有 reason（`SEMANTIC_UNRESOLVED` ／ `MISSING` ／ `INVALID_TYPE`）表达；**不得**新增 reason（`AC-16`） |
+| `ADEP-4` | **evidence locator ／ basis generation ↔ FCM ／ FIC carrier** | carrier 位置与 literals 已固定（`"_meta"` ／ `provenance_associations` ／ `observation` ／ `evidence` ／ `mapping_basis`）；Adapter **只**生成内容，**不**定义 shape |
+| `ADEP-5` | **multi-source canonical stability ↔ `Global Source-Field Precedence = NOT ADOPTED`** | 跨 source precedence **不得**被 Adapter 重新引入（`AC-18`）；drift 防护须以显式 mapping 与 unresolved 表达实现 |
+| `ADEP-6` | **Adapter failure 表达 ↔ Layer 1 ／ Layer 2 归属** | artifact 结构问题归 `Final Import Contract`；semantic ／ field 问题归 Data Validation；Adapter **不**自行产生 disposition 或新 reason（`AC-16` ／ `AC-22`） |
+| `ADEP-7` | **Adapter ↔ `Permission & Security`（`§7` = `DESIGN PENDING`）** | credentials ／ data scope ／ tool permission 边界未定 ⇒ 本层**不得**设计，只能登记依赖与接口期待（Decision 7） |
+| `ADEP-8` | **Adapter ↔ Architecture Decisions（尚无 ADR）** | framework ／ technology ／ deployment 选择属 `§10`；本层**不得**预选 |
+| `ADEP-9` | **Adapter ↔ `Data Landing Zone` 之前链路** | Controlled Export 由 source system 侧完成（`§3.3`）；Adapter **不**设计 export 侧实现，**不**扩大 source access |
+| `ADEP-10` | **Adapter ↔ real source field 未知** | 真实 ERP field 未知 **≠** design pending（`AC-17`）；Adapter 的存在**不**要求现在选定真实 field |
+
+---
+
+#### 4.6.8 Review Findings
+
+**`ARF-1`（Q1 Ownership）**
+`AC-22` ＋ `§3` 已确定 Hard Boundary 与 layer ownership 的主体划分 —— **`Inherited Constraint`**。
+**唯一开放项**是 Adapter 与 `Master Data Mapping` 在 **mapping decision** 上的分工表达（`ADEP-2`），
+归 **Decision 1**。
+
+**`ARF-2`（Q2 Input ／ Output Contract）**
+**`Inherited Constraint`：** input **只能**是 Controlled Export 产物（`AI-1`）；
+output 是**供 import contract 验证**的 canonical artifact set ＋ mapping evidence（`AO-1`）。
+**开放：** output 的**组织 ／ 提交方式**（Decision 2）。
+**本 Review 不写**任何 connector 或 runtime 流程。
+
+**`ARF-3`（Q3 Determinism ／ Fail-safe）**
+**`Inherited Constraint`：** `AC-5` ～ `AC-10` 已唯一确定
+deterministic ／ explicit ／ traceable ／ reproducible 与禁止 auto-reconciliation ／ silent fix-up。
+**开放：** unresolved 的 **Adapter-side contract**（`UF-1` ／ `UF-2`；`UF-3` = `NOT COMPATIBLE`），
+归 **Decision 3**。
+
+**`ARF-4`（Q4 Missing ／ Ambiguous 归属）**
+**`Inherited Constraint`：** 四种 root condition 的归属已由 `§4.5.21` ／ `AC-9` ／ `AC-10` ／
+`AC-16` 唯一确定（见 4.6.5 D 表）。
+**开放：** **unsupported source field** 的 fail-safe 行为与上报形态，
+以及 Adapter **是否**自行产生 Layer 1 类 disposition（**答案已 inherited 为「否」**，
+但**上报接口**需登记），归 **Decision 3**。
+
+**`ARF-5`（Q5 Evidence Locator ／ Mapping Basis）**
+**`Inherited Constraint`：`PE-1`** —— Adapter 负责取值与保留（`ADEP-4`）；
+carrier shape 与 literals 已由 FCM ／ FIC 固定，**本层不得**新增。
+`AC-13` 要求 locator 保持原始 identity value：**禁止** trim ／ case ／ Unicode ／ numeric coercion。
+**开放：** `mapping_basis` 字符串的**语义粒度**，归 **Decision 5**。
+
+**`ARF-6`（Q6 Multi-source Stability）**
+**`Inherited Constraint`：`MS-1`**；`MS-2` = `NOT COMPATIBLE`（`AC-18`）。
+**开放：** 多 Adapter 共享 canonical 约定的**登记与治理**，
+以及 drift 的**检测形态**（**不**新增 carrier ／ reason），归 **Decision 6**。
+
+**`ARF-7`（Q7 What Must Close Here vs Elsewhere）**
+**必须在本层关闭：** ownership 边界（`ARF-1`）、input ／ output conceptual contract（`ARF-2`）、
+determinism ／ fail-safe 要求（`ARF-3`）、unresolved 归属与 Adapter-side contract（`ARF-4`）、
+locator ／ basis 责任（`ARF-5`）、multi-source 原则（`ARF-6`）、与 `Permission & Security`
+及 Architecture 的接口期待（`ARF-8`）。
+**明确留给其他层：** RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling（`§7`）、
+framework ／ technology ／ deployment（`§10`）、connector ／ runtime 实现、真实 source field 选择。
+
+**`ARF-8`（Cross-layer Interface Expectation）**
+Adapter 与 `Permission & Security` 之间需要一个**接口期待**（Adapter 声明所需 scope ／ secret，
+或由 security 层注入），但 `§7` 为 `DESIGN PENDING` ⇒ **本层只登记 dependency 与可选形态**，
+**不得**设计 RBAC 或 secret 机制（`AC-21` ／ `ADEP-7`），归 **Decision 7**。
+
+**`ARF-9`（Fail-safe Summary —— `Inherited Constraint`）**
+在任何无法可靠完成映射的情形下，Adapter **必须** fail safe：
+
+```
+unresolved / unsupported / not-evaluable
+  ⇒ 不得猜测 ／ 不得静默省略 ／ 不得 silent normalization ／ 不得 fallback 到未批准来源
+  ⇒ 显式表达为 unresolved（或 halt），由既有 validation taxonomy 承载后果
+```
+
+不得把「没有 source data」与「有 data 但无法映射」压平为同一结果（`AC-9`）。
+
+---
+
+#### 4.6.9 Proposed Minimum Closure Criteria（candidate —— 待 Human 批准）
+
+| # | Criterion | 类别 |
+| --- | --- | --- |
+| `A-1` | Adapter **owns ／ does not own** 边界已登记，且与 `§3` ／ `AC-22` 及各已关闭层 ownership 一致 | MANDATORY CLOSURE CRITERION |
+| `A-2` | Adapter **input conceptual contract** 已登记（只接受 Controlled Export 产物；无直连 ／ 无 source access 扩大） | MANDATORY CLOSURE CRITERION |
+| `A-3` | Adapter **output conceptual contract** 已登记（canonical artifact set ＋ mapping evidence；**不**宣告 acceptance ／ disposition） | MANDATORY CLOSURE CRITERION |
+| `A-4` | **Determinism 要求**已登记（deterministic ／ explicit ／ traceable ／ reproducible；禁 fuzzy ／ similarity ／ LLM choose ／ silent normalization），且**不依赖** implementation 选择 | MANDATORY CLOSURE CRITERION |
+| `A-5` | **Fail-safe 要求**已登记：unresolved ／ unsupported ／ not-evaluable 时**不得**猜测 ／ 静默省略 ／ fallback 到未批准来源；且区分 `absent` 与 `unresolved` | MANDATORY CLOSURE CRITERION |
+| `A-6` | **unresolved mapping 的 Adapter-side contract** 已登记（`UF-1` ／ `UF-2` 之一，或明确两者的适用条件），并映射到**既有** validation reason（**不新增** reason） | MANDATORY CLOSURE CRITERION |
+| `A-7` | **unsupported ／ 未批准 source field** 的 fail-safe 行为与**上报形态**已登记，且明确 Adapter **不**自行产生 package disposition 或新 Validation Reason | MANDATORY CLOSURE CRITERION |
+| `A-8` | `Stable Source Evidence Locator` 与 `Mapping ／ Resolution Basis` 的 **Adapter-side 责任**已登记（取值 ／ 保留；carrier shape 依 FCM ／ FIC，**不新增** carrier），并保持 `AC-13` 的「保持原始 identity value」要求 | MANDATORY CLOSURE CRITERION |
+| `A-9` | **多 source ／ 多 Adapter semantic stability** 要求已登记（canonical-first；**不**建立跨 source precedence；冲突表达为 unresolved ／ consistency issue） | MANDATORY CLOSURE CRITERION |
+| `A-10` | **跨层边界**已登记：`Permission & Security`（scope ／ tool permission ／ secret）／ Architecture（technology）／ Implementation（runtime）各自归属明确，且本层**未**越过 | MANDATORY CLOSURE CRITERION |
+| `A-11` | **Adapter 与 `Permission & Security` 的接口期待**已登记（Adapter 需要什么、由谁提供），且**未**设计 RBAC ／ secret 机制 | MANDATORY CLOSURE CRITERION |
+| `A-12` | Adapter **failure 上报边界**已登记：Layer 1 归 `Final Import Contract`、Layer 2 ～ 4 归 Data Validation；**不新增** category ／ reason | MANDATORY CLOSURE CRITERION |
+| `A-13` | **selected-decision composition check**：已选组合与 `§3` hard boundary、`§4.3` FIC、`§4.4` Data Validation、`§4.5` Master Data Mapping 之间**无未登记的跨选择冲突** | MANDATORY CLOSURE CRITERION |
+| `A-14` | **真实 source field 未知**状态已登记且**不构成** blocker（`DESIGN RESOLVED ≠ real ERP field known ≠ Adapter implemented ≠ tested`） | MANDATORY CLOSURE CRITERION |
+| `A-15` | Human Inspectability（Adapter 的 mapping ／ unresolved 结果可被人工检视与追溯） | POC DESIGN OBJECTIVE |
+| `A-16` | Implementation Simplicity（Adapter contract 结构最小化） | POC DESIGN OBJECTIVE |
+
+`A-15` ／ `A-16` **必须评估**，但**不作为**独立 hard closure blocker；
+**不得**把主观判断变成不可验证的 closure Gate。
+
+---
+
+#### 4.6.10 Human Decision Required
+
+**Decision 1 —— Adapter 与 `Master Data Mapping` 的 mapping decision 分工如何表达**
+- **Question：** Adapter 侧 source-specific mapping 与已 `DESIGN RESOLVED` 的 canonical mapping contract（`§4.5`）之间，**责任交接点**如何登记 —— Adapter **只**实现已登记的 resolution contract，**还是**允许 Adapter 在其内部定义 source-specific resolution 规则（仍须 explicit ／ deterministic ／ traceable）？
+- **Options：** ① 严格分离（Adapter 只提供 source evidence，resolution 由 mapping contract 定义）；② 允许 source-specific resolution 规则，但**必须**显式登记且不改 canonical semantic；③ 两者混合并逐层声明。
+- **Trade-offs：** ① 边界最清晰、最可审计，但可能要求更多显式登记；② 更贴近真实 source 差异，但存在 drift 风险；③ 灵活但需额外登记纪律。
+- **Dependencies：** `AC-5` ／ `AC-6` ／ `AC-18` ／ `ADEP-2`。
+- **What changes：** `A-1` ／ `A-4` 的可判定性；`§4.5` 契约与 Adapter 文档的责任划分表述。
+- **注意：** 三个选项**均不得**修改 canonical identity ／ relationship resolution contract。
+
+**Decision 2 —— Adapter output 的组织与提交方式**
+- **Question：** Adapter 产出 canonical artifact set 时，**manifest ／ package identity** 由谁生成、多 Adapter 是否可各自产出部分 artifact、以及 output 的提交形态（一次完整 package ／ 分片）？
+- **Options：** ① 单一 Adapter 生成完整 package（含 manifest）；② 多个 Adapter 各自产出 artifact，由一个 package assembly 步骤生成 manifest；③ 其他有依据的形态。
+- **Trade-offs：** ① 最简、single-writer 语义清晰；② 更贴近多 source 现实，但引入 assembly 步骤与 partial 风险；③ 需额外论证。
+- **Dependencies：** `AC-15` ／ `ADEP-1` ／ `IC-13`（package-level atomic）。
+- **What changes：** `A-3` 的登记内容；多 Adapter 场景的 package 生成责任。
+- **注意：** **不得**引入 dataset-level partial acceptance；**不得**新增 carrier ／ literal。
+
+**Decision 3 —— unresolved ／ unsupported mapping 的 Adapter-side contract**
+- **Question：** 采用 `UF-1`（显式产出 unresolved marker，由 Data Validation 表达后果）、`UF-2`（halt 该 source ／ dataset 的输出并等待人工修复），还是按情形组合？另需裁定：**unsupported ／ 未批准 source field** 出现时，Adapter 是 skip ／ quarantine ／ 或 stop？
+- **Options：** `UF-1` ／ `UF-2` ／ 明确条件的组合；(skip ／ quarantine ／ stop) 之一或组合。
+- **Trade-offs：** `UF-1` 信息最完整、与既有 taxonomy 对齐，但把不确定性带入下游；`UF-2` fail-safe 最强、边界最清晰，但需定义「何时可重跑」与如何避免 capability 永久不可用；组合更贴近现实但需登记判定条件。
+- **Dependencies：** `AC-7` ／ `AC-8` ／ `AC-9` ／ `AC-10` ／ `AC-16` ／ `ADEP-3`。
+- **What changes：** `A-5` ／ `A-6` ／ `A-7` 的登记内容；Adapter failure 与 Data Validation 的实际交接形态。
+- **注意：** **`UF-3`（静默省略）与 `AC-8` 不兼容，不作为选项**；**不得**新增 Validation Reason 或 Package disposition。
+
+**Decision 4 —— source-specific mapping 规则的**表达方式**（实现边界）**
+- **Question：** source-specific mapping 规则的**表达载体**（configuration ／ mapping registry ／ code）是否必须在本层登记为 contract 要求，还是留给 Architecture ／ Implementation？
+- **Options：** ① 本层只要求「必须显式 ／ 确定性 ／ 可追溯」，载体留给 Architecture；② 本层登记一个 conceptual mapping-registry 形态（**不**绑定技术）；③ 其他。
+- **Trade-offs：** ① 边界最干净、不预选技术；② 提高可审计性与一致性，但接近实现选择；③ 见论证。
+- **Dependencies：** `AC-6` ／ `ADEP-8`（`§10` 尚无 ADR）。
+- **What changes：** `A-4` 的登记粒度；是否需要在 Adapter 之外新增 registry 概念。
+- **注意：** **不得**选择 framework ／ database ／ API technology；**不得**创建 runtime artifact。
+
+**Decision 5 —— `Mapping ／ Resolution Basis` 字符串的语义粒度**
+- **Question：** `mapping_basis`（`AC-14`）应登记到何种粒度 —— 只标识「使用哪条 approved mapping」，还是需要包含足以重现 resolution 的判定依据？在**不新增** carrier ／ literal 的前提下如何表达？
+- **Options：** ① 最小（标识 mapping 标识符 ／ 规则引用）；② 更完整（含判定依据摘要），仍为单一 exact JSON string；③ 其他。
+- **Trade-offs：** ① 成本最低、不引入新语义；② 可审计性更强，但字符串语义需明确边界；③ 见论证。
+- **Dependencies：** `AC-13` ／ `AC-14` ／ `AC-18` ／ `ADEP-4`。
+- **What changes：** `A-8` 的登记内容；provenance 的可审计程度。
+- **注意：** **不得**新增 `"_meta"` member ／ literal ／ carrier；locator 与 basis **不得**被规范化或改写。
+
+**Decision 6 —— 多 Adapter 共享 canonical 约定的治理与 drift 检测形态**
+- **Question：** 多 source ／ 多 Adapter 场景下，共享的 canonical 约定（identifier 形式、vocabulary、适用范围）如何登记与治理？canonical semantic drift 的**检测形态**是什么（**不**新增 carrier ／ reason）？
+- **Options：** ① 只依赖既有 canonical contract ＋ unresolved 表达（最小）；② 增加 explicit cross-Adapter consistency obligation（仍在既有 taxonomy 内表达）；③ 其他有证据支持的形态。
+- **Trade-offs：** ① 最小、与 `MS-1` 一致；② 更主动，但需定义检测时点与责任；③ 见论证。
+- **Dependencies：** `AC-18` ／ `AC-19` ／ `§4.5.16` ／ `ADEP-5`。
+- **What changes：** `A-9` 的登记内容；是否需要在 Adapter 层新增一致性义务。
+- **注意：** **不得**重新引入 global source-field precedence；**不得**新增 Validation Reason。
+
+**Decision 7 —— Adapter 与 `Permission & Security` 的接口期待**
+- **Question：** Adapter 需要 data scope ／ credentials 时，接口形态是 ① Adapter **声明**所需 scope ／ secret 需求（由 `§7` 后续设计提供），还是 ② 由 security 层**注入**并限制？本层登记到什么程度？
+- **Options：** ① 声明式接口期待（本层登记「需要什么」，不设计机制）；② 注入式（本层登记「由谁提供」）；③ 其他。
+- **Trade-offs：** ① 与 `§7` `DESIGN PENDING` 状态最兼容、不越界；② 更明确但可能预先约束 `§7` 设计；③ 见论证。
+- **Dependencies：** `AC-21` ／ `ADEP-7`；`§7` 为 `DESIGN PENDING`。
+- **What changes：** `A-10` ／ `A-11` 的登记内容。
+- **注意：** **不得**设计 RBAC ／ Secret Handling；**不得**创建 credentials 或 secrets。
+
+**Decision 8 —— Minimum closure criteria 接受与 follow-up 授权**
+- **Question：** 是否接受 **`A-1` ～ `A-14`** 作为 Adapter Boundary minimum closure criteria（`A-15` ／ `A-16` 为 design objectives）？是否授权后续独立 Adapter Boundary Design Change ／ Implementation PR，并在满足 closure criteria 时允许 `DESIGN PENDING → DESIGN RESOLVED`？
+- **Options：** 接受 ／ 调整 ／ 拒绝；授权 ／ 不授权。
+- **Trade-offs：** 授权推进 closure；不授权保持 `DESIGN PENDING`。
+- **Dependencies：** Decision 1 ～ 7。
+- **What changes：** 本层是否可进入 closure。
+
+**本 Review 不作出上述任何决定。** 后续必须由 **Human Decision** 裁定；
+**不得**由 Agent 自行选择 final adapter model ／ mapping 表达方式 ／ unresolved 策略。
+
+---
+
+#### 4.6.11 Explicit Non-Decisions
+
+本 Review **不创建**：
+
+```
+Adapter ／ connector ／ extractor runtime code
+parser ／ serializer ／ runtime validator
+JSON Schema ／ sample package ／ mock dataset
+framework ／ database ／ API technology ／ deployment stack
+RBAC ／ Data Scope ／ Tool Permission ／ Secret Handling 设计
+credentials ／ secrets ／ real source connection
+real ERP table ／ column ／ proprietary field 选择
+canonical entity ／ field ／ enum ／ status
+new Validation Reason ／ new Validation Category
+新的 Package disposition ／ status enum
+新的 carrier ／ sidecar ／ `"_meta"` literal
+Production write ／ write-back ／ Production API call
+ADR ／ Architecture Decision
+```
+
+**未**修改 `AGENTS.md` ／ `CONTRIBUTING.md` ／ Discovery `FROZEN` docs；
+**未**修改 `docs/project-index.md`；
+**未**重新打开 `Snapshot / Import Contract` ／ `Data Validation` ／ `Master Data Mapping`
+任何已登记 policy 或历史记录。
+
+---
+
+#### 4.6.12 Current Status（本 Review 时点）
+
+```
+Snapshot / Import Contract overall = DESIGN RESOLVED
+  Package Envelope ／ Atomicity Boundary ／ Immutability Boundary ／ Analysis Run Linkage = DESIGN RESOLVED
+  Serialization Format             = DESIGN RESOLVED
+  Physical Dataset Layout          = DESIGN RESOLVED
+  Field Carrier Mapping            = DESIGN RESOLVED
+  Final Import Contract            = DESIGN RESOLVED
+Adapter Boundary                   = DESIGN PENDING   ← 本 Review 对象；未关闭
+POC Design v0.2                    = DRAFT
+
+Package Structural Failure
+  ≠ Capability Evidence Unavailable
+  ≠ Business DATA_INCOMPLETE
+```
+
+**本 Review 不选择任何 Option。**
+**本 Review 未创建任何 runtime artifact。**
+**本 Review 未推进任何状态。**
 
 ---
 
