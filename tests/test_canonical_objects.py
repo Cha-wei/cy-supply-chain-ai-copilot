@@ -30,6 +30,7 @@ from __future__ import annotations
 import copy
 import unittest
 import uuid
+from dataclasses import replace
 from pathlib import Path
 
 from snapshot_loader import (
@@ -52,19 +53,27 @@ from snapshot_loader.canonical_objects import (
     CANONICALIZATION_ROLES,
     CANONICALIZATION_ROLE_BY_LITERAL,
     CANONICALIZATION_ROLE_RECOGNITION,
+    LAYER2_REPORT_BINDING,
     PHASE_A_ROLE_LITERALS,
+    RELATION_SOURCE_RESERVATION_OVERLAP,
+    RELATION_TARGET_APPLICABILITY,
     ROLE_FOR_TARGET,
     ROLE_INBOUND_SUPPLY,
     BomParentContextHandoff,
     EffectiveDemandRelationHandoff,
-    EvidenceReference,
+    HandoffEvidence,
 )
 from snapshot_loader.constants import (
     EVALUATION_NOT_EVALUABLE,
     EVALUATION_PASSED,
     V02_CANONICAL_RECORD_PROPERTY_SET,
 )
-from tests.helpers import DatasetSpec, PackageSpec, build_package
+from tests.helpers import (
+    DatasetSpec,
+    PackageSpec,
+    build_package,
+    encode_json,
+)
 
 SCRATCH_ROOT = Path(__file__).resolve().parents[1] / "build" / "test-scratch"
 
@@ -163,7 +172,7 @@ class CanonicalObjectsTestCase(unittest.TestCase):
             handoff = PhaseAHandoff(analysis_run_id="RUN-1", analysis_date="2026-02-01")
         return construct_canonical_objects(accepted, handoff)
 
-    def evidence(
+    def citation(
         self,
         accepted,
         *,
@@ -172,11 +181,13 @@ class CanonicalObjectsTestCase(unittest.TestCase):
         ordinal: int = 0,
         property_name: str | None = None,
         package_id: str | None = None,
-    ) -> EvidenceReference:
+    ) -> HandoffEvidence:
+        """An offered handoff evidence citation (unverified until construction)."""
+
         locator = f"{artifact}#{ordinal}"
         if property_name is not None:
             locator = f"{locator}.{property_name}"
-        return EvidenceReference(
+        return HandoffEvidence(
             snapshot_package_identity=package_id or accepted.package_id,
             logical_dataset_role=role,
             stable_source_evidence_locator=locator,
@@ -438,7 +449,7 @@ class BomParentBindingTests(CanonicalObjectsTestCase):
         return BomParentContextHandoff(
             plant_id=plant,
             required_date=required,
-            evidence=self.evidence(
+            evidence=self.citation(
                 accepted, role="Production Requirement", artifact="0.json", ordinal=0
             ),
         )
@@ -462,12 +473,28 @@ class BomParentBindingTests(CanonicalObjectsTestCase):
         component = objects[0]
         self.assertEqual(component.value_of("material_code"), COMPONENT)
         self.assertEqual(component.value_of("BOMComponentQty"), "2")
+        # §4.1.13 C registered grain: plant_id + parent material_code + required_date +
+        # component material_code.  The parent material_code comes from the resolved
+        # Production Requirement context, not from a new wire property.
+        self.assertEqual(
+            [(prop.name, prop.value) for prop in component.grain],
+            [
+                ("plant_id", PLANT),
+                ("material_code", MATERIAL),
+                ("required_date", REQUIRED_DATE),
+                ("component_material_code", COMPONENT),
+            ],
+        )
+        # The resolved context reference and its upstream provenance are preserved.
+        parent = report.objects_for("Production Requirement")[0]
+        self.assertEqual(component.context_reference, parent.record_reference)
+        self.assertEqual(component.context_provenance, parent.provenance)
+        self.assertEqual(
+            component.context_provenance.stable_source_evidence_locator, "0.json#0"
+        )
         self.assertFalse(component.has("parent_material_code"))
         self.assertNotIn("parent_material_code", str(report.to_dict()))
-        self.assertEqual(
-            [prop.name for prop in component.grain],
-            ["plant_id", "required_date", "material_code"],
-        )
+        self.assertNotIn("parent_material_code", V02_CANONICAL_RECORD_PROPERTY_SET)
 
     def test_parent_context_is_not_created_without_source_evidence(self) -> None:
         _, accepted = self.accepted(
@@ -505,7 +532,7 @@ class BomParentBindingTests(CanonicalObjectsTestCase):
                 BomParentContextHandoff(
                     plant_id=PLANT,
                     required_date=REQUIRED_DATE,
-                    evidence=self.evidence(
+                    evidence=self.citation(
                         accepted,
                         role="Production Requirement",
                         artifact="0.json",
@@ -540,7 +567,7 @@ class BomParentBindingTests(CanonicalObjectsTestCase):
                 BomParentContextHandoff(
                     plant_id=PLANT,
                     required_date=REQUIRED_DATE,
-                    evidence=self.evidence(
+                    evidence=self.citation(
                         accepted, role="Inbound Supply", artifact="0.json", ordinal=0
                     ),
                 ),
@@ -595,7 +622,7 @@ class BomParentBindingTests(CanonicalObjectsTestCase):
                 BomParentContextHandoff(
                     plant_id=PLANT,
                     required_date=REQUIRED_DATE,
-                    evidence=self.evidence(
+                    evidence=self.citation(
                         accepted,
                         role="Production Requirement",
                         artifact="0.json",
@@ -634,7 +661,36 @@ class BomParentBindingTests(CanonicalObjectsTestCase):
 
 
 class EffectiveDemandTests(CanonicalObjectsTestCase):
-    def _handoff(self, accepted):
+    SUBSTITUTE_RELATIONSHIP_RECORD: dict[str, object] = {
+        "plant_id": PLANT,
+        "target_material_code": MATERIAL,
+        "substitute_material_code": "M3",
+        "substitution_ratio": "0.5",
+        "approval_status": "APPROVED",
+    }
+
+    SUBSTITUTE_ALLOCATION_RECORD: dict[str, object] = {
+        "plant_id": PLANT,
+        "target_material_code": MATERIAL,
+        "substitute_material_code": "M3",
+        "AllocatedSubstituteQty": "4",
+    }
+
+    #: ``Substitute Allocation`` is dataset 0, so its locator is ``0.json#0``;
+    #: ``Substitute Relationship`` is dataset 1.
+    def _datasets(self):
+        return [
+            (
+                "Substitute Allocation",
+                [dict(self.SUBSTITUTE_ALLOCATION_RECORD)],
+            ),
+            (
+                "Substitute Relationship",
+                [dict(self.SUBSTITUTE_RELATIONSHIP_RECORD)],
+            ),
+        ]
+
+    def _handoff(self, accepted, *, basis_a="SIMULATED approved applicability mapping", basis_b="SIMULATED approved reservation mapping"):
         return PhaseAHandoff(
             analysis_run_id="RUN-1",
             analysis_date="2026-02-01",
@@ -642,76 +698,62 @@ class EffectiveDemandTests(CanonicalObjectsTestCase):
                 EffectiveDemandRelationHandoff(
                     source_substitute_material="M3",
                     target_material=MATERIAL,
-                    relation="Target Applicability",
-                    outcome="applicable",
-                    evidence=self.evidence(
-                        accepted, role="Substitute Allocation", artifact="0.json", ordinal=0
+                    relation=RELATION_TARGET_APPLICABILITY,
+                    evidence=self.citation(
+                        accepted,
+                        role="Substitute Relationship",
+                        artifact="1.json",
+                        ordinal=0,
                     ),
-                    mapping_basis="SIMULATED approved allocation applicability mapping",
+                    mapping_basis=basis_a,
                 ),
                 EffectiveDemandRelationHandoff(
                     source_substitute_material="M3",
                     target_material=MATERIAL,
-                    relation="Source Reservation Overlap",
-                    outcome="overlaps",
-                    evidence=self.evidence(
-                        accepted, role="Substitute Allocation", artifact="0.json", ordinal=0
+                    relation=RELATION_SOURCE_RESERVATION_OVERLAP,
+                    evidence=self.citation(
+                        accepted,
+                        role="Substitute Allocation",
+                        artifact="0.json",
+                        ordinal=0,
                     ),
-                    mapping_basis="SIMULATED approved source reservation mapping",
+                    mapping_basis=basis_b,
                 ),
             ),
         )
 
     def test_two_relations_stay_independent_references(self) -> None:
-        _, accepted = self.accepted(
-            [
-                (
-                    "Substitute Allocation",
-                    [
-                        {
-                            "plant_id": PLANT,
-                            "target_material_code": MATERIAL,
-                            "substitute_material_code": "M3",
-                            "AllocatedSubstituteQty": "4",
-                        }
-                    ],
-                ),
-                (
-                    "Plant / Material identity context",
-                    [{"plant_id": PLANT, "material_code": MATERIAL}],
-                ),
-            ],
-            name="demand-relations",
-        )
+        _, accepted = self.accepted(self._datasets(), name="demand-relations")
         contexts, issues = build_effective_demand_contexts(accepted, self._handoff(accepted))
         self.assertEqual(issues, ())
         self.assertEqual(len(contexts), 1)
         relations = {item.relation: item.outcome for item in contexts[0].relations}
         self.assertEqual(
             relations,
-            {"Target Applicability": "applicable", "Source Reservation Overlap": "overlaps"},
+            {
+                RELATION_TARGET_APPLICABILITY: "APPROVED",
+                RELATION_SOURCE_RESERVATION_OVERLAP: "4",
+            },
         )
         for relation in contexts[0].relations:
             self.assertTrue(relation.mapping_basis)
             self.assertTrue(relation.provenance.stable_source_evidence_locator)
 
-    def test_relations_are_not_collapsed_into_one_boolean(self) -> None:
-        _, accepted = self.accepted(
-            [("Substitute Allocation", [{"plant_id": PLANT, "target_material_code": MATERIAL, "substitute_material_code": "M3", "AllocatedSubstituteQty": "4"}])],
-            name="demand-not-boolean",
-        )
+    def test_relations_are_read_from_the_accepted_evidence(self) -> None:
+        _, accepted = self.accepted(self._datasets(), name="demand-from-evidence")
         contexts, _ = build_effective_demand_contexts(accepted, self._handoff(accepted))
         relation_names = {item.relation for item in contexts[0].relations}
         self.assertEqual(len(relation_names), 2)
         self.assertTrue(
             all(isinstance(item.outcome, str) for item in contexts[0].relations)
         )
+        # The outcome is the accepted value, never a caller-supplied literal.
+        outcomes = {item.outcome for item in contexts[0].relations}
+        self.assertEqual(outcomes, {"APPROVED", "4"})
 
-    def test_outcome_without_package_scoped_evidence_stays_unresolved(self) -> None:
-        _, accepted = self.accepted(
-            [("Substitute Allocation", [{"plant_id": PLANT, "target_material_code": MATERIAL, "substitute_material_code": "M3", "AllocatedSubstituteQty": "4"}])],
-            name="demand-foreign",
-        )
+    def test_exactly_one_pair_required_per_grain(self) -> None:
+        _, accepted = self.accepted(self._datasets(), name="demand-pair")
+        # Only one of the two registered relations: the pair stays unresolved.
         handoff = PhaseAHandoff(
             analysis_run_id="RUN-1",
             analysis_date="2026-02-01",
@@ -719,12 +761,56 @@ class EffectiveDemandTests(CanonicalObjectsTestCase):
                 EffectiveDemandRelationHandoff(
                     source_substitute_material="M3",
                     target_material=MATERIAL,
-                    relation="Target Applicability",
-                    outcome="applicable",
-                    evidence=self.evidence(
+                    relation=RELATION_TARGET_APPLICABILITY,
+                    evidence=self.citation(
+                        accepted, role="Substitute Relationship", artifact="1.json"
+                    ),
+                    mapping_basis="SIMULATED approved applicability mapping",
+                ),
+            ),
+        )
+        contexts, issues = build_effective_demand_contexts(accepted, handoff)
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+        self.assertTrue(all(issue.reason == "SEMANTIC_UNRESOLVED" for issue in issues))
+
+    def test_repeated_relation_evidence_is_not_deduplicated(self) -> None:
+        _, accepted = self.accepted(self._datasets(), name="demand-repeat")
+        base = self._handoff(accepted)
+        handoff = PhaseAHandoff(
+            analysis_run_id=base.analysis_run_id,
+            analysis_date=base.analysis_date,
+            effective_demand=base.effective_demand
+            + (
+                EffectiveDemandRelationHandoff(
+                    source_substitute_material="M3",
+                    target_material=MATERIAL,
+                    relation=RELATION_TARGET_APPLICABILITY,
+                    evidence=self.citation(
+                        accepted, role="Substitute Relationship", artifact="1.json"
+                    ),
+                    mapping_basis="SIMULATED approved applicability mapping",
+                ),
+            ),
+        )
+        contexts, issues = build_effective_demand_contexts(accepted, handoff)
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+
+    def test_outcome_without_package_scoped_evidence_stays_unresolved(self) -> None:
+        _, accepted = self.accepted(self._datasets(), name="demand-foreign")
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-02-01",
+            effective_demand=(
+                EffectiveDemandRelationHandoff(
+                    source_substitute_material="M3",
+                    target_material=MATERIAL,
+                    relation=RELATION_TARGET_APPLICABILITY,
+                    evidence=self.citation(
                         accepted,
-                        role="Substitute Allocation",
-                        artifact="0.json",
+                        role="Substitute Relationship",
+                        artifact="1.json",
                         ordinal=0,
                         package_id="OTHER-PACKAGE",
                     ),
@@ -775,8 +861,10 @@ class ProvenanceAndInjectionTests(CanonicalObjectsTestCase):
                 self.assertTrue(obj.provenance.stable_source_evidence_locator)
 
     def test_loss_rate_handoff_requires_same_package_evidence(self) -> None:
+        record = copy.deepcopy(PRODUCTION_REQUIREMENT_RECORD)
+        record["loss_rate"] = "0.05"
         _, accepted = self.accepted(
-            [("Production Requirement", [PRODUCTION_REQUIREMENT_RECORD])],
+            [("Production Requirement", [record])],
             name="loss-rate-handoff",
         )
         good = PhaseAHandoff(
@@ -787,15 +875,20 @@ class ProvenanceAndInjectionTests(CanonicalObjectsTestCase):
                     plant_id=PLANT,
                     parent_material_code=MATERIAL,
                     required_date=REQUIRED_DATE,
-                    evidence=self.evidence(
-                        accepted,
-                        role="Production Requirement",
-                        artifact="0.json",
-                        ordinal=0,
-                        property_name="loss_rate",
+                    evidence=self.citation(
+                        accepted, role="Production Requirement", artifact="0.json"
                     ),
-                    resolved=True,
+                    loss_rate_evidence=(
+                        self.citation(
+                            accepted,
+                            role="Production Requirement",
+                            artifact="0.json",
+                            ordinal=0,
+                            property_name="loss_rate",
+                        ),
+                    ),
                     loss_rate="0.05",
+                    resolution_basis="SIMULATED approved requirement loss-rate mapping",
                 ),
             ),
         )
@@ -811,15 +904,23 @@ class ProvenanceAndInjectionTests(CanonicalObjectsTestCase):
                     plant_id=PLANT,
                     parent_material_code=MATERIAL,
                     required_date=REQUIRED_DATE,
-                    evidence=self.evidence(
+                    evidence=self.citation(
                         accepted,
                         role="Production Requirement",
                         artifact="0.json",
-                        ordinal=0,
                         package_id="OTHER-PACKAGE",
                     ),
-                    resolved=True,
+                    loss_rate_evidence=(
+                        self.citation(
+                            accepted,
+                            role="Production Requirement",
+                            artifact="0.json",
+                            property_name="loss_rate",
+                            package_id="OTHER-PACKAGE",
+                        ),
+                    ),
                     loss_rate="0.05",
+                    resolution_basis="SIMULATED approved requirement loss-rate mapping",
                 ),
             ),
         )
@@ -832,6 +933,101 @@ class ProvenanceAndInjectionTests(CanonicalObjectsTestCase):
                 for name, state in self.states(report).items()
             )
         )
+
+    def test_loss_rate_value_the_evidence_does_not_carry_is_rejected(self) -> None:
+        _, accepted = self.accepted(
+            [("Production Requirement", [PRODUCTION_REQUIREMENT_RECORD])],
+            name="loss-rate-unbacked",
+        )
+        # The cited record exists and is in-package, but the citation names a property
+        # the record does not carry, so the value has no accepted evidence.
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-02-01",
+            loss_rate=(
+                LossRateHandoff(
+                    plant_id=PLANT,
+                    parent_material_code=MATERIAL,
+                    required_date=REQUIRED_DATE,
+                    evidence=self.citation(
+                        accepted, role="Production Requirement", artifact="0.json"
+                    ),
+                    loss_rate_evidence=(
+                        self.citation(
+                            accepted,
+                            role="Production Requirement",
+                            artifact="0.json",
+                            property_name="loss_rate",
+                        ),
+                    ),
+                    loss_rate="0.99",
+                    resolution_basis="SIMULATED approved requirement loss-rate mapping",
+                ),
+            ),
+        )
+        report = construct_canonical_objects(accepted, handoff)
+        self.assertEqual(report.loss_rate_contexts, ())
+
+    def test_loss_rate_handoff_value_must_equal_the_cited_evidence_value(self) -> None:
+        record = copy.deepcopy(PRODUCTION_REQUIREMENT_RECORD)
+        record["loss_rate"] = "0.05"
+        _, accepted = self.accepted(
+            [("Production Requirement", [record])], name="loss-rate-mismatch"
+        )
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-02-01",
+            loss_rate=(
+                LossRateHandoff(
+                    plant_id=PLANT,
+                    parent_material_code=MATERIAL,
+                    required_date=REQUIRED_DATE,
+                    evidence=self.citation(
+                        accepted, role="Production Requirement", artifact="0.json"
+                    ),
+                    loss_rate_evidence=(
+                        self.citation(
+                            accepted,
+                            role="Production Requirement",
+                            artifact="0.json",
+                            property_name="loss_rate",
+                        ),
+                    ),
+                    loss_rate="0.5",
+                    resolution_basis="SIMULATED approved requirement loss-rate mapping",
+                ),
+            ),
+        )
+        report = construct_canonical_objects(accepted, handoff)
+        self.assertEqual(report.loss_rate_contexts, ())
+
+        accepted_handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-02-01",
+            loss_rate=(
+                LossRateHandoff(
+                    plant_id=PLANT,
+                    parent_material_code=MATERIAL,
+                    required_date=REQUIRED_DATE,
+                    evidence=self.citation(
+                        accepted, role="Production Requirement", artifact="0.json"
+                    ),
+                    loss_rate_evidence=(
+                        self.citation(
+                            accepted,
+                            role="Production Requirement",
+                            artifact="0.json",
+                            property_name="loss_rate",
+                        ),
+                    ),
+                    loss_rate="0.05",
+                    resolution_basis="SIMULATED approved requirement loss-rate mapping",
+                ),
+            ),
+        )
+        report = construct_canonical_objects(accepted, accepted_handoff)
+        self.assertEqual(len(report.loss_rate_contexts), 1)
+        self.assertEqual(report.loss_rate_contexts[0].value, "0.05")
 
     def test_unresolved_loss_rate_is_not_given_a_value(self) -> None:
         _, accepted = self.accepted(
@@ -846,21 +1042,104 @@ class ProvenanceAndInjectionTests(CanonicalObjectsTestCase):
                     plant_id=PLANT,
                     parent_material_code=MATERIAL,
                     required_date=REQUIRED_DATE,
-                    evidence=self.evidence(
+                    evidence=self.citation(
                         accepted, role="Production Requirement", artifact="0.json"
                     ),
-                    resolved=False,
+                    loss_rate_evidence=(),
                     loss_rate="0.05",
+                    resolution_basis="",
                 ),
             ),
         )
         report = construct_canonical_objects(accepted, handoff)
         self.assertEqual(report.loss_rate_contexts, ())
 
-    def test_safety_stock_handoff_is_not_defaulted_to_zero(self) -> None:
+    def test_multiple_applicable_loss_rate_evidence_is_not_deduplicated(self) -> None:
+        _, accepted = self.accepted(
+            [
+                (
+                    "Production Requirement",
+                    [
+                        PRODUCTION_REQUIREMENT_RECORD,
+                        dict(PRODUCTION_REQUIREMENT_RECORD),
+                    ],
+                )
+            ],
+            name="loss-rate-two-evidence",
+        )
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-02-01",
+            loss_rate=(
+                LossRateHandoff(
+                    plant_id=PLANT,
+                    parent_material_code=MATERIAL,
+                    required_date=REQUIRED_DATE,
+                    evidence=self.citation(
+                        accepted, role="Production Requirement", artifact="0.json"
+                    ),
+                    loss_rate_evidence=(
+                        self.citation(
+                            accepted,
+                            role="Production Requirement",
+                            artifact="0.json",
+                            ordinal=0,
+                            property_name="loss_rate",
+                        ),
+                        self.citation(
+                            accepted,
+                            role="Production Requirement",
+                            artifact="0.json",
+                            ordinal=1,
+                            property_name="loss_rate",
+                        ),
+                    ),
+                    loss_rate="0.05",
+                    resolution_basis="SIMULATED approved requirement loss-rate mapping",
+                ),
+            ),
+        )
+        report = construct_canonical_objects(accepted, handoff)
+        self.assertEqual(report.loss_rate_contexts, ())
+
+    def test_safety_stock_handoff_requires_verified_evidence(self) -> None:
         _, accepted = self.accepted(
             [("Plant / Material identity context", [{"plant_id": PLANT, "material_code": MATERIAL}])],
             name="safety-stock-handoff",
+        )
+        # A citation the package cannot back: the cited record carries no SafetyStock.
+        unbacked = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-02-01",
+            safety_stock=(
+                SafetyStockHandoff(
+                    plant_id=PLANT,
+                    material_code=MATERIAL,
+                    evidence=self.citation(
+                        accepted,
+                        role="Plant / Material identity context",
+                        artifact="0.json",
+                    ),
+                    safety_stock_evidence=(
+                        self.citation(
+                            accepted,
+                            role="Plant / Material identity context",
+                            artifact="0.json",
+                            property_name="SafetyStock",
+                        ),
+                    ),
+                    safety_stock="0",
+                    resolution_basis="",
+                ),
+            ),
+        )
+        report = construct_canonical_objects(accepted, unbacked)
+        self.assertEqual(report.safety_stock_contexts, ())
+
+    def test_safety_stock_handoff_carries_exact_accepted_value(self) -> None:
+        _, accepted = self.accepted(
+            [("Configured Safety Stock", [{"plant_id": PLANT, "material_code": "M9", "SafetyStock": "0"}])],
+            name="safety-stock-exact",
         )
         handoff = PhaseAHandoff(
             analysis_run_id="RUN-1",
@@ -869,16 +1148,128 @@ class ProvenanceAndInjectionTests(CanonicalObjectsTestCase):
                 SafetyStockHandoff(
                     plant_id=PLANT,
                     material_code=MATERIAL,
-                    evidence=self.evidence(
-                        accepted, role="Plant / Material identity context", artifact="0.json"
+                    evidence=self.citation(
+                        accepted, role="Configured Safety Stock", artifact="0.json"
                     ),
-                    resolved=False,
+                    safety_stock_evidence=(
+                        self.citation(
+                            accepted,
+                            role="Configured Safety Stock",
+                            artifact="0.json",
+                            ordinal=0,
+                            property_name="SafetyStock",
+                        ),
+                    ),
                     safety_stock="0",
+                    resolution_basis="SIMULATED approved safety-stock policy mapping",
+                ),
+            ),
+        )
+        report = construct_canonical_objects(accepted, handoff)
+        self.assertEqual(len(report.safety_stock_contexts), 1)
+        self.assertEqual(report.safety_stock_contexts[0].value, "0")
+
+    def test_conflicting_safety_stock_at_same_grain_is_a_stage_b_conflict(self) -> None:
+        _, accepted = self.accepted(
+            [
+                (
+                    "Configured Safety Stock",
+                    [{"plant_id": PLANT, "material_code": "M9", "SafetyStock": "5"}],
+                )
+            ],
+            name="safety-stock-conflict",
+        )
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-02-01",
+            safety_stock=(
+                SafetyStockHandoff(
+                    plant_id=PLANT,
+                    material_code=MATERIAL,
+                    evidence=self.citation(
+                        accepted, role="Configured Safety Stock", artifact="0.json"
+                    ),
+                    safety_stock_evidence=(
+                        self.citation(
+                            accepted,
+                            role="Configured Safety Stock",
+                            artifact="0.json",
+                            ordinal=0,
+                            property_name="SafetyStock",
+                        ),
+                    ),
+                    # The handoff supplies a different value than the accepted evidence.
+                    safety_stock="7",
+                    resolution_basis="SIMULATED approved safety-stock policy mapping",
+                ),
+            ),
+        )
+        report = construct_canonical_objects(accepted, handoff)
+        # No context: the handoff may not win over the accepted evidence.
+        self.assertEqual(report.safety_stock_contexts, ())
+
+    def test_safety_stock_evidence_conflict_is_consistency_conflict(self) -> None:
+        _, accepted = self.accepted(
+            [
+                (
+                    "Configured Safety Stock",
+                    [
+                        {"plant_id": PLANT, "material_code": "M9", "SafetyStock": "5"},
+                        {"plant_id": PLANT, "material_code": "M9", "SafetyStock": "7"},
+                    ],
+                )
+            ],
+            name="safety-stock-two-sources",
+        )
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-02-01",
+            safety_stock=(
+                SafetyStockHandoff(
+                    plant_id=PLANT,
+                    material_code=MATERIAL,
+                    evidence=self.citation(
+                        accepted, role="Configured Safety Stock", artifact="0.json"
+                    ),
+                    safety_stock_evidence=(
+                        self.citation(
+                            accepted,
+                            role="Configured Safety Stock",
+                            artifact="0.json",
+                            ordinal=0,
+                            property_name="SafetyStock",
+                        ),
+                    ),
+                    configured_safety_stock_evidence=(
+                        self.citation(
+                            accepted,
+                            role="Configured Safety Stock",
+                            artifact="0.json",
+                            ordinal=1,
+                            property_name="SafetyStock",
+                        ),
+                    ),
+                    safety_stock="5",
+                    resolution_basis="SIMULATED approved safety-stock policy mapping",
                 ),
             ),
         )
         report = construct_canonical_objects(accepted, handoff)
         self.assertEqual(report.safety_stock_contexts, ())
+        conflicts = [
+            issue
+            for issue in report.issues
+            if issue.category == "CONSISTENCY" and issue.reason == "CONSISTENCY_CONFLICT"
+        ]
+        self.assertEqual(len(conflicts), 1)
+        self.assertIn("conflicting SafetyStock", conflicts[0].detail)
+        self.assertTrue(
+            any(
+                name.startswith(f"{CANONICALIZATION_HANDOFF_EVIDENCE}:SafetyStock")
+                and state == "failed"
+                for name, state in self.states(report).items()
+            )
+        )
 
     def test_absent_safety_stock_dataset_never_becomes_a_default_value(self) -> None:
         report = self.construct(
@@ -1168,6 +1559,78 @@ class BoundaryAndRegressionTests(CanonicalObjectsTestCase):
             layer2_report=layer2,
         )
         self.assertEqual(report.layer2_note, layer2.note)
+        self.assertEqual(len(report.objects_for("Production Requirement")), 1)
+
+    def test_foreign_layer2_report_stops_construction(self) -> None:
+        _, accepted = self.accepted(
+            [("Production Requirement", [PRODUCTION_REQUIREMENT_RECORD])],
+            name="layer2-foreign",
+        )
+        _, other = self.accepted(
+            [("Production Requirement", [PRODUCTION_REQUIREMENT_RECORD])],
+            name="layer2-foreign-other",
+            package_id="SIMULATED-PKG-0002",
+        )
+        foreign = validate_layer2(other)
+        report = construct_canonical_objects(
+            accepted,
+            PhaseAHandoff(analysis_run_id="RUN-1", analysis_date="2026-02-01"),
+            layer2_report=foreign,
+        )
+        self.assertEqual(report.object_sets, ())
+        self.assertEqual(report.inbound_records, ())
+        self.assertEqual(report.issues, ())
+        states = self.states(report)
+        self.assertEqual(states.get(LAYER2_REPORT_BINDING), "failed")
+        self.assertFalse(
+            any(
+                name == CANONICALIZATION_ANALYSIS_RUN and state == "passed"
+                for name, state in states.items()
+            )
+        )
+
+    def test_stale_layer2_report_stops_construction(self) -> None:
+        built, accepted = self.accepted(
+            [("Production Requirement", [PRODUCTION_REQUIREMENT_RECORD])],
+            name="layer2-stale",
+        )
+        fresh = validate_layer2(accepted)
+        # Same package identity, but the accepted content view moved on (a new
+        # acceptance produced a different digest).
+        (built.root / "0.json").write_bytes(
+            encode_json([dict(PRODUCTION_REQUIREMENT_RECORD)])
+        )
+        second = load_package(
+            built.root, trusted_boundary=TrustedInputBoundary(root=self.boundary)
+        )
+        self.assertTrue(second.accepted)
+        report = construct_canonical_objects(
+            accepted,
+            PhaseAHandoff(analysis_run_id="RUN-1", analysis_date="2026-02-01"),
+            layer2_report=fresh,
+        )
+        # The stale report still refers to this package identity, so the binding gate
+        # is decided by the accepted content view digest.
+        self.assertEqual(fresh.package_id, accepted.package_id)
+        if fresh.accepted_content_view_digest != accepted.content_view_digest:
+            self.assertEqual(report.object_sets, ())
+            self.assertEqual(self.states(report).get(LAYER2_REPORT_BINDING), "failed")
+
+    def test_layer2_report_from_a_different_view_of_the_same_package_is_rejected(self) -> None:
+        _, accepted = self.accepted(
+            [("Production Requirement", [PRODUCTION_REQUIREMENT_RECORD])],
+            name="layer2-view",
+        )
+        mismatched = replace(
+            validate_layer2(accepted), accepted_content_view_digest="other-view"
+        )
+        report = construct_canonical_objects(
+            accepted,
+            PhaseAHandoff(analysis_run_id="RUN-1", analysis_date="2026-02-01"),
+            layer2_report=mismatched,
+        )
+        self.assertEqual(report.object_sets, ())
+        self.assertEqual(self.states(report).get(LAYER2_REPORT_BINDING), "failed")
 
 
 if __name__ == "__main__":

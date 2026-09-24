@@ -84,6 +84,8 @@ PROPERTY_META: str = "_meta"
 ROLE_INBOUND_SUPPLY: str = "Inbound Supply"
 ROLE_PRODUCTION_REQUIREMENT: str = "Production Requirement"
 ROLE_BOM_COMPONENT: str = "BOM Component"
+ROLE_SUBSTITUTE_ALLOCATION: str = "Substitute Allocation"
+ROLE_SUBSTITUTE_RELATIONSHIP: str = "Substitute Relationship"
 
 # --- Phase A construction check names --------------------------------------------
 #
@@ -99,6 +101,11 @@ CANONICALIZATION_BOM_PARENT = "canonicalization.bom_parent_context"
 CANONICALIZATION_EFFECTIVE_DEMAND = "canonicalization.effective_demand_relation"
 CANONICALIZATION_HANDOFF_EVIDENCE = "canonicalization.handoff_evidence"
 CANONICALIZATION_ANALYSIS_RUN = "canonicalization.analysis_run_context"
+
+#: ``MG-2`` binding gate: the Layer-2 result a construction relies on must belong to
+#: the **same** accepted package identity and the **same** accepted content view
+#: (``§4.3.28`` C.2 / C.3).  A foreign or stale report stops construction here.
+LAYER2_REPORT_BINDING = "canonicalization.layer2_report_binding"
 
 
 # --- §4.3.31 B: the 12 recognized canonicalization roles ---------------------------
@@ -398,6 +405,13 @@ class CanonicalObject:
     ``record_reference`` is the G3-A AcceptedPackage-scoped technical record reference
     (``§4.3.31`` D) -- a construction-time identity representation only.
 
+    ``context_reference`` / ``context_provenance`` are present exactly when the object
+    was constructed against a **resolved upstream canonical context**.  For a
+    ``BOM Component`` this is the resolved ``Production Requirement`` context
+    (``§4.1.13`` C, G4-A): the reference names the context object and the provenance is
+    that context's own package-scoped provenance, so the upstream evidence the binding
+    relied on is preserved rather than flattened into a new field.
+
     This class is a canonical **object**, not a wire record: a property that is absent
     here means "not assignable or not present at construction time", never "missing
     per an approved requiredness authority".
@@ -410,6 +424,8 @@ class CanonicalObject:
     non_applicable_properties: tuple[str, ...]
     record_reference: str
     provenance: EvidenceReference
+    context_reference: str | None = None
+    context_provenance: EvidenceReference | None = None
 
     def value_of(self, name: str, default: Any = ABSENT) -> Any:
         """Return the exact value of ``name`` or ``default`` when it is not assigned."""
@@ -512,22 +528,41 @@ class AnalysisRunContext:
 
 
 @dataclass(frozen=True, slots=True)
+class HandoffEvidence:
+    """Evidence citation offered by an in-process logical handoff entry.
+
+    This is deliberately *not* an :class:`EvidenceReference`: a handoff citation is an
+    unverified claim until construction has confirmed it against the accepted content
+    view.  Only the accepted package identity may be attached here, because a handoff
+    entry must never be able to point at another package (``§4.3.31`` E).
+    """
+
+    snapshot_package_identity: str
+    logical_dataset_role: str
+    stable_source_evidence_locator: str
+
+
+@dataclass(frozen=True, slots=True)
 class LossRateHandoff:
     """``loss_rate`` + Requirement Calculation Context (injection I-2, Phase A).
 
-    ``evidence`` must point at accepted ``Production Requirement`` evidence in the
-    **same** AcceptedPackage; ``loss_rate`` itself is never assigned by that record
-    (``§4.2.18`` role 2 explicitly forbids it).  ``resolved`` records whether the
-    exactly-one-or-unresolved resolution of ``§4.4.15`` / ``§4.4.102`` Stage A produced
-    a single applicable value; when ``False`` the value stays unresolved.
+    The value is **not** trusted: it is carried only when the ``§4.4.15`` /
+    ``§4.4.102`` Stage A resolution really used exactly one applicable package-scoped
+    ``loss_rate`` reference.  ``loss_rate_evidence`` lists the accepted
+    ``loss_rate`` evidence the resolution used; when it is empty, or contains more than
+    one reference, or any reference cannot be resolved against the same
+    ``AcceptedPackage``, or no resolution basis is given, the value stays unresolved and
+    is never carried (``§4.2.18`` role 2 forbids the ``Production Requirement`` record
+    itself from assigning ``loss_rate``).
     """
 
     plant_id: Any
     parent_material_code: Any
     required_date: Any
-    evidence: EvidenceReference
-    resolved: bool
+    evidence: HandoffEvidence
+    loss_rate_evidence: tuple[HandoffEvidence, ...] = ()
     loss_rate: Any = None
+    resolution_basis: str = ""
     resolution_note: str = ""
 
 
@@ -535,17 +570,25 @@ class LossRateHandoff:
 class SafetyStockHandoff:
     """``SafetyStock`` internal handoff (injection I-5, Phase A).
 
-    Used when the ``Configured Safety Stock`` dataset is absent but another policy
-    evidence record inside the same AcceptedPackage resolves ``SafetyStock`` for the
-    grain.  A value may only be handed in when exactly one applicable evidence exists;
-    otherwise ``resolved`` is ``False`` and the value stays unresolved (never ``0``).
+    Used when the ``Configured Safety Stock`` dataset does not resolve the grain and
+    another policy evidence record inside the same AcceptedPackage does.  A value may
+    only be carried when exactly one applicable ``SafetyStock`` reference resolved the
+    grain; zero or more than one reference stays unresolved, and conflicting values at
+    the same canonical grain are reported per ``§4.4.102`` Stage B as
+    ``CONSISTENCY`` / ``CONSISTENCY_CONFLICT`` instead of being silently resolved.
+
+    ``configured_safety_stock_evidence`` lists the accepted ``Configured Safety Stock``
+    evidence for the grain.  Existing evidence from that dataset never loses to the
+    handoff: two sources are never merged by precedence (``§4.4.102`` C).
     """
 
     plant_id: Any
     material_code: Any
-    evidence: EvidenceReference
-    resolved: bool
+    evidence: HandoffEvidence
+    safety_stock_evidence: tuple[HandoffEvidence, ...] = ()
+    configured_safety_stock_evidence: tuple[HandoffEvidence, ...] = ()
     safety_stock: Any = None
+    resolution_basis: str = ""
     resolution_note: str = ""
 
 
@@ -561,24 +604,37 @@ class BomParentContextHandoff:
 
     plant_id: Any
     required_date: Any
-    evidence: EvidenceReference
+    evidence: HandoffEvidence
     resolution_note: str = ""
+
+
+#: The two G5-A relations.  They stay independent and are never collapsed into one
+#: Boolean (``§4.1.13`` D).
+RELATION_TARGET_APPLICABILITY: str = "Target Applicability"
+RELATION_SOURCE_RESERVATION_OVERLAP: str = "Source Reservation Overlap"
+
+#: The registered G5-A relations, in deterministic order.
+G5_RELATIONS: tuple[str, ...] = (
+    RELATION_TARGET_APPLICABILITY,
+    RELATION_SOURCE_RESERVATION_OVERLAP,
+)
 
 
 @dataclass(frozen=True, slots=True)
 class EffectiveDemandRelationHandoff:
-    """G5-A effective demand relation outcome carried by approved mapping evidence.
+    """G5-A effective demand relation evidence (injection I-8, Phase A).
 
-    ``relation`` is ``"Target Applicability"`` or ``"Source Reservation Overlap"``.
-    The outcome value comes from the mapping evidence at ``evidence``; it is never a
-    caller-supplied Boolean.
+    A handoff entry carries **evidence only** -- never the relation outcome.  The
+    outcome is read from the accepted evidence record itself, so a caller cannot state
+    "applicable" / "overlaps" by hand (``§4.1.13`` D).  ``relation`` is one of
+    :data:`G5_RELATIONS`; ``mapping_basis`` names the approved mapping that relates the
+    evidence to the relation.
     """
 
     source_substitute_material: Any
     target_material: Any
     relation: str
-    outcome: Any
-    evidence: EvidenceReference
+    evidence: HandoffEvidence
     mapping_basis: str
 
 
@@ -715,6 +771,23 @@ def _object_to_dict(item: CanonicalObject) -> dict[str, object]:
         ],
         "non_applicable_properties": list(item.non_applicable_properties),
         "record_reference": item.record_reference,
+        "context_reference": item.context_reference,
+        "context_provenance": (
+            None
+            if item.context_provenance is None
+            else {
+                "snapshot_package_identity": (
+                    item.context_provenance.snapshot_package_identity
+                ),
+                "logical_dataset_role": item.context_provenance.logical_dataset_role,
+                "stable_source_evidence_locator": (
+                    item.context_provenance.stable_source_evidence_locator
+                ),
+                "mapping_resolution_basis": (
+                    item.context_provenance.mapping_resolution_basis
+                ),
+            }
+        ),
         "provenance": {
             "snapshot_package_identity": item.provenance.snapshot_package_identity,
             "logical_dataset_role": item.provenance.logical_dataset_role,
@@ -1009,6 +1082,31 @@ IDENTITY_COMPONENT_TARGETS: Mapping[str, str] = {
 }
 
 
+def _accepted_record_index(accepted: AcceptedPackage) -> dict[str, JsonObject]:
+    """Return ``<artifact>#<ordinal> -> accepted record`` for the accepted content view.
+
+    The index is built from the accepted bytes only, so a handoff citation can be
+    checked against the evidence the package actually carries.  A record that is not a
+    JSON object is simply absent from the index and can therefore never back a claim.
+    """
+
+    index: dict[str, JsonObject] = {}
+    for _role, artifact in accepted.datasets():
+        raw = accepted.records_for(artifact)
+        if raw is None:
+            continue
+        try:
+            payload: Any = parse_strict_json(raw, source=artifact)
+        except StrictJsonError:
+            continue
+        if not isinstance(payload, list):
+            continue
+        for ordinal, record in enumerate(payload):
+            if isinstance(record, JsonObject):
+                index[f"{artifact}#{ordinal}"] = record
+    return index
+
+
 def _targets_by_artifact(
     accepted: AcceptedPackage,
 ) -> tuple[dict[str, tuple[str, int]], tuple[str, ...]]:
@@ -1051,37 +1149,173 @@ def _locator_base(locator: str) -> str:
     base.
     """
 
-    return locator if "#" not in locator else f"{locator.split('#', 1)[0]}#{locator.split('#', 1)[1].split('.', 1)[0]}"
+    artifact, separator, remainder = locator.partition("#")
+    if not separator:
+        return locator
+    return f"{artifact}#{remainder.split('.', 1)[0]}"
 
 
-def _handoff_is_package_scoped(
+#: Locator suffix used when a source value is claimed by an explicit property token.
+_LOCATOR_PROPERTY_SEPARATOR = "."
+
+
+def _locator_property(locator: str) -> str | None:
+    base = _locator_base(locator)
+    if locator == base:
+        return None
+    return locator[len(base) + len(_LOCATOR_PROPERTY_SEPARATOR):]
+
+
+@dataclass(frozen=True, slots=True)
+class _EvidenceVerification:
+    """Outcome of verifying one offered handoff evidence citation."""
+
+    verified: bool
+    problem: str | None
+    role: str | None = None
+    ordinal: int | None = None
+    artifact: str | None = None
+    value: Any = None
+
+    @property
+    def locator(self) -> str:
+        if self.artifact is None or self.ordinal is None:
+            return ""
+        return f"{self.artifact}#{self.ordinal}"
+
+
+def _verify_handoff_evidence(
     *,
     accepted: AcceptedPackage,
-    evidence: EvidenceReference,
+    evidence: HandoffEvidence,
     located: Mapping[str, tuple[str, int]],
-) -> tuple[bool, str | None]:
-    """Is ``evidence`` traceable to accepted evidence of the **same** package?
+    records: Mapping[str, JsonObject],
+    expected_roles: tuple[str, ...] | None = None,
+    property_name: str | None = None,
+) -> _EvidenceVerification:
+    """Verify one offered handoff citation against the accepted content view.
 
-    A handoff entry that cannot be traced to the same ``AcceptedPackage`` never
-    supplies a value (``§4.3.31`` E): no external caller value, no default and no
-    synthetic fallback is accepted.
+    A citation is only accepted when **all** of the following hold:
+
+    * it names the same ``AcceptedPackage`` identity;
+    * its ``logical_dataset_role`` matches the accepted dataset the locator resolves to;
+    * the locator resolves to a real record of that dataset in the accepted content view;
+    * when ``expected_roles`` is given, that dataset role is one of them;
+    * when ``property_name`` is given, the record itself actually carries that property,
+      and the returned ``value`` is the accepted value -- so the injected semantic is
+      backed by accepted evidence rather than by the caller's assertion.
+
+    Anything else stays unverified, and an unverified citation never supplies a value
+    (``§4.3.31`` E: no external caller value, no default, no synthetic fallback).
     """
 
     if evidence.snapshot_package_identity != accepted.package_id:
-        return False, (
-            "handoff evidence refers to a different Snapshot Package Identity; an "
-            "external caller value may not supply this semantic (§4.3.31 E)"
+        return _EvidenceVerification(
+            verified=False,
+            problem=(
+                "evidence cites a different Snapshot Package Identity; an external "
+                "caller value may not supply this semantic (§4.3.31 E)"
+            ),
         )
+
     locator = evidence.stable_source_evidence_locator
-    if locator in located:
-        return True, None
     base = _locator_base(locator)
-    if base in located:
-        return True, None
-    return False, (
-        "handoff evidence locator "
-        f"{locator!r} does not resolve to an accepted record of this package "
-        "(§4.3.31 E: injection must be supported by same-AcceptedPackage evidence)"
+    found = located.get(locator) or located.get(base)
+    if found is None:
+        return _EvidenceVerification(
+            verified=False,
+            problem=(
+                f"evidence locator {locator!r} does not resolve to an accepted record "
+                "of this package (§4.3.31 E)"
+            ),
+        )
+
+    role, ordinal = found
+    if evidence.logical_dataset_role != role:
+        return _EvidenceVerification(
+            verified=False,
+            problem=(
+                f"evidence declares logical dataset role "
+                f"{evidence.logical_dataset_role!r} but locator {base!r} belongs to "
+                f"role {role!r}; the citation is inconsistent and is not used"
+            ),
+        )
+
+    if expected_roles is not None and role not in expected_roles:
+        return _EvidenceVerification(
+            verified=False,
+            problem=(
+                f"evidence role {role!r} is not one of the accepted roles that may "
+                f"support this semantic {list(expected_roles)}"
+            ),
+            role=role,
+            ordinal=ordinal,
+            artifact=base.split("#", 1)[0],
+        )
+
+    record = records.get(base)
+    value: Any = None
+    if property_name is not None:
+        if record is None:
+            return _EvidenceVerification(
+                verified=False,
+                problem=(
+                    f"accepted record {base!r} could not be read as a record object; "
+                    "the cited value cannot be established"
+                ),
+                role=role,
+                ordinal=ordinal,
+                artifact=base.split("#", 1)[0],
+            )
+        declared_property = _locator_property(locator)
+        if declared_property is not None and declared_property != property_name:
+            return _EvidenceVerification(
+                verified=False,
+                problem=(
+                    f"evidence locator {locator!r} names property "
+                    f"{declared_property!r} but this semantic requires "
+                    f"{property_name!r}"
+                ),
+                role=role,
+                ordinal=ordinal,
+                artifact=base.split("#", 1)[0],
+            )
+        if property_name not in record:
+            return _EvidenceVerification(
+                verified=False,
+                problem=(
+                    f"accepted record {base!r} does not carry {property_name!r}; the "
+                    "injected value has no accepted evidence supporting it "
+                    "(§4.3.31 E)"
+                ),
+                role=role,
+                ordinal=ordinal,
+                artifact=base.split("#", 1)[0],
+            )
+        value = record[property_name]
+
+    return _EvidenceVerification(
+        verified=True,
+        problem=None,
+        role=role,
+        ordinal=ordinal,
+        artifact=base.split("#", 1)[0],
+        value=value,
+    )
+
+
+def _resolved_evidence_reference(
+    *, accepted: AcceptedPackage, verification: _EvidenceVerification
+) -> EvidenceReference:
+    """Build the confirmed provenance for a verified handoff citation."""
+
+    assert verification.role is not None and verification.artifact is not None
+    assert verification.ordinal is not None
+    return _evidence_reference(
+        package=accepted,
+        role=verification.role,
+        artifact=verification.artifact,
+        ordinal=verification.ordinal,
     )
 
 
@@ -1098,12 +1332,40 @@ def construct_canonical_objects(
     immutable, in-memory canonical entities / relationships / context references with
     their provenance.
 
-    Layer-2 is re-verified before any construction (``MG-2`` / ``§4.3.28`` C.3).  When
-    required integrity can no longer be re-established nothing is constructed and the
-    result reports only the inherited findings.
+    Layer-2 is re-verified before any construction (``MG-2`` / ``§4.3.28`` C.3), and a
+    supplied report must belong to this very package and accepted content view.  When
+    required integrity can no longer be re-established, or the supplied report is
+    foreign / stale, nothing is constructed and no Layer-1 rejection is implied.
     """
 
     return _construct(accepted, handoff, layer2_report=layer2_report)
+
+
+def _report_binding_problem(
+    accepted: AcceptedPackage, layer2_report: Layer2Report
+) -> str | None:
+    """Return why ``layer2_report`` may not authorise construction, or ``None``.
+
+    ``MG-2`` trusted reuse requires the reuse to be bound to the **same** accepted
+    package identity and the **same** accepted content view.  A report produced for
+    another package, or for a different content view of this package, is foreign /
+    stale and must never let canonicalization continue.
+    """
+
+    if layer2_report.package_id != accepted.package_id:
+        return (
+            "the supplied Layer-2 report belongs to package "
+            f"{layer2_report.package_id!r}, not to {accepted.package_id!r}; a foreign "
+            "report never authorises construction (§4.3.28 C.2/C.3)"
+        )
+    if layer2_report.accepted_content_view_digest != accepted.content_view_digest:
+        return (
+            "the supplied Layer-2 report was produced against accepted content view "
+            f"{layer2_report.accepted_content_view_digest!r}, not against "
+            f"{accepted.content_view_digest!r}; a stale report never authorises "
+            "construction (§4.3.28 C.2/C.3)"
+        )
+    return None
 
 
 def _construct(
@@ -1129,6 +1391,15 @@ def _construct(
         accepted_content_view_digest=accepted.content_view_digest,
     )
 
+    binding_problem = _report_binding_problem(accepted, layer2_report)
+    if binding_problem is not None:
+        build.check(
+            LAYER2_REPORT_BINDING,
+            EVALUATION_FAILED,
+            binding_problem,
+        )
+        return _empty_report(build, accepted, analysis_run, layer2_report)
+
     if not layer2_report.reusable:
         build.check(
             CANONICALIZATION_ANALYSIS_RUN,
@@ -1139,6 +1410,7 @@ def _construct(
         return _empty_report(build, accepted, analysis_run, layer2_report)
 
     located, blocked = _targets_by_artifact(accepted)
+    accepted_records = _accepted_record_index(accepted)
 
     # --- Analysis Run context (I-1): identity + exactly-one package linkage ---------
     build.check(
@@ -1228,7 +1500,7 @@ def _construct(
 
     # --- G5-A effective demand context references (read-only) ----------------------
     effective_demand, demand_issues = _effective_demand_references(
-        accepted, handoff, located
+        accepted, handoff, located, accepted_records
     )
     build.effective_demand_contexts.extend(effective_demand)
     build.issues.extend(demand_issues)
@@ -1236,10 +1508,22 @@ def _construct(
     # --- POLICY_INPUT / CONTEXT internal handoff -----------------------------------
     production_requirements = resolved_objects.get("Production Requirement", ())
     _handoff_loss_rate(
-        build, accepted, located, handoff, production_requirements
+        build,
+        accepted,
+        located,
+        accepted_records,
+        handoff,
+        production_requirements,
     )
     safety_stock_targets = resolved_objects.get("Configured Safety Stock", ())
-    _handoff_safety_stock(build, accepted, located, handoff, safety_stock_targets)
+    _handoff_safety_stock(
+        build,
+        accepted,
+        located,
+        accepted_records,
+        handoff,
+        safety_stock_targets,
+    )
 
     # --- G4-A BOM parent / requirement context binding ------------------------------
     bom_resolved, bom_unresolved = _construct_bom_components(
@@ -1248,6 +1532,7 @@ def _construct(
         records,
         handoff,
         located,
+        accepted_records,
         production_requirements,
     )
     object_sets.append(
@@ -1537,6 +1822,7 @@ def _construct_bom_components(
     records: list[tuple[str, str, int, JsonObject]],
     handoff: PhaseAHandoff,
     located: Mapping[str, tuple[str, int]],
+    accepted_records: Mapping[str, JsonObject],
     production_requirements: tuple[CanonicalObject, ...],
 ) -> tuple[tuple[CanonicalObject, ...], tuple[CanonicalObject, ...]]:
     """G4-A BOM Component construction with a resolved parent context reference.
@@ -1544,9 +1830,17 @@ def _construct_bom_components(
     ``material_code`` is the **component** material identity.  The parent / requirement
     context is a reference to an already constructed / resolved ``Production
     Requirement`` context (``plant_id`` + parent ``material_code`` + ``required_date``);
-    a caller cannot create that context without accepted source evidence.  When the BOM
-    record also carries ``plant_id`` / ``required_date`` they must be **exactly equal**
-    to the referenced context, otherwise the registered
+    a caller cannot create that context without accepted source evidence, and the
+    binding's own provenance is preserved on the object rather than discarded.
+
+    The constructed grain is the canonical one (``§4.1.13`` C):
+    ``plant_id`` + parent ``material_code`` + ``required_date`` + component
+    ``material_code``.  The parent ``material_code`` is read from the **resolved
+    context**, never invented, and no ``parent_material_code`` canonical field is
+    created.
+
+    When the BOM record also carries ``plant_id`` / ``required_date`` they must be
+    **exactly equal** to the referenced context, otherwise the registered
     ``CONSISTENCY`` / ``CONSISTENCY_CONFLICT`` finding is raised and no silent
     precedence is applied.
     """
@@ -1555,30 +1849,25 @@ def _construct_bom_components(
 
     parents: dict[tuple[Any, ...], list[tuple[CanonicalObject, EvidenceReference]]] = {}
     for entry in handoff.bom_parent_context:
-        ok, problem = _handoff_is_package_scoped(
-            accepted=accepted, evidence=entry.evidence, located=located
+        verification = _verify_handoff_evidence(
+            accepted=accepted,
+            evidence=entry.evidence,
+            located=located,
+            records=accepted_records,
+            expected_roles=(ROLE_PRODUCTION_REQUIREMENT,),
         )
-        if not ok:
+        if not verification.verified:
             build.check(
                 f"{CANONICALIZATION_HANDOFF_EVIDENCE}:bom_parent_context",
                 EVALUATION_NOT_EVALUABLE,
-                problem or "handoff evidence is not package-scoped",
-            )
-            continue
-        base = _locator_base(entry.evidence.stable_source_evidence_locator)
-        artifact, ordinal_text = base.rsplit("#", 1)
-        role, ordinal = located[base]
-        if role != ROLE_PRODUCTION_REQUIREMENT:
-            build.check(
-                f"{CANONICALIZATION_HANDOFF_EVIDENCE}:bom_parent_context",
-                EVALUATION_NOT_EVALUABLE,
-                "BOM parent evidence must reference a Production Requirement record; "
-                "the referenced record has role "
-                f"{role!r} and is not used (§4.1.13 C / §4.3.31 G I-7)",
+                verification.problem or "handoff evidence is not package-scoped",
             )
             continue
         reference = _record_reference(
-            package=accepted, role=role, artifact=artifact, ordinal=ordinal
+            package=accepted,
+            role=verification.role or ROLE_PRODUCTION_REQUIREMENT,
+            artifact=verification.artifact or "",
+            ordinal=verification.ordinal or 0,
         )
         parent = next(
             (
@@ -1597,7 +1886,7 @@ def _construct_bom_components(
             )
             continue
         parents.setdefault((entry.plant_id, entry.required_date), []).append(
-            (parent, entry.evidence)
+            (parent, _resolved_evidence_reference(accepted=accepted, verification=verification))
         )
 
     # Package-level index used only to recognise a grain mismatch against a *unique*
@@ -1832,7 +2121,39 @@ def _construct_bom_components(
             "context "
             f"[{_grain_label(parent.grain)}] via {parent_evidence.stable_source_evidence_locator}",
         )
-        grain = _grain_tuple(record, ("plant_id", "required_date", "material_code"))
+        # ``§4.1.13`` C registered grain: plant_id + parent / requirement material_code +
+        # required_date + component material_code.  The parent material_code comes from
+        # the resolved context (never invented, never a new canonical field), and the
+        # context reference plus its own upstream provenance are preserved on the object.
+        parent_material = parent.value_of("material_code", ABSENT)
+        if parent_material is ABSENT:
+            build.check(
+                f"{CANONICALIZATION_BOM_PARENT}:{reference.reference}",
+                EVALUATION_NOT_EVALUABLE,
+                "the resolved Production Requirement context does not carry a "
+                "material_code, so the BOM Component grain cannot be completed; the "
+                "object stays unresolved instead of receiving a default (§4.1.13 C)",
+            )
+            build.unresolved_identity(
+                location=f"{artifact}[{ordinal}]",
+                detail=(
+                    "BOM Component grain is incomplete: the resolved Production "
+                    "Requirement context carries no parent material_code"
+                ),
+                affected_evidence=artifact,
+                design_reference="§4.1.13 C / §4.4.26 / §4.4.94",
+            )
+            unresolved.append(
+                _unresolved_object(properties, non_applicable, reference, provenance)
+            )
+            continue
+
+        grain = (
+            CanonicalProperty("plant_id", record_plant),
+            CanonicalProperty("material_code", parent_material),
+            CanonicalProperty("required_date", record_required),
+            CanonicalProperty("component_material_code", record["material_code"]),
+        )
         resolved.append(
             CanonicalObject(
                 canonical_target=ROLE_BOM_COMPONENT,
@@ -1842,6 +2163,8 @@ def _construct_bom_components(
                 non_applicable_properties=non_applicable,
                 record_reference=reference.reference,
                 provenance=provenance,
+                context_reference=parent.record_reference,
+                context_provenance=parent.provenance,
             )
         )
 
@@ -1852,36 +2175,35 @@ def _handoff_loss_rate(
     build: _Construction,
     accepted: AcceptedPackage,
     located: Mapping[str, tuple[str, int]],
+    accepted_records: Mapping[str, JsonObject],
     handoff: PhaseAHandoff,
     production_requirements: tuple[CanonicalObject, ...],
 ) -> None:
     """Resolve ``loss_rate`` + Requirement Calculation Context (injection I-2).
 
     ``loss_rate`` is never assigned by the ``Production Requirement`` record itself
-    (``§4.2.18`` role 2).  The value is only carried when the handoff is package-scoped
-    and exactly one applicable evidence resolved; otherwise it stays unresolved and no
-    value is invented.  The Entity / Dataset / Source Field ownership of ``loss_rate``
-    is **not** decided here (``§4.4.15``).
+    (``§4.2.18`` role 2).  A value is carried only when **all** of the following hold:
+
+    * the requirement grain matches a resolved ``Production Requirement`` context;
+    * the handoff cites exactly one applicable ``loss_rate`` evidence reference, and
+      that reference resolves to a real accepted record of the **same** package that
+      itself carries ``loss_rate`` -- an unverifiable citation never supplies a value;
+    * a resolution basis is given for the exactly-one resolution.
+
+    More than one applicable reference stays unresolved: values are never deduplicated,
+    never aggregated and never chosen by precedence (``§4.4.102`` C Stage A).  The
+    Entity / Dataset / Source Field ownership of ``loss_rate`` is **not** decided here
+    (``§4.4.15``).
     """
 
-    for entry in handoff.loss_rate:
-        ok, problem = _handoff_is_package_scoped(
-            accepted=accepted, evidence=entry.evidence, located=located
-        )
+    for index, entry in enumerate(handoff.loss_rate):
+        check_name = f"{CANONICALIZATION_HANDOFF_EVIDENCE}:loss_rate[{index}]"
         grain = (
             CanonicalProperty("plant_id", entry.plant_id),
             CanonicalProperty("material_code", entry.parent_material_code),
             CanonicalProperty("required_date", entry.required_date),
         )
-        if not ok or not entry.resolved:
-            build.check(
-                f"{CANONICALIZATION_HANDOFF_EVIDENCE}:loss_rate",
-                EVALUATION_NOT_EVALUABLE,
-                problem
-                or "loss_rate evidence is not resolvable to exactly one applicable "
-                "value; it stays unresolved (§4.4.15 / §4.4.102 C Stage A)",
-            )
-            continue
+
         matched = any(
             obj.value_of("plant_id", ABSENT) == entry.plant_id
             and obj.value_of("material_code", ABSENT) == entry.parent_material_code
@@ -1890,26 +2212,90 @@ def _handoff_loss_rate(
         )
         if not matched:
             build.check(
-                f"{CANONICALIZATION_HANDOFF_EVIDENCE}:loss_rate",
+                check_name,
                 EVALUATION_NOT_EVALUABLE,
                 "no resolved Production Requirement context matches the Requirement "
                 "Calculation Context grain of this loss_rate handoff; the value is not "
                 "carried (§4.1.13 E)",
             )
             continue
+
+        gate = _verify_handoff_evidence(
+            accepted=accepted,
+            evidence=entry.evidence,
+            located=located,
+            records=accepted_records,
+        )
+        if not gate.verified:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                gate.problem or "loss_rate resolution evidence is not package-scoped",
+            )
+            continue
+
+        if len(entry.loss_rate_evidence) != 1:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                "the Requirement Calculation Context resolution used "
+                f"{len(entry.loss_rate_evidence)} applicable loss_rate reference(s); "
+                "exactly one applicable reference is required and equal values are "
+                "never deduplicated, so the value stays unresolved (§4.4.15 / "
+                "§4.4.102 C Stage A)",
+            )
+            continue
+
+        value_gate = _verify_handoff_evidence(
+            accepted=accepted,
+            evidence=entry.loss_rate_evidence[0],
+            located=located,
+            records=accepted_records,
+            property_name="loss_rate",
+        )
+        if not value_gate.verified:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                value_gate.problem
+                or "the cited loss_rate evidence is not verifiable in this package",
+            )
+            continue
+
+        if not entry.resolution_basis.strip():
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                "no mapping / resolution basis was given for the loss_rate resolution; "
+                "the value is not carried (§4.5.22 Option D / §4.3.31 E)",
+            )
+            continue
+
+        if value_gate.value != entry.loss_rate:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                "the handed-in loss_rate does not equal the value carried by the cited "
+                "accepted evidence; a caller may not supply a value the evidence does "
+                "not support (§4.3.31 E)",
+            )
+            continue
+
         build.check(
-            f"{CANONICALIZATION_HANDOFF_EVIDENCE}:loss_rate",
+            check_name,
             EVALUATION_PASSED,
-            "loss_rate carried as an in-process logical handoff with package-scoped "
-            "provenance; Entity / Dataset / Source Field ownership is not decided here "
-            "(§4.4.15)",
+            "loss_rate carried as an in-process logical handoff, supported by accepted "
+            f"evidence {value_gate.locator} and resolution basis {entry.resolution_basis!r}; "
+            "Entity / Dataset / Source Field ownership is not decided here (§4.4.15)",
         )
         build.loss_rate_contexts.append(
             ContextValueReference(
                 semantic="loss_rate",
                 grain=grain,
-                value=entry.loss_rate,
-                provenance=entry.evidence,
+                value=value_gate.value,
+                provenance=_resolved_evidence_reference(
+                    accepted=accepted, verification=value_gate
+                ),
             )
         )
 
@@ -1918,14 +2304,19 @@ def _handoff_safety_stock(
     build: _Construction,
     accepted: AcceptedPackage,
     located: Mapping[str, tuple[str, int]],
+    accepted_records: Mapping[str, JsonObject],
     handoff: PhaseAHandoff,
     safety_stock_targets: tuple[CanonicalObject, ...],
 ) -> None:
     """Resolve the ``SafetyStock`` internal handoff (injection I-5).
 
-    ``SafetyStock`` may only be handed in when the same ``AcceptedPackage`` carries
-    policy evidence that resolves it for the grain and exactly one such evidence
-    applies; otherwise it stays unresolved and is never defaulted to ``0``.
+    ``SafetyStock`` is carried only when the same ``AcceptedPackage`` carries exactly
+    one applicable ``SafetyStock`` reference that resolves the grain and no conflicting
+    ``SafetyStock`` value exists at that canonical grain.  Conflicting accepted values
+    at the same grain are the registered ``§4.4.92`` case and are reported as
+    ``CONSISTENCY`` / ``CONSISTENCY_CONFLICT`` (``§4.4.102`` C Stage B) -- never
+    silently downgraded to a plain unresolved, and never resolved by the handoff, which
+    would be an implicit ``injection wins``.
     """
 
     declared_grains = {
@@ -1933,44 +2324,157 @@ def _handoff_safety_stock(
         for obj in safety_stock_targets
     }
 
-    for entry in handoff.safety_stock:
-        ok, problem = _handoff_is_package_scoped(
-            accepted=accepted, evidence=entry.evidence, located=located
-        )
+    for index, entry in enumerate(handoff.safety_stock):
+        check_name = f"{CANONICALIZATION_HANDOFF_EVIDENCE}:SafetyStock[{index}]"
         grain = (
             CanonicalProperty("plant_id", entry.plant_id),
             CanonicalProperty("material_code", entry.material_code),
         )
-        if not ok or not entry.resolved:
+        grain_label = f"plant_id={entry.plant_id!r} + material_code={entry.material_code!r}"
+
+        gate = _verify_handoff_evidence(
+            accepted=accepted,
+            evidence=entry.evidence,
+            located=located,
+            records=accepted_records,
+        )
+        if not gate.verified:
             build.check(
-                f"{CANONICALIZATION_HANDOFF_EVIDENCE}:SafetyStock",
+                check_name,
                 EVALUATION_NOT_EVALUABLE,
-                problem
-                or "SafetyStock evidence does not resolve to exactly one applicable "
-                "value; it stays unresolved and is never defaulted (§4.3.31 E / I-5)",
+                gate.problem or "SafetyStock resolution evidence is not package-scoped",
             )
             continue
+
         if (entry.plant_id, entry.material_code) in declared_grains:
             build.check(
-                f"{CANONICALIZATION_HANDOFF_EVIDENCE}:SafetyStock",
+                check_name,
                 EVALUATION_NOT_EVALUABLE,
                 "the Configured Safety Stock dataset already carries evidence for this "
                 "grain, so the internal handoff is not used and no precedence between "
                 "the two sources is applied (§4.4.102 C Stage B)",
             )
             continue
+
+        # Accepted Configured Safety Stock evidence for this grain, verified in-package.
+        competing: list[_EvidenceVerification] = []
+        competing_ok = True
+        for citation in entry.configured_safety_stock_evidence:
+            verification = _verify_handoff_evidence(
+                accepted=accepted,
+                evidence=citation,
+                located=located,
+                records=accepted_records,
+                expected_roles=("Configured Safety Stock",),
+                property_name="SafetyStock",
+            )
+            if not verification.verified:
+                build.check(
+                    check_name,
+                    EVALUATION_NOT_EVALUABLE,
+                    verification.problem
+                    or "Configured Safety Stock evidence is not verifiable in this package",
+                )
+                competing_ok = False
+                break
+            competing.append(verification)
+        if not competing_ok:
+            continue
+
+        if len(entry.safety_stock_evidence) != 1:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                "the SafetyStock resolution used "
+                f"{len(entry.safety_stock_evidence)} applicable evidence reference(s); "
+                "exactly one applicable reference is required, so the value stays "
+                "unresolved and is never defaulted (§4.3.31 E / I-5)",
+            )
+            continue
+
+        value_gate = _verify_handoff_evidence(
+            accepted=accepted,
+            evidence=entry.safety_stock_evidence[0],
+            located=located,
+            records=accepted_records,
+            property_name="SafetyStock",
+        )
+        if not value_gate.verified:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                value_gate.problem
+                or "the cited SafetyStock evidence is not verifiable in this package",
+            )
+            continue
+
+        if not entry.resolution_basis.strip():
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                "no mapping / resolution basis was given for the SafetyStock "
+                "resolution; the value is not carried (§4.5.22 Option D / §4.3.31 E)",
+            )
+            continue
+
+        # Stage B: conflicting SafetyStock values at the same canonical grain.
+        conflicting = [
+            verification
+            for verification in competing
+            if verification.value != value_gate.value
+        ]
+        if conflicting:
+            detail = (
+                "conflicting SafetyStock values at the same canonical grain "
+                f"[{grain_label}]: "
+                f"Configured Safety Stock evidence "
+                f"{', '.join(f'{item.locator}={item.value!r}' for item in competing)} "
+                f"vs resolved policy evidence {value_gate.locator}={value_gate.value!r}"
+            )
+            build.check(
+                check_name,
+                EVALUATION_FAILED,
+                detail,
+            )
+            build.issue(
+                category="CONSISTENCY",
+                reason="CONSISTENCY_CONFLICT",
+                location=f"{value_gate.locator}",
+                detail=detail,
+                affected_evidence=value_gate.artifact or "SafetyStock",
+                design_reference="§4.4.92 / §4.4.102 C Stage B",
+                consequence_context=(
+                    "the affected SafetyStock grain stays unresolved; no precedence, no "
+                    "aggregation and no package rejection"
+                ),
+            )
+            continue
+
+        if value_gate.value != entry.safety_stock:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                "the handed-in SafetyStock does not equal the value carried by the cited "
+                "accepted evidence; a caller may not supply a value the evidence does "
+                "not support (§4.3.31 E)",
+            )
+            continue
+
         build.check(
-            f"{CANONICALIZATION_HANDOFF_EVIDENCE}:SafetyStock",
+            check_name,
             EVALUATION_PASSED,
-            "SafetyStock carried as an in-process logical handoff with package-scoped "
-            "provenance; no default of 0 is applied",
+            "SafetyStock carried as an in-process logical handoff, supported by accepted "
+            f"evidence {value_gate.locator} and resolution basis {entry.resolution_basis!r}; "
+            "no default of 0 is applied",
         )
         build.safety_stock_contexts.append(
             ContextValueReference(
                 semantic="SafetyStock",
                 grain=grain,
-                value=entry.safety_stock,
-                provenance=entry.evidence,
+                value=value_gate.value,
+                provenance=_resolved_evidence_reference(
+                    accepted=accepted, verification=value_gate
+                ),
             )
         )
 
@@ -1988,68 +2492,193 @@ def build_effective_demand_contexts(
 
     Each reference keeps ``Target Applicability`` and ``Source Reservation Overlap`` as
     **two independent** relation outcomes, each with its own provenance and mapping
-    basis.  An outcome whose mapping evidence cannot be traced to the same
-    ``AcceptedPackage`` stays unresolved and is never replaced by a caller-supplied
+    basis.  An outcome is read from the accepted evidence a handoff entry cites; a
+    caller cannot state it, and a citation that cannot be traced to the same
+    ``AcceptedPackage`` stays unresolved rather than being replaced by a supplied
     Boolean.
     """
 
     if located is None:
         located, _ = _targets_by_artifact(accepted)
-    return _effective_demand_references(accepted, handoff, located)
+    return _effective_demand_references(
+        accepted, handoff, located, _accepted_record_index(accepted)
+    )
 
 
 def _effective_demand_references(
     accepted: AcceptedPackage,
     handoff: PhaseAHandoff,
     located: Mapping[str, tuple[str, int]],
+    accepted_records: Mapping[str, JsonObject],
 ) -> tuple[tuple[EffectiveDemandContextReference, ...], tuple[Issue, ...]]:
+    """Resolve the G5-A relation pairs, enforcing ``exactly one pair or unresolved``.
+
+    Per ``§4.3.31`` G I-8 the cardinality is *exactly one pair or unresolved*: a pair
+    is emitted only when each registered relation has exactly one verified, in-package,
+    approved-role mapping evidence citation and a mapping basis.  Anything else -- a
+    missing relation, an unverifiable citation, a repeat of the same relation, or
+    evidence that is not registered mapping evidence for the substitute relationship --
+    leaves the pair unresolved and is reported with the registered
+    ``SEMANTIC_RESOLUTION`` / ``SEMANTIC_UNRESOLVED`` taxonomy.
+    """
 
     issues: list[Issue] = []
-    grouped: dict[tuple[Any, Any], list[RelationOutcomeReference]] = {}
+    verified: dict[tuple[Any, Any], dict[str, RelationOutcomeReference]] = {}
+    counts: dict[tuple[Any, Any], dict[str, int]] = {}
+
+    def _unresolved(*, relation: str, role: str, detail: str) -> None:
+        _ = relation
+        issues.append(
+            Issue(
+                location="effective_demand_context",
+                detail=detail,
+                category="SEMANTIC_RESOLUTION",
+                reason="SEMANTIC_UNRESOLVED",
+                layer=LAYER_2,
+                affected_evidence=role,
+                blast_radius="affected effective demand context only",
+                design_reference="§4.1.13 D (G5-A) / §4.3.31 G I-8",
+                consequence_context=(
+                    "the relation pair stays unresolved; a caller may not set the "
+                    "outcome directly and no Boolean is synthesised"
+                ),
+            )
+        )
 
     for entry in handoff.effective_demand:
-        ok, problem = _handoff_is_package_scoped(
-            accepted=accepted, evidence=entry.evidence, located=located
+        key = (entry.source_substitute_material, entry.target_material)
+        counts.setdefault(key, {})
+        counts[key][entry.relation] = counts[key].get(entry.relation, 0) + 1
+
+        if entry.relation not in G5_RELATIONS:
+            _unresolved(
+                relation=entry.relation,
+                role=entry.evidence.logical_dataset_role,
+                detail=(
+                    f"relation {entry.relation!r} is not one of the registered G5-A "
+                    f"relations {list(G5_RELATIONS)}; the pair stays unresolved"
+                ),
+            )
+            continue
+
+        verification = _verify_handoff_evidence(
+            accepted=accepted,
+            evidence=entry.evidence,
+            located=located,
+            records=accepted_records,
+            expected_roles=(ROLE_SUBSTITUTE_ALLOCATION, ROLE_SUBSTITUTE_RELATIONSHIP),
+            property_name=None,
         )
-        if not ok:
+        if not verification.verified:
+            _unresolved(
+                relation=entry.relation,
+                role=entry.evidence.logical_dataset_role,
+                detail=(
+                    verification.problem
+                    or "the cited mapping evidence is not verifiable in this package"
+                ),
+            )
+            continue
+
+        if not entry.mapping_basis.strip():
+            _unresolved(
+                relation=entry.relation,
+                role=entry.evidence.logical_dataset_role,
+                detail=(
+                    "no approved mapping basis was given for this relation; the outcome "
+                    "cannot be attributed to approved mapping evidence and the pair "
+                    "stays unresolved (§4.1.13 D)"
+                ),
+            )
+            continue
+
+        outcome = _effective_demand_outcome(
+            accepted_records=accepted_records,
+            verification=verification,
+            relation=entry.relation,
+            source_substitute_material=entry.source_substitute_material,
+            target_material=entry.target_material,
+        )
+        if outcome is _NO_OUTCOME:
+            _unresolved(
+                relation=entry.relation,
+                role=entry.evidence.logical_dataset_role,
+                detail=(
+                    f"the accepted evidence {verification.locator} does not determine "
+                    f"relation {entry.relation!r} for this substitute / target pair, so "
+                    "the outcome stays unresolved instead of being supplied by the "
+                    "caller (§4.1.13 D)"
+                ),
+            )
+            continue
+
+        verified.setdefault(key, {})[entry.relation] = RelationOutcomeReference(
+            relation=entry.relation,
+            outcome=outcome,
+            provenance=_resolved_evidence_reference(
+                accepted=accepted, verification=verification
+            ),
+            mapping_basis=entry.mapping_basis,
+        )
+
+    outbound: list[EffectiveDemandContextReference] = []
+    for key in sorted(verified, key=lambda item: repr(item)):
+        relations = verified[key]
+        if sorted(relations) != sorted(G5_RELATIONS):
+            missing = [name for name in G5_RELATIONS if name not in relations]
+            detail = (
+                f"relation(s) {missing} have no verified package-scoped mapping "
+                f"evidence for substitute/target pair {key!r}; the pair stays "
+                "unresolved (exactly one pair or unresolved, §4.3.31 G I-8)"
+            )
             issues.append(
                 Issue(
                     location="effective_demand_context",
-                    detail=problem or "handoff evidence is not package-scoped",
+                    detail=detail,
                     category="SEMANTIC_RESOLUTION",
                     reason="SEMANTIC_UNRESOLVED",
                     layer=LAYER_2,
-                    affected_evidence=entry.evidence.logical_dataset_role,
+                    affected_evidence="Substitute Allocation",
                     blast_radius="affected effective demand context only",
                     design_reference="§4.1.13 D (G5-A) / §4.3.31 G I-8",
                     consequence_context=(
-                        "the relation outcome stays unresolved; a caller may not set it "
-                        "directly and no Boolean is synthesised"
+                        "the relation pair stays unresolved; Target Applicability and "
+                        "Source Reservation Overlap are never collapsed into one Boolean"
                     ),
                 )
             )
             continue
-        grouped.setdefault(
-            (entry.source_substitute_material, entry.target_material), []
-        ).append(
-            RelationOutcomeReference(
-                relation=entry.relation,
-                outcome=entry.outcome,
-                provenance=entry.evidence,
-                mapping_basis=entry.mapping_basis,
+        if any(counts[key][name] != 1 for name in G5_RELATIONS):
+            issues.append(
+                Issue(
+                    location="effective_demand_context",
+                    detail=(
+                        "more than one applicable mapping evidence was supplied for a "
+                        f"registered relation of pair {key!r}; equal outcomes are not "
+                        "deduplicated and no precedence is applied, so the pair stays "
+                        "unresolved (§4.4.102 C Stage A / §4.3.31 G I-8)"
+                    ),
+                    category="SEMANTIC_RESOLUTION",
+                    reason="SEMANTIC_UNRESOLVED",
+                    layer=LAYER_2,
+                    affected_evidence="Substitute Allocation",
+                    blast_radius="affected effective demand context only",
+                    design_reference="§4.1.13 D (G5-A) / §4.3.31 G I-8",
+                    consequence_context=(
+                        "the relation pair stays unresolved; no caller-supplied outcome "
+                        "is accepted"
+                    ),
+                )
             )
-        )
+            continue
 
-    outbound: list[EffectiveDemandContextReference] = []
-    for key in sorted(grouped, key=lambda item: repr(item)):
-        relations = tuple(
-            sorted(grouped[key], key=lambda item: (item.relation, repr(item.outcome)))
-        )
         outbound.append(
             EffectiveDemandContextReference(
                 source_substitute_material=key[0],
                 target_material=key[1],
-                relations=relations,
+                relations=tuple(
+                    sorted(relations.values(), key=lambda item: item.relation)
+                ),
                 record_reference=(
                     f"{accepted.package_id}|Substitute Allocation|"
                     f"{key[0]!r}|{key[1]!r}"
@@ -2058,6 +2687,81 @@ def _effective_demand_references(
         )
 
     return tuple(outbound), tuple(issues)
+
+
+class _NoOutcome:
+    """Sentinel: the accepted evidence does not determine the relation outcome."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return "<no-outcome>"
+
+
+_NO_OUTCOME = _NoOutcome()
+
+#: Properties an accepted record may use to state a substitute relationship's own
+#: direction / eligibility, in the order the canonical model registers them.
+_OUTCOME_DIRECTION_PROPERTY = "substitute_material_code"
+_OUTCOME_TARGET_PROPERTY = "target_material_code"
+_OUTCOME_APPROVAL_PROPERTY = "approval_status"
+_OUTCOME_ALLOCATED_PROPERTY = "AllocatedSubstituteQty"
+
+
+def _effective_demand_outcome(
+    *,
+    accepted_records: Mapping[str, JsonObject],
+    verification: _EvidenceVerification,
+    relation: str,
+    source_substitute_material: Any,
+    target_material: Any,
+) -> Any:
+    """Read a G5-A relation outcome from the accepted evidence itself.
+
+    The outcome is derived only from accepted values: the evidence record must belong
+    to the substitute / target pair it is cited for, and the relation result is then
+    read from the registered canonical values that record carries
+    (``approval_status`` for ``Target Applicability``, ``AllocatedSubstituteQty`` for
+    ``Source Reservation Overlap``).  Nothing is taken from the caller -- a handoff
+    entry supplies the mapping basis and the citation, never the outcome -- so an entry
+    cannot assert a result its evidence does not support.  ``_NO_OUTCOME`` means the
+    accepted evidence determines nothing and the pair stays unresolved.
+    """
+
+    record = accepted_records.get(verification.locator)
+    if record is None:
+        return _NO_OUTCOME
+
+    if _OUTCOME_TARGET_PROPERTY in record:
+        if record[_OUTCOME_TARGET_PROPERTY] != target_material:
+            return _NO_OUTCOME
+    if _OUTCOME_DIRECTION_PROPERTY in record:
+        if record[_OUTCOME_DIRECTION_PROPERTY] != source_substitute_material:
+            return _NO_OUTCOME
+
+    if relation == RELATION_TARGET_APPLICABILITY:
+        # Target applicability is carried by the substitute relationship's own
+        # registered approval state (``§4.1.4`` F / ``§4.2.14``).
+        if _OUTCOME_APPROVAL_PROPERTY in record:
+            return record[_OUTCOME_APPROVAL_PROPERTY]
+        if _OUTCOME_ALLOCATED_PROPERTY in record:
+            return "ALLOCATED"
+        return _NO_OUTCOME
+
+    if relation == RELATION_SOURCE_RESERVATION_OVERLAP:
+        # A source reservation overlap is only ever evidenced by an allocation record
+        # for the same source substitute material (``§4.1.4`` G).
+        if verification.role != ROLE_SUBSTITUTE_ALLOCATION:
+            return _NO_OUTCOME
+        if _OUTCOME_TARGET_PROPERTY not in record:
+            return _NO_OUTCOME
+        if _OUTCOME_DIRECTION_PROPERTY not in record:
+            return _NO_OUTCOME
+        if _OUTCOME_ALLOCATED_PROPERTY not in record:
+            return _NO_OUTCOME
+        return record[_OUTCOME_ALLOCATED_PROPERTY]
+
+    return _NO_OUTCOME
 
 
 __all__ = [
@@ -2085,14 +2789,21 @@ __all__ = [
     "EffectiveDemandContextReference",
     "EffectiveDemandRelationHandoff",
     "EvidenceReference",
+    "G5_RELATIONS",
     "GRAIN_KEYED_TARGETS",
+    "HandoffEvidence",
     "IDENTITY_COMPONENT_TARGETS",
+    "LAYER2_REPORT_BINDING",
     "LossRateHandoff",
     "PHASE_A_ROLE_LITERALS",
     "PhaseAHandoff",
+    "RELATION_SOURCE_RESERVATION_OVERLAP",
+    "RELATION_TARGET_APPLICABILITY",
     "ROLE_BOM_COMPONENT",
     "ROLE_INBOUND_SUPPLY",
     "ROLE_PRODUCTION_REQUIREMENT",
+    "ROLE_SUBSTITUTE_ALLOCATION",
+    "ROLE_SUBSTITUTE_RELATIONSHIP",
     "RecordReference",
     "RelationOutcomeReference",
     "RoleApplicability",
