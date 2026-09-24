@@ -345,10 +345,30 @@ class AcceptedPackage:
     boundary_root: Path
     content_view: ContentView
     declared_integrity: tuple[tuple[str, str], ...]
+    #: ``(role, artifact, raw_bytes)`` for each included dataset, captured from the
+    #: exact bytes read and verified during acceptance.  Downstream trusted reuse
+    #: (Layer 2) consumes these bytes instead of re-reading files, because a re-read
+    #: could observe content that no longer belongs to the accepted view
+    #: (``§4.3.28`` C.2 / C.3).  Re-verification still runs first, so a package whose
+    #: bytes changed is reported ``UNUSABLE`` rather than silently re-read.
+    accepted_records: tuple[tuple[str, str, bytes], ...] = ()
 
     @property
     def content_view_digest(self) -> str:
         return self.content_view.digest
+
+    def records_for(self, artifact: str) -> bytes | None:
+        """Return the accepted-view bytes for ``artifact``, or ``None`` if absent."""
+
+        for _, name, raw in self.accepted_records:
+            if name == artifact:
+                return raw
+        return None
+
+    def datasets(self) -> tuple[tuple[str, str], ...]:
+        """Return ``(role, artifact)`` pairs in declared order."""
+
+        return tuple((role, name) for role, name, _ in self.accepted_records)
 
     def to_dict(self) -> dict[str, object]:
         return {
