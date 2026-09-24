@@ -87,7 +87,7 @@
 | Master Data Mapping | **`DESIGN RESOLVED`**（11 / 11 层） | [master-data-mapping.md](design/specs/data-integration/master-data-mapping.md) §4.5；status 见 §4.5.24；scope 见 §4.5.25 |
 | **Adapter Boundary** | **`DESIGN RESOLVED`**（conceptual closure；implementation 未授权） | [Adapter Boundary](design/specs/data-integration/adapter-boundary.md)；closure 见 `adapter-boundary.md` §4.6.21 |
 | AI / Tool Boundary、HITL、Permission & Security、Audit & Observability、Test & AI Eval | 见对应章节 status boundary | §5 ～ §9（§5 status 见 §5.18） |
-| Architecture Decisions | **尚无正式 ADR**；技术栈明确未决定 | §10；`## Explicit Non-Decisions` |
+| Minimum Architecture / Code Start Gate | **ADR-001 ACCEPTED；CSG-1 ～ CSG-8 PASS**；仅第一批 deterministic tranche 授权，implementation NOT STARTED | [ADR-001](architecture/adr-001-deterministic-core.md)；[POC Design §10.1](design/poc-design-v0.2.md#implementation-ready-minimum)；更广泛 Architecture 仍未决定 |
 
 **§4 现有 0 个 `DESIGN PENDING` 设计子领域**（`Adapter Boundary` 已由 Issue #90 Closure Validation = `PASS`
 登记为 `DESIGN RESOLVED`；见 [adapter-boundary.md](design/specs/data-integration/adapter-boundary.md) §4.6.21）。
@@ -100,7 +100,11 @@
 
 **当前 Phase：** `POC Design v0.2`（**`DRAFT`**，尚未 `APPROVED` / `FROZEN`）。
 
-**最近已完成的 Gate：** `§1 Design Goals & Scope` Closure —— **`PASS`**（S-1 ～ S-14 全部 PASS；GSD-8 = `REGISTERED`／`AUTHORIZE`）。
+**最近已完成的 Gate：** `Code Start Gate` —— **PASS**（8 / 8）；仅第一批 deterministic tranche = **IMPLEMENTATION AUTHORIZED**，implementation = **NOT STARTED**。
+Canonical authority 见 [POC Design §10.1](design/poc-design-v0.2.md#implementation-ready-minimum)；minimum Architecture 见 [ADR-001](architecture/adr-001-deterministic-core.md)。
+本记录随 Issue #116 PR 合入 main 生效；此前 main 授权状态不变。下一步 Independent Review / Human merge decision；本 Gate PR 不写代码。§6 ～ §9 JIT blockers、§10 未覆盖选择继续保留；POC success = NOT CLAIMED。
+
+**更早：** `§1 Design Goals & Scope` Closure —— **`PASS`**（S-1 ～ S-14 全部 PASS；GSD-8 = `REGISTERED`／`AUTHORIZE`）。
 四项均为 `DESIGN RESOLVED`，authoritative 记录见 [POC Design](design/poc-design-v0.2.md) **§1.18 ～ §1.20**。
 `POC success = NOT CLAIMED`；本 closure 不授权 implementation，不改变 §6 ～ §10 独立状态。
 

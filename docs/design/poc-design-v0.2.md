@@ -124,6 +124,7 @@ AI **不可以**：
 ## 1. Design Goals & Scope
 
 > **Current canonical wording（Issue #112）：** 以下四项依据 FROZEN Discovery、GSD-1 ～ GSD-7 与 current-main composition 定稿；S-1 ～ S-14 verification 全部 PASS，closure 见 §1.18 ～ §1.20。
+> **后续授权入口：** Issue #116 的 IRM / Code Start Gate 与当前首批 implementation authorization 见 §10.1；§1 closure 本身不授予 implementation authorization。
 > **历史读取边界：** §1.1 ～ §1.17 的 Review、candidate、各 Issue 的 current-state / registration 时点记录保留；其中旧 PENDING / NOT AUTHORIZED / NOT EXECUTED 不代表本次 closure 后状态。已批准 Decision 与 §1.7 criteria 的约束继续有效；最新执行状态以 §1.20 为准。
 
 ### P0 设计目标
@@ -215,7 +216,7 @@ POC success = NOT CLAIMED
 | §7 | 保持 user／scope／Tool／workflow／POC policy 权限交集和 secrets 边界 | Read / Write Boundary `DESIGN RESOLVED`；RBAC、Data Scope、Tool Permission、Secret Handling `DESIGN PENDING` |
 | §8 | 追溯业务决策、Tool、规则版本、Human approval 与 failure | 具体 audit / observability `DESIGN PENDING` |
 | §9 | 提供适用的确定性、integration、AI Eval、HITL／business acceptance evidence | 具体测试／评估设计 `DESIGN PENDING`；本节不定义 harness、KPI、threshold |
-| §10 | 后续技术决策遵循 Options → Trade-offs → Recommendation → Human Approval → ADR | 当前 `No ADR created yet.`；本次不选择 Architecture |
+| §10 | 后续技术决策遵循 Options → Trade-offs → Recommendation → Human Approval → ADR | Issue #116 已批准首批最小 ADR-001（见 §10.1）；更广泛 Architecture 仍未决定，§1 closure 本身不选择 Architecture |
 
 `Downstream pending ≠ Automatic §1 closure blocker`；`Dependency expectation ≠ Downstream design completion`。以上仅规定需尊重的高层责任，不定义实现机制；§1 closure 不传递为 §6 ～ §10 resolved 或 implementation authorization。后续若发现真实 scope 冲突，应经独立 Design Change／Human Decision／canonical synchronization 处理，不得静默反向改写目标。
 
@@ -1649,6 +1650,8 @@ Registration Status = REGISTERED
 **Closure Gate = `PASS`（14 / 14 PASS，0 FAIL；无 partial-pass）。** 此结果仅为 §1 conceptual goal／scope closure，非 runtime／business validation。
 
 ### 1.20 Current Status（Issue #112 Closure 后）
+
+> 以下保留 Issue #112 closure 时点状态；后续 Issue #116 的 scoped implementation authorization 见 §10.1，不由本 closure 推导。
 
 ```
 GSD-1 ～ GSD-7                    = REGISTERED（原批准约束保持）
@@ -6408,7 +6411,108 @@ Options
 
 **至少包含：** **Option 0 — keep current / do nothing**
 
-**当前：`No ADR created yet.`**
+**当前：** [ADR-001 — First Deterministic Tranche Minimum Architecture](../architecture/adr-001-deterministic-core.md) 已获 Human Approval；仅适用于第一批 deterministic tranche，§10 不整体标记 `DESIGN RESOLVED`。
+
+---
+
+<a id="implementation-ready-minimum"></a>
+
+### 10.1 Implementation-Ready Minimum（Issue #116）
+
+**Canonical concern:** IRM / Code Start Gate / first-tranche implementation authorization。
+**Verification base:** current `main @ 44da0a2a866f2e205d3b13a35c544f5c1243f2f3`。
+**Task:** [Issue #116](https://github.com/Cha-wei/cy-supply-chain-ai-copilot/issues/116)。
+
+#### A. Human Decision registration and authority
+
+- **IRM-1 = REGISTERED / Option ① — Two-stage Implementation-Ready Gate**，Human authority 来自 Issue #116 的 Human Decision。
+- **Architecture Option A = HUMAN APPROVED / REGISTERED**，依据本 Task 后续 Human 明确批准；批准内容与 Options / Trade-offs / Recommendation 的 canonical record 为 [ADR-001](../architecture/adr-001-deterministic-core.md)。
+- `IRM-1 approved ≠ Code Start Gate PASS ≠ unrestricted implementation authorization`。本 Gate Task 只改文档，不写 implementation code。
+- §1.20 是 Issue #112 closure 时点状态（当时 `Implementation authorization = NOT GRANTED`）；该 closure 本身仍不授权编码。本节登记 Issue #116 后的**唯一最新首批授权状态**，不回写历史 Human Decision / closure records。
+
+#### B. Stage A — First tranche and module boundaries
+
+完整 vertical-slice 方向仍为 Controlled JSON Snapshot → Import / Validate → Shortage Calculation → Procurement Recommendation → AI Explanation → Human Review / Modify / Approve / Reject → Audit Record。
+**本次首批授权严格小于该完整 slice：**
+
+```
+Snapshot loader → Validation → Canonical data objects
+→ Deterministic business rules → Procurement recommendation result
+```
+
+| Module / responsibility | Input → output | Canonical authority / failure boundary |
+| --- | --- | --- |
+| Snapshot loader / import | 受控 JSON package、明确 configured trusted input boundary → 同一 stable content view 的 package acceptance 或既有 rejection outcome | Snapshot / Import Contract §4.3.22 ～ §4.3.29，特别是 §4.3.28 C／D／D4；版本、路径、unknown content、strict parse、raw-byte integrity 不得跳过；未 Accepted 不建正常 Analysis Run |
+| Validation | accepted package evidence → field / relationship validation、capability readiness 与既有 issue semantics | Data Validation §4.4.2 ～ §4.4.13、§4.4.24 ～ §4.4.100；区分 package structural failure、capability unavailable 与 business DATA_INCOMPLETE，不新增业务 enum |
+| Canonical data objects | validated evidence、已批准 applicability / resolution context → canonical entities / associations 与 provenance | Canonical Data Model §4.1；Data Dictionary §4.2；Master Data Mapping §4.5.24 ～ §4.5.25；对象不是 DB schema，不猜真实 ERP source fields，不把 missing evidence 填成正常值 |
+| Deterministic business rules | 明确 analysis context 与所需 canonical evidence → requirement、inventory、substitute、inbound、shortage 与 applicable supplier-risk evidence | §2.1 ～ §2.7；遵守既有 grain、applicability、missing-data 和 failure isolation；不做 supplier ranking / selection，不让风险证据改写采购数量 |
+| Procurement recommendation result | 已批准 shortage / applicability / MOQ 结果 → 既有推荐数量、need date 与支持证据 | §2.5，特别是 §2.5.2 ～ §2.5.3／§2.5.15；仅 SHORTAGE 产生适用 numeric recommendation，DATA_INCOMPLETE 不猜数量；结果不是 ApprovedPurchaseQty 或 PurchaseOrderQty |
+
+表内 standalone authority 均经 §4 routing 指向六份 canonical specs；本节只划定实现职责，不重写业务／数据 policy。依赖方向、CLI 与 in-memory boundary 由 ADR-001 管理；真实 source extraction / ERP Adapter 不属于该 loader。
+
+**本批明确不包含：** Web、AI explanation / LLM / Agent framework、Tool protocol 实现、HITL workflow、RBAC / real permission enforcement、secrets integration、persistent Audit、database / persistent business state、real ERP Adapter、production write-back、P1。内存中的 package / rule / evidence linkage 是现有确定性结果义务，不等于实现持久 Audit。
+
+#### C. Minimum deterministic acceptance boundary
+
+下列是首批实现必须满足的验证义务，不是已执行测试结果，不构成完整 §9 closure：
+
+| Acceptance obligation | Required evidence / oracle |
+| --- | --- |
+| Controlled input conformance | SIMULATED fixtures 覆盖合法与非法 manifest／版本／路径／unknown member／duplicate key／字段表示／artifact integrity；按 §4.3.25 与 §4.3.28 精确预期 disposition；trust boundary 缺失或不可验证时 fail closed |
+| Atomicity / immutability / provenance | 不出现 partial accepted mixture；每次正常 analysis 只依赖一个 accepted package；保留 raw-byte / package / source-evidence linkage；mutation 与 trusted reuse 失败遵循 §4.3.28 C；不以 package ID 代替 Analysis Run ID |
+| Validation and failure isolation | absent 与 empty dataset 区分；package failure、capability unavailable、business DATA_INCOMPLETE 分层验证；仅影响 canonical policy 指定范围，不能把部分可靠 evidence 升级为完整结论 |
+| Business-rule equivalence | 依 §2.1 ～ §2.7 的公式、grain、适用条件与边界建立精确 expected outputs；包括需求／损耗、库存／安全库存、替代、有效在途、shortage 分类、FirstShortageDate、MOQ 与 supplier-risk evidence；不自行引入业务默认值 |
+| Exact numeric semantics | 沿用 §4.3.25 C-5 与 §2 已批准运算语义；验证表示、计算及输出无非授权 rounding / quantization / truncation；Decimal 默认 context 不能作为 oracle 或业务 policy |
+| Repeatability / integration | 同一受控输入、规则与明确 analysis context 产生一致业务结果；从 loader 到 recommendation 的 integration evidence 可追溯到 canonical rules；运行 identity 等非业务元数据不冒充业务差异 |
+| Isolation / no side effects | 核心可直接调用测试，不依赖 CLI／网络／LLM／数据库；无 source write、审批状态变化或 persistent audit；不得用 stub 的成功返回伪造这些行为已完成 |
+
+验证应随被实现行为一同建立，不等完整 slice 才测试。所有 test inputs 明确标记 SIMULATED；不引入真实客户 baseline、KPI、精度阈值、最终 AI Eval framework 或 business-value claim。若实际编码发现 canonical semantics 缺口，暂停相关行为并升级，禁止实现者猜测。
+
+#### D. Stage B — Just-in-time design blockers
+
+| Concern | Mandatory blocker point | Minimum design before that behavior |
+| --- | --- | --- |
+| §6 HITL | 实现 Review / Modify / Approve / Reject 之前 | 状态、允许／非法转换、重新审批、external execution boundary |
+| §7 Permission & Security | 实现 real user / role / data scope / Tool permission enforcement 或 secret-bearing integration 之前 | 所涉 role／scope／permission／secret contract；保持已 resolved Read / Write Boundary |
+| §8 Audit & Observability | 持久记录 Human decisions、Tool calls、rule executions、failures 或 approval history 之前 | 所需 event set、actor／target／decision／rule-version／evidence linkage 与 failure traceability |
+| §9 Test & AI Eval | 宣称完整 vertical slice complete / validated 之前 | applicable deterministic、integration、AI evidence-fidelity、HITL／acceptance evidence；首批自身测试仍按 C 同步执行 |
+| §10 further Architecture | 引入 ADR-001 未覆盖的长期技术选择之前 | 对真实 choice 执行 Options → Trade-offs → Recommendation → Human Approval → ADR |
+
+`Design must not lag behind the behavior it constrains.` 无关 downstream pending 不阻塞更早的 deterministic code；也不得用 Stage A PASS 越过这些 blocker。§6 ～ §9 均不因此完整 closure。
+
+#### E. CSG-1 ～ CSG-8 verification
+
+**Current-main re-check：** §1 已 resolved；§2／§3／§5 保持 Human-approved resolved design；§4 六份 standalone authority、FROZEN inputs 与 §6 ～ §10 独立边界已核对。当前 main 尚无 ADR 的缺口由本次 Human-approved ADR-001 补足，不通过重写 §2 ～ §5 policy 解决。既有 JSON 决策、首批只读／确定性范围和 §1 conceptual closure 一致；未发现需要新增业务语义的 blocking conflict。
+
+| Criterion | Result | Exact authority / rationale |
+| --- | --- | --- |
+| CSG-1 — Scope integrity | PASS | §1 final wording；本节 B；§3.6 ～ §3.8：首批在 P0 内，不含 P1、生产写回或真实 ERP 假设 |
+| CSG-2 — Business-rule readiness | PASS | §2.1 ～ §2.7；Data Validation §4.4.2 ～ §4.4.13：所需规则 resolved，missing / invalid / fail-safe 语义可追溯，不需猜测 |
+| CSG-3 — Data / import readiness | PASS | §4 routing；六份 standalone specs；Snapshot / Import Contract §4.3.25／§4.3.28／§4.3.29；Master Data Mapping §4.5.24 ～ §4.5.25：canonical input 与 resolution authority 已有，真实 ERP fields 不进入本批 |
+| CSG-4 — AI / Tool compatibility | PASS | §5.6 ～ §5.10／§5.15；本节 B；ADR-001：计算与事实在 deterministic core，首批不依赖 LLM／Agent／Tool protocol 选型 |
+| CSG-5 — Minimum Architecture authority | PASS | ADR-001 Approved decision / approval evidence：Human 明确批准 Python local core、thin CLI、in-memory 与限定边界；不留需实现者自行选择的本批长期 Architecture decision |
+| CSG-6 — Testability | PASS | 本节 C；§2 business rules、§4.3.28、Data Validation：controlled input 到 recommendation 可依 canonical oracle 作确定性验证；无 runtime 已通过或业务成功声明 |
+| CSG-7 — Downstream isolation | PASS | 本节 B／D；ADR-001 dependency / interaction boundary：不实现未决 HITL、权限、persistent audit、AI 行为；JIT blocker 在对应行为前生效 |
+| CSG-8 — Repository authority / authorization | PASS | IRM-1 与 Architecture approval 见 A／ADR-001；CSG-1 ～ CSG-7 均 PASS，本节 F 仅授权 B 定义的第一批，未发放全局 implementation authorization |
+
+**Code Start Gate = PASS（8 / 8 PASS，0 FAIL）。** 这是 design-readiness Gate，不是 implementation / runtime validation。任一 mandatory criterion FAIL ⇒ Code Start Gate FAIL、implementation NOT AUTHORIZED；不允许首批内部 partial authorization，除非更小 tranche 被明确重新定义并批准。
+
+#### F. Current scoped authorization / next gate
+
+```
+IRM-1                         = REGISTERED（Two-stage gate）
+Architecture Option A         = HUMAN APPROVED / ADR-001 ACCEPTED
+Code Start Gate               = PASS（CSG-1 ～ CSG-8 全部 PASS）
+First deterministic tranche   = IMPLEMENTATION AUTHORIZED（仅本节 B）
+Implementation status         = NOT STARTED
+Unrestricted implementation   = NOT AUTHORIZED
+§6 ～ §9 full closure          = NOT CLAIMED（JIT blockers 见 D）
+§10 overall resolved          = NOT CLAIMED
+POC Design v0.2                = DRAFT
+POC success                   = NOT CLAIMED
+```
+
+本 scoped authorization 仅属于 Issue #116 的正式变更；本 PR 合入 main 前，main 仍以原有正式状态为准，不能把待审分支状态说成 main 已授权。Gate Task 本身不写代码。下一步为本变更的 Independent Review 与 Human merge decision；后续首批 coding task 仍须满足 DoR、Required Gates 和上述 JIT boundaries。
 
 ---
 
@@ -6471,7 +6575,7 @@ Options
 
 ## Explicit Non-Decisions
 
-当前**明确尚未决定**：
+当前**明确尚未决定**（下列是更广泛系统选择；首批 local core／thin CLI／in-memory 的限定选择已由 ADR-001 决定，不构成全项目选型）：
 
 - backend framework
 - frontend framework
@@ -6510,7 +6614,7 @@ Options
 
 - 本文档为 **POC Design 阶段的 Canonical Source**。
 - 本文档**不修改、不重新解释**任何 `FROZEN` Discovery 内容。
-- 本文档**不包含**任何技术栈选择；**尚未形成**正式的 Architecture Decision 或 ADR。
+- 本文档通过 §10 引用 Human-approved ADR-001，仅选择第一批 deterministic tranche 的最小 Architecture；不代表全项目或生产技术栈已决定。
 - 本文档当前**包含**已经 Human-approved、且状态为 `DESIGN RESOLVED` 的 P0 business rules。
 - `DESIGN RESOLVED` **不代表** `IMPLEMENTED`，**不代表** `TESTED`，也**不代表** `APPROVED` 或 `FROZEN`。
 - **尚未解决**的设计项继续保持 `DESIGN PENDING` / `NOT STARTED`，**不得视为已完成**。
