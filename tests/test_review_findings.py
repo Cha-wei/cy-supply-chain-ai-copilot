@@ -27,6 +27,7 @@ from snapshot_loader import (
     load_package,
 )
 from snapshot_loader import loader as loader_module
+from snapshot_loader import trust as trust_module
 from snapshot_loader.constants import (
     MANDATORY_LAYER1_CHECKS,
     RECORD_META_NAMESPACE,
@@ -127,8 +128,204 @@ class F3EmptyRecordTests(ReviewFindingTestCase):
         self.assertEqual(report.disposition, DISPOSITION_ACCEPTED)
 
 
+class F2RequiredCarrierPresenceTests(ReviewFindingTestCase):
+    """Human Decision -- the approved Manifest semantic set must actually be carried.
+
+    Presence is required at Layer 1; value semantics are not validated.  ``CF-1`` is
+    preserved: ``completeness_state`` presence is required, but its value does not
+    gate acceptance.
+    """
+
+    PACKAGE_CARRIERS = (
+        "snapshot_package_id",
+        "contract_version",
+        "created_at",
+        "environment",
+        "evidence_classification",
+        "completeness_state",
+    )
+    ENTRY_CARRIERS = (
+        "role",
+        "artifact",
+        "record_count",
+        "provenance_ref",
+        "integrity_evidence",
+    )
+
+    def _without_package_carrier(self, name: str, *, run: str):
+        built = valid_package(self.boundary / f"pkg-{run}", boundary_root=self.boundary)
+        document = json.loads(built.manifest_path.read_text(encoding="utf-8"))
+        document["package"].pop(name)
+        built.manifest_path.write_bytes(encode_json(document))
+        return self.load(built.root)
+
+    def _without_entry_carrier(self, name: str, *, run: str):
+        built = valid_package(self.boundary / f"pkg-{run}", boundary_root=self.boundary)
+        document = json.loads(built.manifest_path.read_text(encoding="utf-8"))
+        document["datasets"][0].pop(name)
+        built.manifest_path.write_bytes(encode_json(document))
+        return self.load(built.root)
+
+    def test_missing_created_at_is_rejected(self) -> None:
+        report = self._without_package_carrier("created_at", run="created")
+        self.assertEqual(report.disposition, DISPOSITION_REJECTED)
+        self.assertTrue(
+            any(issue.location == "package.created_at" for issue in report.issues)
+        )
+
+    def test_missing_environment_is_rejected(self) -> None:
+        report = self._without_package_carrier("environment", run="env")
+        self.assertEqual(report.disposition, DISPOSITION_REJECTED)
+        self.assertTrue(
+            any(issue.location == "package.environment" for issue in report.issues)
+        )
+
+    def test_missing_evidence_classification_is_rejected(self) -> None:
+        report = self._without_package_carrier("evidence_classification", run="evclass")
+        self.assertEqual(report.disposition, DISPOSITION_REJECTED)
+        self.assertTrue(
+            any(
+                issue.location == "package.evidence_classification"
+                for issue in report.issues
+            )
+        )
+
+    def test_missing_completeness_state_is_rejected(self) -> None:
+        # presence required ...
+        report = self._without_package_carrier("completeness_state", run="complete")
+        self.assertEqual(report.disposition, DISPOSITION_REJECTED)
+        self.assertTrue(
+            any(issue.location == "package.completeness_state" for issue in report.issues)
+        )
+
+    def test_completeness_state_presence_required_but_value_does_not_gate(self) -> None:
+        # ... while CF-1 is preserved: the *value* does not participate in the gate.
+        for value in ("COMPLETE", "IN_PROGRESS", "anything-at-all", ""):
+            with self.subTest(value=value):
+                built = valid_package(
+                    self.boundary / f"pkg-cf1-{value or 'empty'}",
+                    boundary_root=self.boundary,
+                )
+                document = json.loads(built.manifest_path.read_text(encoding="utf-8"))
+                document["package"]["completeness_state"] = value
+                built.manifest_path.write_bytes(encode_json(document))
+                report = self.load(built.root)
+                self.assertEqual(
+                    report.disposition,
+                    DISPOSITION_ACCEPTED,
+                    msg=f"completeness_state value {value!r} must not gate acceptance",
+                )
+
+    def test_missing_dataset_entry_provenance_ref_is_rejected(self) -> None:
+        report = self._without_entry_carrier("provenance_ref", run="provref")
+        self.assertEqual(report.disposition, DISPOSITION_REJECTED)
+        self.assertTrue(
+            any(issue.location == "datasets[0].provenance_ref" for issue in report.issues)
+        )
+
+    def test_missing_dataset_entry_role_is_rejected(self) -> None:
+        report = self._without_entry_carrier("role", run="role")
+        self.assertEqual(report.disposition, DISPOSITION_REJECTED)
+
+    def test_missing_dataset_entry_artifact_is_rejected(self) -> None:
+        report = self._without_entry_carrier("artifact", run="artifact")
+        self.assertEqual(report.disposition, DISPOSITION_REJECTED)
+
+    def test_missing_dataset_entry_record_count_is_rejected(self) -> None:
+        report = self._without_entry_carrier("record_count", run="recordcount")
+        self.assertEqual(report.disposition, DISPOSITION_REJECTED)
+
+    def test_missing_dataset_entry_integrity_evidence_is_rejected(self) -> None:
+        report = self._without_entry_carrier("integrity_evidence", run="integrity")
+        self.assertEqual(report.disposition, DISPOSITION_REJECTED)
+
+    def test_presence_only_no_value_semantics_invented(self) -> None:
+        # The Decision authorises presence + approved location only.  Arbitrary but
+        # present values must therefore not be rejected by any invented value rule.
+        built = valid_package(self.boundary / "pkg-values", boundary_root=self.boundary)
+        document = json.loads(built.manifest_path.read_text(encoding="utf-8"))
+        document["package"]["created_at"] = "not-a-timestamp"
+        document["package"]["environment"] = "some-environment"
+        document["package"]["evidence_classification"] = "some-classification"
+        document["datasets"][0]["provenance_ref"] = "opaque-provenance-reference"
+        built.manifest_path.write_bytes(encode_json(document))
+
+        report = self.load(built.root)
+        self.assertEqual(
+            report.disposition,
+            DISPOSITION_ACCEPTED,
+            msg="no new value semantic may be introduced by the presence Decision",
+        )
+
+    def test_required_carrier_checks_are_emitted_and_passed_on_success(self) -> None:
+        built = valid_package(self.boundary / "pkg-ok", boundary_root=self.boundary)
+        report = self.load(built.root)
+        states = {check.name: check.state for check in report.collector.checks}
+        self.assertEqual(states["manifest.package_block_required_carriers"], "passed")
+        self.assertEqual(states["datasets.entry_required_carriers"], "passed")
+        self.assertIn("manifest.package_block_required_carriers", MANDATORY_LAYER1_CHECKS)
+        self.assertIn("datasets.entry_required_carriers", MANDATORY_LAYER1_CHECKS)
+
+
 class F4StableViewMutationTests(ReviewFindingTestCase):
     """F4 -- a post-read, pre-accept in-place mutation must be detected."""
+
+    def test_undeclared_root_file_added_after_listing_is_not_accepted(self) -> None:
+        # Window: the root listing has already been taken, declared file bytes never
+        # change, and an undeclared entry appears before acceptance concludes.  The
+        # final root content-set re-check must catch it.
+        built = valid_package(self.boundary / "pkg-root-listing", boundary_root=self.boundary)
+        original_list = trust_module.list_root_entries
+        calls = {"count": 0}
+        extra = built.root / "extra.json"
+
+        def listing_with_injected_extra(root):
+            names = original_list(root)
+            if names is not None:
+                calls["count"] += 1
+                # Append on every call after the first: this simulates a changed
+                # directory every time the loader re-scans it, which is what a
+                # concurrent writer that keeps adding files would look like.  The
+                # point of the final check is that it is consulted at all.
+                if calls["count"] >= 2:
+                    if not extra.exists():
+                        extra.write_bytes(encode_json([{"plant_id": "INJECTED"}]))
+                    if "extra.json" not in names:
+                        names = names + ["extra.json"]
+            return names
+
+        trust_module.list_root_entries = listing_with_injected_extra
+        loader_module.list_root_entries = listing_with_injected_extra
+        self.addCleanup(setattr, trust_module, "list_root_entries", original_list)
+        self.addCleanup(setattr, loader_module, "list_root_entries", original_list)
+
+        report = self.load(built.root)
+
+        self.assertGreaterEqual(calls["count"], 2, "loader never re-listed the root")
+        self.assertNotEqual(
+            report.disposition,
+            DISPOSITION_ACCEPTED,
+            msg="an undeclared root entry added after listing must not be accepted",
+        )
+        self.assertTrue(
+            any(
+                issue.location == "package"
+                and "root content set changed" in issue.detail
+                for issue in report.issues
+            ),
+            msg=f"expected a final root content-set issue, got {report.issues}",
+        )
+
+    def test_final_root_content_set_check_passes_for_an_unchanged_package(self) -> None:
+        built = valid_package(self.boundary / "pkg-root-ok", boundary_root=self.boundary)
+        report = self.load(built.root)
+        self.assertEqual(report.disposition, DISPOSITION_ACCEPTED)
+        states = {check.name: check.state for check in report.collector.checks}
+        self.assertEqual(states["package.final_root_content_set"], "passed")
+
+    def test_final_root_content_set_is_mandatory(self) -> None:
+        self.assertIn("package.final_root_content_set", MANDATORY_LAYER1_CHECKS)
+
 
     def test_manifest_mutation_after_read_is_detected(self) -> None:
         built = valid_package(self.boundary / "pkg", boundary_root=self.boundary)

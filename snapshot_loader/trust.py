@@ -281,15 +281,20 @@ def read_file_bytes(path: Path) -> tuple[bytes, FileView] | None:
     return raw, view
 
 
-def list_root_entries(root: Path) -> tuple[str, ...] | None:
-    """Return the sorted package-root entry names, or ``None`` when unlistable."""
+def list_root_entries(root: Path) -> list[str] | None:
+    """Return a freshly built sorted list of package-root entry names.
+
+    A **new list object** is returned on every call, and the underlying directory is
+    re-scanned each time.  Callers therefore cannot accidentally compare a cached
+    listing against itself, which matters for the acceptance-time stable-view checks
+    (``§4.3.28`` C.2 ``Decision 10A``).  ``None`` means the directory was unlistable.
+    """
 
     try:
         with os.scandir(root) as iterator:
-            names = sorted(entry.name for entry in iterator)
+            return [entry.name for entry in iterator]
     except OSError:
         return None
-    return tuple(names)
 
 
 def compute_view_digest(files: tuple[FileView, ...]) -> str:
@@ -383,8 +388,8 @@ class AcceptedPackage:
                 collector=collector,
             )
 
-        expected_names = tuple(sorted(view.name for view in self.content_view.files))
-        if names != expected_names:
+        expected_names = sorted(view.name for view in self.content_view.files)
+        if sorted(names) != expected_names:
             collector = collector.failed(
                 "trusted_reuse.directory_listing_unchanged",
                 "package root contents changed after acceptance",

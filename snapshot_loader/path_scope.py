@@ -16,11 +16,24 @@ the serialization extension is ``.json``, and ``manifest.json`` is a reserved na
 
 This module implements **only** those registered rules.  It deliberately does not
 invent platform-specific filename policy: there is no maximum filename length, no
-Windows reserved-device-name list, no Windows illegal-character set, and no
-"trailing dot/space" or "surrounding whitespace" rule.  Any such extra rejection
-would be an unapproved acceptance criterion, and a filename the host filesystem
-cannot represent is reported as an absent/unreadable declared artifact (``IC-14``)
-rather than as a contract violation here.
+Windows reserved-device-name list, no Windows illegal-character set, no "trailing
+dot/space" or "surrounding whitespace" rule, no "must have a non-empty stem" rule,
+and no rule that rejects a filename merely for starting with ``..``.  Any such extra
+rejection would be an unapproved acceptance criterion, and a filename the host
+filesystem cannot represent is reported as an absent/unreadable declared artifact
+(``IC-14``) rather than as a contract violation here.
+
+One behaviour needs an explicit boundary statement because it is **not** a registered
+contract criterion:
+
+```
+filename containing a control character  ->  rejected (CONTROL_CHARACTER)
+```
+
+Control characters are disallowed because they cannot be reliably compared or
+represented.  This is a documented permissive-by-default implementation behaviour,
+not a canonical acceptance criterion; if a wider tolerance is ever wanted, this is
+the single place to change and it requires no contract amendment.
 
 Because ``PN-1`` performs no normalisation, a value that is not literally a plain
 filename is rejected outright rather than repaired into one.  Any accepted
@@ -99,9 +112,11 @@ def validate_artifact_filename(reference: object) -> FilenameRejection | None:
                 f"separator {separator!r} is not allowed",
             )
 
-    if reference == "." or reference.startswith(".."):
+    if reference in {".", ".."}:
         return FilenameRejection(
-            "DOT_SEGMENT", "'.' / '..' segments are not allowed in artifact references"
+            "DOT_SEGMENT",
+            "'.' and '..' are not filenames; a '..' *segment* is already rejected by "
+            "the separator rule above",
         )
 
     if os.path.isabs(reference):
@@ -118,7 +133,8 @@ def validate_artifact_filename(reference: object) -> FilenameRejection | None:
     if _has_control_characters(reference):
         return FilenameRejection(
             "CONTROL_CHARACTER",
-            "control characters are not allowed in a filename",
+            "filenames containing control characters are not accepted (implementation "
+            "behaviour, not a registered contract criterion)",
         )
 
     if not reference.endswith(ARTIFACT_EXTENSION):
@@ -134,10 +150,10 @@ def validate_artifact_filename(reference: object) -> FilenameRejection | None:
             f"{MANIFEST_FILENAME!r} is reserved for the Snapshot Manifest",
         )
 
-    if reference == ARTIFACT_EXTENSION:
-        return FilenameRejection(
-            "INVALID_FILENAME", "artifact filename has no name portion"
-        )
+    # No "non-empty stem" rule: canonical authority registers only
+    # ``extension = .json`` (§4.3.23 D).  A literal ``".json"`` therefore satisfies
+    # the registered rule and is accepted; requiring a stem would be an unapproved
+    # acceptance criterion.
 
     return None
 

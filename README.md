@@ -104,17 +104,38 @@ python -m unittest tests.test_layer1_acceptance -v
 
 ```
 .github/workflows/ci.yml 当前只有 Foundation checks。
-Layer-1 loader CI test job = NOT PRESENT IN THIS BRANCH；已由 Human Decision
-拆出为 immediately-following mandatory minimal change。
+Layer-1 loader CI test job = NOT PRESENT IN PR #119；已由 Human Decision
+拆出为 immediately-following mandatory change（Issue #120）。
 ```
 
-因此：**不得**声称 GitHub CI 已运行本文的 146 个测试、Layer-1 Python CI job PASS、
+因此：**不得**声称 GitHub CI 已运行本文的 deterministic tests、Layer-1 Python CI job PASS、
 或 CI extension 已完成。
 
 当前可声称的验证证据只有两类：
 
-- **local**：`146 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures）；
-- **remote**：existing `Foundation checks` = PASS。
+- **local**：`182 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures）；
+- **remote**：existing `Foundation checks` = PASS（`b523477` 上的 Actions run 35991140000）。
+
+本文不登记动态的 PR head SHA；以 PR #119 当前 head 为准。
+
+### Manifest carrier presence（Layer-1 requirement）
+
+依 Human Decision，POC v0.2 Layer-1 **要求 presence**：
+
+- `"package"` block 必须包含 `snapshot_package_id` / `contract_version` / `created_at` /
+  `environment` / `evidence_classification` / `completeness_state`；
+- 每个 included dataset entry 必须包含 `role` / `artifact` / `record_count` /
+  `provenance_ref` / `integrity_evidence`。
+
+```
+presence required ≠ semantic value validation
+```
+
+Layer 1 只判断 carrier 是否存在、是否位于 approved group / entry、以及既有 structural
+shape 是否可判定；**不**判断 carrier 的 value semantic。`CF-1` 保持：
+`completeness_state` 的 **presence** 是 REQUIRED，但其 **value 不参与** Layer-1 gate。
+
+`provenance_ref` **无** value 格式约束（canonical authority 未登记其 representation）。
 
 ### CLI 用法
 

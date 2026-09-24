@@ -59,10 +59,21 @@ class FilenameRejectionTests(unittest.TestCase):
         self.assert_rejected(str(PureWindowsPath("sub", "req.json")), "PATH_SEPARATOR")
 
     def test_dot_segments(self) -> None:
+        # Only the literal "." / ".." values and real traversal (a "." or ".."
+        # *segment*, which requires a separator) are rejected.  PN-1 registers no
+        # rule against a filename that merely starts with "..".
+        self.assert_rejected(".", "DOT_SEGMENT")
         self.assert_rejected("..", "DOT_SEGMENT")
         self.assert_rejected("../requirement.json", "PATH_SEPARATOR")
         self.assert_rejected("./requirement.json", "PATH_SEPARATOR")
-        self.assert_rejected("..requirement.json", "DOT_SEGMENT")
+        self.assert_rejected(".\\requirement.json", "PATH_SEPARATOR")
+
+    def test_double_dot_prefix_is_a_literal_filename_not_traversal(self) -> None:
+        # "..requirement.json" is a single literal filename with no separator, so it
+        # contains no "." / ".." segment and must not be rejected as traversal.
+        self.assert_accepted("..requirement.json")
+        self.assert_accepted("...json")
+        self.assert_accepted("..a.json")
 
     def test_uri_references(self) -> None:
         self.assert_rejected("file:///tmp/requirement.json", "URI_REFERENCE")

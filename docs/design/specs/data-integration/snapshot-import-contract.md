@@ -6299,6 +6299,87 @@ filename 不得成为 role 的 authoritative source
 Role semantic recognition、capability-to-role requirement 与 role availability
 属后续 validation ／ **Capability Readiness**。
 
+**D.1 Manifest semantic-set carrier presence（Human Decision：presence = REQUIRED）**
+
+`§4.3.8` ／ `§4.3.25 A` 要求 Manifest **实际承载**已批准的 semantic set。
+本次 Human Decision 只批准 **carrier ／ property presence ＋ approved carrier location**，
+并据此登记：
+
+```
+POC v0.2 Layer-1 carrier presence = REQUIRED
+```
+
+**`"package"` block 必须包含：**
+
+```
+snapshot_package_id
+contract_version
+created_at
+environment
+evidence_classification
+completeness_state
+```
+
+**每个 included dataset entry 必须包含：**
+
+```
+role
+artifact
+record_count
+provenance_ref
+integrity_evidence
+```
+
+**`provenance_ref` 不设 value 约束** —— current canonical authority **未**为其登记任何
+representation（URI ／ schema ／ 格式），因此本层**只**要求其存在，**不得**新增格式约束。
+
+**本次**未**授权**新增以下规则（保持 `NOT DEFINED`）：
+
+```
+created_at 的新 timestamp format ／ timezone policy
+environment 的新 enum
+evidence_classification 的新 enum
+provenance_ref 的新 URI ／ schema ／ 格式约束
+completeness_state 的新 vocabulary 或 final-state gate
+任何新的 business validation ／ capability rule
+```
+
+**`CF-1` 保持（`§4.3.28` B.3）：**
+
+```
+"completeness_state" = Manifest-declared metadata only
+value 不直接参与 Layer-1 acceptance gate
+```
+
+**但 presence 是 REQUIRED：**
+
+```
+property presence = REQUIRED
+presence required ≠ semantic value gates acceptance
+```
+
+**Layer 边界（不得越过）：**
+
+Layer 1 只负责：
+
+```
+required carrier exists
+carrier 在 approved group ／ entry 中
+existing structural shape 可判定
+```
+
+以下 concern **不**因本登记而被拉入 Layer 1：
+
+```
+business requiredness（超出 presence 的部分）
+capability readiness
+semantic resolution
+provenance sufficiency
+business data completeness
+per-role field applicability
+downstream derived result policy
+```
+
 **E. Decision 6 明确 deferred 的问题（本层**未**决定，且**不**构成 Layer-1 blocker）**
 
 ```

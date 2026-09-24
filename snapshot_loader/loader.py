@@ -55,6 +55,8 @@ from .constants import (
     PACKAGE_SCOPED_PROPERTIES,
     RECORD_META_NAMESPACE,
     REQUIRED_ASSOCIATION_MEMBERS,
+    REQUIRED_DATASET_ENTRY_PROPERTIES,
+    REQUIRED_PACKAGE_BLOCK_PROPERTIES,
     SUPPORTED_CONTRACT_VERSION,
     V02_CANONICAL_RECORD_PROPERTY_SET,
 )
@@ -281,6 +283,26 @@ def _accept(
     package_id = package_block.get("snapshot_package_id")
     contract_version = package_block.get(CONTRACT_VERSION_PROPERTY)
 
+    # Human Decision: the approved semantic set must actually be carried by the
+    # package block at Layer 1.  Presence only -- value semantics are not validated
+    # here (``CF-1``: ``completeness_state`` presence is required, but its value does
+    # not gate acceptance).
+    collector = _check_required_carriers(
+        carrier=package_block,
+        required=REQUIRED_PACKAGE_BLOCK_PROPERTIES,
+        check_name="manifest.package_block_required_carriers",
+        location_prefix=GROUPING_PACKAGE,
+        missing_detail=(
+            "required package-scoped Manifest carrier is absent; the approved semantic "
+            "set must be carried by the Manifest (presence is required at Layer 1; no "
+            "value semantic is validated here)"
+        ),
+        design_reference=(
+            "Human Decision (Manifest semantic-set carrier presence) + §4.3.8 / §4.3.25 A"
+        ),
+        collector=collector,
+    )
+
     if not isinstance(package_id, str) or package_id == "":
         collector = collector.failed(
             "manifest.package_identity", "snapshot_package_id is missing or not a string"
@@ -495,6 +517,7 @@ def _mark_manifest_dependents_not_evaluable(
     for name in (
         "manifest.datasets_collection",
         "datasets.entry_shape",
+        "datasets.entry_required_carriers",
         "datasets.role_uniqueness",
         "datasets.artifact_reference_valid",
         "datasets.artifact_uniqueness",
@@ -509,6 +532,37 @@ def _mark_manifest_dependents_not_evaluable(
     ):
         collector = collector.not_evaluable(name, reason)
     return collector
+
+
+def _check_required_carriers(
+    *,
+    carrier: JsonObject,
+    required: tuple[str, ...],
+    check_name: str,
+    location_prefix: str,
+    missing_detail: str,
+    design_reference: str,
+    collector: IssueCollector,
+) -> IssueCollector:
+    """Verify that every registered carrier property is present at ``carrier``.
+
+    Presence only (Human Decision: Manifest semantic-set carrier presence = REQUIRED
+    at Layer 1).  Nothing about the property's *value* is decided here: value
+    semantics, business requiredness beyond presence, applicability, semantic
+    resolution and capability readiness remain Layer 2-4 concerns.
+    """
+
+    missing = [name for name in required if name not in carrier]
+    if not missing:
+        return collector.passed(check_name)
+
+    collector = collector.failed(check_name, f"missing={missing!r}")
+    return collector.issue_many(
+        [(f"{location_prefix}.{name}", missing_detail) for name in missing],
+        affected_evidence=location_prefix,
+        design_reference=design_reference,
+        consequence_context="Package rejected",
+    )
 
 
 def _check_manifest_structure(
@@ -588,6 +642,7 @@ def _check_dataset_entries(
     datasets: list[Any], collector: IssueCollector
 ) -> tuple[tuple[_DatasetEntry, ...], IssueCollector]:
     entries: list[_DatasetEntry] = []
+    entry_carrier_failures = 0
 
     for index, raw_entry in enumerate(datasets):
         location = f"{GROUPING_DATASETS}[{index}]"
@@ -629,6 +684,36 @@ def _check_dataset_entries(
         artifact = raw_entry.get("artifact")
         declared_count = _as_record_count(raw_entry.get("record_count"))
         integrity = raw_entry.get("integrity_evidence")
+
+        # Human Decision: every included dataset entry must carry the approved
+        # dataset-entry semantic set.  Presence only: ``provenance_ref`` presence is
+        # required, while its value format is not constrained because no canonical
+        # authority registers a ``provenance_ref`` representation.
+        missing_entry_carriers = [
+            name for name in REQUIRED_DATASET_ENTRY_PROPERTIES if name not in raw_entry
+        ]
+        if missing_entry_carriers:
+            entry_carrier_failures += 1
+            collector = collector.failed(
+                f"datasets.entry_required_carriers:{index}",
+                f"missing={missing_entry_carriers!r}",
+            )
+            collector = collector.issue_many(
+                [
+                    (
+                        f"{location}.{name}",
+                        "required dataset-entry carrier is absent; every included "
+                        "dataset entry must carry the approved semantic set (presence "
+                        "is required at Layer 1; no value semantic is validated here)",
+                    )
+                    for name in missing_entry_carriers
+                ],
+                affected_evidence=location,
+                design_reference=(
+                    "Human Decision (Manifest semantic-set carrier presence) + §4.3.25 B"
+                ),
+                consequence_context="Package rejected",
+            )
 
         entry_valid = True
 
@@ -705,6 +790,15 @@ def _check_dataset_entries(
         for check in collector.checks
     ):
         collector = collector.passed("datasets.entry_shape")
+
+    collector = (
+        collector.failed(
+            "datasets.entry_required_carriers",
+            f"{entry_carrier_failures} entry/entries missing required carriers",
+        )
+        if entry_carrier_failures
+        else collector.passed("datasets.entry_required_carriers")
+    )
 
     return tuple(entries), collector
 
@@ -1401,6 +1495,51 @@ def _check_stable_view(
         return collector
 
     collector = collector.passed("package.stable_view_all_files_re_read")
+
+    # Final root content-set re-check.  Re-reading the declared files close the
+    # window for declared-file mutation, but not the window between the earlier root
+    # listing and this point: an *undeclared* entry added or removed in between would
+    # otherwise escape, because the declared file bytes would still match.  The set of
+    # root entries must therefore equal exactly what the accepted view allows.
+    expected_entries = sorted({MANIFEST_FILENAME} | set(read_views))
+    final_entries = list_root_entries(package_path)
+    if final_entries is None:
+        collector = collector.issue(
+            "package",
+            "package root could not be re-listed at the conclusion of acceptance, so "
+            "the accepted view cannot be confirmed",
+            blast_radius="whole package",
+            design_reference="§4.3.28 C.2 (Decision 10A) + IS-24",
+            consequence_context="Package not evaluable / fail closed",
+        )
+        collector = collector.failed(
+            "package.final_root_content_set",
+            "package root could not be re-listed",
+        )
+        return collector.failed(
+            "package.acceptance_time_stable_view",
+            "final root content set could not be confirmed",
+        )
+
+    if sorted(final_entries) != expected_entries:
+        collector = collector.issue(
+            "package",
+            "the package root content set changed during acceptance "
+            f"(accepted view allows={expected_entries!r}, observed={sorted(final_entries)!r})",
+            blast_radius="whole package",
+            design_reference="§4.3.28 C.2 (Decision 10A) + IS-24 + §4.3.28 A.2 (UX-A)",
+            consequence_context="Package not evaluable / fail closed",
+        )
+        collector = collector.failed(
+            "package.final_root_content_set",
+            "root entry set differs from the accepted view",
+        )
+        return collector.failed(
+            "package.acceptance_time_stable_view",
+            "the package root content set changed during acceptance",
+        )
+
+    collector = collector.passed("package.final_root_content_set")
 
     root_identity = physical_identity(package_path)
     if root_identity is None:

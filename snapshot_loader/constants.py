@@ -47,8 +47,40 @@ MANIFEST_TOP_LEVEL_PROPERTIES: tuple[str, ...] = (
     GROUPING_DATASETS,
 )
 
+# --- Human Decision: Layer-1 carrier presence = REQUIRED ------------------------
+#
+# The approved semantic set must actually be carried by the Manifest (§4.3.8 /
+# §4.3.25 A).  Layer 1 verifies **presence in the approved carrier location** only:
+# it does not validate the value semantics of these carriers.  In particular
+# ``CF-1`` is preserved -- ``completeness_state`` presence is required, but its value
+# does not gate acceptance.
+#
+# Where existing canonical authority already registers a representation, that
+# representation is enforced (``snapshot_package_id`` and ``contract_version`` as
+# exact JSON strings, ``record_count`` as a JSON integer, ``integrity_evidence`` as a
+# 64-character lowercase hex SHA-256 digest).  No other value rule is introduced.
+REQUIRED_PACKAGE_BLOCK_PROPERTIES: tuple[str, ...] = (
+    "snapshot_package_id",
+    "contract_version",
+    "created_at",
+    "environment",
+    "evidence_classification",
+    "completeness_state",
+)
+
 # --- §4.3.25 B: dataset entry literals -----------------------------------------
 DATASET_ENTRY_PROPERTIES: tuple[str, ...] = (
+    "role",
+    "artifact",
+    "record_count",
+    "provenance_ref",
+    "integrity_evidence",
+)
+
+#: Carriers that must be present on every included dataset entry (Human Decision).
+#: ``provenance_ref`` presence is required; its value format is **not** constrained,
+#: because no canonical authority registers a ``provenance_ref`` representation.
+REQUIRED_DATASET_ENTRY_PROPERTIES: tuple[str, ...] = (
     "role",
     "artifact",
     "record_count",
@@ -158,8 +190,10 @@ MANDATORY_LAYER1_CHECKS: frozenset[str] = frozenset(
         "manifest.package_identity",
         "manifest.contract_version_present",
         "manifest.contract_version_supported",
+        "manifest.package_block_required_carriers",
         "manifest.datasets_collection",
         "datasets.entry_shape",
+        "datasets.entry_required_carriers",
         "datasets.role_uniqueness",
         "datasets.artifact_reference_valid",
         "datasets.artifact_uniqueness",
@@ -171,6 +205,7 @@ MANDATORY_LAYER1_CHECKS: frozenset[str] = frozenset(
         "artifacts.record_count_consistency",
         "package.root_listable",
         "package.unreferenced_root_artifact",
+        "package.final_root_content_set",
         "package.acceptance_time_stable_view",
     }
 )
