@@ -123,29 +123,101 @@ AI **不可以**：
 
 ## 1. Design Goals & Scope
 
-> 本节待设计。以下为占位说明，**不重新定义 P0 / P1**。
+> **Current canonical wording（Issue #112）：** 以下四项依据 FROZEN Discovery、GSD-1 ～ GSD-7 与 current-main composition 定稿；S-1 ～ S-14 verification 全部 PASS，closure 见 §1.18 ～ §1.20。
+> **历史读取边界：** §1.1 ～ §1.17 的 Review、candidate、各 Issue 的 current-state / registration 时点记录保留；其中旧 PENDING / NOT AUTHORIZED / NOT EXECUTED 不代表本次 closure 后状态。已批准 Decision 与 §1.7 criteria 的约束继续有效；最新执行状态以 §1.20 为准。
 
 ### P0 设计目标
 
-`DESIGN PENDING`
+**Design Status:** `DESIGN RESOLVED`
 
-> P0 范围以 `FROZEN` Discovery Brief §11 为准（缺料分析 → 采购建议 → HITL）。本节**不重新定义 P0 / P1**，只登记待设计的设计目标。
+依据 [FROZEN Discovery Brief](../discovery/discovery-brief-v0.1.1.md) §10 ／ §11（FZ-1 ／ FZ-2），本 POC 的设计目标是：让 AI 基于企业已有生产计划、BOM、库存、在途采购与必要供应商信息，完成**受控**的跨系统数据获取，通过**确定性业务规则**计算缺料风险，生成**有数据依据、可解释、可追溯**的采购建议。
+
+P0 保持 **缺料分析 → 采购建议 → HITL** 单一闭环。AI 组织和解释确定性结果，只生成 **Procurement Request Draft**；Human 在 POC 内 Review / Modify / Approve / Reject，正式业务系统执行在 POC write boundary 之外（Discovery Brief §11；[FROZEN Discovery Validation](../discovery/discovery-validation-v0.1.md) VR-004 ／ VR-007；§3.6 ～ §3.8）。受控意味着只访问授权数据和工具；可解释意味着说明所用数据与风险依据；可追溯意味着可复现 Tool、数据、规则与建议形成过程。
+
+按 GSD-2 的 **strict limited-reference** 边界：§2 支撑确定性业务计算，§3 支撑受控系统／读写／草稿边界，§4 的六份 canonical specs 支撑数据／验证／映射／integration，§5 支撑 AI／确定性逻辑／Tool／Agent 职责。详细 authority 仍在这些章节及 §4 routing 指向的 specs；此处不复制公式、字段、contract 或 implementation detail，也不把 supporting design 提升为新目标或成功证据。
 
 ### POC 成功边界
 
-`DESIGN PENDING`
+**Design Status:** `DESIGN RESOLVED`
 
-> 成功标准以 `FROZEN` Discovery Brief §16 为准；失败条件以 §17 为准。
+继承 Discovery Brief §16 ／ §17，按 GSD-3（§1.13）采用三层责任／证据成熟度模型：
+
+- **Layer 1 — Design-time success boundary：** 定义目标、scope、确定性规则、受控系统／数据／AI 职责与安全、解释、追溯要求，以及 §6 ～ §9 应尊重的 dependency expectations；本层只能证明 design boundary defined。
+- **Layer 2 — Runtime / test evidence boundary：** 后续 implementation、integration 与 §9 需提供系统按批准设计实际运行的证据；本节不定义具体 test case、dataset、harness、threshold、rubric 或 scoring。
+- **Layer 3 — Business-value evidence boundary：** 后续需依据真实客户／流程 baseline 证明明确业务改善；模拟设计、Demo 可运行、单项 test pass 均不能替代该证据。
+
+**FROZEN §16 全部 success dimensions 的责任映射：** 三层不是互斥 bucket，同一维度可以同时有 design obligation 与 evidence obligation。
+
+| FROZEN dimension | Layer 1：设计责任 | Layer 2：未来 runtime / test evidence | Layer 3：业务价值关系 |
+| --- | --- | --- | --- |
+| 数据正确 | 受控且正确的数据来源，LLM 不创造库存／订单／价格事实；§3、§4、§5 | 证明实际数据获取、validation、mapping、import 符合批准设计 | 技术正确不单独证明业务改善 |
+| 计算正确 | §2 确定性规则；相同输入稳定、一致、可复现 | 证明实际实现与批准规则一致且结果可复现 | 计算通过不单独证明业务改善 |
+| 工具正确 | §5 授权 Tool 与 Agent 职责；无明显无意义或越权调用 | 证明 Tool selection / runtime behavior 正确、受控 | 调用通过不单独证明业务改善 |
+| 可解释 | 关键风险必须有数据依据与规则依据；§5 evidence fidelity | 证明解释不篡改结果、不静默补齐缺失／无效证据 | 解释效果的真实改善由业务 evidence 证明 |
+| 安全 | 未经人工批准禁止高风险写操作；当前 POC source WRITE = DENIED，人工批准也不解除该边界 | 证明 Human／workflow／permission 边界实际 enforce，fail-closed 有证据 | 安全控制不替代业务价值证明 |
+| 业务价值 | 保留至少一种明确改善的目标与 evidence obligation，不预设数值 | runtime evidence 可支撑业务评价，但不能单独证明真实收益 | 与当前流程比较，至少证明减少系统切换、减少人工汇总、降低分析时间、提高异常解释效率等一种明确改善；真实 KPI 数值须等待客户真实 baseline |
+
+**Failure / reassessment boundary（FROZEN §17，完整保留其条件语义）：** 以下是后续判断是否应继续扩大 POC／重新评估的条件，**不是已发生事实**：关键生产、BOM、库存和采购数据无法可靠获取；主数据无法建立稳定关联；现有 MRP / ERP 已能高效完成全部缺料分析时不应重复建设；业务发生频率极低可能导致投入回报不足；引入 Agent 后流程更复杂、执行步骤更多、业务人员负担反而增加时需要重新评估技术方案。这些条件不被删除、弱化或并入自创 success score。
+
+```
+Design closure
+≠ Implemented
+≠ Runtime validated / Tested
+≠ Business value proven / accepted
+≠ POC SUCCESS
+≠ Production-ready
+
+POC success = NOT CLAIMED
+```
+
+`POC SUCCESS` 是 evidence claim；后续须依 Human-approved acceptance / evidence policy，综合 applicable runtime-test evidence **＋** business-value evidence 与 FROZEN success dimensions 的满足情况。本节不创建最终 success gate，不宣称真实客户 baseline、usage frequency、adoption 或 business acceptance 已取得；FROZEN H3 / H4 状态不因 downstream simulated design 改变。
 
 ### In Scope
 
-`DESIGN PENDING`
+**Design Status:** `DESIGN RESOLVED`
+
+按 GSD-4（§1.14）组织，三类只用于明确业务能力、支撑责任与控制义务，不构成新授权：
+
+| Canonical category | 内容与 authority | 边界 |
+| --- | --- | --- |
+| P0 capability scope | 缺料分析、采购建议及风险证据、Procurement Request Draft 与 POC 内 Human Review / Modify / Approve / Reject；Discovery Brief §10 ／ §11，§2、§3.2 ／ §3.6 ～ §3.8、§5.3 ～ §5.4 ／ §5.15 | §2.7 Supplier Risk 只支撑 P0 风险证据，不是 P1 高级供应商比较／自动选择；§5.3 六类 SIMULATED questions 只解释 P0 outputs，不是 P1 广义自然语言供应链查询 |
+| Supporting infrastructure | Controlled Export / Snapshot、canonical data / dictionary、import / validation / mapping / Adapter conceptual boundary、Controlled Tool 与 Agent responsibility；Discovery Validation VR-007，§3、§4 routing 指向六份 canonical specs、§5.13 ～ §5.14 | 为既有 P0 提供支撑，不成为新 P0 capability；不选择技术组件，不授权 implementation |
+| Quality / safety boundary | 确定性、正确性、explainability、traceability、evidence fidelity、permission、fail-closed、auditability；Discovery Brief §10 ／ §16，§3.9 ～ §3.10、data-validation.md §4.4.2 ～ §4.4.13、§5.5 ～ §5.10、§1.14 GSD-4.3 | 是控制／证据义务，不是新业务场景；不定义 test harness / KPI / threshold，不推进 §7 ／ §9 ／ §10 |
+
+相关事实可以同时承担 supporting 与 quality obligation；上述表按主要职责定位，详细规则保持原 canonical authority，避免重复定义。
 
 ### Out of Scope
 
-`DESIGN PENDING`
+**Design Status:** `DESIGN RESOLVED`
 
-> P1 能力（RAG、高级供应商比较、自然语言供应链查询、自动报告）以 `FROZEN` Discovery Brief §12 为准。
+保持 **Out of Scope ≠ P1 ≠ Prohibited ≠ Deferred**（GSD-5，§1.15）。下表逐项以已批准 category semantics 与原始 authority 重新核验；**不采用**旧 §1.4 C 的固定 routing order、first-match 或互斥 bucket 规则，也不自动接受其 candidate placements。
+
+| Primary classification | 具体事项 | Canonical authority 与重新核验理由 |
+| --- | --- | --- |
+| Out of Scope | 完整 ERP / MRP 替代 | Discovery Brief §19 Scope Validation 明确 POC 不承担该职责；属于业务范围排除，不是待实现承诺 |
+| Out of Scope | 正式 ERP Purchase Request / Purchase Order execution、Production write-back 业务能力 | Discovery Brief §11 P0-3、Discovery Validation VR-007 C、§3.1 ～ §3.2 ／ §3.6 ～ §3.8；POC 提供 Draft／Human interaction，正式执行在外部 |
+| P1 | 企业知识库／RAG；高级供应商比较；自然语言供应链查询；自动供应链分析报告 | Discovery Brief §12 四项后续增强；不属于第一阶段 POC 成败核心，不提升为 P0，也不是永久排除或禁止 |
+| Prohibited | 绕过 Controlled Export 直连源系统／Production DB，扩大 source access | Discovery Validation VR-007、§3.3 ～ §3.4 ／ §3.10；当前明确禁止的访问路径，不是普通 Deferred backlog |
+| Prohibited | 执行 source-system write／Production write API，AI Approve／Formal Submit／Create Purchase Order／Override Approval，绕过 Human／workflow／permission boundary | Discovery Validation VR-004 ／ VR-007、§3.5 ／ §3.7 ～ §3.9、§5.10 ／ §5.15；当前行为禁止；Human 在 POC Approve 不授予生产执行能力 |
+| Prohibited | LLM 自行创造结构化业务事实、改写确定性结果、以猜测或旧聊天伪装当前事实、越权调用 Tool | Discovery Brief §16、§5.6 ～ §5.10 ／ §5.12 ～ §5.14；已批准 hard boundaries，不新增禁止项 |
+| Prohibited | 将 SIMULATED 证据表述为真实客户／企业事实 | Discovery Validation §2、§5.0 ／ §5.17；证据来源不能因设计完成被升级 |
+| Deferred | §6 完整 HITL workflow；§7 RBAC／Data Scope／Tool Permission／Secret Handling；§8 audit／observability；§9 具体 tests／eval／acceptance method | 各章明确列为未来设计，GSD-6（§1.16）只登记依赖；§7 Read / Write Boundary 已 resolved，不能被整体退回 pending |
+| Deferred | §10 Architecture／framework／database／API／deployment／ADR 的后续决定 | §10 与全局 Explicit Non-Decisions；本次不作选型，不要求 §10 永远无 ADR |
+| Deferred | runtime／source-specific／Adapter realization、具体 source table / column 与真实 ERP mapping | §3.14、master-data-mapping.md §4.5.24 ～ §4.5.25、adapter-boundary.md §4.6.21 ～ §4.6.22；当前未实现／未授权，不等于永久排除，也不承诺一定实施 |
+
+**跨维度关系：** Production write-back 的“业务能力在范围外”与“执行写操作被禁止”分别说明 scope 和 behavior，二者在上表各自有明确 primary classification，指向同一 §3 authority，不重复定义规则，也不因未来工作暂缓而削弱当前禁令。HITL 等 responsibility 属 In Scope，其详细设计为 Deferred；这描述 scope 与 design maturity 两个维度，不把它排除出 POC。已批准 JSON serialization 不列为 Deferred（冲突处置见 §1.19 B）。
+
+**Downstream dependency expectations（GSD-6）：**
+
+| 下游 | §1 要求其尊重的责任 | 独立现状 |
+| --- | --- | --- |
+| §6 | 保持 Draft／Human Review / Modify / Approve / Reject 与 external execution 的边界，不绕过重新审批要求 | 完整 workflow / state machine `DESIGN PENDING` |
+| §7 | 保持 user／scope／Tool／workflow／POC policy 权限交集和 secrets 边界 | Read / Write Boundary `DESIGN RESOLVED`；RBAC、Data Scope、Tool Permission、Secret Handling `DESIGN PENDING` |
+| §8 | 追溯业务决策、Tool、规则版本、Human approval 与 failure | 具体 audit / observability `DESIGN PENDING` |
+| §9 | 提供适用的确定性、integration、AI Eval、HITL／business acceptance evidence | 具体测试／评估设计 `DESIGN PENDING`；本节不定义 harness、KPI、threshold |
+| §10 | 后续技术决策遵循 Options → Trade-offs → Recommendation → Human Approval → ADR | 当前 `No ADR created yet.`；本次不选择 Architecture |
+
+`Downstream pending ≠ Automatic §1 closure blocker`；`Dependency expectation ≠ Downstream design completion`。以上仅规定需尊重的高层责任，不定义实现机制；§1 closure 不传递为 §6 ～ §10 resolved 或 implementation authorization。后续若发现真实 scope 冲突，应经独立 Design Change／Human Decision／canonical synchronization 处理，不得静默反向改写目标。
 
 ### 1.1 Review Authority / Scope（review-only）
 
@@ -412,7 +484,7 @@ Criteria approved
 | `GSD-5` | Out of Scope ／ P1 ／ Prohibited ／ Deferred 的分类方式 | ① 四类分离**← `SELECTED`（`REGISTERED`，Issue #102）**；② 其他 | 四类分离支撑 `S-4`，避免「都不做」式压平 | §1 Out of Scope 结构 |
 | `GSD-6` | `§6` ～ `§10` remaining pending 是否阻止 §1 conceptual closure？ | ① 不阻止，§1 只登记 interface ／ dependency expectation**← `SELECTED`（`REGISTERED`，Issue #104）**；② 阻止，需先完成相关层；③ 条件性 | ① 与「§1 是 goal ／ scope 层」一致；② 会把 §1 与多章设计耦合 | §1 closure 时点与顺序 |
 | `GSD-7` | 是否接受 proposed minimum closure criteria `S-1` ～ `S-14`？ | 接受 ／ 调整 ／ 拒绝**← `SELECTED`（`REGISTERED`，Issue #106：**调整后接受**，`S-1` ～ `S-14` = Human-approved mandatory minimum closure criteria）** | 若调整，需给出替代 criteria | §1 后续 closure gate |
-| `GSD-8` | 是否授权后续独立 §1 Design Change ／ Closure PR？ | 授权 ／ 不授权 | 授权后方可由该 PR 登记 §1 的 canonical goal ／ scope 与状态转换 | §1 是否可离开 `DESIGN PENDING` |
+| `GSD-8` | 是否授权后续独立 §1 Design Change ／ Closure PR？ | **AUTHORIZE（REGISTERED，Issue #112；见 §1.18）** | 授权后方可由该 PR 登记 §1 的 canonical goal ／ scope 与状态转换 | §1 是否可离开 `DESIGN PENDING` |
 
 > **current-state（Issue #94 ／ #96 ／ #98 ／ #100 ／ #102 ／ #104）：** `GSD-1` = **`REGISTERED`**（**`§1 Option 2`**，见 **`§1.11`**）；
 > `GSD-2` = **`REGISTERED`**（**Option ② —— FROZEN inheritance ＋ limited downstream composition references**，**strict limited-reference interpretation**，见 **`§1.12`**）；
@@ -421,7 +493,7 @@ Criteria approved
 > `GSD-5` = **`REGISTERED`**（**Option ① —— Out of Scope ／ P1 ／ Prohibited ／ Deferred 四类分离**，见 **`§1.15`**）；
 > `GSD-6` = **`REGISTERED`**（**Option ① —— `§6` ～ `§10` remaining pending 不阻止 §1 conceptual closure；§1 只登记 interface ／ dependency expectations**，见 **`§1.16`**）；
 > `GSD-7` = **`REGISTERED`**（**调整后接受 `S-1` ～ `S-14`；`S-1` ～ `S-14` = Human-approved mandatory minimum closure criteria**，见 **`§1.7`** ／ **`§1.17`**）；
-> **`GSD-8` 仍为 `PENDING`**。
+> **`GSD-8` = `REGISTERED`（AUTHORIZE，Issue #112）**；本次 closure verification 与 current status 见 **§1.19 ～ §1.20**。
 
 **已被 `FROZEN` 唯一决定、因此**不**列为 Human Decision 的事项：**
 
@@ -468,6 +540,8 @@ implementation code ／ schema ／ Mock API ／ Mock Dataset
 ```
 
 ### 1.10 Current Status（本 Review 时点）
+
+> **历史 snapshot，保留不回写。** 本块及其下旧 current-state 描述已由 Issue #112 的 **§1.20 Current Status** supersede，不代表 latest state。
 
 ```
 §1 P0 设计目标                      = DESIGN PENDING   ← 本 Review 未推进；GSD-1 registration 亦未推进
@@ -1508,6 +1582,97 @@ POC Design v0.2                   = DRAFT
 
 ---
 
+### 1.18 Human Decision Record —— GSD-8（Issue #112）
+
+**Registration Status：`REGISTERED`**
+
+```
+Decision Authority  = Human（Issue #112）
+Selected Option     = AUTHORIZE dedicated §1 Design Change / Closure PR
+Registration Status = REGISTERED
+```
+
+本授权只允许本 PR 编写四项 final canonical wording、执行 §1.7 mandatory gate 并按真实结果同步状态。
+`GSD-8 REGISTERED ≠ Closure Gate PASS ≠ §1 DESIGN RESOLVED`：前者不自动推出后两者；后两者仅在 §1.19 全部 criterion 实际 PASS 后登记。授权不包含 implementation、Architecture、runtime validation、business acceptance、POC SUCCESS 或 production readiness。
+
+### 1.19 Section 1 Closure Verification（Issue #112）
+
+**Verification base：** current `main @ 41f4451edb809a8673a26638d2dd25062585cf2a`（PR #114 merge 后重新核验）。读取该版本的 FROZEN inputs、GSD-1 ～ GSD-7、§2 ～ §5 current canonical authority 与 §6 ～ §10 independent status；§4 通过六份 standalone specs 核验，parent stub 不替代规范正文。以下为本次重新核验，**不以历史 §1.4 D／GSF-6 结论替代**。
+
+**Current-main refresh（PR #115）：** 原 verification base 为 `bc391bd3eaf481c9fdc94a1586703ae19992778a`；本次将最新 main 合入现有 closure 分支，无冲突。逐文件比较确认两版 main 的 FROZEN inputs、parent design（含 GSD-1 ～ GSD-7、§2 ～ §5、§6 ～ §10）与六份 standalone specs 内容完全一致；main 增量仅为 `CONTRIBUTING.md v0.4` 与 project-index governance baseline 同步。重新核对下列 composition evidence、既有两处状态修正与 S-1 ～ S-14 结果，结论保持 **14 PASS / 0 FAIL**；current-main composition = **PASS**，两类 unresolved blocking conflict 均为 **NONE**。合入后 `CONTRIBUTING.md` 与 main 完全一致，index 保留 v0.4 及本 PR 的 §1 closure 状态；四项 final wording、GSD records、独立 downstream 状态与 `POC success = NOT CLAIMED` 均未改变。相对最新 main 的变更仍仅限本 Issue 授权的两份文件，不新增设计或授权。
+
+#### 1.19 A. Current-main composition evidence
+
+| 输入与 exact canonical reference | 本次与 FROZEN P0 / final §1 的 composition 核验 | Result |
+| --- | --- | --- |
+| §2.1 ～ §2.6，特别是 §2.1.1 ／ §2.1.3、§2.2.1、§2.3.1、§2.4.1、§2.5.1 ／ §2.5.15、§2.6.1 | 需求／库存／替代供给／有效在途支撑 P0-1；数量建议支撑 P0-2，保持 draft／Human decision；不是生产执行或完整 MRP 替代 | PASS |
+| §2.7.0 ／ §2.7.14 ～ §2.7.18、§5.3 Q4 ／ §5.4 | Supplier Risk 是 P0 采购建议的 risk evidence；不选择／排名 Supplier、不修改采购数量；SIMULATED design 不证明 H3 | PASS |
+| §3.1 ～ §3.10 ／ §3.14；Discovery Validation VR-004 ／ VR-007 | Controlled Export / Snapshot、read-only／draft-only、fail-closed 与 FROZEN 一致；POC 内 Human approval 不解除 source WRITE = DENIED | PASS |
+| [canonical-data-model.md](specs/data-integration/canonical-data-model.md) §4.1.1 ～ §4.1.2 ／ §4.1.12 | 既有规则需要的业务实体及关联；不创建新业务能力，source unknown 不等于 conceptual boundary 未定义 | PASS |
+| [data-dictionary.md](specs/data-integration/data-dictionary.md) §4.2.1 ／ §4.2.17 | canonical field semantics 支撑同一 P0，不是 database／API／ERP schema 或已验证数据 | PASS |
+| [snapshot-import-contract.md](specs/data-integration/snapshot-import-contract.md) §4.3.1 ／ §4.3.21 ～ §4.3.22 ／ §4.3.28 ～ §4.3.29 | immutable／traceable input 支撑受控数据路径，JSON 已批准；contract closure 不证明 import runtime；全局冲突按 B 实际同步后重检 | PASS |
+| [data-validation.md](specs/data-integration/data-validation.md) §4.4.1 ～ §4.4.3 ／ §4.4.6 ／ §4.4.9 ～ §4.4.13 ／ §4.4.101 | validation／readiness／failure isolation 支撑数据正确性；package、capability、business failure 保持区分，不重定义 §2 business rules | PASS |
+| [master-data-mapping.md](specs/data-integration/master-data-mapping.md) §4.5.24 ～ §4.5.25 | conceptual identity／relationship／source-semantic resolution 支撑既有 P0；不声称真实 ERP field 已知或 mapping runtime 完成 | PASS |
+| [adapter-boundary.md](specs/data-integration/adapter-boundary.md) §4.6.2 AC-1／AC-2／AC-22、§4.6.21 ～ §4.6.22 | controlled exported inputs 下的 Adapter／Assembly／Import ownership 支撑 integration；不授予 production access、权限设计或 implementation | PASS |
+| §5.0 ～ §5.4 ／ §5.6 ～ §5.15 ／ §5.17 ～ §5.19 | 六类 P0 questions 解释确定性 output，不是 P1 广义查询；LLM 不创造事实，Tool／Agent 不绕过权限／HITL；H4 不因 SIMULATED design 被 resolved | PASS |
+
+#### 1.19 B. Conflict assessment and actual synchronization
+
+| Finding | 对 S-7 / S-13 / S-14 的影响 | 本次处理与最终结论 |
+| --- | --- | --- |
+| current-main §4 与 snapshot-import-contract.md §4.3.21 ～ §4.3.22 明确 JSON 已决定；全局 Explicit Non-Decisions 却称 concrete file format 尚未决定 | 是真实 current-state contradiction；若照搬，§1 Deferred 会错误包含已决定事项，且 current-state 不一致。仅登记 finding 不足以 PASS | 为满足本次 closure，删除全局未决定清单中的过期项，并明确引用既有 PR #51 Decision／PR #52 closure 与 §4.3.22；未重新选择格式、未修改 spec。实际修正后不再有该 blocking contradiction |
+| §2 总览仍把 §4 列为未完成，与 current §4 六项 DESIGN RESOLVED 不一致 | 会把 supporting design current state 误报为 pending，影响 S-7 / S-13 的 composition／同步 | 仅在 §2 总览移除该过期 pending bullet，增加 current §4 routing／状态引用；不改任何 §2 规则或 §4 policy。修正后一致 |
+| 旧 §1 Review／GSD registration 中 GSD-8 PENDING、§1 DESIGN PENDING、verification NOT EXECUTED；snapshot-import-contract.md §4.3.29 的旧 Adapter pending snapshot | 这些是各自时点记录，不是新的业务 scope conflict；不能删改历史或把历史当 latest state | §1 顶部与 §1.10 明确历史边界，latest §1 状态集中到 §1.20；spec §4.3.29 已显式以 Issue #90 supersede，latest Adapter status 在 §4.6.21 ～ §4.6.22。历史继续保留，非 blocking |
+| FROZEN H3／H4 未确认、真实 ERP fields 未知、runtime 未实现、§6 ～ §10 pending | 是已明确的 evidence／implementation／downstream dependency boundary，不自动构成 §1 goal／scope blocker | 按 GSD-2／GSD-3／GSD-6 保留，不伪造证据、不把依赖推进为完成；§1 conceptual closure 不等于这些事项已满足 |
+
+以上同步严格限于本次 closure 所需的两份允许文件；§4 specs 全部只读。既有 JSON 决策仍由 standalone spec 唯一持有；本 PR 不创建新的 Architecture／serialization policy。未发现需要新 Human policy 才能分类的 final §1 item。
+
+#### 1.19 C. S-1 ～ S-14 verification
+
+| Criterion | Result | Exact canonical evidence | Rationale / blocking impact |
+| --- | --- | --- | --- |
+| S-1 | PASS | 本节顶部 P0 设计目标；Discovery Brief §10 ／ §11；§1.12 GSD-2.1 ～ GSD-2.6 | FZ-1／FZ-2 与单一 P0 闭环保留；downstream 仅作 supporting pointers；无 blocking impact |
+| S-2 | PASS | 顶部 In Scope／Out of Scope；Discovery Brief §12；§2.7.14 ～ §2.7.18；§5.3 ～ §5.4 | 明确区分 risk evidence／P0 explanations 与 P1 comparison／广义查询；未提升 P1；无 blocking impact |
+| S-3 | PASS | 顶部 In Scope 三类；§1.14 GSD-4.1 ～ GSD-4.4；§1.19 A | supporting／quality 均可追溯到既有 P0，没有新增业务场景或能力；无 blocking impact |
+| S-4 | PASS | 顶部 Out of Scope 逐项 authority 表及跨维度说明；§1.15 GSD-5.1 ～ GSD-5.6 | 按批准四类语义重新分类，无固定先后／first-match；scope／behavior／maturity 关系显式，不采用旧候选规则；无 blocking impact |
+| S-5 | PASS | 顶部 POC 成功边界六行映射；Discovery Brief §16；§1.13 GSD-3.1 ～ GSD-3.4 | 六个 dimensions 完整映射三层责任／evidence，不把 design completion 写成成功；无 blocking impact |
+| S-6 | PASS | 顶部 Failure / reassessment boundary；Discovery Brief §17；§1.13 GSD-3.8 | 五类失败／重估条件完整保留、未弱化、未写成已发生；无 blocking impact |
+| S-7 | PASS | §1.19 A 十行 current-main evidence 与 B 实际 conflict synchronization；各行所列 §2／§3／六份 §4 specs／§5 | 已重新核验 current base；两处 current-state contradiction 已实际修正；Current-main composition check = PASS，Unresolved §2 ～ §5 blocking conflict = NONE |
+| S-8 | PASS | 顶部 Downstream dependency expectations；§1.16 GSD-6.1 ～ GSD-6.5；§6 ～ §10 | 每层责任／独立状态明确，只说明 what must be respected；无 automatic closure blocker |
+| S-9 | PASS | 顶部 POC 成功边界；§1.13 GSD-3.5；§1.17 GSD-7.4 | 完整区分 design／implementation／runtime-test／business-value／POC SUCCESS／production-ready；success 需两类 evidence；无 blocking impact |
+| S-10 | PASS | 顶部 POC 成功边界；Discovery Validation §2 ／ §3.1；§2.7.0；§5.0 ／ §5.17 | 不引入 KPI 数值、真实客户 baseline、usage／adoption 或企业事实，SIMULATED 保持原来源；无 blocking impact |
+| S-11 | PASS | 顶部 Deferred／dependency 表；§1.18 授权边界；§10；全局 Explicit Non-Decisions | 本次无 framework／DB／API／deployment／Agent／LLM／ADR 选择；JSON 仅恢复既有批准状态；无 blocking impact |
+| S-12 | PASS | Discovery Brief §10 ～ §12 ／ §16 ～ §17 ／ §19；Discovery Validation §2 ／ VR-004 ／ VR-007；§1.12 | FROZEN 文件未改、业务 authority 未反转、P0／P1 未重定义；无 blocking impact |
+| S-13 | PASS | 四项顶部 Design Status；§1.8 GSD-8 navigation；§1.20；project-index.md §5 ～ §6；§1.19 B | 全部 PASS 才同步四项 resolved；index／latest block／parent 摘要一致，旧时点显式标为历史；无 blocking impact |
+| S-14 | PASS | 顶部四项 final wording；§1.19 A／B；§1.15；§1.17 GSD-7.7 ～ GSD-7.8 | 无新增 scope policy，已发现 blocking contradictions 已实际修正而非只登记；Unresolved blocking scope conflict = NONE |
+
+**Closure Gate = `PASS`（14 / 14 PASS，0 FAIL；无 partial-pass）。** 此结果仅为 §1 conceptual goal／scope closure，非 runtime／business validation。
+
+### 1.20 Current Status（Issue #112 Closure 后）
+
+```
+GSD-1 ～ GSD-7                    = REGISTERED（原批准约束保持）
+GSD-8                             = REGISTERED（AUTHORIZE）
+Dedicated §1 Design Change / Closure PR = AUTHORIZED（Issue #112）
+S-1 ～ S-14 verification           = PASS（14 / 14，0 FAIL）
+Current-main composition check    = PASS
+Unresolved §2 ～ §5 blocking conflict = NONE
+Unresolved blocking scope conflict = NONE
+§1 Closure Gate                   = PASS
+§1 P0 设计目标                     = DESIGN RESOLVED
+§1 POC 成功边界                    = DESIGN RESOLVED
+§1 In Scope                       = DESIGN RESOLVED
+§1 Out of Scope                   = DESIGN RESOLVED
+§6 ～ §10                         = 各自 current canonical status 独立保持
+Implementation authorization      = NOT GRANTED
+POC success                       = NOT CLAIMED
+POC Design v0.2                    = DRAFT
+```
+
+**State transition：** 本次四项 `DESIGN PENDING → DESIGN RESOLVED` 仅由 §1.19 全部 mandatory criteria PASS 支持，不由 GSD-8 授权本身推出。未宣称 implemented、runtime validated／tested、business accepted 或 production-ready。后续 Coordinator Review／Human merge decision 独立于本次 Agent 执行结果。
+
+---
+
 ## 2. P0 Business Rules
 
 > 本节各项均对应 `FROZEN` Discovery Validation v0.1 中的 Open Design Backlog。
@@ -1535,9 +1700,10 @@ POC Design v0.2                   = DRAFT
 > >
 > > 即所有原先从 Discovery 带入 `POC Design` 的 `VB` backlog 均已完成 Design resolution。
 > >
+> > **current-state synchronization（Issue #112）：** `§4` 六个专题均已 `DESIGN RESOLVED`，以 §4 routing 所指 standalone canonical specs 为准；本句仅同步状态，不改变任何规则或授权 implementation。
+> >
 > > **但仍存在以下未完成设计：**
 > >
-> > - `§4` Data & Integration Design
 > > - `§6` HITL Workflow
 > > - `§7` remaining Permission & Security（除 `Read / Write Boundary` 外）
 > > - `§8` Audit & Observability
@@ -6319,8 +6485,9 @@ Options
 - cloud provider
 - authentication implementation
 - API style
-- concrete file format
 - Mock API design
+
+**已决定项（Issue #112 current-state synchronization）：** concrete file format／Serialization Format 已由 PR #51 Human Decision 选择 JSON，并经 PR #52 Closure Re-run；canonical authority 见 [snapshot-import-contract.md](specs/data-integration/snapshot-import-contract.md) §4.3.21 ～ §4.3.22。原“尚未决定”条目已移除；本次只消除过期状态矛盾，未重新选择格式。
 
 **这些不是遗漏。**
 
