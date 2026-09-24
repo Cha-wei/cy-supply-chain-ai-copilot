@@ -1,28 +1,37 @@
-"""Controlled Snapshot loader and Layer-1 package acceptance (POC v0.2).
+"""Controlled Snapshot loader, Layer-1 package acceptance, and Layer-2 validation (POC v0.2).
 
-First deterministic tranche, module 1 of ``POC Design v0.2`` §10.1 B:
+Deterministic tranches delivered here:
 
     Snapshot loader / import
       controlled JSON package + configured trusted input boundary
         -> package acceptance, or an existing rejection / not-evaluable outcome
+        -> a bound accepted content view that downstream trusted reuse consumes
+
+    Layer 2 -- Canonical Evidence Validation (:func:`validate_layer2`)
+      the narrowed non-null present-value subset: logical type, registered scalar
+      representation, approved numeric range, approved canonical status vocabulary,
+      and identifier non-empty boundary
 
 Canonical authority:
 
 * ``docs/design/specs/data-integration/snapshot-import-contract.md``
   §4.3.22 -- §4.3.30 (implementation: §4.3.28 ``D4`` acceptance gate)
 * ``docs/design/specs/data-integration/data-validation.md``
-  §4.4.2 / §4.4.79 -- §4.4.83 (inherited taxonomy, reused unchanged)
+  §4.4.2 / §4.4.24 -- §4.4.44 / §4.4.79 -- §4.4.83 (inherited taxonomy, reused unchanged)
 
 Scope boundary (deliberately narrow):
 
-* **in scope** -- package structural acceptance: trusted input boundary, strict JSON,
-  contract version exact-match, unknown / undeclared content policy, role and
-  artifact cardinality, strict literal paths, declared artifact existence and
+* **in scope (Layer 1)** -- package structural acceptance: trusted input boundary,
+  strict JSON, contract version exact-match, unknown / undeclared content policy, role
+  and artifact cardinality, strict literal paths, declared artifact existence and
   readability, raw-byte SHA-256 integrity, record carrier shape, canonical record
   property membership, and ``"_meta"`` shape.
-* **out of scope** -- ``§4.4`` Layer 2+ validation, canonical business objects,
-  ``§2`` business rules, procurement recommendation, persistence, CLI-only concerns,
-  network, LLM, database.
+* **in scope (Layer 2)** -- :func:`validate_layer2` over an :class:`AcceptedPackage`,
+  non-null present values only, reported against the inherited issue taxonomy with
+  ``not_evaluable`` used wherever the authority does not decide the question.
+* **out of scope** -- ``§4.4`` Layer 3 (capability readiness) and Layer 4 (business
+  rules), cross-field / cross-dataset consistency, ``§2`` business rules, procurement
+  recommendation, persistence, network, LLM, database.
 
 The core is importable and directly testable and does not depend on the CLI
 (``POC Design v0.2`` §10.1 B; ADR-001).

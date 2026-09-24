@@ -250,13 +250,24 @@ LAYER2_REUSABLE: str = "REUSABLE"
 LAYER2_UNUSABLE: str = "UNUSABLE"
 
 # --- §4.3.22: registered scalar representations (Layer-2 basis) -----------------
+#
+# ``C-3`` registers ``YYYY-MM-DD``; ``C-4`` registers "ISO 8601 / RFC 3339
+# compatible" with an explicit UTC offset or ``Z`` and forbids silent timezone
+# inference.  The patterns below encode **only** those registered lexical forms; the
+# logical validity of the date / instant they denote is a separate obligation carried
+# by the logical type declared in ``§4.2.2`` (``§4.4.27`` / ``§4.4.28`` -- ``§4.4.34``
+# require a *valid* ``DATE`` / *valid temporal value*).
 DATE_PATTERN: str = r"[0-9]{4}-[0-9]{2}-[0-9]{2}"
 TIMESTAMP_PATTERN: str = (
     r"[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt ]"
-    r"[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?"
+    r"[0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]+)?)?"
     r"(?:[Zz]|[+-][0-9]{2}:[0-9]{2})"
 )
-DECIMAL_STRING_PATTERN: str = r"[+-]?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?"
+#: ``C-5`` registers a **base-10 decimal string** and forbids binary floating point,
+#: locale commas, thousands separators and scientific notation.  It does **not**
+#: register a leading-zero prohibition or any other lexical tightening, so none is
+#: encoded here (``§4.4.24``: do not invent what is undefined).
+DECIMAL_STRING_PATTERN: str = r"[+-]?[0-9]+(?:\.[0-9]+)?"
 
 # --- §4.4.26 ～ §4.4.35: per-logical-type Layer-2 rule kind ---------------------
 #
@@ -296,6 +307,14 @@ class Layer2FieldRule:
     (``§4.4.33``).  ``authoritative`` records whether the present-value rules for this
     field are fully derivable from current authority: when ``False`` the field is
     reported as ``not evaluable`` instead of being silently skipped or guessed.
+
+    ``minimum`` / ``maximum`` carry a **field-level** numeric bound taken verbatim
+    from the existing authority (``§4.2.13`` of the Data Dictionary, the field's own
+    Data Dictionary row, or ``§4.4.28`` -- ``§4.4.35``).  They exist because the
+    registered *logical type* of a field does not always carry its bound: for example
+    ``on_hand_qty`` is registered ``DECIMAL_QUANTITY`` while its own row defines
+    ``on_hand_qty >= 0``.  No bound is encoded unless an authority already states it
+    (``§4.4.24`` / ``§4.4.29``: "如果当前 Design 未定义更严格范围，不得新增").
     """
 
     name: str
@@ -303,6 +322,12 @@ class Layer2FieldRule:
     authoritative: bool = True
     vocabulary: tuple[str, ...] | None = None
     note: str = ""
+    minimum: str | None = None
+    minimum_exclusive: bool = False
+    maximum: str | None = None
+    maximum_exclusive: bool = False
+    bound_authority: str = ""
+    bound_reference: str = ""
 
     @property
     def kind(self) -> str:
@@ -333,7 +358,19 @@ LAYER2_REGISTRY: tuple[Layer2FieldRule, ...] = (
         "STATUS",
         vocabulary=("AVAILABLE", "INSPECTION", "FROZEN"),
     ),
-    Layer2FieldRule("on_hand_qty", "DECIMAL_QUANTITY"),
+    # ``on_hand_qty`` is registered ``DECIMAL_QUANTITY`` -- it is *not* in the §4.2.13
+    # ``NON_NEGATIVE_QUANTITY`` list -- but its own Data Dictionary row defines
+    # ``on_hand_qty < 0`` as illegal input ("不得 clamp to 0", §2.2.8), which is also
+    # what §4.4.29 defers to ("按当前 Dictionary / Rule 已定义的范围校验").  The bound is
+    # therefore carried per field, never by widening the ``DECIMAL_QUANTITY`` logical
+    # type into a non-negative type.
+    Layer2FieldRule(
+        "on_hand_qty",
+        "DECIMAL_QUANTITY",
+        minimum="0",
+        bound_authority="on_hand_qty < 0 为非法输入",
+        bound_reference="§2.2.8 / §4.2.5 (Data Dictionary row) + §4.4.29",
+    ),
     Layer2FieldRule("inventory_snapshot_time", "TIMESTAMP"),
     Layer2FieldRule("SafetyStock", "NON_NEGATIVE_QUANTITY"),
     # §4.2.6 Inbound
@@ -356,7 +393,20 @@ LAYER2_REGISTRY: tuple[Layer2FieldRule, ...] = (
     # §4.2.7 Substitute
     Layer2FieldRule("target_material_code", "IDENTIFIER"),
     Layer2FieldRule("substitute_material_code", "IDENTIFIER"),
-    Layer2FieldRule("substitution_ratio", "RATIO"),
+    # ``substitution_ratio`` is registered ``RATIO``, but ``RATIO`` inherently admits
+    # 0 while the field's own authority requires ``> 0``: §4.2.13
+    # (``substitution_ratio | > 0 | §2.3.6``), the §4.2.7 Data Dictionary row
+    # (``substitution_ratio > 0``) and §4.4.31 ("必须 > 0；missing / invalid 时不得默认
+    # 1.0").  ``loss_rate`` is also ``RATIO`` but bounded ``0 <= loss_rate < 1``, so the
+    # two RATIO fields genuinely differ and neither may inherit the other's bound.
+    Layer2FieldRule(
+        "substitution_ratio",
+        "RATIO",
+        minimum="0",
+        minimum_exclusive=True,
+        bound_authority="substitution_ratio > 0",
+        bound_reference="§2.3.6 / §4.2.13 / §4.2.7 + §4.4.31",
+    ),
     Layer2FieldRule(
         "approval_status",
         "STATUS",

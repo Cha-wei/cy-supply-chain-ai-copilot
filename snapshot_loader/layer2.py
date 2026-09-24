@@ -11,8 +11,12 @@ Layer 4 = Business Rules                       NOT IN SCOPE
 
 Scope actually implemented (``§4.4.24`` ／ ``§4.4.25`` ／ ``§4.4.26`` -- ``§4.4.35``):
 
-* logical type and registered scalar representation (``§4.3.22`` ``C-3`` -- ``C-10``);
-* approved numeric range;
+* logical type and registered scalar representation (``§4.3.22`` ``C-3`` -- ``C-10``),
+  including whether a lexically well-formed ``DATE`` ／ ``TIMESTAMP`` denotes a real
+  calendar date ／ instant with an explicit offset;
+* approved numeric range -- from the field's own registered bound
+  (``§4.2.13`` ／ the field's Data Dictionary row) or from its registered logical type,
+  and never from a widened type;
 * approved **canonical** status vocabulary;
 * identifier exact-opaque-string / non-empty boundary;
 * deterministic issue collection using only the inherited taxonomy
@@ -26,6 +30,12 @@ Boundaries that are deliberately **not** crossed:
   the ``POLICY_INPUT`` ／ ``CONTEXT`` input channel are deferred by ``§4.3.30``;
 * **JSON ``null``** keeps its ``C-2`` meaning (explicit missing ／ unavailable) but its
   missingness is **not** decided here, and it is never misread as ``INVALID_TYPE``;
+* deferred value-level rules (``PerformancePeriod``, ``sourcing_status``) are reported
+  ``not evaluable`` -- but their **representation** is still decided first, because
+  ``§4.3.22`` applies to every present serialized value;
+* no past/future date rejection, no planning horizon, no freshness threshold and no
+  business-timezone policy (``C-4`` registers ``business timezone policy = NOT
+  DEFINED``, and ``C-3`` forbids introducing a freshness threshold);
 * no per-role whitelist, dataset schema or input-channel policy is invented;
 * no capability readiness, no business rule, no cross-field ／ cross-dataset
   consistency, no provenance ／ semantic resolution;
@@ -36,10 +46,14 @@ that ``AcceptedPackage`` captured at acceptance time.  Required integrity is
 re-verified first; if mutation is detected or required integrity can no longer be
 re-established the package becomes ``UNUSABLE`` and normal Layer-2 validation does
 **not** continue.  Changed files are never re-read and treated as accepted evidence.
+The resulting re-verification findings are **inherited**, not produced here: they are
+re-published on :attr:`Layer2Report.inherited_issues` with their original layer,
+category, reason, location, affected evidence, blast radius and design reference.
 """
 
 from __future__ import annotations
 
+import datetime as _datetime
 import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -120,6 +134,12 @@ class Layer2Report:
     ``disposition`` restates the package disposition only: Layer 2 never changes it
     (``§4.4.25``).  The single exception is the inherited trusted-reuse failure, which
     is expressed as ``UNUSABLE`` per ``§4.3.28`` C.3 ``MG-2``.
+
+    ``inherited_issues`` carries defects that Layer 2 **did not produce** -- currently
+    the ``MG-2`` re-verification findings raised by the trusted-reuse boundary.  They
+    are re-published with their original layer, category, reason, location, affected
+    evidence, blast radius and design reference intact, because Layer 2 is not the
+    layer that established them and must not rewrite their meaning.
     """
 
     package_id: str
@@ -129,6 +149,7 @@ class Layer2Report:
     collector: IssueCollector
     accepted_content_view_digest: str
     note: str = ""
+    inherited_issues: tuple[Issue, ...] = ()
 
     @property
     def reusable(self) -> bool:
@@ -145,6 +166,14 @@ class Layer2Report:
     @property
     def issues(self) -> tuple[Issue, ...]:
         return self.collector.sorted_issues()
+
+    @property
+    def all_issues(self) -> tuple[Issue, ...]:
+        """Layer-2 defects together with the inherited ones, deterministically ordered."""
+
+        return tuple(
+            sorted(self.issues + self.inherited_issues, key=Issue.sort_key)
+        )
 
     @property
     def checks(self) -> tuple[Layer2Check, ...]:
@@ -169,6 +198,9 @@ class Layer2Report:
             "accepted_content_view_digest": self.accepted_content_view_digest,
             "note": self.note,
             "issues": [issue.to_dict() for issue in self.issues],
+            "inherited_issues": [
+                issue.to_dict() for issue in self.inherited_issues
+            ],
             "checks": [check.to_dict() for check in self.checks],
         }
 
@@ -190,6 +222,13 @@ class Layer2Report:
             lines.append(
                 f"  - [{issue.category}/{issue.reason}] {issue.location}: {issue.detail}"
             )
+        if self.inherited_issues:
+            lines.append(f"inherited issues : {len(self.inherited_issues)}")
+            for issue in self.inherited_issues:
+                lines.append(
+                    f"  - [layer {issue.layer} {issue.category}/{issue.reason}] "
+                    f"{issue.location}: {issue.detail}"
+                )
         undecided = self.not_evaluable_checks
         if undecided:
             lines.append(f"not evaluable    : {len(undecided)} check(s)")
@@ -199,7 +238,11 @@ class Layer2Report:
 
 
 class _Collector:
-    """Mutable accumulator that yields the inherited issue / check shapes."""
+    """Mutable accumulator that yields the inherited issue / check shapes.
+
+    Layer-2 issues are always **newly constructed** here (never re-labelled): a defect
+    this layer cannot reach is reported as ``not evaluable`` instead.
+    """
 
     def __init__(self) -> None:
         self.issues: list[Issue] = []
@@ -269,6 +312,74 @@ def _as_decimal(value: object) -> Decimal | None:
     return Decimal(value)  # type: ignore[arg-type]
 
 
+def _date_defect(value: str) -> str | None:
+    """Is ``value`` a **valid** ``DATE`` logical value?
+
+    ``C-3`` registers the physical form ``YYYY-MM-DD``; the logical type ``DATE``
+    declared in ``§4.2.2`` additionally requires the value to *be* a date.  The
+    authority asks for a "valid `DATE`" (``§4.4.28`` ``required_date``), a "有效
+    `DATE`" (``§4.4.30`` ``effective_arrival_date``) and a "valid `DATE` / `TIMESTAMP`
+    logical value" (``§4.4.27`` ``AnalysisDate``), so a lexically well-formed but
+    impossible calendar value is decidable here and is not ``INVALID_TYPE``-free.
+
+    Only *internal* consistency is decided.  No past/future rejection, no planning
+    horizon and no freshness threshold is applied (``§4.4.28`` explicitly leaves those
+    undefined, and ``C-3`` forbids introducing a freshness threshold).
+    """
+
+    if not _DATE_RE.match(value):
+        return f"DATE {value!r} is not in the registered YYYY-MM-DD form (C-3)"
+    try:
+        _datetime.date.fromisoformat(value)
+    except ValueError:
+        return f"DATE {value!r} matches the C-3 form but is not a valid calendar date"
+    return None
+
+
+def _timestamp_defect(value: str) -> str | None:
+    """Is ``value`` a **valid** ``TIMESTAMP`` logical value with explicit offset?
+
+    ``C-4`` registers "ISO 8601 / RFC 3339 compatible" plus an explicit UTC offset or
+    ``Z``, and forbids silent timezone inference.  Logical validity here therefore
+    means: the lexical shape is the registered one, the calendar/clock fields denote a
+    real instant, and the offset is an explicit, syntactically valid one.
+
+    ``C-4`` also registers ``business timezone policy = NOT DEFINED``: nothing here
+    converts, compares or normalises the instant against any business timezone, and no
+    freshness policy is introduced.
+    """
+
+    if not _TIMESTAMP_RE.match(value):
+        return (
+            f"TIMESTAMP {value!r} must be ISO 8601 / RFC 3339 compatible and carry an "
+            "explicit UTC offset or 'Z' (C-4)"
+        )
+
+    # ``datetime`` requires a 'T' separator; RFC 3339 is case-insensitive for the
+    # designators ('T'/'Z' may be lowercase) and permits a space only when both sides
+    # agree on it as a simplification, which the registered form above already accepts.
+    candidate = value
+    if len(candidate) > 10:
+        candidate = candidate[:10] + "T" + candidate[11:]
+    if candidate.endswith(("Z", "z")):
+        candidate = candidate[:-1] + "+00:00"
+
+    try:
+        parsed = _datetime.datetime.fromisoformat(candidate)
+    except ValueError:
+        return (
+            f"TIMESTAMP {value!r} matches the C-4 form but does not denote a valid "
+            "instant (impossible date, clock time or UTC offset)"
+        )
+
+    if parsed.tzinfo is None:  # pragma: no cover - guarded by the registered form
+        return (
+            f"TIMESTAMP {value!r} carries no explicit UTC offset or 'Z' (C-4); silent "
+            "timezone inference is not allowed"
+        )
+    return None
+
+
 def _representation_defect(rule: Layer2FieldRule, value: object) -> str | None:
     """Return a defect detail when ``value`` violates its registered representation.
 
@@ -297,24 +408,14 @@ def _representation_defect(rule: Layer2FieldRule, value: object) -> str | None:
     if kind == KIND_DATE:
         if not isinstance(value, str):
             return f"DATE requires a JSON string in YYYY-MM-DD (C-3); got {type(value).__name__}"
-        # ``C-3`` registers the *form* ``YYYY-MM-DD`` only.  It registers no
-        # calendar-validity rule, and Layer 2 must not invent one (§4.4.42), so an
-        # impossible calendar value that matches the registered form is left alone.
-        if not _DATE_RE.match(value):
-            return f"DATE {value!r} is not in the registered YYYY-MM-DD form (C-3)"
-        return None
+        return _date_defect(value)
 
     if kind == KIND_TIMESTAMP:
         if not isinstance(value, str):
             return (
                 f"TIMESTAMP requires a JSON string (C-4); got {type(value).__name__}"
             )
-        if not _TIMESTAMP_RE.match(value):
-            return (
-                f"TIMESTAMP {value!r} must be ISO 8601 / RFC 3339 compatible and carry "
-                "an explicit UTC offset or 'Z' (C-4)"
-            )
-        return None
+        return _timestamp_defect(value)
 
     if kind == KIND_STATUS:
         if not isinstance(value, str):
@@ -337,7 +438,19 @@ def _representation_defect(rule: Layer2FieldRule, value: object) -> str | None:
 
 
 def _range_defect(rule: Layer2FieldRule, value: object) -> str | None:
-    """Return a defect detail when a compliant numeric string is out of range."""
+    """Return a defect detail when a compliant numeric string is out of range.
+
+    Bounds come from exactly two authorities, and neither broadens the other:
+
+    * the field's own registered bound carried on :class:`Layer2FieldRule`
+      (``bound_reference`` records where it came from);
+    * the bound implied by the field's registered logical type
+      (``NON_NEGATIVE_QUANTITY`` ``>= 0``, ``PERCENTAGE`` ``0`` -- ``100``).
+
+    A field registered with a plain ``DECIMAL_QUANTITY`` logical type gets **no**
+    implicit bound from that type; ``on_hand_qty`` is bounded only because its own Data
+    Dictionary row defines the bound.  ``§4.4.24`` forbids inventing any other bound.
+    """
 
     kind = rule.kind
     if kind not in (KIND_DECIMAL, KIND_NON_NEGATIVE, KIND_RATIO, KIND_PERCENTAGE):
@@ -347,19 +460,35 @@ def _range_defect(rule: Layer2FieldRule, value: object) -> str | None:
     if number is None:
         return None
 
-    if rule.name == "loss_rate":
-        if number < 0 or number >= 1:
-            return "loss_rate must satisfy 0 <= loss_rate < 1 (§4.4.28)"
-        return None
+    if rule.minimum is not None:
+        minimum = Decimal(rule.minimum)
+        below = number <= minimum if rule.minimum_exclusive else number < minimum
+        if below:
+            return (
+                f"{rule.name} must satisfy "
+                f"{'>' if rule.minimum_exclusive else '>='} {rule.minimum} "
+                f"({rule.bound_authority}; {rule.bound_reference})"
+            )
 
-    if rule.name == "substitution_ratio":
-        if number < 0:
-            return "substitution_ratio must satisfy >= 0 (§4.2.13)"
+    if rule.maximum is not None:
+        maximum = Decimal(rule.maximum)
+        above = number >= maximum if rule.maximum_exclusive else number > maximum
+        if above:
+            return (
+                f"{rule.name} must satisfy "
+                f"{'<' if rule.maximum_exclusive else '<='} {rule.maximum} "
+                f"({rule.bound_authority}; {rule.bound_reference})"
+            )
+
+    if rule.name == "loss_rate":
+        # §4.2.13 / §4.4.28: 0 <= loss_rate < 1.
+        if number < 0 or number >= 1:
+            return "loss_rate must satisfy 0 <= loss_rate < 1 (§2.4.6 / §4.2.13 / §4.4.28)"
         return None
 
     if kind == KIND_PERCENTAGE:
         if number < 0 or number > 100:
-            return "PERCENTAGE must satisfy 0 <= value <= 100 (§4.4.34)"
+            return "PERCENTAGE must satisfy 0 <= value <= 100 (§2.7.16 / §4.4.34)"
         return None
 
     if kind == KIND_NON_NEGATIVE:
@@ -432,11 +561,11 @@ def _validate_record(
             )
             continue
 
-        note = LAYER2_NOT_EVALUABLE_FIELDS.get(field)
-        if note is not None:
-            collector.not_evaluable(f"layer2.field_not_evaluable:{location}", note)
-            continue
-
+        # Representation is decided **before** any deferral.  §4.3.22 C-3 -- C-10 are
+        # unconditional: they apply to every present serialized value regardless of
+        # whether the field's *value* rules are deferred.  A deferred field therefore
+        # still reports INVALID_TYPE for a value of the wrong logical type, and only the
+        # value-level judgement (range / vocabulary) is withheld as ``not evaluable``.
         defect = _representation_defect(rule, value)
         if defect is not None:
             reason = (
@@ -460,11 +589,19 @@ def _validate_record(
                 design_reference=(
                     "§4.4.26 (identifier) + §4.3.22 C-10"
                     if reason == REASON_UNRESOLVED_IDENTITY
-                    else "§4.4.28 ～ §4.4.35 + §4.3.22 C-3 ～ C-10"
+                    else "§4.4.27 ～ §4.4.34 + §4.3.22 C-3 ～ C-10"
                 ),
                 consequence_context=(
                     "affected evidence / grain unreliable; package disposition unchanged"
                 ),
+            )
+            continue
+
+        note = LAYER2_NOT_EVALUABLE_FIELDS.get(field)
+        if note is not None:
+            collector.not_evaluable(
+                f"layer2.field_not_evaluable:{location}",
+                f"{note} (representation and logical type are already validated)",
             )
             continue
 
@@ -516,17 +653,10 @@ def validate_layer2(accepted: AcceptedPackage) -> Layer2Report:
 
     verdict = accepted.reverify()
     if not verdict.reusable:
-        collector.passed(LAYER2_REVERIFICATION)
-        for issue in verdict.collector.issues:
-            collector.issue(
-                category=issue.category,
-                reason=issue.reason,
-                location=issue.location,
-                detail=issue.detail,
-                affected_evidence=issue.affected_evidence or "accepted package",
-                design_reference="§4.3.28 C.3 (MG-2) + IC-12",
-                consequence_context="Package becomes UNUSABLE; Layer-2 validation not performed",
-            )
+        # ``MG-2`` / ``IC-12``: required integrity could not be re-established before
+        # trusted reuse.  The gate has exactly one state -- ``failed``.  It is never
+        # also recorded as ``passed`` (``FR-3``: an undecided prerequisite must not be
+        # reported as a pass, and a failed gate must not be reported as both).
         collector.failed(
             LAYER2_REVERIFICATION,
             "trusted reuse re-verification failed; normal Layer-2 validation not performed",
@@ -542,6 +672,10 @@ def validate_layer2(accepted: AcceptedPackage) -> Layer2Report:
                 "required integrity could not be re-established before trusted reuse "
                 "(§4.3.28 C.3 MG-2); changed files are never re-read as accepted evidence"
             ),
+            # Re-published exactly as raised: Layer 2 did not establish these findings,
+            # so it does not relabel their layer, category, reason, location, affected
+            # evidence, blast radius or design reference.
+            inherited_issues=verdict.collector.sorted_issues(),
         )
 
     collector.passed(LAYER2_REVERIFICATION)

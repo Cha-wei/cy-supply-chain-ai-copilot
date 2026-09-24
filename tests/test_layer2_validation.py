@@ -225,11 +225,33 @@ class MalformedRepresentationTests(Layer2TestCase):
         self.assertIn(REASON_INVALID_TYPE, self.reasons(report))
         self.assertIn("r.json[0].required_date", self.locations(report))
 
-    def test_date_impossible_calendar_value_is_not_a_layer2_rule(self) -> None:
-        # ``C-3`` registers the YYYY-MM-DD *form* only.  No calendar-validity rule is
-        # registered, so Layer 2 must not invent one (§4.4.42).
-        report = self.single(required_date="2026-13-45")
-        self.assertEqual(report.issues, ())
+    def test_date_impossible_calendar_value_is_invalid_type(self) -> None:
+        # ``C-3`` registers the YYYY-MM-DD form and the ``DATE`` logical type requires a
+        # *valid* date (§4.4.27 / §4.4.28 / §4.4.30).  A lexically well-formed value
+        # that is not a real calendar date is therefore INVALID_TYPE, not a silent pass.
+        for value in ("2026-13-45", "2026-02-30", "2026-00-10", "2026-04-31"):
+            with self.subTest(value=value):
+                report = self.single(required_date=value)
+                self.assertIn(REASON_INVALID_TYPE, self.reasons(report), msg=value)
+                self.assertIn("r.json[0].required_date", self.locations(report), msg=value)
+
+    def test_date_valid_boundaries_are_accepted(self) -> None:
+        for value in ("2026-02-28", "2024-02-29", "2026-01-01", "2026-12-31"):
+            with self.subTest(value=value):
+                report = self.single(required_date=value)
+                self.assertEqual(report.issues, (), msg=value)
+
+    def test_non_leap_year_february_29_is_invalid_type(self) -> None:
+        report = self.single(required_date="2026-02-29")
+        self.assertIn(REASON_INVALID_TYPE, self.reasons(report))
+
+    def test_date_rule_does_not_add_a_past_or_future_policy(self) -> None:
+        # §4.4.28: planning horizon / past-date rejection / future-date maximum are NOT
+        # defined.  Only internal calendar validity is decided.
+        for value in ("1900-01-01", "2999-12-31"):
+            with self.subTest(value=value):
+                report = self.single(required_date=value)
+                self.assertEqual(report.issues, (), msg=value)
 
     def test_date_wrong_shape_is_invalid_type(self) -> None:
         report = self.single(required_date="2026-2-1")
@@ -243,6 +265,38 @@ class MalformedRepresentationTests(Layer2TestCase):
         report = self.single(inventory_snapshot_time="2026-01-31T08:00:00+08:00")
         self.assertEqual(report.issues, ())
 
+    def test_timestamp_impossible_value_is_invalid_type(self) -> None:
+        # §4.4.29: ``inventory_snapshot_time`` 必须是有效 temporal value.
+        for value in (
+            "2026-02-30T08:00:00Z",
+            "2026-01-31T25:00:00Z",
+            "2026-01-31T08:60:00Z",
+            "2026-01-31T08:00:00+99:00",
+            "2026-13-01T08:00:00Z",
+        ):
+            with self.subTest(value=value):
+                report = self.single(inventory_snapshot_time=value)
+                self.assertIn(REASON_INVALID_TYPE, self.reasons(report), msg=value)
+
+    def test_timestamp_valid_boundaries_are_accepted(self) -> None:
+        for value in (
+            "2026-01-31T00:00:00Z",
+            "2026-01-31T23:59:59Z",
+            "2024-02-29T23:59:59+08:00",
+            "2026-01-31T08:00:00.125Z",
+            "2026-01-31T08:00:00+23:59",
+            "2026-01-31T08:00:00-23:59",
+        ):
+            with self.subTest(value=value):
+                report = self.single(inventory_snapshot_time=value)
+                self.assertEqual(report.issues, (), msg=value)
+
+    def test_timestamp_rule_does_not_infer_a_business_timezone(self) -> None:
+        # C-4: business timezone policy = NOT DEFINED; a non-UTC offset stays a distinct
+        # explicit instant and is never converted, compared or normalised here.
+        report = self.single(inventory_snapshot_time="2026-01-31T08:00:00+05:45")
+        self.assertEqual(report.issues, ())
+
     def test_decimal_scientific_notation_is_invalid_type(self) -> None:
         report = self.single(ProductionQty="1e3")
         self.assertIn(REASON_INVALID_TYPE, self.reasons(report))
@@ -251,9 +305,21 @@ class MalformedRepresentationTests(Layer2TestCase):
         report = self.single(ProductionQty="1,000")
         self.assertIn(REASON_INVALID_TYPE, self.reasons(report))
 
-    def test_decimal_leading_zero_is_invalid_type(self) -> None:
-        report = self.single(ProductionQty="007")
-        self.assertIn(REASON_INVALID_TYPE, self.reasons(report))
+    def test_decimal_leading_zero_is_not_a_registered_prohibition(self) -> None:
+        # C-5 registers "base-10 decimal string" and forbids binary floating point,
+        # locale commas, thousands separators and scientific notation.  It registers NO
+        # leading-zero prohibition, so ``"007"`` is a valid decimal string and must not
+        # be rejected (§4.4.24: do not invent what is undefined).
+        for value in ("007", "00", "00012.50", "+007", "-0"):
+            with self.subTest(value=value):
+                report = self.single(ProductionQty=value)
+                self.assertEqual(report.issues, (), msg=value)
+
+    def test_decimal_locale_comma_and_scientific_forms_stay_invalid(self) -> None:
+        for value in ("1,000", "1e3", "1E3", "0x10", "1 000", ".5", "5.", "Infinity"):
+            with self.subTest(value=value):
+                report = self.single(ProductionQty=value)
+                self.assertIn(REASON_INVALID_TYPE, self.reasons(report), msg=value)
 
 
 class InvalidLogicalTypeTests(Layer2TestCase):
@@ -303,6 +369,86 @@ class RangeTests(Layer2TestCase):
     def test_percentage_below_zero_is_out_of_range(self) -> None:
         report = self.single(QualityPerformance="-1")
         self.assertIn(REASON_OUT_OF_DEFINED_RANGE, self.reasons(report))
+
+    def test_substitution_ratio_zero_is_out_of_range(self) -> None:
+        # §4.2.13 (``substitution_ratio | > 0``) / §4.2.7 row / §4.4.31 ("必须 > 0").
+        # ``RATIO`` alone admits 0, so this boundary can only come from the field.
+        report = self.single(substitution_ratio="0")
+        self.assertIn(REASON_OUT_OF_DEFINED_RANGE, self.reasons(report))
+        self.assertIn("r.json[0].substitution_ratio", self.locations(report))
+
+    def test_substitution_ratio_negative_is_out_of_range(self) -> None:
+        report = self.single(substitution_ratio="-0.5")
+        self.assertIn(REASON_OUT_OF_DEFINED_RANGE, self.reasons(report))
+
+    def test_substitution_ratio_just_above_zero_is_accepted(self) -> None:
+        for value in ("0.0001", "0.5", "1", "3.25"):
+            with self.subTest(value=value):
+                report = self.single(substitution_ratio=value)
+                self.assertEqual(report.issues, (), msg=value)
+
+    def test_substitution_ratio_zero_is_not_defaulted_to_one(self) -> None:
+        # §4.4.31: missing / invalid 时不得默认 1.0.  A rejected 0 must stay visible as a
+        # defect and must never be silently replaced by a valid ratio.
+        report = self.single(substitution_ratio="0")
+        self.assertTrue(report.issues)
+        for issue in report.issues:
+            self.assertNotIn("1.0", issue.detail)
+
+    def test_on_hand_qty_negative_is_out_of_range(self) -> None:
+        # §4.2.5 Data Dictionary row + §2.2.8: ``on_hand_qty < 0`` 为非法输入;
+        # §4.4.29: 按当前 Dictionary / Rule 已定义的范围校验.
+        report = self.single(on_hand_qty="-1")
+        self.assertIn(REASON_OUT_OF_DEFINED_RANGE, self.reasons(report))
+        self.assertIn("r.json[0].on_hand_qty", self.locations(report))
+
+    def test_on_hand_qty_is_not_clamped_to_zero(self) -> None:
+        report = self.single(on_hand_qty="-1")
+        for issue in report.issues:
+            self.assertNotIn("clamp", issue.detail.lower())
+
+    def test_on_hand_qty_zero_is_a_valid_value(self) -> None:
+        report = self.single(on_hand_qty="0")
+        self.assertEqual(report.issues, ())
+
+    def test_on_hand_qty_positive_decimal_is_accepted(self) -> None:
+        for value in ("0.001", "100", "12345.6789"):
+            with self.subTest(value=value):
+                report = self.single(on_hand_qty=value)
+                self.assertEqual(report.issues, (), msg=value)
+
+    def test_decimal_quantity_type_is_not_globally_non_negative(self) -> None:
+        # The fix for ``on_hand_qty`` must not widen ``DECIMAL_QUANTITY``: the bound is
+        # carried by the field's own rule, and the registered logical type is unchanged.
+        self.assertEqual(
+            LAYER2_FIELD_RULE_BY_NAME["on_hand_qty"].logical_type, "DECIMAL_QUANTITY"
+        )
+        # Every DECIMAL_QUANTITY field in the registry carries an explicit, referenced
+        # bound; none of them relies on the logical type supplying one.
+        decimal_quantity_rules = [
+            rule for rule in LAYER2_REGISTRY if rule.kind == "decimal"
+        ]
+        self.assertTrue(decimal_quantity_rules)
+        for rule in decimal_quantity_rules:
+            with self.subTest(field=rule.name):
+                self.assertIsNotNone(rule.minimum)
+                self.assertTrue(rule.bound_authority)
+                self.assertTrue(rule.bound_reference)
+
+    def test_ratio_bound_is_per_field_not_per_logical_type(self) -> None:
+        # ``loss_rate`` and ``substitution_ratio`` are both RATIO but bound differently;
+        # neither may inherit the other's boundary.
+        loss_rate = LAYER2_FIELD_RULE_BY_NAME["loss_rate"]
+        substitution_ratio = LAYER2_FIELD_RULE_BY_NAME["substitution_ratio"]
+        self.assertEqual(loss_rate.logical_type, substitution_ratio.logical_type)
+        self.assertIsNone(loss_rate.minimum)
+        self.assertEqual(substitution_ratio.minimum, "0")
+        self.assertTrue(substitution_ratio.minimum_exclusive)
+        # 0 is a valid loss_rate but an invalid substitution_ratio.
+        self.assertEqual(self.single(loss_rate="0").issues, ())
+        self.assertIn(
+            REASON_OUT_OF_DEFINED_RANGE, self.reasons(self.single(substitution_ratio="0"))
+        )
 
     def test_identifier_empty_is_unresolved_identity(self) -> None:
         report = self.single(plant_id="")
@@ -456,6 +602,44 @@ class OmissionAndNullDeferralTests(Layer2TestCase):
         self.assertNotIn(REASON_INVALID_TYPE, self.reasons(report))
         names = {check.name for check in report.not_evaluable_checks}
         self.assertTrue(any("field_not_evaluable" in name and "PerformancePeriod" in name for name in names))
+
+    def test_performance_period_valid_string_reports_no_invalid_defined_status(self) -> None:
+        # §4.4.34 does not define a PerformancePeriod vocabulary, so a present string
+        # must never be judged as an invalid defined status; the vocabulary stays
+        # ``not evaluable``.
+        report = self.single(PerformancePeriod="SIM-2026-Q1")
+        self.assertEqual(report.issues, ())
+        self.assertNotIn(REASON_INVALID_DEFINED_STATUS, self.reasons(report))
+        names = {check.name for check in report.not_evaluable_checks}
+        self.assertTrue(
+            any("field_not_evaluable" in name and "PerformancePeriod" in name for name in names)
+        )
+
+    def test_performance_period_non_string_is_invalid_type(self) -> None:
+        # Representation is decided before the value-level deferral: C-10 requires an
+        # exact JSON string for this canonical property, so a JSON number is
+        # INVALID_TYPE even though its vocabulary is deferred.
+        report = self.single(PerformancePeriod=123)
+        self.assertIn(REASON_INVALID_TYPE, self.reasons(report))
+        self.assertIn("r.json[0].PerformancePeriod", self.locations(report))
+        self.assertNotIn(REASON_INVALID_DEFINED_STATUS, self.reasons(report))
+
+    def test_sourcing_status_non_string_is_invalid_type_without_allowlist(self) -> None:
+        # Same ordering rule for the other deferred field: §4.4.33 forbids an enum
+        # allowlist, but C-7 still requires a JSON string.
+        report = self.single(sourcing_status=123)
+        self.assertIn(REASON_INVALID_TYPE, self.reasons(report))
+        self.assertIn("r.json[0].sourcing_status", self.locations(report))
+        self.assertNotIn(REASON_INVALID_DEFINED_STATUS, self.reasons(report))
+
+    def test_sourcing_status_non_string_is_not_reported_as_valid_value(self) -> None:
+        report = self.single(sourcing_status=True)
+        self.assertIn(REASON_INVALID_TYPE, self.reasons(report))
+        states = {check.name: check.state for check in report.checks}
+        self.assertNotIn("passed", set(
+            state for name, state in states.items()
+            if name.startswith("layer2.present_value:r.json[0].sourcing_status")
+        ))
 
 
 class DerivedFieldTests(Layer2TestCase):
@@ -653,6 +837,91 @@ class AcceptedViewBindingTests(Layer2TestCase):
         self.assertNotIn(REASON_OUT_OF_DEFINED_RANGE, self.reasons(report))
         names = {check.name for check in report.checks}
         self.assertIn(layer2_module.LAYER2_REVERIFICATION, names)
+
+    def test_reverification_gate_has_exactly_one_state_and_it_is_failed(self) -> None:
+        # ``MG-2`` is a gate, not a diagnostic: it must be recorded once, as ``failed``.
+        # Recording it as both ``passed`` and ``failed`` would misreport a failed gate
+        # as having also succeeded.
+        built, accepted = self.accepted([dict(VALID_RECORD)])
+        (built.root / "r.json").write_bytes(encode_json([{"plant_id": "P1"}]))
+        report = validate_layer2(accepted)
+        self.assertEqual(report.disposition, DISPOSITION_UNUSABLE)
+
+        states = [
+            check.state
+            for check in report.checks
+            if check.name == layer2_module.LAYER2_REVERIFICATION
+        ]
+        self.assertEqual(states, ["failed"])
+        self.assertEqual(states.count("passed"), 0)
+
+    def test_mg2_gate_is_not_reported_as_passed_anywhere(self) -> None:
+        built, accepted = self.accepted([dict(VALID_RECORD)])
+        (built.root / "r.json").unlink()
+        report = validate_layer2(accepted)
+
+        self.assertEqual(report.disposition, DISPOSITION_UNUSABLE)
+        for check in report.checks:
+            with self.subTest(check=check.name):
+                self.assertNotEqual(check.state, "passed")
+
+    def test_inherited_reverification_issues_keep_their_original_shape(self) -> None:
+        # Layer 2 did not establish these findings, so it must not relabel them: layer,
+        # category, reason, location, affected evidence, blast radius and design
+        # reference all stay exactly as the trusted-reuse boundary raised them.
+        built, accepted = self.accepted([dict(VALID_RECORD)])
+        (built.root / "r.json").write_bytes(encode_json([{"plant_id": "P1"}]))
+
+        verdict = accepted.reverify()
+        self.assertFalse(verdict.reusable)
+        expected = verdict.collector.sorted_issues()
+        self.assertTrue(expected)
+
+        report = validate_layer2(accepted)
+
+        self.assertEqual(report.inherited_issues, expected)
+        for original, published in zip(expected, report.inherited_issues):
+            with self.subTest(location=original.location):
+                self.assertEqual(published.layer, original.layer)
+                self.assertEqual(published.layer, 1)
+                self.assertEqual(published.category, original.category)
+                self.assertEqual(published.reason, original.reason)
+                self.assertEqual(published.location, original.location)
+                self.assertEqual(published.detail, original.detail)
+                self.assertEqual(published.affected_evidence, original.affected_evidence)
+                self.assertEqual(published.blast_radius, original.blast_radius)
+                self.assertEqual(published.design_reference, original.design_reference)
+                self.assertEqual(
+                    published.consequence_context, original.consequence_context
+                )
+
+    def test_inherited_issues_are_not_mixed_into_the_layer2_issue_set(self) -> None:
+        # The Layer-2 issue set stays empty: a re-verification finding is an inherited
+        # structural finding, not a canonical evidence defect produced by Layer 2.
+        built, accepted = self.accepted([dict(VALID_RECORD)])
+        (built.root / "r.json").unlink()
+
+        report = validate_layer2(accepted)
+
+        self.assertEqual(report.issues, ())
+        self.assertEqual(report.issues_for(category=CATEGORY_FIELD_VALUE), ())
+        self.assertEqual(report.issues_for(category=CATEGORY_IDENTITY_RESOLUTION), ())
+        self.assertTrue(report.inherited_issues)
+        self.assertEqual(len(report.all_issues), len(report.inherited_issues))
+
+    def test_inherited_issues_are_exposed_in_the_serialised_report(self) -> None:
+        built, accepted = self.accepted([dict(VALID_RECORD)])
+        (built.root / "r.json").unlink()
+        report = validate_layer2(accepted)
+
+        payload = report.to_dict()
+        self.assertEqual(payload["issues"], [])
+        inherited = payload["inherited_issues"]
+        self.assertIsInstance(inherited, list)
+        self.assertTrue(inherited)
+        self.assertTrue(all(entry["layer"] == 1 for entry in inherited))
+        text = report.render_text()
+        self.assertIn("inherited issues", text)
 
     def test_mutation_is_detected_even_when_the_change_would_be_invalid(self) -> None:
         # A mutated file must never be re-read and validated as if it were accepted
