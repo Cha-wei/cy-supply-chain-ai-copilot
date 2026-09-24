@@ -2,7 +2,7 @@
 
 **Document / Topic:** Canonical Data Model
 **Parent Design:** [POC Design v0.2](../../poc-design-v0.2.md)
-**Legacy Section:** §4.1（§4.1.1 ～ §4.1.12 编号保留）
+**Legacy Section:** §4.1（§4.1.1 ～ §4.1.13 编号保留）
 **Design Status:** `DESIGN RESOLVED`
 **Implementation Status:** `NOT STARTED`
 **Canonical Authority:** 本文件是 Canonical Data Model concern 的唯一 current canonical source；parent design 保留 navigation/status 入口。
@@ -650,6 +650,99 @@ Canonical model **不得通过默认值隐藏缺失**。
 > ```
 >
 > Analysis Run **只**是 **observation / traceability context**。
+
+#### 4.1.13 First-Tranche Canonical Object Construction Boundary（Issue #125 Human Decision Record）
+
+**Registration Status：`REGISTERED`** —— 依据 **Issue #125 Human Decision**（**D-1 ～ D-10 全部 `APPROVED`**）。
+
+本小节**只**登记 first deterministic tranche 的 canonical object construction boundary：
+canonical entity catalog（`§4.1.3` ／ `§4.1.4`）的 grain ／ attribute **完全未变**；本小节只补充
+「构造期需要哪些已批准 context，以及未完整 grain 如何被 representative 表示」。
+**未新增** canonical entity。
+
+**A. Canonicalization target assignment**
+
+downstream canonicalization 只在 **§4.3.31 B** 的 12 个 recognized role literal 上执行 role → target
+assignment；target 仅取自 `§4.1.3` ／ `§4.1.4` 的既有 entity ／ relationship ／ context。未识别 role ⇒
+`not_evaluable`（**§4.4.102**），不产生 Layer-1 rejection。
+
+**B. Inbound Supply `inbound record identity`（`§4.1.4 E`，G3-A）**
+
+```
+first-tranche implementation representation
+  = AcceptedPackage-scoped deterministic technical record reference
+    = current AcceptedPackage identity
+      + exact recognized logical dataset role = `Inbound Supply`
+      + dataset-internal record ordinal over the accepted stable content view
+```
+
+该 reference **不是** canonical field、**不是** canonical identity 的 production resolution：
+**grain 定义未改变**，`§4.1.4 E` 的 `inbound record identity` 语义**未改变**。
+其 scope ／禁止项见 **§4.3.31 D**。
+
+```
+source-specific ／ real Adapter inbound business identity = OPEN
+      （revisit before real Adapter or production integration）
+```
+
+**C. BOM Component（`§4.1.4 N`，G4-A）**
+
+- `BOM Component` role 下的 `material_code` = **component material identity**（属 contextual role
+  clarification，**不** rename 全局 `material_code`，**不**修改 entity C 的 grain）；
+- parent ／ requirement context **必须**引用**已经 constructed ／ resolved** 的 Production Requirement
+  context（`plant_id` ＋ parent `material_code` ＋ `required_date`），并保留其 upstream provenance；
+- **不得**由 caller 无来源地创建 parent context。
+
+```
+形成的 grain（未改变）：
+  plant_id ＋ parent ／ requirement material_code ＋ required_date ＋ component material_code
+```
+
+record 内若同时携带 `plant_id` ／ `required_date`，必须与 context **exact 相等**；不一致 ⇒
+`CONSISTENCY` ／ `CONSISTENCY_CONFLICT`，**不得** silent precedence。
+
+**不批准**：`parent_material_code` canonical field、BOM Version entity、BOM Header entity、BOM ID entity。
+
+**D. Substitute Allocation `effective demand context`（`§4.1.4 G`，G5-A）**
+
+`effective demand context` 采用 **read-only in-memory reference object**：
+
+```
+不是 canonical field
+不是 persisted entity
+不是 single boolean
+不新增 identity component
+```
+
+其两个 relation outcome **必须**来自 approved mapping evidence，可追溯到 **same AcceptedPackage**，
+并保留 provenance ＋ mapping basis；**不得**由 caller 手工指定 outcome 以绕过 mapping：
+
+```
+Target Applicability  ≠  Source Reservation Overlap（不得压成一个 Boolean）
+```
+
+`§4.1.4 G` 的 grain 与 attributes **未改变**；**未**新增 `requirement_id` ／ `demand_window_id` ／
+`allocation_period` ／ `valid_from` ／ `valid_to`。
+
+**E. `POLICY_INPUT` ／ `CONTEXT` context**
+
+`loss_rate` ／ `SafetyStock` ／ `ApplicableMOQ` ／ `AnalysisDate` ／ `RecommendationNeedDate` 以
+**已 resolved value ＋ provenance** 经 **§4.3.31 E** 的 in-process logical handoff 提供；
+`loss_rate` 的 Entity ／ Dataset ／ Source Field 归属**仍不得**决定（§4.4.15）。
+`RecommendationNeedDate` = `FirstShortageDate`（§4.4.65），**不是**任意 runtime injected date。
+
+**F. Registration Boundary ／ status**
+
+- **未新增** canonical entity ／ canonical business field ／ identity component；
+- **未修改** 任何 entity grain ／ attributes；
+- **未修改** `adr-001-deterministic-core.md`；
+- 本小节**不代表** implementation。
+
+```
+first-tranche canonical object construction boundary = REGISTERED（Issue #125 Human Decision）
+Canonical Data Model                                 = DESIGN RESOLVED（§4.1.1 ～ §4.1.12 结论未变）
+Runtime implementation                                = NOT STARTED
+```
 
 ---
 

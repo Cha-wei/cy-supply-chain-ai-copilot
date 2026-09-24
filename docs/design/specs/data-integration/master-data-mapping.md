@@ -2,7 +2,7 @@
 
 **Document / Topic:** Master Data Mapping
 **Parent Design:** [POC Design v0.2](../../poc-design-v0.2.md)
-**Legacy Section:** §4.5（§4.5.1 ～ §4.5.25 编号保留）
+**Legacy Section:** §4.5（§4.5.1 ～ §4.5.26 编号保留）
 **Design Status:** `DESIGN RESOLVED`
 **Implementation Status:** 原文未单独登记本专题的 implementation 状态；source-specific / runtime realization 属 Adapter Boundary 范围，仍为 `NOT IMPLEMENTED`（见原文）。
 **Canonical Authority:** 本文件是 Master Data Mapping concern 的唯一 current canonical source；parent design 保留 navigation/status 入口。
@@ -8566,6 +8566,60 @@ New Blocking Canonical Mapping Gap = NONE
 Final Master Data Mapping          = DESIGN RESOLVED
 Master Data Mapping overall        = DESIGN RESOLVED
 Master Data Mapping layers         = 11 / 11 DESIGN RESOLVED
+```
+
+#### 4.5.26 First-Tranche Canonicalization Mapping Boundary（Issue #125 Human Decision Record）
+
+**Registration Status：`REGISTERED`** —— 依据 **Issue #125 Human Decision**（**D-1 ～ D-10 全部 `APPROVED`**）。
+
+本小节只登记 first deterministic tranche 的 canonicalization 如何复用既有 Master Data Mapping
+resolution boundary；它**不新增** mapping layer、**不新增** unresolved item、**不修改** `MC-1` ～ `MC-10`。
+
+**A. 复用既有 resolution contract（未变）**
+
+```
+loss_rate        : owner = Requirement Calculation Context
+                   resolution contract = exactly one applicable loss_rate or unresolved（§4.5.22 Option E）
+ApplicableMOQ    : owner = exact Procurement Recommendation Context
+                   resolution contract = exactly one applicable ApplicableMOQ or unresolved（§4.5.22 Option D）
+physical carrier : 两者均为 SOURCE-SPECIFIC ／ not yet defined
+```
+
+resolution 的 outcome 语义与 conflict 语义按 **§4.4.102** 的 Stage A ／ Stage B 处理；
+无 approved precedence 时**不得**自行裁决（§4.4.67 ／ §4.4.12 ／ §4.4.13）。
+
+**B. Grain representation 复用（未变）**
+
+```
+BOM Component        : requirement-scoped grain；parent ／ requirement context 由 §4.1.13 C 的
+                       resolved context reference 提供（§4.5.7 保持）
+Substitute Allocation: effective demand context = read-only reference object（§4.1.13 D ／ §4.5.9 保持）
+Inbound Supply       : first-tranche identity representation = G3-A technical record reference（§4.3.31 D）
+```
+
+**C. 未新增 unresolved item**
+
+```
+Master Data Mapping layers            = 11 / 11 DESIGN RESOLVED（未变）
+New Blocking Canonical Mapping Gap    = NONE（未变）
+source-specific ／ real Adapter inbound business identity = OPEN
+      （属 §4.3.30 F 的既有登记项；revisit before real Adapter or production integration）
+```
+
+本登记**不**把 `§4.3.30 F` 的 source-specific item 计入 Master Data Mapping closure blocker，
+也**不**声称它已关闭。
+
+**D. Registration Boundary ／ status**
+
+- **未新增** canonical entity ／ canonical business field ／ mapping layer ／ Rule ID；
+- **未**修改 `§4.5.1` ～ `§4.5.25` 的既有结论与 `MC-9` scope attribution；
+- **未**修改 `adr-001-deterministic-core.md`；
+- **不代表** implementation ／ real ERP mapping ／ Adapter 已完成。
+
+```
+first-tranche canonicalization mapping boundary = REGISTERED（Issue #125 Human Decision）
+Master Data Mapping overall                     = DESIGN RESOLVED（未变）
+Runtime implementation                          = NOT STARTED
 ```
 
 ---

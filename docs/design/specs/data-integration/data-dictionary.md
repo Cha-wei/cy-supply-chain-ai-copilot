@@ -2,7 +2,7 @@
 
 **Document / Topic:** Data Dictionary
 **Parent Design:** [POC Design v0.2](../../poc-design-v0.2.md)
-**Legacy Section:** §4.2（§4.2.1 ～ §4.2.17 编号保留）
+**Legacy Section:** §4.2（§4.2.1 ～ §4.2.18 编号保留）
 **Design Status:** `DESIGN RESOLVED`
 **Implementation Status:** `NOT STARTED`
 **Canonical Authority:** 本文件是 Data Dictionary concern 的唯一 current canonical source；parent design 保留 navigation/status 入口。
@@ -1189,6 +1189,61 @@ canonical field semantics defined
 
 **不表示**：source mapping complete、physical schema complete、import contract complete、
 data validated、implemented、tested。
+
+#### 4.2.18 First-Tranche Canonicalization Applicability（Issue #125 Human Decision Record）
+
+**Registration Status：`REGISTERED`** —— 依据 **Issue #125 Human Decision**（**D-1 ～ D-10 全部 `APPROVED`**）。
+
+本小节登记 first deterministic tranche 的 **canonicalization applicability matrix**。
+它描述「某个 recognized role 的 evidence 可以携带哪些**既有** canonical property」，
+是 **object construction** 所需的信息。
+
+**必须严格区分（不得合并）：**
+
+```
+canonicalization applicability  = 哪些既有 property 可被指派到该 object
+per-record REQUIRED schema      = 未登记，本小节不登记
+MISSING semantics               = 未登记，本小节不登记（§4.2.12 保持）
+capability requirement          = 属 Capability Readiness，本小节不登记
+"可被指派"  ≠  "必须存在"
+```
+
+**本小节未新增任何 canonical field**；所有 property 均取自 `§4.2.3` ～ `§4.2.9` 的既有 field。
+role literal 集合与 Layer-1 opacity 约束见 **§4.3.31 B**；未识别 role 行为见 **§4.4.102**。
+
+| # | recognized role | assignable existing canonical properties | contextual ／ injected | explicitly not assignable |
+| --- | --- | --- | --- | --- |
+| 1 | `Plant / Material identity context` | `plant_id`, `material_code` | — | 其余 28 个 property |
+| 2 | `Production Requirement` | `plant_id`, `material_code`（parent）, `required_date`, `ProductionQty` | `loss_rate` ＋ Requirement Calculation Context（**禁止**由本 record 指派）；BOM context（经 role 3）；Analysis Run context | `BOMComponentQty`, `loss_rate`, inventory ／ inbound ／ substitute ／ supplier ／ procurement 全部 |
+| 3 | `BOM Component` | `plant_id`, `required_date`, `material_code`（= component material identity）, `BOMComponentQty` | parent ／ requirement context binding（G4-A） | `ProductionQty`, `loss_rate`, 其余全部 |
+| 4 | `Inventory Snapshot` | `plant_id`, `material_code`, `inventory_snapshot_time`, `inventory_status`, `on_hand_qty` | — | `SafetyStock`（属 role 5）, 其余全部 |
+| 5 | `Configured Safety Stock` | `plant_id`, `material_code`, `SafetyStock` | `SafetyStock`（internal handoff；冲突规则见 §4.4.102） | 其余全部 |
+| 6 | `Inbound Supply` | `plant_id`, `material_code`, `ordered_qty`, `received_qty`, `effective_arrival_date`, `inbound_status` | —（record identity = G3-A technical record reference；**不是** canonical property） | 其余全部 |
+| 7 | `Substitute Relationship` | `plant_id`, `target_material_code`, `substitute_material_code`, `substitution_ratio`, `approval_status` | — | `AllocatedSubstituteQty`, effective demand context（属 role 8） |
+| 8 | `Substitute Allocation` | `plant_id`, `target_material_code`, `substitute_material_code`, `AllocatedSubstituteQty` | effective demand context reference（G5-A） | `substitution_ratio`, `approval_status`（属 role 7） |
+| 9 | `Supplier identity` | `supplier_id` | — | 其余 29 个 property |
+| 10 | `Supplier-Material Relationship` | `supplier_id`, `material_code`, `sourcing_status` | eligibility mapping outcome（conceptual；**不得**登记为 canonical field） | `standard_lead_time_days`, `PerformancePeriod`, `PerformanceUpdatedAt`, `DeliveryPerformance`, `QualityPerformance`（属 role 11） |
+| 11 | `Supplier Performance` | `supplier_id`, `material_code`, `PerformancePeriod`, `PerformanceUpdatedAt`, `DeliveryPerformance`, `QualityPerformance`, `standard_lead_time_days` | Analysis Run context（`AnalysisDate`） | `sourcing_status`（属 role 10） |
+| 12 | `Procurement policy input` | `ApplicableMOQ` | Procurement Recommendation Context ＋ `RecommendationNeedDate`（**仅 Phase B**） | 其余全部 |
+
+**`standard_lead_time_days`（Human-approved assignment）：** 归入 role 11 `Supplier Performance`
+作为本 first-tranche canonicalization assignment。说明依据：`§4.2.8` 将其归入 Supplier Fields，
+`§4.1.4 J` 以「另需 `standard_lead_time_days` 供 Lead Time Feasibility 使用」表述（未列入 J 的
+attributes 列表），`§4.4.6` Capability C 又以独立 evidence role 行列出 —— 本登记按 `§4.2.8` 的
+分组将其指派给 role 11，**不**改变其 Class（`SOURCE`）／ Requiredness ／ logical type ／ valid boundary。
+
+**Boundary：**
+
+- field-level validation ／ missing ／ type ／ status ／ semantic ／ provenance reason **一律委托既有
+  canonical taxonomy**（见 **§4.4.102**），不在本小节重定义；
+- record 的 grain 完整性 ／ 缺字段 ／ 类型 ／ status 判定**不属于** role → target assignment；
+- **不**新增 canonical field ／ enum ／ default ／ normalization ／ aggregation ／ precedence。
+
+```
+first-tranche canonicalization applicability = REGISTERED（Issue #125 Human Decision）
+canonical field set                          = 未改变（§4.2.3 ～ §4.2.17 结论未变）
+Runtime implementation                        = NOT STARTED
+```
 
 ---
 

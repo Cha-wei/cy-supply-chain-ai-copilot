@@ -2,7 +2,7 @@
 
 **Document / Topic:** Data Validation
 **Parent Design:** [POC Design v0.2](../../poc-design-v0.2.md)
-**Legacy Section:** §4.4（§4.4.1 ～ §4.4.101 编号保留）
+**Legacy Section:** §4.4（§4.4.1 ～ §4.4.102 编号保留）
 **Design Status:** `DESIGN RESOLVED`
 **Implementation Status:** 原文未单独登记 implementation 状态；`DESIGN RESOLVED` 仅表示 conceptual validation design complete，不代表 implemented / data validated / tested / production-ready。
 **Canonical Authority:** 本文件是 Data Validation concern 的唯一 current canonical source；parent design 保留 navigation/status 入口。
@@ -2760,6 +2760,124 @@ conceptual validation design complete
 - no error code / severity model
 - no UI / monitoring implementation
 - no physical import format
+
+#### 4.4.102 First-Tranche Canonicalization Outcome & Conflict Boundary（Issue #125 Human Decision Record）
+
+**Registration Status：`REGISTERED`** —— 依据 **Issue #125 Human Decision**（**D-1 ～ D-10 全部 `APPROVED`**）。
+
+本小节登记 downstream canonicalization 的 outcome 与 conflict 边界。它**不新增**任何
+Validation Category ／ Reason ／ status ／ enum：`§4.4.80` 的 8 个 category 与 `§4.4.81` 的
+12 个 reason **保持不变**。
+
+**A. Outcome vocabulary（不新增 status）**
+
+```
+"not canonicalizable" 只作为 explanatory wording（human-readable detail）
+```
+
+canonicalization outcome 一律使用既有 vocabulary：
+
+```
+construction check state : passed ／ failed ／ not_evaluable（§4.3.28 B.2 FR-3）
+package disposition      : 既有 ACCEPTED ／ REJECTED ／ UNUSABLE（本登记不改变 disposition 语义）
+Validation Issue         : 仅 8 category ／ 12 reason（§4.4.80 ／ §4.4.81）
+```
+
+**B. Unrecognized role（D-9）**
+
+```
+unrecognized role = not_evaluable only at canonicalization stage
+no automatic Validation Issue
+no Layer-1 rejection
+no new reason ／ status ／ enum
+```
+
+依据 `§4.4.95`：只有当前 capability **确实需要**解释该 semantic 而 approved Design 无法可靠解释时，
+才形成 `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`；canonicalization **不做** capability-specific
+readiness，故**不得**自动产生该 issue。future Capability Readiness 可按 actual capability context
+使用既有 taxonomy。
+
+**C. Two-stage rule（D-7）—— 不得使用一条 universal conflict rule**
+
+**Stage A —— applicability ／ resolution（exactly-one-or-unresolved）**
+
+```
+0 applicable evidence
+    ├─ 该 semantic 的既有 applicable rule 明确允许 valid absence（§4.4.87）⇒ 不生成 issue
+    └─ 否则                                                        ⇒ 保持 unresolved
+exactly 1 applicable evidence                                       ⇒ resolved
+>1 applicable evidence
+    ⇒ 不得因 value 相等而自动 deduplicate（不得创建 same-value deduplication policy）
+    ⇒ 若该 semantic 的 current contract 要求 exactly one applicable
+      （loss_rate §4.4.15 ／ ApplicableMOQ §4.4.67）
+      ⇒ SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED
+```
+
+**Stage B —— approved consistency invariant violation**
+
+只有**同时**满足以下三条，才使用 `CONSISTENCY` ／ `CONSISTENCY_CONFLICT`：
+
+```
+1. 各 evidence 已可靠解析到同一 canonical grain ／ fact；且
+2. 已有 Design 明确要求这些 canonical values 在该 grain ／ fact 上应当一致；且
+3. 实际值互不一致
+```
+
+**Stage B 的已登记实例：** `conflicting SafetyStock at same grain`（§4.4.92）、
+`received_qty > ordered_qty`、`Allocation > Eligible Supply`、
+`Supplier Performance associated with wrong Material`。
+
+`sourcing_status` ／ `ApplicableMOQ` 等多来源 policy evidence 在无 approved precedence 时，
+**不得**自动归类为 `CONSISTENCY_CONFLICT`（§4.4.67 明确禁止），而应落 Stage A。
+
+**wire ↔ injection：** **不得**使用一条 universal conflict rule；必须逐项先判断属于 Stage A 还是
+Stage B。Stage A 的 item 出现多来源冲突 ⇒ `SEMANTIC_UNRESOLVED`；Stage B 的 item ⇒
+`CONSISTENCY_CONFLICT`。
+
+**明确禁止（无 authority，不得 silent precedence）：**
+
+```
+first wins ／ last wins ／ wire wins ／ injection wins ／ latest wins ／
+min ／ max ／ average ／ earliest ／ newest updated_at ／ most specific wins ／ LLM choose
+```
+
+**D. Taxonomy delegation（不重定义）**
+
+canonicalization **不**重定义 field-level reason；root-condition 映射沿用既有 taxonomy：
+
+```
+canonical identifier 无法解析      → IDENTITY_RESOLUTION ／ UNRESOLVED_IDENTITY（§4.4.26 ／ §4.4.94）
+required non-identity field missing → FIELD_VALUE ／ MISSING（仅在既有 requiredness authority applicable 时）
+present invalid type                → FIELD_VALUE ／ INVALID_TYPE
+invalid approved status             → FIELD_VALUE ／ INVALID_DEFINED_STATUS（§4.2.14）
+semantic mapping 无法解析           → SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED（§4.4.95）
+provenance linkage problem          → PROVENANCE ／ PROVENANCE_UNRESOLVED ／ PROVENANCE_MISMATCH（§4.4.93）
+valid absence ／ valid zero ／ valid but ineligible → 不生成 issue（§4.4.87 ／ §4.4.88 ／ §4.4.89）
+```
+
+**E. `loss_rate` ／ `ApplicableMOQ` boundary（未变）**
+
+`§4.4.15` 与 `§4.4.67` 的结论**未改变**：`loss_rate` 的 Entity ／ Dataset ／ Source Field 归属
+**不得**被决定；`ApplicableMOQ` 的 Resolution Contract 仍为 exactly one applicable or unresolved；
+值经 **§4.3.31 E** 的 in-process logical handoff 提供。
+
+**F. `PerformancePeriod`（未变）**
+
+`PerformancePeriod` period policy 仍 `DESIGN PENDING`。non-null present `TEXT_CONTEXT` **原样保留
+exact value**；业务 semantic readiness（`DeliveryRisk` ／ `QualityRisk` 的 `DATA_INCOMPLETE`）
+留给对应后续 validation ／ capability，**不得**因 object construction 自动判为 `SEMANTIC_UNRESOLVED`。
+
+**G. Registration Boundary ／ status**
+
+- **未新增** Validation Category ／ Reason ／ severity ／ error code ／ status ／ enum；
+- **未**修改 `§4.4.24` ～ `§4.4.100` 的既有结论；
+- **不代表** implementation。
+
+```
+first-tranche canonicalization outcome ／ conflict boundary = REGISTERED（Issue #125 Human Decision）
+Validation taxonomy                                       = 8 category ／ 12 reason 未变
+Runtime implementation                                     = NOT STARTED
+```
 
 ---
 

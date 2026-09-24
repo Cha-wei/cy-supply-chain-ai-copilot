@@ -6450,6 +6450,8 @@ Snapshot loader → Validation → Canonical data objects
 
 表内 standalone authority 均经 §4 routing 指向六份 canonical specs；本节只划定实现职责，不重写业务／数据 policy。依赖方向、CLI 与 in-memory boundary 由 ADR-001 管理；真实 source extraction / ERP Adapter 不属于该 loader。
 
+**Canonical data objects module 的 authority routing（Issue #125 Human Decision，`REGISTERED`）：**该 module 除上表所列 authority 外，另以 **Snapshot / Import Contract §4.3.31**（wire → canonical object construction contract ／ injection boundary ／ phase ordering）、**Canonical Data Model §4.1.13**（canonical object construction boundary）、**Data Dictionary §4.2.18**（canonicalization applicability）、**Data Validation §4.4.102**（canonicalization outcome ／ conflict boundary）与**Master Data Mapping §4.5.26**（canonicalization mapping boundary）为 authority。本 routing 登记**不**改变本节的 module 职责划分，**不**改变 ADR-001，**不**授权 Issue #124 implementation。
+
 **本批明确不包含：** Web、AI explanation / LLM / Agent framework、Tool protocol 实现、HITL workflow、RBAC / real permission enforcement、secrets integration、persistent Audit、database / persistent business state、real ERP Adapter、production write-back、P1。内存中的 package / rule / evidence linkage 是现有确定性结果义务，不等于实现持久 Audit。
 
 #### C. Minimum deterministic acceptance boundary
