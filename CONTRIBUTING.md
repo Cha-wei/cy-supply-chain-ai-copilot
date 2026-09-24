@@ -1,7 +1,7 @@
 # CONTRIBUTING.md
 
 **项目：** Yunnan CY Group Supply Chain AI Copilot
-**文档版本：** v0.3
+**文档版本：** v0.4
 **文档状态：** `APPROVED`
 **生效范围：** 本项目日常工程协作流程
 
@@ -611,6 +611,20 @@ Agent 已完成当前 Task 的全部自主执行工作，并满足所有**适用
 **不**改变 Human Approval、DoR ／ DoD、Required Gates、Git ／ PR 语义、Rule Precedence
 或 Multi-Agent role 规则。
 
+### Decision / Change Granularity
+
+默认以**一个逻辑完整、可独立 Review ／ Validate ／ Rollback 的 Design Change ／ Closure 单元**对应
+**一个 Issue ／ PR**，而不是机械地按每个微小 Human Decision 拆分 `registration-only PR`。
+
+- 当多个 Human Decisions 属于**同一个 logical change ／ closure**，共享相同 Objective、关键依赖与
+  Write Scope，并可在同一 Review Gate 中整体验证时，应优先在同一个 Issue ／ PR 中登记和实施。
+- **不得仅为了“登记动作本身”而默认创建独立 `registration-only PR`。**
+- `registration-only PR` 仅在该 Decision 需要先形成**独立 canonical authority**、具有独立
+  lifecycle ／ blast radius ／ rollback boundary，或分离后能显著改善 Review ／ Traceability 时采用。
+- **逻辑完整 ≠ 捆绑无关变更。** 不同 Concern、不同授权边界或无法共同验证／回滚的变更仍应拆分。
+- 本规则**不改变** Human Approval、Decision Authority、DoR ／ DoD、Required Gates、Merge Authority
+  或 Git ／ PR 基本语义；同一 PR 中包含多个 Human Decisions 时，每个 Decision 仍必须具有明确的
+  Human authorization 与可追踪依据。
 ### 生命周期
 
 正式文档按需使用：
@@ -766,15 +780,16 @@ DRAFT → REVIEW → APPROVED → FROZEN → DEPRECATED
 ## Document Control
 
 **Document:** CONTRIBUTING
-**Version:** v0.3
+**Version:** v0.4
 **Status:** `APPROVED`
 
-本文档的**当前已批准 baseline** 为 **`v0.3`**（文档级状态 `APPROVED`）。
-**`v0.2`** ／ **`v0.1`** 为其**此前**的已批准 baseline。
+本文档的**当前已批准 baseline** 为 **`v0.4`**（文档级状态 `APPROVED`）。
+**`v0.3`** ／ **`v0.2`** ／ **`v0.1`** 为其**此前**的已批准 baseline。
 
 - **`v0.1`：** 此前已批准的工程协作基线（已完成实际文件 Review 并获 `APPROVAL`）；**不再**是 current baseline。
 - **`v0.2`：** 经**明确授权的 Governance Task** 引入第 4 节 `### Multi-Agent Execution` 与第 5 节 `### Workspace ／ Worktree Isolation`，并在第 11 节增加一个**条件性** `Write Owner` 字段；已随 **PR #54 merge** 生效；**不再**是 current baseline。**未**修改 Human Approval、DoR、DoD、Required Gate、Git / PR 规则、Rule Precedence 或 Governance Protection；**未**新增 governance artifact；`AGENTS.md` **未修改**。
-- **`v0.3`：** 经**明确授权的 Governance Task**（Issue #68）在第 9 节 `### Canonical Source` 之后新增 `### Issue / PR / Review 记录职责`，明确 Canonical docs ／ Issue ／ PR body ／ Review comments 的操作性职责、anti-duplication 规则与「历史不追溯清理」边界；**现为 current `APPROVED` baseline**。**未**修改 Human Approval、DoR、DoD、Required Gates、Git / PR 语义、Rule Precedence 或 Multi-Agent role 规则；**未**新增 governance 文档；`AGENTS.md` **未修改**；`Canonical Source` 原则**未改动**。
+- **`v0.3`：** 经**明确授权的 Governance Task**（Issue #68）在第 9 节 `### Canonical Source` 之后新增 `### Issue / PR / Review 记录职责`，明确 Canonical docs ／ Issue ／ PR body ／ Review comments 的操作性职责、anti-duplication 规则与「历史不追溯清理」边界；**不再**是 current baseline。**未**修改 Human Approval、DoR、DoD、Required Gates、Git / PR 语义、Rule Precedence 或 Multi-Agent role 规则；**未**新增 governance 文档；`AGENTS.md` **未修改**；`Canonical Source` 原则**未改动**。
+- **`v0.4`：** 经**明确授权的 Governance Task**（Issue #113）在第 9 节新增 `### Decision / Change Granularity`，确立“一个逻辑完整的 Design Change ／ Closure 单元 → 一个 Issue ／ PR”的默认粒度，并明确不得机械地为每个微小 Human Decision 创建 `registration-only PR`；同时保留需要独立 canonical authority ／ lifecycle ／ blast radius ／ rollback boundary，或分离显著改善 Review ／ Traceability 时单独 registration PR 的例外。**现为 current `APPROVED` baseline**。**未**修改 Human Approval、Decision Authority、DoR ／ DoD、Required Gates、Merge Authority、Rule Precedence 或 Multi-Agent role 规则；**未**新增 governance 文档；`AGENTS.md` **未修改**。
 - 本文档**尚未** `FROZEN`，因此仍可通过治理 Task 修订。
 - 实质修改需通过明确授权的 Governance Task，并按第 12 节处理冲突。
 - 非实质修正（typo、坏链接、格式）可直接修正，无需扩大为架构决策。
