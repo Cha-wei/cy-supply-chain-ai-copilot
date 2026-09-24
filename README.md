@@ -113,10 +113,11 @@ Layer-1 loader CI test job = NOT PRESENT IN PR #119；已由 Human Decision
 
 当前可声称的验证证据只有两类：
 
-- **local**：`182 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures）；
-- **remote**：existing `Foundation checks` = PASS（`b523477` 上的 Actions run 35991140000）。
+- **local**：`185 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures）；
+- **remote**：PR #119 current-head `Foundation checks` = PASS。
 
-本文不登记动态的 PR head SHA；以 PR #119 当前 head 为准。
+本文**不登记**动态的 PR head SHA 或 transient Actions run id —— 二者会随每次 push 变化；
+具体 current run evidence 以 **PR #119** 为准。
 
 ### Manifest carrier presence（Layer-1 requirement）
 

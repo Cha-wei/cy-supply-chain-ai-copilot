@@ -18,22 +18,16 @@ This module implements **only** those registered rules.  It deliberately does no
 invent platform-specific filename policy: there is no maximum filename length, no
 Windows reserved-device-name list, no Windows illegal-character set, no "trailing
 dot/space" or "surrounding whitespace" rule, no "must have a non-empty stem" rule,
-and no rule that rejects a filename merely for starting with ``..``.  Any such extra
-rejection would be an unapproved acceptance criterion, and a filename the host
-filesystem cannot represent is reported as an absent/unreadable declared artifact
-(``IC-14``) rather than as a contract violation here.
+no rule that rejects a filename merely for starting with ``..``, and **no
+control-character rule**.
 
-One behaviour needs an explicit boundary statement because it is **not** a registered
-contract criterion:
-
-```
-filename containing a control character  ->  rejected (CONTROL_CHARACTER)
-```
-
-Control characters are disallowed because they cannot be reliably compared or
-represented.  This is a documented permissive-by-default implementation behaviour,
-not a canonical acceptance criterion; if a wider tolerance is ever wanted, this is
-the single place to change and it requires no contract amendment.
+A filename that is legal under the registered rules but that the host filesystem
+cannot represent or open is **not** a contract violation: it is handled downstream as
+an absent / unreadable declared artifact (``IC-14`` / ``IC-16``) and fails closed
+there.  The filesystem helpers in this module therefore return their neutral
+"cannot inspect" values for both :class:`OSError` and :class:`ValueError` -- the
+latter is what ``os`` / :mod:`pathlib` raise for a path the host cannot represent
+(for example an embedded NUL), and it must never escape as a loader crash.
 
 Because ``PN-1`` performs no normalisation, a value that is not literally a plain
 filename is rejected outright rather than repaired into one.  Any accepted
@@ -76,10 +70,6 @@ class FilenameRejection:
 
     code: str
     detail: str
-
-
-def _has_control_characters(value: str) -> bool:
-    return any(ord(char) < 0x20 or ord(char) == 0x7F for char in value)
 
 
 def validate_artifact_filename(reference: object) -> FilenameRejection | None:
@@ -130,12 +120,9 @@ def validate_artifact_filename(reference: object) -> FilenameRejection | None:
             "artifact reference must be a plain filename with no directory component",
         )
 
-    if _has_control_characters(reference):
-        return FilenameRejection(
-            "CONTROL_CHARACTER",
-            "filenames containing control characters are not accepted (implementation "
-            "behaviour, not a registered contract criterion)",
-        )
+    # No control-character rule: no canonical authority registers
+    # "control character = Layer-1 contract violation".  A filename the host cannot
+    # represent or open is handled as an absent / unreadable artifact (IC-14).
 
     if not reference.endswith(ARTIFACT_EXTENSION):
         return FilenameRejection(
@@ -162,7 +149,9 @@ def resolved_within(candidate: Path, anchor: Path) -> bool:
     """Return ``True`` when ``candidate`` resolves inside ``anchor``.
 
     Used as a redundant boundary assertion (``IC-2``): on any resolution error the
-    answer is ``False`` so that the caller fails closed.
+    answer is ``False`` so that the caller fails closed.  ``ValueError`` is treated
+    like ``OSError`` because a path the host cannot represent raises it rather than
+    returning a negative containment answer.
     """
 
     try:
@@ -177,9 +166,34 @@ def resolved_within(candidate: Path, anchor: Path) -> bool:
         return os.path.commonpath([str(resolved_anchor), str(resolved_candidate)]) == str(
             resolved_anchor
         )
-    except ValueError:
-        # Different drives / mounts on Windows: not within the package boundary.
+    except (ValueError, OSError):
+        # Different drives / mounts on Windows, or an unrepresentable path: not
+        # provably within the package boundary.
         return False
+
+
+def path_is_unrepresentable(path: Path) -> bool:
+    """Return ``True`` when this host cannot address ``path`` at all.
+
+    Some syntactically legal filenames cannot be represented by the host filesystem
+    or its API (an embedded NUL is the standard example).  Such a name does **not**
+    violate any registered ``PN-1`` rule, so it must not be turned into a filename
+    contract violation; instead the caller treats the declared artifact as absent /
+    unreadable (``IC-14`` / ``IC-16``) and fails closed.
+
+    Detection probes the filesystem, because that is where the host rejects the
+    path: ``os.fsencode`` / ``os.path.abspath`` accept an embedded NUL happily, while
+    ``lstat`` / ``stat`` / ``open`` / ``scandir`` raise ``ValueError`` for it.  A
+    path that merely *does not exist* is representable and returns ``False``.
+    """
+
+    try:
+        path.lstat()
+    except ValueError:
+        return True
+    except OSError:
+        return False
+    return False
 
 
 def is_reparse_point(path: Path) -> bool:
@@ -188,16 +202,20 @@ def is_reparse_point(path: Path) -> bool:
     Returns ``True`` for symbolic links and, on Windows, for any other reparse
     point (junction, mount point, appexec link).  Returns ``False`` when the path
     cannot be inspected -- callers must therefore treat a ``False`` result as
-    "not detected" rather than as proven alias-free.
+    "not detected" rather than as proven alias-free.  ``ValueError`` (a path the
+    host cannot represent) is handled exactly like ``OSError``.
     """
 
     try:
         stat_result = path.lstat()
-    except OSError:
+    except (OSError, ValueError):
         return False
 
-    if os.path.islink(path):
-        return True
+    try:
+        if os.path.islink(path):
+            return True
+    except (OSError, ValueError):
+        return False
 
     file_attributes = getattr(stat_result, "st_file_attributes", 0)
     reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
@@ -209,12 +227,13 @@ def physical_identity(path: Path) -> tuple[int, int] | None:
 
     ``None`` means the platform/filesystem could not provide a trustworthy
     identity; alias detection must then be reported as *not evaluable* rather than
-    as passed or failed.
+    as passed or failed.  ``ValueError`` (a path the host cannot represent) is
+    handled exactly like ``OSError``.
     """
 
     try:
         stat_result = path.stat()
-    except OSError:
+    except (OSError, ValueError):
         return None
 
     device = int(getattr(stat_result, "st_dev", 0) or 0)

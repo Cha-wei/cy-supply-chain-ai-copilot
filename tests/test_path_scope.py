@@ -7,7 +7,12 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
 from snapshot_loader import validate_artifact_filename  # noqa: E402
-from snapshot_loader.path_scope import resolved_within  # noqa: E402
+from snapshot_loader.path_scope import (  # noqa: E402
+    is_reparse_point,
+    path_is_unrepresentable,
+    physical_identity,
+    resolved_within,
+)
 
 
 class FilenameAcceptanceTests(unittest.TestCase):
@@ -120,9 +125,35 @@ class FilenameRejectionTests(unittest.TestCase):
         self.assert_accepted("nul.json")
         self.assert_accepted('req"uirement.json')
 
-    def test_control_characters(self) -> None:
-        self.assert_rejected("requirement\n.json", "CONTROL_CHARACTER")
-        self.assert_rejected("requirement\x00.json", "CONTROL_CHARACTER")
+    def test_no_control_character_rule(self) -> None:
+        # No canonical authority registers "control character = Layer-1 contract
+        # violation", so validate_artifact_filename must not reject these on its own.
+        # Whether the host can actually represent such a name is a filesystem
+        # question handled downstream (IC-14), not a filename contract question.
+        self.assert_accepted("requirement\n.json")
+        self.assert_accepted("requirement\x00.json")
+        self.assert_accepted("requirement\r.json")
+        self.assert_accepted("requirement\t.json")
+        self.assert_accepted("requirement\x7f.json")
+        self.assert_accepted("requirement\x01.json")
+
+    def test_unrepresentable_paths_are_detected_without_crashing(self) -> None:
+        # An embedded NUL is a legal filename under the registered PN-1 rules but the
+        # host cannot address it.  Detection must return a verdict rather than raise.
+        nul = Path("pkg") / "required\x00.json"
+        self.assertTrue(path_is_unrepresentable(nul))
+        self.assertFalse(is_reparse_point(nul))
+        self.assertIsNone(physical_identity(nul))
+
+        # Containment is a purely lexical check and stays True here: ''/".."-
+        # free single-component names are inside the root by construction.  Whether
+        # the host can open the file is a separate question answered by
+        # read_file_bytes -> absent/unreadable (IC-14), not by containment.
+        self.assertTrue(resolved_within(nul, Path("pkg")))
+
+    def test_representable_paths_are_not_flagged_as_unrepresentable(self) -> None:
+        self.assertFalse(path_is_unrepresentable(Path("pkg") / "missing.json"))
+        self.assertFalse(path_is_unrepresentable(Path("pkg") / "requirement.json"))
 
     def test_case_is_not_folded_and_exact_match_required(self) -> None:
         # PN-1 forbids case folding, but the extension requirement in §4.3.23 D is a

@@ -326,6 +326,42 @@ class F4StableViewMutationTests(ReviewFindingTestCase):
     def test_final_root_content_set_is_mandatory(self) -> None:
         self.assertIn("package.final_root_content_set", MANDATORY_LAYER1_CHECKS)
 
+    def test_unrepresentable_declared_filename_fails_closed_without_crashing(self) -> None:
+        # A declared filename that is legal under the registered rules but that the
+        # host cannot address (embedded NUL) must reach the existing absent/unreadable
+        # artifact path (IC-14) and fail closed -- never crash the loader, and never
+        # be turned into an invented filename contract violation.
+        built = valid_package(
+            self.boundary / "pkg-unrepresentable", boundary_root=self.boundary
+        )
+        document = json.loads(built.manifest_path.read_text(encoding="utf-8"))
+        document["datasets"][0]["artifact"] = "requirement\x00.json"
+        built.manifest_path.write_bytes(encode_json(document))
+
+        try:
+            report = self.load(built.root)
+        except Exception as error:  # noqa: BLE001 - the point of the test
+            self.fail(f"loader crashed on an unrepresentable filename: {error!r}")
+
+        self.assertEqual(report.disposition, DISPOSITION_REJECTED)
+        self.assertFalse(report.accepted)
+        self.assertTrue(
+            any(
+                check.name == "artifacts.declared_exist_and_readable"
+                and check.state == "failed"
+                for check in report.collector.checks
+            ),
+            msg="expected the declared-existence gate to fail, "
+            f"got {[c for c in report.collector.checks if c.state != 'passed']}",
+        )
+        self.assertTrue(
+            any(
+                "absent" in issue.detail or "unreadable" in issue.detail
+                for issue in report.issues
+            ),
+            msg=f"expected an absent/unreadable artifact issue, got {report.issues}",
+        )
+
 
     def test_manifest_mutation_after_read_is_detected(self) -> None:
         built = valid_package(self.boundary / "pkg", boundary_root=self.boundary)

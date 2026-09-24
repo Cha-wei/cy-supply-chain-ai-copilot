@@ -126,7 +126,7 @@ class TrustedInputBoundary:
                 ),
             )
 
-        if not root.is_dir():
+        if not _is_directory(root):
             return BoundaryResolution(
                 root=None,
                 problem=Issue(
@@ -195,7 +195,7 @@ class TrustedInputBoundary:
                 ),
             )
 
-        if not candidate.is_dir():
+        if not _is_directory(candidate):
             return BoundaryResolution(
                 root=None,
                 problem=Issue(
@@ -209,13 +209,32 @@ class TrustedInputBoundary:
         return BoundaryResolution(root=root, problem=None)
 
 
+def _is_directory(path: Path) -> bool:
+    """``Path.is_dir`` that also survives an unaddressable path.
+
+    ``ValueError`` is what ``os`` / :mod:`pathlib` raise for a path the host cannot
+    represent; treat it exactly like ``OSError`` so the caller fails closed instead
+    of crashing.
+    """
+
+    try:
+        return path.is_dir()
+    except (OSError, ValueError):
+        return False
+
+
 def read_file_bytes(path: Path) -> tuple[bytes, FileView] | None:
     """Read ``path`` exactly once and return its bytes with a verified file view.
 
-    ``None`` means unreadable / not a regular file / a reparse point.  The digest is
-    computed over the **exact raw bytes** that were read (``IG-raw``), with no JSON
-    canonicalisation, so the returned bytes and the digest always describe the same
-    content view.
+    ``None`` means unreadable / not a regular file / a reparse point, **or** a path
+    the host cannot represent at all.  The digest is computed over the **exact raw
+    bytes** that were read (``IG-raw``), with no JSON canonicalisation, so the
+    returned bytes and the digest always describe the same content view.
+
+    ``ValueError`` is handled exactly like ``OSError``: ``os`` raises it for a path
+    the host cannot represent (an embedded NUL, for example), and that must surface
+    as an absent / unreadable declared artifact (``IC-14`` / ``IC-16``) rather than
+    as an uncaught loader crash.
     """
 
     if is_reparse_point(path):
@@ -225,11 +244,11 @@ def read_file_bytes(path: Path) -> tuple[bytes, FileView] | None:
     nofollow = getattr(os, "O_NOFOLLOW", 0)
     try:
         descriptor = os.open(path, flags | nofollow)
-    except OSError:
+    except (OSError, ValueError):
         if nofollow:
             try:
                 descriptor = os.open(path, flags)
-            except OSError:
+            except (OSError, ValueError):
                 return None
         else:
             return None
@@ -293,7 +312,8 @@ def list_root_entries(root: Path) -> list[str] | None:
     try:
         with os.scandir(root) as iterator:
             return [entry.name for entry in iterator]
-    except OSError:
+    except (OSError, ValueError):
+        # ValueError: the host cannot address this directory at all.
         return None
 
 
@@ -352,7 +372,7 @@ class AcceptedPackage:
         collector = IssueCollector()
         collector = collector.passed("trusted_reuse.reverification_attempted")
 
-        if not self.package_path.is_dir():
+        if not _is_directory(self.package_path):
             collector = collector.failed(
                 "trusted_reuse.package_present",
                 "accepted package directory is no longer available",

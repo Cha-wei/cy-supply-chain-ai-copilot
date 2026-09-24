@@ -63,6 +63,7 @@ from .constants import (
 from .issues import IssueCollector
 from .path_scope import (
     FilenameRejection,
+    path_is_unrepresentable,
     physical_identity,
     resolved_within,
     validate_artifact_filename,
@@ -873,6 +874,15 @@ def _check_entry_filenames(
 
         if rejection is None:
             target = package_path / entry.artifact
+            # A filename that is legal under the registered rules but that the host
+            # cannot represent (an embedded NUL, for example) is NOT a path-boundary
+            # violation: it is left to the declared-artifact existence/readability
+            # gate, which reports an absent/unreadable artifact (IC-14/IC-16) and
+            # fails closed.  Only a target that is representable AND provably outside
+            # the package root is a boundary error.
+            if path_is_unrepresentable(target):
+                accepted.append(entry)
+                continue
             if not resolved_within(target, package_path):
                 rejected = True
                 collector = collector.issue(
