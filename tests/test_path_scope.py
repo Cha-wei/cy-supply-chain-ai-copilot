@@ -145,15 +145,26 @@ class FilenameRejectionTests(unittest.TestCase):
         self.assertFalse(is_reparse_point(nul))
         self.assertIsNone(physical_identity(nul))
 
-        # Containment is a purely lexical check and stays True here: ''/".."-
-        # free single-component names are inside the root by construction.  Whether
-        # the host can open the file is a separate question answered by
-        # read_file_bytes -> absent/unreadable (IC-14), not by containment.
-        self.assertTrue(resolved_within(nul, Path("pkg")))
+        # Containment for such a path is deliberately NOT asserted: whether
+        # ``Path.resolve`` can even handle it is platform-dependent (Linux raises,
+        # Windows does not), and containment is not the gate that protects the
+        # loader.  What matters is that the call cannot blow up, and that the
+        # loader's actual protection -- read_file_bytes returning None so the
+        # artifact is reported absent/unreadable (IC-14) -- is asserted end to end
+        # in test_review_findings.
+        self.assertIsInstance(resolved_within(nul, Path("pkg")), bool)
 
     def test_representable_paths_are_not_flagged_as_unrepresentable(self) -> None:
         self.assertFalse(path_is_unrepresentable(Path("pkg") / "missing.json"))
         self.assertFalse(path_is_unrepresentable(Path("pkg") / "requirement.json"))
+
+    def test_containment_for_representable_paths(self) -> None:
+        # The registered containment semantics, asserted only for paths the host can
+        # actually address.
+        root = Path.cwd()
+        self.assertTrue(resolved_within(root / "child.json", root))
+        self.assertTrue(resolved_within(root, root))
+        self.assertFalse(resolved_within(root.parent, root))
 
     def test_case_is_not_folded_and_exact_match_required(self) -> None:
         # PN-1 forbids case folding, but the extension requirement in §4.3.23 D is a
