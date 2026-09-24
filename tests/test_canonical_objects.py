@@ -521,24 +521,19 @@ class BomParentBindingTests(CanonicalObjectsTestCase):
         objects = report.objects_for("BOM Component")
         self.assertEqual(len(objects), 1)
         component = objects[0]
-        # The role's existing ``material_code`` keeps meaning the component material
-        # identity and is *not* turned into a grain component.
         self.assertEqual(component.value_of("material_code"), COMPONENT)
         self.assertEqual(component.value_of("BOMComponentQty"), "2")
+        # BOM-local grain = the role's existing ``material_code``, i.e. the component
+        # material identity; the parent / requirement part of the effective grain is the
+        # resolved Production Requirement context reference.
         self.assertEqual(
             [(prop.name, prop.value) for prop in component.grain],
-            [
-                ("plant_id", PLANT),
-                ("material_code", MATERIAL),
-                ("required_date", REQUIRED_DATE),
-            ],
-        )
-        self.assertEqual(
-            [prop.name for prop in component.grain],
-            ["plant_id", "material_code", "required_date"],
+            [("material_code", COMPONENT)],
         )
         self.assertNotIn("component_material_code", str(component.grain))
-        # The resolved context reference and its upstream provenance are preserved.
+        self.assertNotIn("parent_material_code", str(component.grain))
+        # The resolved context reference and its upstream provenance are preserved, and
+        # together they are the parent / requirement part of the effective BOM grain.
         parent = report.objects_for("Production Requirement")[0]
         self.assertEqual(component.context_reference, parent.record_reference)
         self.assertEqual(component.context_provenance, parent.provenance)
@@ -546,8 +541,53 @@ class BomParentBindingTests(CanonicalObjectsTestCase):
             component.context_provenance.stable_source_evidence_locators,
             (EVIDENCE_REQUIREMENT,),
         )
+        self.assertEqual(
+            [(prop.name, prop.value) for prop in parent.grain],
+            [
+                ("plant_id", PLANT),
+                ("material_code", MATERIAL),
+                ("required_date", REQUIRED_DATE),
+            ],
+        )
         self.assertFalse(component.has("parent_material_code"))
         self.assertNotIn("parent_material_code", V02_CANONICAL_RECORD_PROPERTY_SET)
+
+    def test_two_components_under_one_requirement_are_two_effective_grains(self) -> None:
+        _, accepted = self.accepted(
+            [
+                ("Production Requirement", [PRODUCTION_REQUIREMENT()]),
+                ("BOM Component", [BOM_COMPONENT(), BOM_COMPONENT(material_code="M3")]),
+            ],
+            name="bom-two-grains",
+        )
+        report = construct_canonical_objects(
+            accepted,
+            PhaseAHandoff(
+                analysis_run_id="RUN-1",
+                analysis_date="2026-02-01",
+                bom_parent_context=(self._parent_handoff(accepted),),
+            ),
+        )
+        objects = report.objects_for("BOM Component")
+        self.assertEqual(len(objects), 2)
+        effective = {
+            (obj.context_reference, obj.value_of("material_code")) for obj in objects
+        }
+        self.assertEqual(
+            effective,
+            {
+                (report.objects_for("Production Requirement")[0].record_reference, COMPONENT),
+                (report.objects_for("Production Requirement")[0].record_reference, "M3"),
+            },
+        )
+        # The two effective BOM grains / identities are distinct.
+        self.assertEqual(
+            len({obj.record_reference for obj in objects}),
+            2,
+        )
+        self.assertEqual(
+            sorted(obj.value_of("material_code") for obj in objects), ["M2", "M3"]
+        )
 
     def test_no_component_material_code_identity_component_is_introduced(self) -> None:
         _, accepted = self.accepted(
@@ -866,8 +906,15 @@ class EffectiveDemandTests(CanonicalObjectsTestCase):
         )
         contexts, issues = build_effective_demand_contexts(accepted, handoff)
         self.assertEqual(contexts, ())
-        self.assertEqual(len(issues), 1)
-        self.assertEqual(issues[0].reason, "SEMANTIC_UNRESOLVED")
+        # One issue for the unverifiable citation and one for the pair whose other
+        # registered relation carries no evidence at all.
+        self.assertEqual(len(issues), 2)
+        self.assertTrue(
+            all(issue.reason == "SEMANTIC_UNRESOLVED" for issue in issues)
+        )
+        self.assertTrue(
+            any("OTHER-PACKAGE" not in issue.detail for issue in issues)
+        )
 
     def test_effective_demand_context_is_not_a_canonical_field(self) -> None:
         _, accepted = self.accepted(self._datasets(), name="demand-not-field")

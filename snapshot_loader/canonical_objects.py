@@ -660,11 +660,19 @@ G5_RELATIONS: tuple[str, ...] = (
 class EffectiveDemandRelationHandoff:
     """G5-A effective demand relation evidence (injection I-8, Phase A).
 
-    A handoff entry carries **evidence only** -- never the relation outcome.  The
-    outcome is read from the accepted evidence record itself, so a caller cannot state
-    "applicable" / "overlaps" by hand (``§4.1.13`` D).  ``relation`` is one of
-    :data:`G5_RELATIONS`; ``mapping_basis`` names the approved mapping that relates the
-    evidence to the relation.
+    A handoff entry carries **evidence only** -- never the relation outcome, so a caller
+    cannot state "applicable" / "overlaps" by hand (``§4.1.13`` D).  ``relation`` is one
+    of :data:`G5_RELATIONS`; ``mapping_basis`` names the mapping the entry attributes the
+    evidence to.
+
+    Phase A does **not** derive a conceptual outcome from the cited evidence: the
+    approved outcomes are ``applicable`` / ``not applicable`` / ``unresolved`` and
+    ``overlaps`` / ``does not overlap`` / ``unresolved``, and the concrete source value
+    -> conceptual outcome mapping is ``SOURCE-SPECIFIC`` / Adapter-defined
+    (``§4.5.9`` / ``§4.5.26``) with no approved mapping available to Phase A.  Registered
+    canonical values such as ``approval_status`` or ``AllocatedSubstituteQty`` are
+    therefore **not** relation outcomes, and every relation is reported ``unresolved``
+    rather than relabelled or invented.
     """
 
     source_substitute_material: Any
@@ -2308,12 +2316,19 @@ def _construct_bom_components(
             "context "
             f"[{_grain_label(parent.grain)}] via {parent_evidence.record_path}",
         )
-        # ``§4.1.13`` C registered grain: plant_id + parent / requirement material_code +
-        # required_date.  The parent material_code is expressed **through the resolved
-        # Production Requirement context** -- the context reference below -- and never as
-        # a new canonical property / identity component.  The role's own ``material_code``
-        # keeps meaning the component material identity, so the component identity is
-        # carried by this object's own properties, not by the grain.
+        # ``§4.1.13`` C / ``§4.1.4`` N canonical semantic for this relationship is
+        # ``resolved Production Requirement context`` + ``component material_code``.
+        # It is represented structurally, without adding any canonical property:
+        #
+        #   * the resolved Production Requirement context (plant_id + parent
+        #     material_code + required_date) is carried by ``context_reference`` /
+        #     ``context_provenance`` below; and
+        #   * the BOM-local grain below is the role's existing ``material_code``, which
+        #     means the **component** material identity.
+        #
+        # Together those two parts are the effective BOM grain / identity.  No
+        # ``component_material_code`` and no ``parent_material_code`` canonical field or
+        # identity component is created.
         parent_material = parent.value_of("material_code", ABSENT)
         if parent_material is ABSENT:
             build.check(
@@ -2337,11 +2352,7 @@ def _construct_bom_components(
             )
             continue
 
-        grain = (
-            CanonicalProperty("plant_id", record_plant),
-            CanonicalProperty("material_code", parent_material),
-            CanonicalProperty("required_date", record_required),
-        )
+        grain = (CanonicalProperty("material_code", record["material_code"]),)
         resolved.append(
             CanonicalObject(
                 canonical_target=ROLE_BOM_COMPONENT,
@@ -2843,10 +2854,13 @@ def build_effective_demand_contexts(
 
     Each reference keeps ``Target Applicability`` and ``Source Reservation Overlap`` as
     **two independent** relation outcomes, each with its own provenance and mapping
-    basis.  An outcome is read from the accepted evidence a handoff entry cites; a
-    caller cannot state it, and a citation that cannot be traced to the same
-    ``AcceptedPackage`` stays unresolved rather than being replaced by a supplied
-    Boolean.
+    basis.  A caller can never state an outcome.
+
+    Phase A currently emits **no** context: the concrete source value -> approved
+    conceptual outcome mapping is ``SOURCE-SPECIFIC`` / Adapter-defined and no approved
+    mapping is available, so every relation is reported ``unresolved``
+    (``SEMANTIC_RESOLUTION`` / ``SEMANTIC_UNRESOLVED``) instead of being relabelled,
+    guessed or replaced by a supplied Boolean.
     """
 
     if located is None:
@@ -2862,23 +2876,23 @@ def _effective_demand_references(
     located: Mapping[str, tuple[str, int]],
     accepted_records: Mapping[str, JsonObject],
 ) -> tuple[tuple[EffectiveDemandContextReference, ...], tuple[Issue, ...]]:
-    """Resolve the G5-A relation pairs, enforcing ``exactly one pair or unresolved``.
+    """Report the G5-A relation evidence status and the unresolved boundary.
 
-    Per ``§4.3.31`` G I-8 the cardinality is *exactly one pair or unresolved*: a pair
-    is emitted only when each registered relation has exactly one verified, in-package,
-    approved-role mapping evidence citation and a mapping basis.  Anything else -- a
-    missing relation, an unverifiable citation, a repeat of the same relation, or
-    evidence that is not registered mapping evidence for the substitute relationship --
-    leaves the pair unresolved and is reported with the registered
-    ``SEMANTIC_RESOLUTION`` / ``SEMANTIC_UNRESOLVED`` taxonomy.
+    Per ``§4.3.31`` G I-8 the cardinality is *exactly one pair or unresolved*.  Phase A
+    emits no pair at all: the concrete source value -> approved conceptual outcome
+    mapping is ``SOURCE-SPECIFIC`` / Adapter-defined and is not registered in the
+    current authority, so the conceptual outcome of every relation stays
+    ``unresolved``.  Incoming entries are still checked against the accepted content
+    view, so the report distinguishes "evidence not verifiable in this package" from
+    "evidence verified, but the outcome cannot be formed without the deferred mapping".
+    Nothing is relabelled from a registered canonical value and nothing is taken from
+    the caller.
     """
 
     issues: list[Issue] = []
-    verified: dict[tuple[Any, Any], dict[str, RelationOutcomeReference]] = {}
-    counts: dict[tuple[Any, Any], dict[str, int]] = {}
+    seen_pairs: dict[tuple[Any, Any], set[str]] = {}
 
-    def _unresolved(*, relation: str, role: str, detail: str) -> None:
-        _ = relation
+    def _unresolved(*, role: str, detail: str) -> None:
         issues.append(
             Issue(
                 location="effective_demand_context",
@@ -2898,12 +2912,10 @@ def _effective_demand_references(
 
     for entry in handoff.effective_demand:
         key = (entry.source_substitute_material, entry.target_material)
-        counts.setdefault(key, {})
-        counts[key][entry.relation] = counts[key].get(entry.relation, 0) + 1
+        seen_pairs.setdefault(key, set()).add(entry.relation)
 
         if entry.relation not in G5_RELATIONS:
             _unresolved(
-                relation=entry.relation,
                 role=entry.evidence.logical_dataset_role,
                 detail=(
                     f"relation {entry.relation!r} is not one of the registered G5-A "
@@ -2921,7 +2933,6 @@ def _effective_demand_references(
         )
         if not verification.verified:
             _unresolved(
-                relation=entry.relation,
                 role=entry.evidence.logical_dataset_role,
                 detail=(
                     verification.problem
@@ -2930,27 +2941,14 @@ def _effective_demand_references(
             )
             continue
 
-        if not entry.mapping_basis.strip():
-            _unresolved(
-                relation=entry.relation,
-                role=entry.evidence.logical_dataset_role,
-                detail=(
-                    "no mapping basis was given for this relation; the outcome cannot be "
-                    "attributed to approved mapping evidence and the pair stays "
-                    "unresolved (§4.1.13 D)"
-                ),
-            )
-            continue
-
-        # The approved conceptual outcomes are ``applicable`` / ``not applicable`` /
-        # ``unresolved`` and ``overlaps`` / ``does not overlap`` / ``unresolved``.  The
-        # concrete source value -> conceptual outcome mapping is SOURCE-SPECIFIC /
-        # Adapter-defined (``§4.5.9`` / ``§4.5.26``) and no approved mapping is available
-        # to Phase A, so **no** outcome is derived here.  In particular a registered
-        # canonical value such as ``approval_status`` or ``AllocatedSubstituteQty`` is
-        # *not* itself a relation outcome, and it is never silently relabelled as one.
+        # Verified, in-package evidence.  The outcome is still not formed here: the
+        # approved outcomes are ``applicable`` / ``not applicable`` / ``unresolved`` and
+        # ``overlaps`` / ``does not overlap`` / ``unresolved``; the concrete source value
+        # -> conceptual outcome mapping is SOURCE-SPECIFIC / Adapter-defined
+        # (``§4.5.9`` / ``§4.5.26``) and is not registered.  A registered canonical value
+        # such as ``approval_status`` or ``AllocatedSubstituteQty`` is therefore *not*
+        # itself a relation outcome and is never relabelled as one.
         _unresolved(
-            relation=entry.relation,
             role=entry.evidence.logical_dataset_role,
             detail=(
                 f"the accepted evidence {verification.record_path} supports relation "
@@ -2962,72 +2960,35 @@ def _effective_demand_references(
             ),
         )
 
-    outbound: list[EffectiveDemandContextReference] = []
-    for key in sorted(verified, key=lambda item: repr(item)):
-        relations = verified[key]
-        if sorted(relations) != sorted(G5_RELATIONS):
-            missing = [name for name in G5_RELATIONS if name not in relations]
-            detail = (
-                f"relation(s) {missing} have no verified package-scoped mapping "
-                f"evidence for substitute/target pair {key!r}; the pair stays "
-                "unresolved (exactly one pair or unresolved, §4.3.31 G I-8)"
-            )
-            issues.append(
-                Issue(
-                    location="effective_demand_context",
-                    detail=detail,
-                    category="SEMANTIC_RESOLUTION",
-                    reason="SEMANTIC_UNRESOLVED",
-                    layer=LAYER_2,
-                    affected_evidence="Substitute Allocation",
-                    blast_radius="affected effective demand context only",
-                    design_reference="§4.1.13 D (G5-A) / §4.3.31 G I-8",
-                    consequence_context=(
-                        "the relation pair stays unresolved; Target Applicability and "
-                        "Source Reservation Overlap are never collapsed into one Boolean"
-                    ),
-                )
-            )
+    for key in sorted(seen_pairs, key=lambda item: repr(item)):
+        seen = seen_pairs[key]
+        missing = [name for name in G5_RELATIONS if name not in seen]
+        if not missing:
             continue
-        if any(counts[key][name] != 1 for name in G5_RELATIONS):
-            issues.append(
-                Issue(
-                    location="effective_demand_context",
-                    detail=(
-                        "more than one applicable mapping evidence was supplied for a "
-                        f"registered relation of pair {key!r}; equal outcomes are not "
-                        "deduplicated and no precedence is applied, so the pair stays "
-                        "unresolved (§4.4.102 C Stage A / §4.3.31 G I-8)"
-                    ),
-                    category="SEMANTIC_RESOLUTION",
-                    reason="SEMANTIC_UNRESOLVED",
-                    layer=LAYER_2,
-                    affected_evidence="Substitute Allocation",
-                    blast_radius="affected effective demand context only",
-                    design_reference="§4.1.13 D (G5-A) / §4.3.31 G I-8",
-                    consequence_context=(
-                        "the relation pair stays unresolved; no caller-supplied outcome "
-                        "is accepted"
-                    ),
-                )
-            )
-            continue
-
-        outbound.append(
-            EffectiveDemandContextReference(
-                source_substitute_material=key[0],
-                target_material=key[1],
-                relations=tuple(
-                    sorted(relations.values(), key=lambda item: item.relation)
+        issues.append(
+            Issue(
+                location="effective_demand_context",
+                detail=(
+                    f"relation(s) {missing} carry no mapping evidence for substitute/"
+                    f"target pair {key!r}; the pair stays unresolved (exactly one pair or "
+                    "unresolved, §4.3.31 G I-8)"
                 ),
-                record_reference=(
-                    f"{accepted.package_id}|Substitute Allocation|"
-                    f"{key[0]!r}|{key[1]!r}"
+                category="SEMANTIC_RESOLUTION",
+                reason="SEMANTIC_UNRESOLVED",
+                layer=LAYER_2,
+                affected_evidence="Substitute Allocation",
+                blast_radius="affected effective demand context only",
+                design_reference="§4.1.13 D (G5-A) / §4.3.31 G I-8",
+                consequence_context=(
+                    "the relation pair stays unresolved; Target Applicability and Source "
+                    "Reservation Overlap are never collapsed into one Boolean"
                 ),
             )
         )
 
-    return tuple(outbound), tuple(issues)
+    # ``§4.1.13`` D / ``§4.3.31`` G I-8: no effective demand context is produced in
+    # Phase A while the source-specific mapping is unavailable.
+    return (), tuple(issues)
 
 
 __all__ = [
