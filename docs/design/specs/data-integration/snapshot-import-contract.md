@@ -2,7 +2,7 @@
 
 **Document / Topic:** Snapshot / Import Contract
 **Parent Design:** [POC Design v0.2](../../poc-design-v0.2.md)
-**Legacy Section:** §4.3（§4.3.1 ～ §4.3.30 编号保留）
+**Legacy Section:** §4.3（§4.3.1 ～ §4.3.31 编号保留）
 **Design Status:** `DESIGN RESOLVED`
 **Implementation Status:** 原文未单独登记本专题的 implementation 状态；`DESIGN RESOLVED` 不表示 import implementation exists / data validated / tested。
 **Canonical Authority:** 本文件是 Snapshot / Import Contract concern 的唯一 current canonical source；parent design 保留 navigation/status 入口。
@@ -6437,6 +6437,228 @@ Snapshot / Import Contract     = DESIGN RESOLVED（§4.3.1 ～ §4.3.29 结论�
 Runtime implementation         = NOT STARTED（本登记不产生 runtime artifact）
 POC Design v0.2                = DRAFT
 POC success                    = NOT CLAIMED
+```
+
+#### 4.3.31 First-Tranche Wire → Canonical Object Construction Contract（Issue #125 Human Decision Record）
+
+**Registration Status：`REGISTERED`** —— 依据 **Issue #125 Human Decision**（**D-1 ～ D-10 全部 `APPROVED`**）。
+
+本小节**只**登记 first deterministic tranche 的 **downstream canonicalization** 与 wire contract 的边界：
+**Layer-1 wire binding 完全不改**，只登记「已通过 Layer-1 acceptance ／ Layer-2 validation 的
+record 如何被 downstream canonicalization 指派到 canonical target」，以及 `POLICY_INPUT` ／ `CONTEXT`
+的注入边界。本小节**不**重开 `§4.3.1` ～ `§4.3.30`，**不**回写历史时点记录。
+
+**A. Layer-1 opacity（本登记不得削弱）**
+
+```
+Layer-1 role             = exact opaque JSON string（不 trim ／ 不 case fold ／ 不 normalize）
+Layer-1 role enum        = 不建立 exhaustive enum
+§4.3.10 logical role list = 在 Layer 1 仍保持 illustrative
+unknown ／ unrecognized role ≠ Layer-1 structural rejection
+known property ≠ valid evidence ≠ applicable field ≠ required field（§4.3.30 C.2 未变）
+```
+
+**B. First-tranche recognized canonicalization role set（12 个 exact literal）**
+
+以下集合**只服务 downstream canonicalization**；它不是 Layer-1 wire vocabulary，也不改变 `§4.3.10`
+的 illustrative 状态。
+
+| # | exact role literal | canonicalization target | role kind | assignment outcome |
+| --- | --- | --- | --- | --- |
+| 1 | `Plant / Material identity context` | entity **Plant** ＋ entity **Material**（§4.1.3 ／ §4.1.4 A ／ B） | identity context | assigned |
+| 2 | `Production Requirement` | entity **Production Requirement**（§4.1.4 C） | entity（source） | assigned |
+| 3 | `BOM Component` | entity **BOM Component**（§4.1.4 N） | relationship | assigned |
+| 4 | `Inventory Snapshot` | entity **Inventory Snapshot**（§4.1.4 D） | entity（source） | assigned |
+| 5 | `Configured Safety Stock` | entity **Configured Safety Stock**（§4.1.4 O） | entity（policy input） | assigned |
+| 6 | `Inbound Supply` | entity **Inbound Supply**（§4.1.4 E） | entity（source） | assigned |
+| 7 | `Substitute Relationship` | entity **Substitute Relationship**（§4.1.4 F） | relationship | assigned |
+| 8 | `Substitute Allocation` | entity **Substitute Allocation**（§4.1.4 G） | relationship | assigned |
+| 9 | `Supplier identity` | entity **Supplier**（§4.1.4 H） | identity | assigned |
+| 10 | `Supplier-Material Relationship` | entity **Supplier-Material Relationship**（§4.1.4 I） | relationship | assigned |
+| 11 | `Supplier Performance` | entity **Supplier Performance**（§4.1.4 J） | entity（source） | assigned |
+| 12 | `Procurement policy input` | `ApplicableMOQ` 的 `POLICY_INPUT` channel（owner = Procurement Recommendation Context） | policy-input channel | assigned（**仅 Phase B**） |
+
+本表**只**回答「该 role 的 evidence 被指派到哪个 canonical target」。
+field-level validation ／ missing ／ type ／ status ／ semantic ／ provenance reason **一律委托既有
+canonical taxonomy**（见 **§4.4.102**），不在本小节重定义。
+
+**C. Unrecognized role behavior（D-9）**
+
+```
+unrecognized role = not_evaluable only at canonicalization stage
+no automatic Validation Issue
+no Layer-1 rejection
+```
+
+`§4.4.95` 要求只有「当前 capability 确实需要解释该 semantic」时才产生 `SEMANTIC_UNRESOLVED`；
+本 tranche 的 canonicalization **不做** capability-specific readiness，因此**不得**把 unrecognized role
+自动映射为该 Validation Issue。**不新增** Validation Category ／ Reason ／ status ／ enum。
+
+**D. Inbound Supply identity representation（G3-A，D-4）**
+
+```
+first-tranche Inbound Supply identity representation
+  = AcceptedPackage-scoped deterministic technical record reference
+```
+
+由以下三者共同确定：
+
+```
+- current AcceptedPackage identity
+- exact recognized logical dataset role = `Inbound Supply`
+- dataset-internal record ordinal over the accepted stable content view
+```
+
+**严格限定：**
+
+```
+只服务 first deterministic tranche 的 in-memory canonical-object identity ／ reference
+deterministic for the same immutable AcceptedPackage accepted content view
+能区分内容完全相同但位置不同的两条 inbound records
+不进行 content-derived deduplication
+不进行 cross-package identity matching
+不创建 canonical business field
+不创建 wire property
+不创建 "_meta" member
+不等于 Stable Source Evidence Locator
+不等于真实 ERP PO ／ inbound line identity
+不声称 production identity 已解决
+```
+
+**`G3-B` = `NOT SELECTED`。** 本登记**不批准** `inbound_record_id`；本 tranche 没有合法 carrier ／
+source 可提供该 value（30-property closed set 不含它、不新增 wire property、不新增 `"_meta"` member、
+external runtime business value 已被 **E** 禁止、injection 必须由 same AcceptedPackage evidence 支撑），
+若采用将造成「approved canonical identity 但 current tranche 无法实例化」的 contract contradiction。
+
+**`§4.3.30 F` 状态登记：**
+
+```
+first-tranche implementation representation
+      = RESOLVED by G3-A
+source-specific ／ real Adapter inbound business identity
+      = OPEN ／ revisit before real Adapter or production integration
+```
+
+```
+"implementation blocker 已解除"  ≠  "production identity design fully resolved"
+```
+
+`§4.3.30 F` 的 source-specific ／ real Adapter item **不得**被声称已最终关闭。
+
+**E. Injection Boundary（D-10）—— in-process logical handoff only**
+
+```
+canonicalization injection = in-process logical handoff interface
+```
+
+它本身：
+
+```
+不是新的 external evidence source
+不是新的 transport carrier
+不是第二个 Snapshot Package
+不允许绕过 AcceptedPackage
+不允许 caller 任意提供新的 business fact
+canonicalization API 参数 ≠ new top-level input carrier
+```
+
+对 `SOURCE` ／ `POLICY_INPUT` semantic（`loss_rate`、`SafetyStock`、effective demand context mapping
+evidence、其他 source-derived ／ policy-derived canonical input）：若通过 injection 进入 canonicalization，
+该 value ／ context **必须**已经由当前 Analysis Run 所绑定的 **same AcceptedPackage** evidence 可靠解析，
+并保持既有 provenance：
+
+```
+Snapshot Package Identity
++ Logical Dataset Role
++ Stable Source Evidence Locator
++ Mapping / Resolution Basis（when applicable）
+```
+
+如果当前 AcceptedPackage 内**没有**可支撑该 semantic 的 evidence：
+
+```
+不得通过 external caller value 补齐
+不得默认
+不得 synthetic fallback
+保持 unresolved ／ 既有 fail-safe 语义
+```
+
+特别登记：`SafetyStock` 在 `Configured Safety Stock` dataset absent 时，**仅当** same AcceptedPackage 内
+存在另一份经 approved mapping 可可靠解析为 `SafetyStock` 的 policy evidence 时，才允许 internal
+handoff；否则保持 unresolved。**不得**因此定义新的 capability requirement。
+
+`analysis_run_id` ／ `AnalysisDate` 属 Analysis Run ／ CONTEXT，**不是** logical dataset source evidence：
+其 provenance ／ binding = **Analysis Run identity ＋ exactly-one AcceptedPackage linkage**，
+**不得**为其伪造 logical dataset role ／ Stable Source Evidence Locator；
+而任何 source-derived value 被注入时仍**必须**遵守完整 package-scoped source provenance contract。
+
+**本登记不修改 ADR-001**，**不新增 input carrier**。若未来需要支持
+`Snapshot Package` ＋ `external runtime business ／ policy evidence` 作为同一个 Analysis Run 的业务输入，
+**必须**重新进入：
+
+```
+Architecture Decision
+→ Human Approval
+→ ADR ／ provenance contract synchronization
+```
+
+**不得**由本登记静默授权。
+
+**F. Phase ordering（D-7）**
+
+```
+Phase A — pre-rule canonicalization（Canonical data objects module）
+  包含：Analysis Run context；source canonical entities ／ relationships（role 1 ～ 11）；
+        loss_rate ＋ Requirement Calculation Context；SafetyStock；
+        Inbound Supply technical record reference（G3-A）；BOM parent ／ requirement context；
+        effective demand context relation outcomes
+  不要求：RecommendationNeedDate；ApplicableMOQ Procurement Recommendation Context
+
+Phase B — post-shortage procurement-context resolution
+  Deterministic shortage rules → Classification ／ FirstShortageDate
+  仅当 Procurement Recommendation applicable：
+    RecommendationNeedDate = FirstShortageDate
+      → 建立 Procurement Recommendation Context
+      → 再执行 ApplicableMOQ resolution
+```
+
+```
+RecommendationNeedDate = FirstShortageDate（§4.4.65）
+RecommendationNeedDate ≠ 任意 runtime injected date；caller 不得覆盖 FirstShortageDate semantic
+ApplicableMOQ 仅在 Phase B 的 Procurement Recommendation Context 中解析（§4.4.67）
+Phase B 不得阻塞 Phase A
+```
+
+**G. Injection contract（D-7）**
+
+| # | injected semantic | phase | binding key ／ target grain | value | provenance | resolution basis | cardinality | unresolved behavior | multi-applicable ／ conflict behavior |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| I-1 | Analysis Run context：`analysis_run_id` ＋ `AnalysisDate` | A | canonicalization invocation | `ANALYSIS_RUN_ID` ＋ `DATE` | Analysis Run identity ＋ exactly-one AcceptedPackage linkage（**不**要求 logical dataset role ／ Stable Source Evidence Locator） | n/a | exactly one | linkage 不可建立 → `not_evaluable`；`AnalysisDate` 保持 unresolved | **Stage B**（§4.4.68 ／ §4.4.93）→ `PROVENANCE` ／ `PROVENANCE_MISMATCH` |
+| I-2 | `loss_rate` ＋ Requirement Calculation Context | A | `plant_id` ＋ parent/requirement `material_code` ＋ `required_date` ＋ component `material_code` | `RATIO` | required（same AcceptedPackage-scoped source provenance） | required | exactly one applicable or unresolved | §4.4.15 root **B** → `SEMANTIC_UNRESOLVED`；root **A** → `FIELD_VALUE` ／ `MISSING` | **Stage A** → `SEMANTIC_UNRESOLVED`；不得同值去重；不得自动 `CONSISTENCY_CONFLICT` |
+| I-3 | `ApplicableMOQ` ＋ Procurement Recommendation Context | **B** | `plant_id` ＋ `material_code` ＋ `RecommendationNeedDate` | `NON_NEGATIVE_QUANTITY` | required（same AcceptedPackage-scoped source provenance） | required | exactly one applicable or unresolved | 无法识别 applicable → `SEMANTIC_UNRESOLVED`；applicable 但缺值 → `FIELD_VALUE` ／ `MISSING` | **Stage A**（§4.4.67）→ `SEMANTIC_UNRESOLVED` |
+| I-4 | `RecommendationNeedDate` | **B** | Procurement Recommendation Context | `DATE`（= `FirstShortageDate`；caller 不得覆盖） | required | when applicable | exactly one | 保持 unresolved；`NORMAL` ／ `BUFFER_BREACH` ⇒ valid absence（§4.4.87） | **Stage B**（§4.4.65）→ `CONSISTENCY` ／ `CONSISTENCY_CONFLICT` |
+| I-5 | `SafetyStock`（internal handoff） | A | `plant_id` ＋ `material_code` | `NON_NEGATIVE_QUANTITY` | required（same AcceptedPackage-scoped source provenance） | when mapping 发生 | exactly one applicable or unresolved | 保持 unresolved（不得默认 0） | **Stage B**（§4.4.92）→ `CONSISTENCY_CONFLICT` |
+| I-6 | Inbound Supply technical record reference（G3-A）—— **非** injected business value | A | current AcceptedPackage identity ＋ recognized role `Inbound Supply` ＋ dataset-internal record ordinal | technical record reference（**不是** canonical ／ wire property ／ `"_meta"` member） | required（绑定 same AcceptedPackage ／ accepted content view） | n/a | exactly one reference per accepted inbound record | 无法形成 → `UNRESOLVED_IDENTITY` | **Stage A**（§4.5.3 condition **C**）→ `UNRESOLVED_IDENTITY` |
+| I-7 | BOM parent ／ requirement context（G4-A） | A | `BOM Component` evidence → resolved Production Requirement context | context reference | required | n/a | exactly one context per evidence set | `UNRESOLVED_IDENTITY` | **Stage A**（§4.4.11）→ `UNRESOLVED_IDENTITY` |
+| I-8 | effective demand context relation outcomes（G5-A） | A | source substitute material ＋ target material ＋ allocation record | two independent relation outcomes（references） | required（same AcceptedPackage-scoped source provenance） | required | exactly one pair or unresolved | `SEMANTIC_UNRESOLVED` | **Stage A**（§4.4.60 path **B**）→ `SEMANTIC_UNRESOLVED` |
+
+injection **不**决定任何真实 ERP ／ source file ／ ERP field physical carrier；`loss_rate` 的
+Entity ／ Dataset ／ Source Field 归属仍**不得**决定（§4.4.15）。
+
+**H. Registration Boundary ／ status**
+
+- 本小节**不**新增 wire property ／ `"_meta"` member ／ canonical business field ／ canonical entity；
+- 本小节**不**新增 Validation Category ／ Reason ／ status ／ enum；
+- 本小节**不**修改 `BR-*` ／ Data Dictionary 的 Class ／ Requiredness ／ vocabulary；
+- 本小节**不**修改 `FROZEN` docs ／ `AGENTS.md` ／ `CONTRIBUTING.md` ／ `adr-001-deterministic-core.md`；
+- 本小节**不**代表 implementation：**未**创建 parser ／ serializer ／ validator ／ canonical object。
+
+```
+first-tranche wire → canonical object construction contract = REGISTERED（Issue #125 Human Decision）
+Layer-1 wire binding                                        = 未改变
+Snapshot / Import Contract                                  = DESIGN RESOLVED（§4.3.1 ～ §4.3.30 结论未变）
+Runtime implementation                                      = NOT STARTED
+POC success                                                 = NOT CLAIMED
 ```
 
 ---
