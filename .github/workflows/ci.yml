@@ -1,13 +1,14 @@
 name: CI
 
-# CI Foundation v1
-# 目的：只验证当前 Project Foundation / Governance 基线的真实可验证事实。
+# CI Foundation v2
+# 目的：验证 Project Foundation / Governance 基线的真实可验证事实，
+#       并运行第一批 deterministic tranche 的 Layer-1 loader 测试。
 # 范围限制（有意为之）：
-#   - 不依赖任何应用技术栈（未选定）
-#   - 不安装第三方依赖、不下载外部工具、不引入 package manager
-#   - 不做 lint / unit / integration / eval（当前项目尚无可验证的对象）
-#   - 不使用 matrix / cache / artifact / service container / secret / AI 调用
-# 后续技术栈确定后，再以独立变更扩展本 workflow。
+#   - Python 测试只使用标准库（unittest / stdlib）；不安装第三方依赖、不下载外部工具
+#   - 无 network / database / LLM / secret / AI 调用
+#   - 不做 lint / integration / eval（当前尚无对应可验证对象）
+#   - 不使用 cache / artifact / service container / secret
+# foundation-checks 语义保持不变；layer1-loader-tests 为本 tranche 的最小扩展。
 
 on:
   pull_request:
@@ -118,3 +119,98 @@ jobs:
               exit 1
             fi
           done
+
+  layer1-loader-tests:
+    name: Layer-1 loader tests (SIMULATED)
+    needs: foundation-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Confirm the standard-library-only boundary
+        run: |
+          set -euo pipefail
+          python --version
+          python - <<'PY'
+          import importlib.util
+          import sys
+
+          third_party = [
+              module
+              for module in ("pytest", "pydantic", "requests", "numpy", "flask")
+              if importlib.util.find_spec(module)
+          ]
+          print(f"third-party packages available: {third_party}")
+          print(f"platform: {sys.platform}")
+          PY
+
+      - name: Run deterministic SIMULATED unit tests
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -v
+
+      - name: Verify the thin CLI entry point end to end
+        run: |
+          set -euo pipefail
+          # CI-only scratch space: not part of the repository content.
+          scratch="$(mktemp -d)"
+          mkdir -p "$scratch/landing/pkg"
+          python - "$scratch" <<'PY'
+          import hashlib
+          import json
+          import pathlib
+          import sys
+
+          scratch = pathlib.Path(sys.argv[1])
+          package = scratch / "landing" / "pkg"
+          records = [
+              {
+                  "plant_id": "P1",
+                  "material_code": "M1",
+                  "required_date": "2026-02-01",
+                  "ProductionQty": "10",
+                  "BOMComponentQty": "2",
+              }
+          ]
+          payload = json.dumps(records, ensure_ascii=False, indent=2).encode("utf-8")
+          (package / "requirement.json").write_bytes(payload)
+          manifest = {
+              "package": {
+                  "snapshot_package_id": "SIMULATED-CI-PKG",
+                  "contract_version": "v0.2",
+                  "created_at": "2026-01-05T08:30:00Z",
+                  "environment": "SIMULATED",
+                  "evidence_classification": "SIMULATED",
+                  "completeness_state": "COMPLETE",
+              },
+              "datasets": [
+                  {
+                      "role": "Production Requirement",
+                      "artifact": "requirement.json",
+                      "record_count": 1,
+                      "provenance_ref": "simulated://ci/requirement",
+                      "integrity_evidence": hashlib.sha256(payload).hexdigest(),
+                  }
+              ],
+          }
+          (package / "manifest.json").write_bytes(
+              json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
+          )
+          PY
+          python -m snapshot_loader \
+            --trusted-root "$scratch/landing" \
+            --package "$scratch/landing/pkg" \
+            --reverify
+          echo "OK      controlled SIMULATED package accepted and re-verified"
+          rm -rf "$scratch"
