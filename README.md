@@ -61,7 +61,7 @@ protocol、HITL、RBAC / secrets、persistent Audit、production write-back、P1
 ├── AGENTS.md                     # AI 协作约定
 ├── CONTRIBUTING.md               # 工程协作规范
 ├── pyproject.toml                # Python package metadata（无第三方运行时依赖）
-├── .github/workflows/ci.yml      # Foundation checks + Layer-1 loader tests
+├── .github/workflows/ci.yml      # Foundation checks；Layer-1 loader CI tests deferred to immediate follow-up
 ├── snapshot_loader/              # Controlled Snapshot loader（本 tranche 唯一实现）
 │   ├── constants.py              # 已登记的 exact literals（不 runtime 推导）
 │   ├── strict_json.py            # strict JSON parse（C-1 / C-9）
@@ -99,6 +99,22 @@ python -m unittest discover -s tests -v
 # 单个测试模块
 python -m unittest tests.test_layer1_acceptance -v
 ```
+
+**CI 状态（必须准确表述）：**
+
+```
+.github/workflows/ci.yml 当前只有 Foundation checks。
+Layer-1 loader CI test job = NOT PRESENT IN THIS BRANCH；已由 Human Decision
+拆出为 immediately-following mandatory minimal change。
+```
+
+因此：**不得**声称 GitHub CI 已运行本文的 146 个测试、Layer-1 Python CI job PASS、
+或 CI extension 已完成。
+
+当前可声称的验证证据只有两类：
+
+- **local**：`146 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures）；
+- **remote**：existing `Foundation checks` = PASS。
 
 ### CLI 用法
 
