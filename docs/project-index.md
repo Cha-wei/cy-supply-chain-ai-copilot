@@ -57,6 +57,11 @@
 | 文档 | 状态 |
 | --- | --- |
 | `docs/design/poc-design-v0.2.md` | **`DRAFT`** —— **POC Design 阶段 Canonical Source** |
+| [Canonical Data Model](design/specs/data-integration/canonical-data-model.md) | **`DESIGN RESOLVED`** —— Canonical Data Model concern 的 standalone canonical spec |
+| [Data Dictionary](design/specs/data-integration/data-dictionary.md) | **`DESIGN RESOLVED`** —— Data Dictionary concern 的 standalone canonical spec |
+| [Snapshot / Import Contract](design/specs/data-integration/snapshot-import-contract.md) | **`DESIGN RESOLVED`** —— Snapshot / Import Contract concern 的 standalone canonical spec |
+| [Data Validation](design/specs/data-integration/data-validation.md) | **`DESIGN RESOLVED`** —— Data Validation concern 的 standalone canonical spec |
+| [Master Data Mapping](design/specs/data-integration/master-data-mapping.md) | **`DESIGN RESOLVED`** —— Master Data Mapping concern 的 standalone canonical spec |
 | [Adapter Boundary](design/specs/data-integration/adapter-boundary.md) | **`DESIGN RESOLVED`** —— Adapter Boundary concern 的 standalone canonical spec |
 
 `POC Design v0.2` 继承上述两个 `FROZEN` baseline，**不修改、不重新解释** FROZEN Discovery。
@@ -71,15 +76,15 @@
 | --- | --- | --- |
 | **POC Design Goals & Scope（§1）** | **`DESIGN PENDING`** | §1（review-only design analysis 见 §1.1 ～ §1.10） |
 | P0 Business Rules ／ System Boundary & Integration | **`DESIGN RESOLVED`** | §2；§3（status 见 §3.14）；§11 Open Design Backlog |
-| Canonical Data Model ／ Data Dictionary | **`DESIGN RESOLVED`** | §4.1；§4.2 |
-| **Snapshot / Import Contract overall** | **`DESIGN RESOLVED`** | §4.3；status 见 §4.3.21 |
-| ├ Package Envelope ／ Atomicity ／ Immutability ／ Analysis Run Linkage | `DESIGN RESOLVED` | §4.3 |
-| ├ Serialization Format | **`DESIGN RESOLVED`** | §4.3.22 |
-| ├ Physical Dataset Layout | **`DESIGN RESOLVED`** | §4.3.23；closure 见 §4.3.24 |
-| ├ Field Carrier Mapping | **`DESIGN RESOLVED`** | §4.3.25；closure 见 §4.3.27 |
-| └ Final Import Contract | **`DESIGN RESOLVED`** | §4.3.28；closure 见 §4.3.29 |
-| Data Validation | **`DESIGN RESOLVED`** | §4.4；closure 见 §4.4.101 |
-| Master Data Mapping | **`DESIGN RESOLVED`**（11 / 11 层） | §4.5；status 见 §4.5.24；scope 见 §4.5.25 |
+| Canonical Data Model ／ Data Dictionary | **`DESIGN RESOLVED`** | [canonical-data-model.md](design/specs/data-integration/canonical-data-model.md) §4.1；[data-dictionary.md](design/specs/data-integration/data-dictionary.md) §4.2 |
+| **Snapshot / Import Contract overall** | **`DESIGN RESOLVED`** | [snapshot-import-contract.md](design/specs/data-integration/snapshot-import-contract.md) §4.3；status 见 §4.3.21 |
+| ├ Package Envelope ／ Atomicity ／ Immutability ／ Analysis Run Linkage | `DESIGN RESOLVED` | [snapshot-import-contract.md](design/specs/data-integration/snapshot-import-contract.md) §4.3 |
+| ├ Serialization Format | **`DESIGN RESOLVED`** | [snapshot-import-contract.md](design/specs/data-integration/snapshot-import-contract.md) §4.3.22 |
+| ├ Physical Dataset Layout | **`DESIGN RESOLVED`** | [snapshot-import-contract.md](design/specs/data-integration/snapshot-import-contract.md) §4.3.23；closure 见 §4.3.24 |
+| ├ Field Carrier Mapping | **`DESIGN RESOLVED`** | [snapshot-import-contract.md](design/specs/data-integration/snapshot-import-contract.md) §4.3.25；closure 见 §4.3.27 |
+| └ Final Import Contract | **`DESIGN RESOLVED`** | [snapshot-import-contract.md](design/specs/data-integration/snapshot-import-contract.md) §4.3.28；closure 见 §4.3.29 |
+| Data Validation | **`DESIGN RESOLVED`** | [data-validation.md](design/specs/data-integration/data-validation.md) §4.4；closure 见 §4.4.101 |
+| Master Data Mapping | **`DESIGN RESOLVED`**（11 / 11 层） | [master-data-mapping.md](design/specs/data-integration/master-data-mapping.md) §4.5；status 见 §4.5.24；scope 见 §4.5.25 |
 | **Adapter Boundary** | **`DESIGN RESOLVED`**（conceptual closure；implementation 未授权） | [Adapter Boundary](design/specs/data-integration/adapter-boundary.md)；closure 见 `adapter-boundary.md` §4.6.21 |
 | AI / Tool Boundary、HITL、Permission & Security、Audit & Observability、Test & AI Eval | 见对应章节 status boundary | §5 ～ §9（§5 status 见 §5.18） |
 | Architecture Decisions | **尚无正式 ADR**；技术栈明确未决定 | §10；`## Explicit Non-Decisions` |
@@ -101,7 +106,7 @@
 
 **更早：** `Final Import Contract` Closure Validation —— **`PASS`**
 （`Final Import Contract` 与 `Snapshot / Import Contract overall` 均 → **`DESIGN RESOLVED`**；
-authoritative 记录见 **§4.3.28** ／ **§4.3.29**）。
+authoritative 记录见 [snapshot-import-contract.md](design/specs/data-integration/snapshot-import-contract.md) **§4.3.28** ／ **§4.3.29**）。
 
 **其余 pending areas（`§1 Design Goals & Scope`；`§6` ～ `§9` 对应章节的 status boundary，例如
 `Permission & Security` 的 `RBAC` / `Data Scope` / `Tool Permission` / `Secret Handling`）** 见 **§5 Major Design State**；
