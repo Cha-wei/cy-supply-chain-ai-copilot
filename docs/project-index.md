@@ -74,7 +74,7 @@
 
 | 设计领域 | 状态 | 入口 |
 | --- | --- | --- |
-| **POC Design Goals & Scope（§1）** | **`DESIGN PENDING`** | §1（review-only design analysis 见 §1.1 ～ §1.10） |
+| **POC Design Goals & Scope（§1）** | **`DESIGN RESOLVED`**（四项；conceptual closure） | [POC Design](design/poc-design-v0.2.md) §1 final wording；GSD-8 见 §1.18；closure 见 §1.19；current status 见 §1.20 |
 | P0 Business Rules ／ System Boundary & Integration | **`DESIGN RESOLVED`** | §2；§3（status 见 §3.14）；§11 Open Design Backlog |
 | Canonical Data Model ／ Data Dictionary | **`DESIGN RESOLVED`** | [canonical-data-model.md](design/specs/data-integration/canonical-data-model.md) §4.1；[data-dictionary.md](design/specs/data-integration/data-dictionary.md) §4.2 |
 | **Snapshot / Import Contract overall** | **`DESIGN RESOLVED`** | [snapshot-import-contract.md](design/specs/data-integration/snapshot-import-contract.md) §4.3；status 见 §4.3.21 |
@@ -100,7 +100,11 @@
 
 **当前 Phase：** `POC Design v0.2`（**`DRAFT`**，尚未 `APPROVED` / `FROZEN`）。
 
-**最近已完成的 Gate：** `Adapter Boundary` Closure Validation —— **`PASS`**
+**最近已完成的 Gate：** `§1 Design Goals & Scope` Closure —— **`PASS`**（S-1 ～ S-14 全部 PASS；GSD-8 = `REGISTERED`／`AUTHORIZE`）。
+四项均为 `DESIGN RESOLVED`，authoritative 记录见 [POC Design](design/poc-design-v0.2.md) **§1.18 ～ §1.20**。
+`POC success = NOT CLAIMED`；本 closure 不授权 implementation，不改变 §6 ～ §10 独立状态。
+
+**更早：** `Adapter Boundary` Closure Validation —— **`PASS`**
 （`Adapter Boundary` → **`DESIGN RESOLVED`**；authoritative 记录见 [adapter-boundary.md](design/specs/data-integration/adapter-boundary.md) **§4.6.21**；
 本文档**不复制** closure rationale）。
 
@@ -108,7 +112,7 @@
 （`Final Import Contract` 与 `Snapshot / Import Contract overall` 均 → **`DESIGN RESOLVED`**；
 authoritative 记录见 [snapshot-import-contract.md](design/specs/data-integration/snapshot-import-contract.md) **§4.3.28** ／ **§4.3.29**）。
 
-**其余 pending areas（`§1 Design Goals & Scope`；`§6` ～ `§9` 对应章节的 status boundary，例如
+**其余 pending areas（`§6` ～ `§9` 对应章节的 status boundary，例如
 `Permission & Security` 的 `RBAC` / `Data Scope` / `Tool Permission` / `Secret Handling`）** 见 **§5 Major Design State**；
 `Adapter Boundary` 的 **implementation / Architecture / §7 / §8 等后续工作未由 closure 授权**，
 须以独立、明确授权的 task / PR 进行（本文档**不建立**其执行顺序）。
