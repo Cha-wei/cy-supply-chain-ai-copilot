@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "snapshot-loader"
+version = "0.1.0"
+description = "Controlled JSON Snapshot loader and Layer-1 package acceptance (POC v0.2, first deterministic tranche)"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+# POC v0.2 deliberately has no third-party runtime dependency: the deterministic core
+# uses only the Python standard library (ADR-001: prefer the standard library; stdlib
+# only is not a permanent architectural rule, but no dependency is justified yet).
+dependencies = []
+
+[project.optional-dependencies]
+dev = []
+
+[project.scripts]
+snapshot-loader = "snapshot_loader.cli:main"
+
+[tool.setuptools]
+packages = ["snapshot_loader"]
