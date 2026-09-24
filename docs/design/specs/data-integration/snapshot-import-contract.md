@@ -2,7 +2,7 @@
 
 **Document / Topic:** Snapshot / Import Contract
 **Parent Design:** [POC Design v0.2](../../poc-design-v0.2.md)
-**Legacy Section:** §4.3（§4.3.1 ～ §4.3.29 编号保留）
+**Legacy Section:** §4.3（§4.3.1 ～ §4.3.30 编号保留）
 **Design Status:** `DESIGN RESOLVED`
 **Implementation Status:** 原文未单独登记本专题的 implementation 状态；`DESIGN RESOLVED` 不表示 import implementation exists / data validated / tested。
 **Canonical Authority:** 本文件是 Snapshot / Import Contract concern 的唯一 current canonical source；parent design 保留 navigation/status 入口。
@@ -6134,6 +6134,309 @@ POC Design v0.2                    = DRAFT
 Package Structural Failure
   ≠ Capability Evidence Unavailable
   ≠ Business DATA_INCOMPLETE
+```
+
+---
+
+#### 4.3.30 v0.2 Record-Level Wire Binding（Issue #118 Human Decision Record）
+
+**Registration Status：`REGISTERED`** —— 依据 **Issue #118 Human Decision**（Decision 1 ～ 8）。
+
+本小节**只**登记该 Human Decision 已批准的 **record-level wire binding**：
+**v0.2 已知 canonical record property 的 exact literal 集合**、
+该集合在 **Layer 1** 的**唯一职责与明确非职责**、以及 **Manifest `"role"` value contract**。
+
+- 本小节**不**重开 `§4.3.1` ～ `§4.3.29`，**不**回写任何历史时点记录；
+- 本小节**不**新增 carrier ／ enum ／ Validation Reason ／ canonical field；
+- 本小节**不**创建 JSON Schema ／ parser ／ serializer ／ validator；
+- **design registration ≠ runtime implementation**。
+
+**A. Registered Decision（approved model）**
+
+```
+Model A1（经收缩后）= global contract-level known canonical record property set
+                    + Manifest "role" value = exact opaque JSON string
+Per-role whitelist（logical dataset role → permitted canonical properties）
+                    = NOT ADOPTED for Layer 1
+```
+
+**B. The set（authoritative — explicit, closed, version-bound）**
+
+```
+applicable contract_version = "v0.2"（VC-1；见 §4.3.28 A.1）
+set kind                    = explicit closed literal enumeration
+dynamic derivation          = 禁止（不得在 runtime 依 Data Dictionary 自动生成）
+```
+
+**B.1 Frozen v0.2 canonical record property literals（30 项 —— Data Dictionary 现存
+canonical field identifiers ＋ 本次两项 naming clarification）：**
+
+```
+plant_id
+material_code
+supplier_id
+analysis_run_id
+AnalysisDate
+required_date
+ProductionQty
+BOMComponentQty
+loss_rate
+inventory_status
+on_hand_qty
+inventory_snapshot_time
+SafetyStock
+ordered_qty
+received_qty
+effective_arrival_date
+inbound_status
+target_material_code
+substitute_material_code
+substitution_ratio
+approval_status
+AllocatedSubstituteQty
+sourcing_status
+standard_lead_time_days
+PerformancePeriod
+PerformanceUpdatedAt
+DeliveryPerformance
+QualityPerformance
+RecommendationNeedDate
+ApplicableMOQ
+```
+
+**B.2 明确排除（`NOT canonical record properties`）：**
+
+```
+effective demand context   —— 既有 authority 已声明其为 conceptual context，
+                              不是 canonical physical field（§4.1.4 G ／ §4.2.7）
+snapshot_package_id        —— 保持 transport ／ Manifest identity，
+                              不成为 business-record canonical property（§4.3.3）
+"_meta"                    —— 由既有独立 known-member contract 管理（§4.3.25 F ／ §4.3.28 E），
+                              不作为 ordinary canonical property
+```
+
+**本集合为 closed enumeration：** 只有 **B.1** 逐项列出的 literal（＋ `"_meta"`）属于
+v0.2 known canonical record property set。任何未列出的 literal —— 无论其 Class、
+Requiredness 或语义 —— 都**不在**本集合内，除非经正式 Human Decision 显式加入。
+
+```
+"未被列出" ⇒ 不属于本集合（本层依 UX-A reject）
+"未被列出" ≠ 已被批准为 wire property
+"未被列出" ≠ 本层对其业务语义作出判断
+```
+
+> **§4.2.10 derived result fields：** 该表中的 derived result identifiers
+> （例如 `BaseRequirement` ／ `RecommendedPurchaseQty` ／ `Classification`）**未**出现在
+> B.1 的逐项列示中 ⇒ 依上述 closed-enumeration 规则，它们**不在**本集合内。
+> 本层**不**对 derived result 是否应出现在任何 artifact 中作出判断 ——
+> 该问题由 **Decision 6** 明确 deferred。本小节只登记 literal 集合，
+> **不**为 derived results 新增或排除任何 literal。
+
+**B.3 集合可以包含不同 Class ／ Requiredness 的 canonical fields，Layer 1 对这些类别
+不做语义合法性判断：**
+
+```
+property known at Layer 1 ≠ field permitted as Snapshot business evidence
+```
+
+字段是否适合作为 source ／ runtime ／ context ／ derived evidence，
+留给对应 downstream validation ／ implementation gate（Layer 2 ～ Layer 4）。
+
+**C. Layer-1 职责与明确非职责**
+
+**C.1 Layer-1 known-property check 的**唯一**职责：**
+
+```
+direct record property ∈ B.1 的 approved set（或为 "_meta"）
+      ⇒ Layer-1 视为 known property
+不在 approved set 中
+      ⇒ 依现有 UX-A（§4.3.28 A.2）reject
+```
+
+**C.2 该 check **不得同时判断**：**
+
+```
+field requiredness
+logical value validity
+business applicability
+field 是否应该属于某 logical dataset role
+capability readiness
+semantic resolution
+source ／ runtime ／ derived legitimacy
+```
+
+```
+known property ≠ valid evidence ≠ applicable field ≠ required field
+```
+
+**C.3 边界说明：** 上述 concern 保持属于 **Layer 2 ～ Layer 4**（`§4.4.2`）；
+**不得**因本决定被提升为 package structural rejection（同 `IC-17` ／ `§4.3.28` `I-16`）。
+
+**D. Manifest `"role"` value contract（Decision 5）**
+
+```
+Manifest "role" value = exact opaque JSON string
+POC v0.2 Layer-1       = 不建立 exhaustive role enum
+```
+
+Layer 1 使用 **exact string equality** 执行**既有** structural invariants：
+
+```
+same role 不得有 duplicate ／ conflicting authoritative association
+one included role → one authoritative artifact
+different included roles 不得（被确认为）指向同一 physical artifact
+filename 不得成为 role 的 authoritative source
+不做 trim ／ case conversion ／ Unicode normalization ／ synonym conversion
+```
+
+```
+"role" value 未出现在 §4.3.10 示例列表
+      ⇒ 本身**不构成** Layer-1 unknown-content rejection
+```
+
+`§4.3.10` 的 logical role list **继续保持 illustrative**（本小节**未**修改该小节文本，
+**未**把其升级为 exhaustive wire vocabulary）。
+Role semantic recognition、capability-to-role requirement 与 role availability
+属后续 validation ／ **Capability Readiness**。
+
+**D.1 Manifest semantic-set carrier presence（Human Decision：presence = REQUIRED）**
+
+`§4.3.8` ／ `§4.3.25 A` 要求 Manifest **实际承载**已批准的 semantic set。
+本次 Human Decision 只批准 **carrier ／ property presence ＋ approved carrier location**，
+并据此登记：
+
+```
+POC v0.2 Layer-1 carrier presence = REQUIRED
+```
+
+**`"package"` block 必须包含：**
+
+```
+snapshot_package_id
+contract_version
+created_at
+environment
+evidence_classification
+completeness_state
+```
+
+**每个 included dataset entry 必须包含：**
+
+```
+role
+artifact
+record_count
+provenance_ref
+integrity_evidence
+```
+
+**`provenance_ref` 不设 value 约束** —— current canonical authority **未**为其登记任何
+representation（URI ／ schema ／ 格式），因此本层**只**要求其存在，**不得**新增格式约束。
+
+**本次**未**授权**新增以下规则（保持 `NOT DEFINED`）：
+
+```
+created_at 的新 timestamp format ／ timezone policy
+environment 的新 enum
+evidence_classification 的新 enum
+provenance_ref 的新 URI ／ schema ／ 格式约束
+completeness_state 的新 vocabulary 或 final-state gate
+任何新的 business validation ／ capability rule
+```
+
+**`CF-1` 保持（`§4.3.28` B.3）：**
+
+```
+"completeness_state" = Manifest-declared metadata only
+value 不直接参与 Layer-1 acceptance gate
+```
+
+**但 presence 是 REQUIRED：**
+
+```
+property presence = REQUIRED
+presence required ≠ semantic value gates acceptance
+```
+
+**Layer 边界（不得越过）：**
+
+Layer 1 只负责：
+
+```
+required carrier exists
+carrier 在 approved group ／ entry 中
+existing structural shape 可判定
+```
+
+以下 concern **不**因本登记而被拉入 Layer 1：
+
+```
+business requiredness（超出 presence 的部分）
+capability readiness
+semantic resolution
+provenance sufficiency
+business data completeness
+per-role field applicability
+downstream derived result policy
+```
+
+**E. Decision 6 明确 deferred 的问题（本层**未**决定，且**不**构成 Layer-1 blocker）**
+
+```
+POLICY_INPUT 最终通过 Snapshot 还是 runtime ／ analysis channel 提供
+AnalysisDate ／ RecommendationNeedDate 等 CONTEXT field 的最终 input channel
+derived results 是否应出现在某种 downstream artifact
+per-role field applicability
+capability-specific dataset requirements
+```
+
+这些问题**不得**借本次 known-member binding 被静默决定。
+
+**F. Decision 7 —— `inbound record identity`（DEFER ／ ESCALATE）**
+
+`§4.1.3` `E` ／ `§4.1.4` `E` 的 **Inbound Supply grain** 含 `inbound record identity`，
+而 current canonical authority **未**为其登记任何 canonical field identifier。
+
+```
+本层不创建新 canonical field
+本层不修改 Inbound grain
+本层不把 Stable Source Evidence Locator 当作 inbound identity
+```
+
+⇒ 记录为**后续 canonical-object ／ `BR-INBOUND-001` implementation 前必须重新评估**的 item
+（canonical-model completeness，非本层 wire binding）。
+它**不**阻塞 Layer-1 loader。
+
+**G. Registration Boundary（本小节）**
+
+- 本小节**不**新增 canonical entity ／ business field ／ enum ／ status ／
+  Validation Reason ／ Validation Category ／ carrier ／ sidecar；
+- 本小节**不**修改 `BR-*` ／ Validation Taxonomy ／ Master Data Mapping ／ Data Dictionary 的
+  business semantic、Class、Requiredness 或 vocabulary；
+- 本小节**不**修改 `FROZEN` docs ／ `AGENTS.md` ／ `CONTRIBUTING.md`；
+- 本小节**不**代表 implementation：**未**创建 JSON Schema ／ sample JSON ／ package directory ／
+  `manifest.json` ／ dataset artifact ／ parser ／ serializer ／ validator ／ import service；
+- 本小节**不**改变 `§4.3.10` ／ `§4.3.25` ／ `§4.3.28` ／ `§4.3.29` 的既有文本与结论。
+
+**H. Referenced supporting clarification（不同文件，不在本小节）**
+
+```
+analysis run identity → analysis_run_id
+inbound status / eligibility context → inbound_status
+```
+
+两项 **canonical field identifier naming clarification** 登记于
+`data-dictionary.md`（`§4.2.3` ／ `§4.2.6`）；**只**固定 identifier 命名，
+**未**改变 business semantic、Class、Requiredness 与 vocabulary。
+
+**执行状态（本 Registration 时点）**
+
+```
+v0.2 record-level wire binding = REGISTERED（Issue #118 Human Decision）
+Snapshot / Import Contract     = DESIGN RESOLVED（§4.3.1 ～ §4.3.29 结论未变）
+Runtime implementation         = NOT STARTED（本登记不产生 runtime artifact）
+POC Design v0.2                = DRAFT
+POC success                    = NOT CLAIMED
 ```
 
 ---

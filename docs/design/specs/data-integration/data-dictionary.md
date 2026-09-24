@@ -99,8 +99,15 @@ JSON structure、file columns、source table / column、serialization format。
 | `plant_id` | `IDENTIFIER` | `REQUIRED` | `CONTEXT` | 业务计算边界中的 Plant 标识 | `NOT DEFINED` | `DATA_INCOMPLETE` | 全部 Rule |
 | `material_code` | `IDENTIFIER` | `REQUIRED` | `CONTEXT` | canonical material identity | `NOT DEFINED` | `DATA_INCOMPLETE` | 全部 Rule |
 | `supplier_id` | `IDENTIFIER` | `CONDITIONAL`（Supplier Risk 评估时 `REQUIRED`） | `SOURCE` | supplier identity | `NOT DEFINED` | `DATA_INCOMPLETE` | `BR-SUPPLIER-RISK-001` |
-| analysis run identity | `ANALYSIS_RUN_ID` | `REQUIRED` | `CONTEXT` | 一次短缺分析运行的标识 | `NOT DEFINED`；**ID 生成方式未设计** | `DATA_INCOMPLETE` | `BR-SHORTAGE-001`、`BR-PROCUREMENT-001`、`BR-SUPPLIER-RISK-001` |
+| `analysis_run_id` | `ANALYSIS_RUN_ID` | `REQUIRED` | `CONTEXT` | 一次短缺分析运行的标识 | `NOT DEFINED`；**ID 生成方式未设计** | `DATA_INCOMPLETE` | `BR-SHORTAGE-001`、`BR-PROCUREMENT-001`、`BR-SUPPLIER-RISK-001` |
 | `AnalysisDate` | `DATE` | `CONDITIONAL`（Lead Time Feasibility 时 `REQUIRED`） | `CONTEXT` | 分析运行日期（`DaysUntilNeed` 的减数） | `NOT DEFINED` | `LeadTimeRisk = DATA_INCOMPLETE` | `BR-SUPPLIER-RISK-001` |
+
+> **Canonical field identifier clarification（Issue #118 Human Decision）：**
+> 本节的 `analysis_run_id` 为 **exact canonical field identifier**；
+> `ANALYSIS_RUN_ID` 继续是它的 **Logical Type**，**不是** field identifier
+> （见本节上方 **§4.2.2** Logical Types）。
+> 本决定**只**固定 identifier 命名 —— **不**决定 Analysis Run ID generation，
+> **不**决定其 runtime creation mechanism，**不**改变 Class ／ Requiredness ／ business semantic。
 
 #### 4.2.4 Requirement / BOM Fields
 
@@ -716,7 +723,14 @@ Master Data Mapping overall   = 仍 DESIGN PENDING
 | `ordered_qty` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `SOURCE` | 已订购数量 | `ordered_qty >= 0` | `DATA_INCOMPLETE` | `BR-INBOUND-001` |
 | `received_qty` | `NON_NEGATIVE_QUANTITY` | `REQUIRED` | `SOURCE` | 已收货数量 | `received_qty >= 0`；`received_qty > ordered_qty` 为**非法** | `DATA_INCOMPLETE` ＋ Data Quality Issue | `BR-INBOUND-001` |
 | `effective_arrival_date` | `DATE` | `REQUIRED` | `SOURCE` | Inbound **真正可用于 shortage calculation** 的有效到货日（canonical semantic **未改变**） | **source mapping = source-specific / Adapter-defined**；**canonical mapping contract = `DESIGN RESOLVED`**（**§4.5.21**）；**具体 source field 不在 canonical Data Dictionary 中统一定义** | 见下方 **Root-Condition Distinction**；三类最终均为 `DATA_INCOMPLETE` | `BR-INBOUND-001` |
-| inbound status / eligibility context | `STATUS` | `REQUIRED` | `SOURCE` | 判断该 inbound 是否可计入未来供给的状态 | 见 §2.6.3 的保守分类；未知 / 非法 → **不得猜测** | `DATA_INCOMPLETE` ＋ Data Quality Issue | `BR-INBOUND-001` |
+| `inbound_status` | `STATUS` | `REQUIRED` | `SOURCE` | 判断该 inbound 是否可计入未来供给的状态 | 见 §2.6.3 的保守分类；未知 / 非法 → **不得猜测** | `DATA_INCOMPLETE` ＋ Data Quality Issue | `BR-INBOUND-001` |
+
+> **Canonical field identifier clarification（Issue #118 Human Decision）：**
+> `inbound_status` 是 **exact canonical field identifier**（此前仅以描述性名称
+> `inbound status / eligibility context` 登记）。
+> 本决定**只**固定 identifier 命名 —— business semantic、Class、Requiredness 与
+> `§2.6.3` ／ **§4.2.14** 已批准的 inbound status vocabulary **均未改变**；
+> 本决定**不**把它改成 `SOURCE-SPECIFIC` vocabulary，也**不**重新设计 source mapping。
 
 **`effective_arrival_date` —— source mapping / mapping contract（PR #34 Human-approved Option D）**
 
@@ -1042,7 +1056,7 @@ DATA_INCOMPLETE
 | Status Field | Vocabulary | 依据 |
 | --- | --- | --- |
 | `inventory_status` | `AVAILABLE` / `INSPECTION` / `FROZEN` | §2.2.3 |
-| Inbound status / eligibility context | 见 §2.6.3 的保守分类（含 `OPEN` / `CONFIRMED` / `PARTIALLY_RECEIVED` / `CANCELLED` / `CLOSED` / `COMPLETED`） | §2.6.3 |
+| `inbound_status` | 见 §2.6.3 的保守分类（含 `OPEN` / `CONFIRMED` / `PARTIALLY_RECEIVED` / `CANCELLED` / `CLOSED` / `COMPLETED`） | §2.6.3 |
 | `Classification` | `NORMAL` / `BUFFER_BREACH` / `SHORTAGE` / `DATA_INCOMPLETE` | §2.1.4 |
 | `approval_status` | 仅 `APPROVED` 可参与；`PENDING` / `REJECTED` / `UNKNOWN` 不得进入 | §2.3.5 |
 | `LeadTimeRisk` | `LOW` / `HIGH` | §2.7.5 |
