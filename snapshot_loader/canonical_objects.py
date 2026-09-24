@@ -2352,7 +2352,38 @@ def _construct_bom_components(
             )
             continue
 
-        grain = (CanonicalProperty("material_code", record["material_code"]),)
+        # The BOM-local grain is the role's existing ``material_code``, i.e. the
+        # **component** material identity.  Neither Layer-1 nor Layer-2 guarantees that
+        # this property is present, and an omitted identity part is never defaulted,
+        # synthesised or guessed: the object stays unresolved with the registered
+        # IDENTITY_RESOLUTION / UNRESOLVED_IDENTITY taxonomy, and construction never
+        # raises because a canonical property is absent (``§4.4.26`` / ``§4.4.94``).
+        component_material = (
+            record["material_code"] if "material_code" in record else ABSENT
+        )
+        if component_material is ABSENT:
+            build.check(
+                f"{CANONICALIZATION_BOM_PARENT}:{reference.reference}",
+                EVALUATION_NOT_EVALUABLE,
+                "the BOM Component evidence does not carry its component material_code, "
+                "so the effective BOM grain cannot be stated; the object stays "
+                "unresolved instead of receiving a default (§4.1.13 C / §4.4.26)",
+            )
+            build.unresolved_identity(
+                location=f"{artifact}[{ordinal}]",
+                detail=(
+                    "BOM Component effective grain is incomplete: the accepted evidence "
+                    "omits the component material_code"
+                ),
+                affected_evidence=artifact,
+                design_reference="§4.1.13 C / §4.4.26 / §4.4.94",
+            )
+            unresolved.append(
+                _unresolved_object(properties, non_applicable, reference, provenance)
+            )
+            continue
+
+        grain = (CanonicalProperty("material_code", component_material),)
         resolved.append(
             CanonicalObject(
                 canonical_target=ROLE_BOM_COMPONENT,

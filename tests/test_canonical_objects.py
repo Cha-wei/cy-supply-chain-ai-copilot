@@ -608,6 +608,44 @@ class BomParentBindingTests(CanonicalObjectsTestCase):
         payload = str(report.to_dict())
         self.assertNotIn("component_material_code", payload)
 
+    def test_omitted_component_material_code_stays_unresolved_without_error(self) -> None:
+        # Layer-1 / Layer-2 do not guarantee ``material_code``; an omitted component
+        # material identity must never raise, be defaulted, or be synthesised.
+        omitted = {
+            "plant_id": PLANT,
+            "required_date": REQUIRED_DATE,
+            "BOMComponentQty": "2",
+        }
+        _, accepted = self.accepted(
+            [
+                ("Production Requirement", [PRODUCTION_REQUIREMENT()]),
+                ("BOM Component", [omitted]),
+            ],
+            name="bom-omitted-material",
+        )
+        report = construct_canonical_objects(
+            accepted,
+            PhaseAHandoff(
+                analysis_run_id="RUN-1",
+                analysis_date="2026-02-01",
+                bom_parent_context=(self._parent_handoff(accepted),),
+            ),
+        )
+        self.assertEqual(report.objects_for("BOM Component"), ())
+        self.assertEqual(len(report.unresolved_for("BOM Component")), 1)
+        unresolved = report.unresolved_for("BOM Component")[0]
+        self.assertIsNone(unresolved.grain)
+        self.assertIsNone(unresolved.context_reference)
+        self.assertFalse(unresolved.has("material_code"))
+        self.assertIn("UNRESOLVED_IDENTITY", {issue.reason for issue in report.issues})
+        identity_issues = [
+            issue for issue in report.issues if issue.reason == "UNRESOLVED_IDENTITY"
+        ]
+        self.assertTrue(
+            any("component material_code" in issue.detail for issue in identity_issues)
+        )
+        self.assertNotIn("material_code", str(unresolved.grain))
+
     def test_parent_context_is_not_created_without_source_evidence(self) -> None:
         _, accepted = self.accepted(
             [
