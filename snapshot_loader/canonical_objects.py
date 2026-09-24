@@ -86,6 +86,7 @@ ROLE_PRODUCTION_REQUIREMENT: str = "Production Requirement"
 ROLE_BOM_COMPONENT: str = "BOM Component"
 ROLE_SUBSTITUTE_ALLOCATION: str = "Substitute Allocation"
 ROLE_SUBSTITUTE_RELATIONSHIP: str = "Substitute Relationship"
+ROLE_CONFIGURED_SAFETY_STOCK: str = "Configured Safety Stock"
 
 # --- Phase A construction check names --------------------------------------------
 #
@@ -379,14 +380,39 @@ class EvidenceReference:
     ``§4.5.22`` Option D ``Layered Logical Provenance Contract``:
     ``Snapshot Package Identity`` + ``Logical Dataset Role`` +
     ``Stable Source Evidence Locator`` + ``Mapping / Resolution Basis`` (when
-    applicable).  This is a logical carrier only; it is deliberately **not** a wire
-    property, **not** a ``"_meta"`` member and **not** a canonical field.
+    applicable).
+
+    ``stable_source_evidence_locators`` / ``mapping_resolution_basis`` are the values
+    the accepted record itself registers under
+    ``_meta.provenance_associations`` (``§4.3.28`` E): they are carried **exactly**, in
+    declared order, with no trim / case conversion / normalisation and no heuristic
+    interpretation.  ``logical_observation`` is the registered ``"observation"`` the
+    association states.  Nothing here is synthesised: an accepted record without a
+    registered association contributes no locator, and the package-scoped path to the
+    record is reported separately as :attr:`artifact` / :attr:`record_ordinal` (an
+    internal construction-time path, never presented as an authoritative locator).
+
+    This is a logical carrier only; it is deliberately **not** a wire property,
+    **not** a ``"_meta"`` member and **not** a canonical field.
     """
 
     snapshot_package_identity: str
     logical_dataset_role: str
-    stable_source_evidence_locator: str
+    artifact: str
+    record_ordinal: int
+    logical_observation: str | None = None
+    stable_source_evidence_locators: tuple[str, ...] = ()
     mapping_resolution_basis: str | None = None
+    #: Every registered ``"observation"`` the accepted record states, in declared order.
+    #: Present so record-level provenance reports the registered associations without
+    #: silently dropping them when no single observation was requested.
+    registered_observations: tuple[str, ...] = ()
+
+    @property
+    def record_path(self) -> str:
+        """Internal construction-time path to the record (never an authoritative locator)."""
+
+        return f"{self.artifact}#{self.record_ordinal}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -531,15 +557,25 @@ class AnalysisRunContext:
 class HandoffEvidence:
     """Evidence citation offered by an in-process logical handoff entry.
 
-    This is deliberately *not* an :class:`EvidenceReference`: a handoff citation is an
-    unverified claim until construction has confirmed it against the accepted content
-    view.  Only the accepted package identity may be attached here, because a handoff
-    entry must never be able to point at another package (``§4.3.31`` E).
+    The citation names an accepted record by ``artifact`` + ``record_ordinal`` -- an
+    internal construction-time path used only to locate the record inside the accepted
+    content view, **never** presented as, nor used in place of, an authoritative Stable
+    Source Evidence Locator.  ``evidence_locator`` optionally names one of the opaque
+    locator strings the accepted record itself registers under
+    ``_meta.provenance_associations`` (``§4.3.28`` E): when given, it must match a
+    registered value exactly, because a caller cannot mint provenance.
+
+    This is deliberately *not* an :class:`EvidenceReference`: a citation is an
+    unverified claim until construction has confirmed it.  Only the accepted package
+    identity may be attached here, because a handoff entry must never be able to point
+    at another package (``§4.3.31`` E).
     """
 
     snapshot_package_identity: str
     logical_dataset_role: str
-    stable_source_evidence_locator: str
+    artifact: str
+    record_ordinal: int
+    evidence_locator: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -775,29 +811,23 @@ def _object_to_dict(item: CanonicalObject) -> dict[str, object]:
         "context_provenance": (
             None
             if item.context_provenance is None
-            else {
-                "snapshot_package_identity": (
-                    item.context_provenance.snapshot_package_identity
-                ),
-                "logical_dataset_role": item.context_provenance.logical_dataset_role,
-                "stable_source_evidence_locator": (
-                    item.context_provenance.stable_source_evidence_locator
-                ),
-                "mapping_resolution_basis": (
-                    item.context_provenance.mapping_resolution_basis
-                ),
-            }
+            else _provenance_to_dict(item.context_provenance)
         ),
-        "provenance": {
-            "snapshot_package_identity": item.provenance.snapshot_package_identity,
-            "logical_dataset_role": item.provenance.logical_dataset_role,
-            "stable_source_evidence_locator": (
-                item.provenance.stable_source_evidence_locator
-            ),
-            "mapping_resolution_basis": (
-                item.provenance.mapping_resolution_basis
-            ),
-        },
+        "provenance": _provenance_to_dict(item.provenance),
+    }
+
+
+def _provenance_to_dict(item: EvidenceReference) -> dict[str, object]:
+    """Serialise the accepted provenance exactly as the record registered it."""
+
+    return {
+        "snapshot_package_identity": item.snapshot_package_identity,
+        "logical_dataset_role": item.logical_dataset_role,
+        "logical_observation": item.logical_observation,
+        "registered_observations": list(item.registered_observations),
+        "stable_source_evidence_locators": list(item.stable_source_evidence_locators),
+        "mapping_resolution_basis": item.mapping_resolution_basis,
+        "accepted_record_path": item.record_path,
     }
 
 
@@ -811,14 +841,7 @@ def _effective_demand_to_dict(item: EffectiveDemandContextReference) -> dict[str
                 "relation": relation.relation,
                 "outcome": relation.outcome,
                 "mapping_basis": relation.mapping_basis,
-                "provenance": {
-                    "stable_source_evidence_locator": (
-                        relation.provenance.stable_source_evidence_locator
-                    ),
-                    "mapping_resolution_basis": (
-                        relation.provenance.mapping_resolution_basis
-                    ),
-                },
+                "provenance": _provenance_to_dict(relation.provenance),
             }
             for relation in item.relations
         ],
@@ -830,14 +853,7 @@ def _context_value_to_dict(item: ContextValueReference) -> dict[str, object]:
         "semantic": item.semantic,
         "grain": [{"name": prop.name, "value": prop.value} for prop in item.grain],
         "value": item.value,
-        "provenance": {
-            "snapshot_package_identity": item.provenance.snapshot_package_identity,
-            "logical_dataset_role": item.provenance.logical_dataset_role,
-            "stable_source_evidence_locator": (
-                item.provenance.stable_source_evidence_locator
-            ),
-            "mapping_resolution_basis": item.provenance.mapping_resolution_basis,
-        },
+        "provenance": _provenance_to_dict(item.provenance),
     }
 
 
@@ -922,17 +938,52 @@ def _evidence_reference(
     role: str,
     artifact: str,
     ordinal: int,
-    property_name: str | None = None,
-    mapping_basis: str | None = None,
+    record: JsonObject | None = None,
+    observation: str | None = None,
 ) -> EvidenceReference:
-    locator = f"{artifact}#{ordinal}"
-    if property_name is not None:
-        locator = f"{locator}.{property_name}"
+    """Build the package-scoped provenance of one accepted record.
+
+    The registered ``_meta.provenance_associations`` values are carried **exactly** as
+    the record states them; when ``observation`` is given the matching association is
+    the one reported.  Nothing is synthesised: a record with no registered association
+    yields an empty locator tuple, and ``artifact`` / ``ordinal`` are reported only as
+    the internal accepted-record path (``§4.3.28`` E / ``§4.5.22`` Option D).
+    """
+
+    associations = read_provenance_associations(record) if record is not None else ()
+    association: ProvenanceAssociation | None = None
+    if observation is not None:
+        for item in associations:
+            if item.observation == observation:
+                association = item
+                break
+    if association is not None:
+        locators = association.evidence
+        basis = association.mapping_basis
+        stated = association.observation
+    elif observation is not None:
+        locators = ()
+        basis = None
+        stated = observation
+    else:
+        # No single observation was requested: report every registered locator in
+        # declared order rather than dropping the record's registered associations.
+        locators = tuple(
+            locator for item in associations for locator in item.evidence
+        )
+        basis = None
+        stated = None
     return EvidenceReference(
         snapshot_package_identity=package.package_id,
         logical_dataset_role=role,
-        stable_source_evidence_locator=locator,
-        mapping_resolution_basis=mapping_basis,
+        artifact=artifact,
+        record_ordinal=ordinal,
+        logical_observation=stated,
+        stable_source_evidence_locators=locators,
+        mapping_resolution_basis=basis,
+        registered_observations=tuple(
+            item.observation for item in associations if item.observation is not None
+        ),
     )
 
 
@@ -1082,6 +1133,59 @@ IDENTITY_COMPONENT_TARGETS: Mapping[str, str] = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class ProvenanceAssociation:
+    """One ``_meta.provenance_associations[]`` entry, exactly as the record registers it.
+
+    ``§4.3.28`` E registers the controlled member shape and its literals
+    (``"provenance_associations"`` / ``"observation"`` / ``"evidence"`` /
+    ``"mapping_basis"``).  ``evidence`` is an array of opaque Stable Source Evidence
+    Locator strings; ``mapping_basis`` is an optional exact JSON string required only
+    when a semantic mapping / resolution happened.  No trim, case conversion, Unicode
+    normalisation, numeric coercion or heuristic interpretation is applied.
+    """
+
+    observation: str | None
+    evidence: tuple[str, ...]
+    mapping_basis: str | None
+
+
+def read_provenance_associations(record: JsonObject) -> tuple[ProvenanceAssociation, ...]:
+    """Read the registered provenance associations of one accepted record.
+
+    Only the approved ``_meta`` shape is read (``§4.3.28`` E).  Anything absent or not
+    in the registered shape contributes **no** association, because a locator or basis
+    may never be invented: an accepted record without registered provenance simply has
+    no registered provenance.
+    """
+
+    meta = record.get(PROPERTY_META) if PROPERTY_META in record else None
+    if not isinstance(meta, dict):
+        return ()
+    associations = meta.get("provenance_associations")
+    if not isinstance(associations, list):
+        return ()
+
+    outbound: list[ProvenanceAssociation] = []
+    for association in associations:
+        if not isinstance(association, dict):
+            continue
+        observation = association.get("observation")
+        basis = association.get("mapping_basis")
+        evidence = association.get("evidence")
+        locators: tuple[str, ...] = ()
+        if isinstance(evidence, list):
+            locators = tuple(item for item in evidence if isinstance(item, str))
+        outbound.append(
+            ProvenanceAssociation(
+                observation=observation if isinstance(observation, str) else None,
+                evidence=locators,
+                mapping_basis=basis if isinstance(basis, str) else None,
+            )
+        )
+    return tuple(outbound)
+
+
 def _accepted_record_index(accepted: AcceptedPackage) -> dict[str, JsonObject]:
     """Return ``<artifact>#<ordinal> -> accepted record`` for the accepted content view.
 
@@ -1141,31 +1245,6 @@ def _targets_by_artifact(
     return located, tuple(blocked)
 
 
-def _locator_base(locator: str) -> str:
-    """Return ``<artifact>#<ordinal>`` for a Stable Source Evidence Locator.
-
-    The registered locator form is ``<artifact>#<ordinal>[.<property>]``.  The artifact
-    name may itself contain dots, so the ordinal separator -- not a dot -- delimits the
-    base.
-    """
-
-    artifact, separator, remainder = locator.partition("#")
-    if not separator:
-        return locator
-    return f"{artifact}#{remainder.split('.', 1)[0]}"
-
-
-#: Locator suffix used when a source value is claimed by an explicit property token.
-_LOCATOR_PROPERTY_SEPARATOR = "."
-
-
-def _locator_property(locator: str) -> str | None:
-    base = _locator_base(locator)
-    if locator == base:
-        return None
-    return locator[len(base) + len(_LOCATOR_PROPERTY_SEPARATOR):]
-
-
 @dataclass(frozen=True, slots=True)
 class _EvidenceVerification:
     """Outcome of verifying one offered handoff evidence citation."""
@@ -1176,9 +1255,10 @@ class _EvidenceVerification:
     ordinal: int | None = None
     artifact: str | None = None
     value: Any = None
+    association: ProvenanceAssociation | None = None
 
     @property
-    def locator(self) -> str:
+    def record_path(self) -> str:
         if self.artifact is None or self.ordinal is None:
             return ""
         return f"{self.artifact}#{self.ordinal}"
@@ -1191,19 +1271,25 @@ def _verify_handoff_evidence(
     located: Mapping[str, tuple[str, int]],
     records: Mapping[str, JsonObject],
     expected_roles: tuple[str, ...] | None = None,
-    property_name: str | None = None,
+    observation: str | None = None,
 ) -> _EvidenceVerification:
     """Verify one offered handoff citation against the accepted content view.
 
-    A citation is only accepted when **all** of the following hold:
+    The citation names an accepted record by ``artifact`` + ``record_ordinal`` (an
+    internal construction-time path, **not** an authoritative Stable Source Evidence
+    Locator) and may name an ``evidence_locator`` the record registered.  A citation is
+    only accepted when **all** of the following hold:
 
     * it names the same ``AcceptedPackage`` identity;
-    * its ``logical_dataset_role`` matches the accepted dataset the locator resolves to;
-    * the locator resolves to a real record of that dataset in the accepted content view;
-    * when ``expected_roles`` is given, that dataset role is one of them;
-    * when ``property_name`` is given, the record itself actually carries that property,
-      and the returned ``value`` is the accepted value -- so the injected semantic is
-      backed by accepted evidence rather than by the caller's assertion.
+    * the record path resolves to a real accepted record;
+    * its ``logical_dataset_role`` matches the role that record actually belongs to;
+    * when ``expected_roles`` is given, that role is one of them;
+    * when ``evidence_locator`` is given, the accepted record's registered
+      ``_meta.provenance_associations`` actually contain that exact opaque locator
+      string -- a caller cannot mint an authoritative locator (``§4.3.28`` E);
+    * when ``observation`` is given, a registered association states that exact
+      ``"observation"``, and the record carries that canonical property; the returned
+      ``value`` is then the accepted value.
 
     Anything else stays unverified, and an unverified citation never supplies a value
     (``§4.3.31`` E: no external caller value, no default, no synthetic fallback).
@@ -1218,15 +1304,14 @@ def _verify_handoff_evidence(
             ),
         )
 
-    locator = evidence.stable_source_evidence_locator
-    base = _locator_base(locator)
-    found = located.get(locator) or located.get(base)
+    path = f"{evidence.artifact}#{evidence.record_ordinal}"
+    found = located.get(path)
     if found is None:
         return _EvidenceVerification(
             verified=False,
             problem=(
-                f"evidence locator {locator!r} does not resolve to an accepted record "
-                "of this package (§4.3.31 E)"
+                f"cited accepted record path {path!r} does not resolve to a record of "
+                "this package (§4.3.31 E)"
             ),
         )
 
@@ -1236,8 +1321,8 @@ def _verify_handoff_evidence(
             verified=False,
             problem=(
                 f"evidence declares logical dataset role "
-                f"{evidence.logical_dataset_role!r} but locator {base!r} belongs to "
-                f"role {role!r}; the citation is inconsistent and is not used"
+                f"{evidence.logical_dataset_role!r} but {path!r} belongs to role "
+                f"{role!r}; the citation is inconsistent and is not used"
             ),
         )
 
@@ -1250,72 +1335,141 @@ def _verify_handoff_evidence(
             ),
             role=role,
             ordinal=ordinal,
-            artifact=base.split("#", 1)[0],
+            artifact=evidence.artifact,
         )
 
-    record = records.get(base)
+    record = records.get(path)
+    if record is None:
+        return _EvidenceVerification(
+            verified=False,
+            problem=(
+                f"accepted record {path!r} could not be read as a record object; the "
+                "cited evidence cannot be established"
+            ),
+            role=role,
+            ordinal=ordinal,
+            artifact=evidence.artifact,
+        )
+
+    associations = read_provenance_associations(record)
+
+    if evidence.evidence_locator is not None:
+        registered = [
+            locator
+            for association in associations
+            for locator in association.evidence
+        ]
+        if evidence.evidence_locator not in registered:
+            return _EvidenceVerification(
+                verified=False,
+                problem=(
+                    f"the cited evidence locator {evidence.evidence_locator!r} is not "
+                    "registered by the accepted record's _meta.provenance_associations; "
+                    "a locator may not be minted by the caller (§4.3.28 E)"
+                ),
+                role=role,
+                ordinal=ordinal,
+                artifact=evidence.artifact,
+            )
+
     value: Any = None
-    if property_name is not None:
-        if record is None:
+    association: ProvenanceAssociation | None = None
+    if observation is not None:
+        matching = [
+            item
+            for item in associations
+            if item.observation == observation
+            and (
+                evidence.evidence_locator is None
+                or evidence.evidence_locator in item.evidence
+            )
+        ]
+        if not matching:
             return _EvidenceVerification(
                 verified=False,
                 problem=(
-                    f"accepted record {base!r} could not be read as a record object; "
-                    "the cited value cannot be established"
+                    f"the accepted record {path!r} registers no "
+                    f"_meta.provenance_associations entry for observation "
+                    f"{observation!r}"
+                    + (
+                        f" with evidence {evidence.evidence_locator!r}"
+                        if evidence.evidence_locator is not None
+                        else ""
+                    )
+                    + "; the injected value has no accepted provenance supporting it "
+                    "(§4.3.28 E / §4.3.31 E)"
                 ),
                 role=role,
                 ordinal=ordinal,
-                artifact=base.split("#", 1)[0],
+                artifact=evidence.artifact,
             )
-        declared_property = _locator_property(locator)
-        if declared_property is not None and declared_property != property_name:
+        if len(matching) > 1:
             return _EvidenceVerification(
                 verified=False,
                 problem=(
-                    f"evidence locator {locator!r} names property "
-                    f"{declared_property!r} but this semantic requires "
-                    f"{property_name!r}"
+                    f"the accepted record {path!r} registers {len(matching)} "
+                    f"associations for observation {observation!r}; exactly one "
+                    "applicable association is required and they are not merged "
+                    "(§4.4.102 C Stage A)"
                 ),
                 role=role,
                 ordinal=ordinal,
-                artifact=base.split("#", 1)[0],
+                artifact=evidence.artifact,
             )
-        if property_name not in record:
+        association = matching[0]
+        if observation not in record:
             return _EvidenceVerification(
                 verified=False,
                 problem=(
-                    f"accepted record {base!r} does not carry {property_name!r}; the "
-                    "injected value has no accepted evidence supporting it "
-                    "(§4.3.31 E)"
+                    f"the accepted record {path!r} registers observation "
+                    f"{observation!r} but does not carry that canonical property; the "
+                    "value cannot be established"
                 ),
                 role=role,
                 ordinal=ordinal,
-                artifact=base.split("#", 1)[0],
+                artifact=evidence.artifact,
             )
-        value = record[property_name]
+        value = record[observation]
 
     return _EvidenceVerification(
         verified=True,
         problem=None,
         role=role,
         ordinal=ordinal,
-        artifact=base.split("#", 1)[0],
+        artifact=evidence.artifact,
         value=value,
+        association=association,
     )
 
 
 def _resolved_evidence_reference(
     *, accepted: AcceptedPackage, verification: _EvidenceVerification
 ) -> EvidenceReference:
-    """Build the confirmed provenance for a verified handoff citation."""
+    """Build the confirmed provenance for a verified handoff citation.
+
+    Only the values the accepted record itself registered are carried: its opaque
+    ``evidence`` locators, its ``mapping_basis`` and its ``observation``.  An accepted
+    record without a registered association contributes an empty locator tuple rather
+    than a synthesised one (``§4.3.28`` E).
+    """
 
     assert verification.role is not None and verification.artifact is not None
     assert verification.ordinal is not None
-    return _evidence_reference(
-        package=accepted,
-        role=verification.role,
+    association = verification.association
+    return EvidenceReference(
+        snapshot_package_identity=accepted.package_id,
+        logical_dataset_role=verification.role,
         artifact=verification.artifact,
-        ordinal=verification.ordinal,
+        record_ordinal=verification.ordinal,
+        logical_observation=(
+            association.observation if association is not None else None
+        ),
+        stable_source_evidence_locators=(
+            association.evidence if association is not None else ()
+        ),
+        mapping_resolution_basis=(
+            association.mapping_basis if association is not None else None
+        ),
     )
 
 
@@ -1631,7 +1785,11 @@ def _resolve_grain_keyed(
             package=accepted, role=role, artifact=artifact, ordinal=ordinal
         )
         provenance = _evidence_reference(
-            package=accepted, role=role, artifact=artifact, ordinal=ordinal
+            package=accepted,
+            role=role,
+            artifact=artifact,
+            ordinal=ordinal,
+            record=record,
         )
         obj = CanonicalObject(
             canonical_target=target,
@@ -1642,6 +1800,24 @@ def _resolve_grain_keyed(
             record_reference=reference.reference,
             provenance=provenance,
         )
+        if grain is None:
+            ungrainable[target].append(obj)
+            build.check(
+                f"{CANONICALIZATION_GRAIN_RESOLUTION}:{target}:{reference.reference}",
+                EVALUATION_NOT_EVALUABLE,
+                "a canonical identity component is not present on the accepted record; "
+                "the object stays unresolved instead of receiving a default",
+            )
+            build.unresolved_identity(
+                location=f"{artifact}[{ordinal}]",
+                detail=(
+                    f"{target} identity cannot be resolved: a registered canonical "
+                    "identity component is not present on the accepted record"
+                ),
+                affected_evidence=artifact,
+                design_reference="§4.4.26 / §4.4.94 / §4.1.3",
+            )
+            continue
 
         key = _grain_key(record, GRAIN_KEYED_TARGETS[target])
         if key is None:
@@ -1729,8 +1905,11 @@ def _assign_identity_context(
         ordinal=ordinal,
     )
     provenance = _evidence_reference(
-        package=accepted, role="Plant / Material identity context", artifact=artifact,
+        package=accepted,
+        role="Plant / Material identity context",
+        artifact=artifact,
         ordinal=ordinal,
+        record=record,
     )
 
     for key_name, target in IDENTITY_COMPONENT_TARGETS.items():
@@ -1780,7 +1959,11 @@ def _construct_inbound(
             package=accepted, role=role, artifact=artifact, ordinal=ordinal
         )
         provenance = _evidence_reference(
-            package=accepted, role=role, artifact=artifact, ordinal=ordinal
+            package=accepted,
+            role=role,
+            artifact=artifact,
+            ordinal=ordinal,
+            record=record,
         )
         if "plant_id" not in record and "material_code" not in record:
             # ``§4.1.4`` E registers ``plant_id`` + ``material_code`` as the inbound
@@ -1930,7 +2113,11 @@ def _construct_bom_components(
             package=accepted, role=role, artifact=artifact, ordinal=ordinal
         )
         provenance = _evidence_reference(
-            package=accepted, role=role, artifact=artifact, ordinal=ordinal
+            package=accepted,
+            role=role,
+            artifact=artifact,
+            ordinal=ordinal,
+            record=record,
         )
 
         record_plant = record["plant_id"] if "plant_id" in record else ABSENT
@@ -2119,20 +2306,22 @@ def _construct_bom_components(
             EVALUATION_PASSED,
             "parent / requirement context bound to resolved Production Requirement "
             "context "
-            f"[{_grain_label(parent.grain)}] via {parent_evidence.stable_source_evidence_locator}",
+            f"[{_grain_label(parent.grain)}] via {parent_evidence.record_path}",
         )
         # ``§4.1.13`` C registered grain: plant_id + parent / requirement material_code +
-        # required_date + component material_code.  The parent material_code comes from
-        # the resolved context (never invented, never a new canonical field), and the
-        # context reference plus its own upstream provenance are preserved on the object.
+        # required_date.  The parent material_code is expressed **through the resolved
+        # Production Requirement context** -- the context reference below -- and never as
+        # a new canonical property / identity component.  The role's own ``material_code``
+        # keeps meaning the component material identity, so the component identity is
+        # carried by this object's own properties, not by the grain.
         parent_material = parent.value_of("material_code", ABSENT)
         if parent_material is ABSENT:
             build.check(
                 f"{CANONICALIZATION_BOM_PARENT}:{reference.reference}",
                 EVALUATION_NOT_EVALUABLE,
                 "the resolved Production Requirement context does not carry a "
-                "material_code, so the BOM Component grain cannot be completed; the "
-                "object stays unresolved instead of receiving a default (§4.1.13 C)",
+                "material_code, so the BOM Component grain cannot be stated; the object "
+                "stays unresolved instead of receiving a default (§4.1.13 C)",
             )
             build.unresolved_identity(
                 location=f"{artifact}[{ordinal}]",
@@ -2152,7 +2341,6 @@ def _construct_bom_components(
             CanonicalProperty("plant_id", record_plant),
             CanonicalProperty("material_code", parent_material),
             CanonicalProperty("required_date", record_required),
-            CanonicalProperty("component_material_code", record["material_code"]),
         )
         resolved.append(
             CanonicalObject(
@@ -2185,10 +2373,12 @@ def _handoff_loss_rate(
     (``§4.2.18`` role 2).  A value is carried only when **all** of the following hold:
 
     * the requirement grain matches a resolved ``Production Requirement`` context;
-    * the handoff cites exactly one applicable ``loss_rate`` evidence reference, and
-      that reference resolves to a real accepted record of the **same** package that
-      itself carries ``loss_rate`` -- an unverifiable citation never supplies a value;
-    * a resolution basis is given for the exactly-one resolution.
+    * the handoff cites exactly one applicable ``loss_rate`` record inside the **same**
+      ``AcceptedPackage``, and that record registers a ``_meta.provenance_associations``
+      entry for the ``loss_rate`` observation -- an unverifiable citation, or one
+      without registered provenance, never supplies a value;
+    * the resolution basis is the ``mapping_basis`` the accepted record itself registers;
+      a caller-supplied free string is not an approved mapping basis.
 
     More than one applicable reference stays unresolved: values are never deduplicated,
     never aggregated and never chosen by precedence (``§4.4.102`` C Stage A).  The
@@ -2251,7 +2441,7 @@ def _handoff_loss_rate(
             evidence=entry.loss_rate_evidence[0],
             located=located,
             records=accepted_records,
-            property_name="loss_rate",
+            observation="loss_rate",
         )
         if not value_gate.verified:
             build.check(
@@ -2262,12 +2452,29 @@ def _handoff_loss_rate(
             )
             continue
 
-        if not entry.resolution_basis.strip():
+        # The basis must be the one the accepted record itself registers: a caller's
+        # free string is not an approved mapping basis (§4.3.28 E / §4.5.22 Option D).
+        accepted_basis = (
+            value_gate.association.mapping_basis
+            if value_gate.association is not None
+            else None
+        )
+        if not accepted_basis:
             build.check(
                 check_name,
                 EVALUATION_NOT_EVALUABLE,
-                "no mapping / resolution basis was given for the loss_rate resolution; "
-                "the value is not carried (§4.5.22 Option D / §4.3.31 E)",
+                "the accepted record registers no \"mapping_basis\" for the loss_rate "
+                "association, so the resolution basis cannot be tied to approved "
+                "package evidence; the value is not carried (§4.3.28 E)",
+            )
+            continue
+        if entry.resolution_basis and entry.resolution_basis != accepted_basis:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                "the handed-in resolution basis does not equal the mapping_basis the "
+                "accepted record registers; a caller free string is not an approved "
+                "mapping basis (§4.3.28 E)",
             )
             continue
 
@@ -2285,8 +2492,9 @@ def _handoff_loss_rate(
             check_name,
             EVALUATION_PASSED,
             "loss_rate carried as an in-process logical handoff, supported by accepted "
-            f"evidence {value_gate.locator} and resolution basis {entry.resolution_basis!r}; "
-            "Entity / Dataset / Source Field ownership is not decided here (§4.4.15)",
+            f"record {value_gate.record_path} with registered provenance and basis "
+            f"{accepted_basis!r}; Entity / Dataset / Source Field ownership is not "
+            "decided here (§4.4.15)",
         )
         build.loss_rate_contexts.append(
             ContextValueReference(
@@ -2310,19 +2518,28 @@ def _handoff_safety_stock(
 ) -> None:
     """Resolve the ``SafetyStock`` internal handoff (injection I-5).
 
-    ``SafetyStock`` is carried only when the same ``AcceptedPackage`` carries exactly
-    one applicable ``SafetyStock`` reference that resolves the grain and no conflicting
-    ``SafetyStock`` value exists at that canonical grain.  Conflicting accepted values
-    at the same grain are the registered ``§4.4.92`` case and are reported as
-    ``CONSISTENCY`` / ``CONSISTENCY_CONFLICT`` (``§4.4.102`` C Stage B) -- never
-    silently downgraded to a plain unresolved, and never resolved by the handoff, which
-    would be an implicit ``injection wins``.
+    Two obligations are implemented here, in this order:
+
+    * **Stage B over accepted evidence (handoff-independent).**  Two accepted
+      ``Configured Safety Stock`` records that state different ``SafetyStock`` values on
+      the same ``plant_id`` + ``material_code`` grain are the registered ``§4.4.92``
+      case and are reported as ``CONSISTENCY`` / ``CONSISTENCY_CONFLICT``
+      (``§4.4.102`` C Stage B) whether or not any handoff entry exists -- generic
+      duplicate handling never downgrades or overrides it.
+    * **Internal handoff.**  A value is carried only when the same ``AcceptedPackage``
+      resolves the grain through exactly one applicable record whose registered
+      provenance states the ``SafetyStock`` observation, whose own ``plant_id`` /
+      ``material_code`` equal the claimed grain, and no conflicting accepted value
+      exists at that grain.  A handoff can therefore neither invent a value nor shadow
+      accepted evidence (no implicit ``injection wins``).
     """
 
-    declared_grains = {
-        (obj.value_of("plant_id", ABSENT), obj.value_of("material_code", ABSENT))
-        for obj in safety_stock_targets
-    }
+    grains_stated_by_configured_dataset = _configured_safety_stock_grains(
+        accepted, accepted_records
+    )
+    conflicting_grains = _report_safety_stock_grain_conflicts(
+        build, accepted, accepted_records
+    )
 
     for index, entry in enumerate(handoff.safety_stock):
         check_name = f"{CANONICALIZATION_HANDOFF_EVIDENCE}:SafetyStock[{index}]"
@@ -2346,13 +2563,23 @@ def _handoff_safety_stock(
             )
             continue
 
-        if (entry.plant_id, entry.material_code) in declared_grains:
+        if (entry.plant_id, entry.material_code) in grains_stated_by_configured_dataset:
             build.check(
                 check_name,
                 EVALUATION_NOT_EVALUABLE,
-                "the Configured Safety Stock dataset already carries evidence for this "
-                "grain, so the internal handoff is not used and no precedence between "
-                "the two sources is applied (§4.4.102 C Stage B)",
+                "the Configured Safety Stock dataset itself states this grain, so the "
+                "internal handoff is not used and no precedence between the two sources "
+                "is applied (§4.4.102 C Stage B)",
+            )
+            continue
+
+        if (entry.plant_id, entry.material_code) in conflicting_grains:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                "conflicting accepted SafetyStock values were reported for this grain; "
+                "the handoff may not resolve the conflict and no value is carried "
+                "(§4.4.92 / §4.4.102 C Stage B)",
             )
             continue
 
@@ -2365,8 +2592,8 @@ def _handoff_safety_stock(
                 evidence=citation,
                 located=located,
                 records=accepted_records,
-                expected_roles=("Configured Safety Stock",),
-                property_name="SafetyStock",
+                expected_roles=(ROLE_CONFIGURED_SAFETY_STOCK,),
+                observation="SafetyStock",
             )
             if not verification.verified:
                 build.check(
@@ -2397,7 +2624,7 @@ def _handoff_safety_stock(
             evidence=entry.safety_stock_evidence[0],
             located=located,
             records=accepted_records,
-            property_name="SafetyStock",
+            observation="SafetyStock",
         )
         if not value_gate.verified:
             build.check(
@@ -2408,12 +2635,43 @@ def _handoff_safety_stock(
             )
             continue
 
-        if not entry.resolution_basis.strip():
+        # The cited evidence must state the very grain the handoff claims: evidence for
+        # another plant / material may not support this context.
+        evidence_grain = _safety_stock_record_grain(accepted_records, value_gate.record_path)
+        if evidence_grain != (entry.plant_id, entry.material_code):
             build.check(
                 check_name,
                 EVALUATION_NOT_EVALUABLE,
-                "no mapping / resolution basis was given for the SafetyStock "
-                "resolution; the value is not carried (§4.5.22 Option D / §4.3.31 E)",
+                "the cited SafetyStock evidence states grain "
+                f"{evidence_grain!r} which is not the claimed grain "
+                f"[{grain_label}]; evidence for another grain may not support this "
+                "context (§4.1.4 O / §4.4.92)",
+            )
+            continue
+
+        # The basis must be the one the accepted record itself registers: a caller's
+        # free string is not an approved mapping basis (§4.3.28 E / §4.5.22 Option D).
+        accepted_basis = (
+            value_gate.association.mapping_basis
+            if value_gate.association is not None
+            else None
+        )
+        if not accepted_basis:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                "the accepted record registers no \"mapping_basis\" for the SafetyStock "
+                "association, so the resolution basis cannot be tied to approved "
+                "package evidence; the value is not carried (§4.3.28 E)",
+            )
+            continue
+        if entry.resolution_basis and entry.resolution_basis != accepted_basis:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                "the handed-in resolution basis does not equal the mapping_basis the "
+                "accepted record registers; a caller free string is not an approved "
+                "mapping basis (§4.3.28 E)",
             )
             continue
 
@@ -2428,8 +2686,9 @@ def _handoff_safety_stock(
                 "conflicting SafetyStock values at the same canonical grain "
                 f"[{grain_label}]: "
                 f"Configured Safety Stock evidence "
-                f"{', '.join(f'{item.locator}={item.value!r}' for item in competing)} "
-                f"vs resolved policy evidence {value_gate.locator}={value_gate.value!r}"
+                f"{', '.join(f'{item.record_path}={item.value!r}' for item in competing)} "
+                f"vs resolved policy evidence "
+                f"{value_gate.record_path}={value_gate.value!r}"
             )
             build.check(
                 check_name,
@@ -2439,7 +2698,7 @@ def _handoff_safety_stock(
             build.issue(
                 category="CONSISTENCY",
                 reason="CONSISTENCY_CONFLICT",
-                location=f"{value_gate.locator}",
+                location=f"{value_gate.record_path}",
                 detail=detail,
                 affected_evidence=value_gate.artifact or "SafetyStock",
                 design_reference="§4.4.92 / §4.4.102 C Stage B",
@@ -2464,8 +2723,8 @@ def _handoff_safety_stock(
             check_name,
             EVALUATION_PASSED,
             "SafetyStock carried as an in-process logical handoff, supported by accepted "
-            f"evidence {value_gate.locator} and resolution basis {entry.resolution_basis!r}; "
-            "no default of 0 is applied",
+            f"record {value_gate.record_path} with registered provenance and basis "
+            f"{accepted_basis!r}; no default of 0 is applied",
         )
         build.safety_stock_contexts.append(
             ContextValueReference(
@@ -2477,6 +2736,98 @@ def _handoff_safety_stock(
                 ),
             )
         )
+
+
+def _safety_stock_record_grain(
+    accepted_records: Mapping[str, JsonObject], record_path: str
+) -> tuple[Any, Any] | None:
+    """The ``plant_id`` + ``material_code`` grain an accepted record itself states."""
+
+    record = accepted_records.get(record_path)
+    if record is None:
+        return None
+    if "plant_id" not in record or "material_code" not in record:
+        return None
+    return (record["plant_id"], record["material_code"])
+
+
+def _configured_safety_stock_grains(
+    accepted: AcceptedPackage, accepted_records: Mapping[str, JsonObject]
+) -> set[tuple[Any, Any]]:
+    """Grains the accepted ``Configured Safety Stock`` dataset itself states."""
+
+    grains: set[tuple[Any, Any]] = set()
+    for role, artifact in accepted.datasets():
+        if role != ROLE_CONFIGURED_SAFETY_STOCK:
+            continue
+        for path, record in accepted_records.items():
+            if not path.startswith(f"{artifact}#"):
+                continue
+            grain = _safety_stock_record_grain(accepted_records, path)
+            if grain is not None:
+                grains.add(grain)
+    return grains
+
+
+def _report_safety_stock_grain_conflicts(
+    build: _Construction,
+    accepted: AcceptedPackage,
+    accepted_records: Mapping[str, JsonObject],
+) -> set[tuple[Any, Any]]:
+    """Report ``§4.4.92`` conflicting SafetyStock at one grain, handoff-independent.
+
+    Two accepted ``Configured Safety Stock`` records that state different
+    ``SafetyStock`` values on the same ``plant_id`` + ``material_code`` grain violate the
+    registered consistency invariant, so they are reported as ``CONSISTENCY`` /
+    ``CONSISTENCY_CONFLICT`` (``§4.4.102`` C Stage B).  This runs over the accepted
+    content view alone, with or without any handoff entry; the generic "more than one
+    applicable evidence" handling never downgrades it.
+    """
+
+    per_grain: dict[tuple[Any, Any], list[tuple[str, Any]]] = {}
+    for role, artifact in accepted.datasets():
+        if role != ROLE_CONFIGURED_SAFETY_STOCK:
+            continue
+        for path, record in accepted_records.items():
+            if not path.startswith(f"{artifact}#"):
+                continue
+            if "SafetyStock" not in record:
+                continue
+            grain = _safety_stock_record_grain(accepted_records, path)
+            if grain is None:
+                continue
+            per_grain.setdefault(grain, []).append((path, record["SafetyStock"]))
+
+    conflicting: set[tuple[Any, Any]] = set()
+    for grain in sorted(per_grain, key=lambda item: repr(item)):
+        values = per_grain[grain]
+        distinct = {repr(value) for _path, value in values}
+        if len(distinct) < 2:
+            continue
+        conflicting.add(grain)
+        detail = (
+            "conflicting SafetyStock values at the same canonical grain "
+            f"[plant_id={grain[0]!r} + material_code={grain[1]!r}]: "
+            + ", ".join(f"{path}={value!r}" for path, value in values)
+        )
+        build.check(
+            f"{CANONICALIZATION_HANDOFF_EVIDENCE}:SafetyStock:grain_conflict",
+            EVALUATION_FAILED,
+            detail,
+        )
+        build.issue(
+            category="CONSISTENCY",
+            reason="CONSISTENCY_CONFLICT",
+            location=f"{values[0][0]}",
+            detail=detail,
+            affected_evidence=ROLE_CONFIGURED_SAFETY_STOCK,
+            design_reference="§4.4.92 / §4.4.102 C Stage B",
+            consequence_context=(
+                "the affected SafetyStock grain stays unresolved; no precedence, no "
+                "aggregation and no package rejection"
+            ),
+        )
+    return conflicting
 
 
 # --- G5-A effective demand relation outcomes ---------------------------------------
@@ -2567,7 +2918,6 @@ def _effective_demand_references(
             located=located,
             records=accepted_records,
             expected_roles=(ROLE_SUBSTITUTE_ALLOCATION, ROLE_SUBSTITUTE_RELATIONSHIP),
-            property_name=None,
         )
         if not verification.verified:
             _unresolved(
@@ -2585,40 +2935,31 @@ def _effective_demand_references(
                 relation=entry.relation,
                 role=entry.evidence.logical_dataset_role,
                 detail=(
-                    "no approved mapping basis was given for this relation; the outcome "
-                    "cannot be attributed to approved mapping evidence and the pair "
-                    "stays unresolved (§4.1.13 D)"
+                    "no mapping basis was given for this relation; the outcome cannot be "
+                    "attributed to approved mapping evidence and the pair stays "
+                    "unresolved (§4.1.13 D)"
                 ),
             )
             continue
 
-        outcome = _effective_demand_outcome(
-            accepted_records=accepted_records,
-            verification=verification,
+        # The approved conceptual outcomes are ``applicable`` / ``not applicable`` /
+        # ``unresolved`` and ``overlaps`` / ``does not overlap`` / ``unresolved``.  The
+        # concrete source value -> conceptual outcome mapping is SOURCE-SPECIFIC /
+        # Adapter-defined (``§4.5.9`` / ``§4.5.26``) and no approved mapping is available
+        # to Phase A, so **no** outcome is derived here.  In particular a registered
+        # canonical value such as ``approval_status`` or ``AllocatedSubstituteQty`` is
+        # *not* itself a relation outcome, and it is never silently relabelled as one.
+        _unresolved(
             relation=entry.relation,
-            source_substitute_material=entry.source_substitute_material,
-            target_material=entry.target_material,
-        )
-        if outcome is _NO_OUTCOME:
-            _unresolved(
-                relation=entry.relation,
-                role=entry.evidence.logical_dataset_role,
-                detail=(
-                    f"the accepted evidence {verification.locator} does not determine "
-                    f"relation {entry.relation!r} for this substitute / target pair, so "
-                    "the outcome stays unresolved instead of being supplied by the "
-                    "caller (§4.1.13 D)"
-                ),
-            )
-            continue
-
-        verified.setdefault(key, {})[entry.relation] = RelationOutcomeReference(
-            relation=entry.relation,
-            outcome=outcome,
-            provenance=_resolved_evidence_reference(
-                accepted=accepted, verification=verification
+            role=entry.evidence.logical_dataset_role,
+            detail=(
+                f"the accepted evidence {verification.record_path} supports relation "
+                f"{entry.relation!r} but no approved source-value -> "
+                "applicable / not applicable / overlaps / does not overlap mapping is "
+                "available in the current authority (SOURCE-SPECIFIC / Adapter-defined); "
+                "the conceptual outcome stays unresolved and is never taken from the "
+                "caller nor invented by canonicalization (§4.1.13 D)"
             ),
-            mapping_basis=entry.mapping_basis,
         )
 
     outbound: list[EffectiveDemandContextReference] = []
@@ -2687,81 +3028,6 @@ def _effective_demand_references(
         )
 
     return tuple(outbound), tuple(issues)
-
-
-class _NoOutcome:
-    """Sentinel: the accepted evidence does not determine the relation outcome."""
-
-    __slots__ = ()
-
-    def __repr__(self) -> str:  # pragma: no cover - debugging aid
-        return "<no-outcome>"
-
-
-_NO_OUTCOME = _NoOutcome()
-
-#: Properties an accepted record may use to state a substitute relationship's own
-#: direction / eligibility, in the order the canonical model registers them.
-_OUTCOME_DIRECTION_PROPERTY = "substitute_material_code"
-_OUTCOME_TARGET_PROPERTY = "target_material_code"
-_OUTCOME_APPROVAL_PROPERTY = "approval_status"
-_OUTCOME_ALLOCATED_PROPERTY = "AllocatedSubstituteQty"
-
-
-def _effective_demand_outcome(
-    *,
-    accepted_records: Mapping[str, JsonObject],
-    verification: _EvidenceVerification,
-    relation: str,
-    source_substitute_material: Any,
-    target_material: Any,
-) -> Any:
-    """Read a G5-A relation outcome from the accepted evidence itself.
-
-    The outcome is derived only from accepted values: the evidence record must belong
-    to the substitute / target pair it is cited for, and the relation result is then
-    read from the registered canonical values that record carries
-    (``approval_status`` for ``Target Applicability``, ``AllocatedSubstituteQty`` for
-    ``Source Reservation Overlap``).  Nothing is taken from the caller -- a handoff
-    entry supplies the mapping basis and the citation, never the outcome -- so an entry
-    cannot assert a result its evidence does not support.  ``_NO_OUTCOME`` means the
-    accepted evidence determines nothing and the pair stays unresolved.
-    """
-
-    record = accepted_records.get(verification.locator)
-    if record is None:
-        return _NO_OUTCOME
-
-    if _OUTCOME_TARGET_PROPERTY in record:
-        if record[_OUTCOME_TARGET_PROPERTY] != target_material:
-            return _NO_OUTCOME
-    if _OUTCOME_DIRECTION_PROPERTY in record:
-        if record[_OUTCOME_DIRECTION_PROPERTY] != source_substitute_material:
-            return _NO_OUTCOME
-
-    if relation == RELATION_TARGET_APPLICABILITY:
-        # Target applicability is carried by the substitute relationship's own
-        # registered approval state (``§4.1.4`` F / ``§4.2.14``).
-        if _OUTCOME_APPROVAL_PROPERTY in record:
-            return record[_OUTCOME_APPROVAL_PROPERTY]
-        if _OUTCOME_ALLOCATED_PROPERTY in record:
-            return "ALLOCATED"
-        return _NO_OUTCOME
-
-    if relation == RELATION_SOURCE_RESERVATION_OVERLAP:
-        # A source reservation overlap is only ever evidenced by an allocation record
-        # for the same source substitute material (``§4.1.4`` G).
-        if verification.role != ROLE_SUBSTITUTE_ALLOCATION:
-            return _NO_OUTCOME
-        if _OUTCOME_TARGET_PROPERTY not in record:
-            return _NO_OUTCOME
-        if _OUTCOME_DIRECTION_PROPERTY not in record:
-            return _NO_OUTCOME
-        if _OUTCOME_ALLOCATED_PROPERTY not in record:
-            return _NO_OUTCOME
-        return record[_OUTCOME_ALLOCATED_PROPERTY]
-
-    return _NO_OUTCOME
 
 
 __all__ = [
