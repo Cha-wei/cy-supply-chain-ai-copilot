@@ -1597,7 +1597,9 @@ Registration Status = REGISTERED
 
 ### 1.19 Section 1 Closure Verification（Issue #112）
 
-**Verification base：** current `main @ bc391bd3eaf481c9fdc94a1586703ae19992778a`。读取该版本的 FROZEN inputs、GSD-1 ～ GSD-7、§2 ～ §5 current canonical authority 与 §6 ～ §10 independent status；§4 通过六份 standalone specs 核验，parent stub 不替代规范正文。以下为本次重新核验，**不以历史 §1.4 D／GSF-6 结论替代**。
+**Verification base：** current `main @ 41f4451edb809a8673a26638d2dd25062585cf2a`（PR #114 merge 后重新核验）。读取该版本的 FROZEN inputs、GSD-1 ～ GSD-7、§2 ～ §5 current canonical authority 与 §6 ～ §10 independent status；§4 通过六份 standalone specs 核验，parent stub 不替代规范正文。以下为本次重新核验，**不以历史 §1.4 D／GSF-6 结论替代**。
+
+**Current-main refresh（PR #115）：** 原 verification base 为 `bc391bd3eaf481c9fdc94a1586703ae19992778a`；本次将最新 main 合入现有 closure 分支，无冲突。逐文件比较确认两版 main 的 FROZEN inputs、parent design（含 GSD-1 ～ GSD-7、§2 ～ §5、§6 ～ §10）与六份 standalone specs 内容完全一致；main 增量仅为 `CONTRIBUTING.md v0.4` 与 project-index governance baseline 同步。重新核对下列 composition evidence、既有两处状态修正与 S-1 ～ S-14 结果，结论保持 **14 PASS / 0 FAIL**；current-main composition = **PASS**，两类 unresolved blocking conflict 均为 **NONE**。合入后 `CONTRIBUTING.md` 与 main 完全一致，index 保留 v0.4 及本 PR 的 §1 closure 状态；四项 final wording、GSD records、独立 downstream 状态与 `POC success = NOT CLAIMED` 均未改变。相对最新 main 的变更仍仅限本 Issue 授权的两份文件，不新增设计或授权。
 
 #### 1.19 A. Current-main composition evidence
 
