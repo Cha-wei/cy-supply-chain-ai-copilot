@@ -17,9 +17,22 @@ Authorities (current `main` of Cha-wei/cy-supply-chain-ai-copilot):
 * ``docs/design/specs/data-integration/data-dictionary.md``
   * §4.2.3 -- §4.2.9 canonical field identifiers (incl. ``analysis_run_id``,
     ``inbound_status`` as registered by Issue #118)
+  * §4.2.2, §4.2.11 -- §4.2.14 -- logical types, time semantics, quantity
+    constraints, status vocabulary
+* ``docs/design/specs/data-integration/data-validation.md``
+  * §4.4.2 / §4.4.25   -- Layer-2 boundary; a field-level issue never rejects a package
+  * §4.4.26 -- §4.4.35 -- present-value field rules (range, vocabulary, representation)
+  * §4.4.39 / §4.4.42  -- valid zero preservation; no stringency inflation
+  * §4.4.78 -- §4.4.100 -- inherited issue taxonomy (8 categories / 12 reasons)
+* ``docs/design/specs/data-integration/snapshot-import-contract.md``
+  * §4.3.22 ``C-2`` -- JSON ``null`` vs property omission
+  * §4.3.22 ``C-3`` -- ``C-10`` -- registered scalar representations
+  * §4.3.30 -- deferred applicability / input-channel items (Layer-2 narrowing)
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 # --- §4.3.22 VC-1 / §4.3.28 A.1 -------------------------------------------------
 CONTRACT_VERSION_PROPERTY: str = "contract_version"
@@ -212,6 +225,177 @@ MANDATORY_LAYER1_CHECKS: frozenset[str] = frozenset(
 
 # --- §4.4.2 / §4.4.80 / §4.4.81: inherited taxonomy (no new reason may be added) -
 LAYER_1: int = 1
+LAYER_2: int = 2
 
 CATEGORY_PACKAGE_STRUCTURE: str = "PACKAGE_STRUCTURE"
 REASON_STRUCTURAL_INCONSISTENCY: str = "STRUCTURAL_INCONSISTENCY"
+
+# Layer-2 fields use only these inherited reasons (§4.4.81); none is added here.
+CATEGORY_FIELD_VALUE: str = "FIELD_VALUE"
+CATEGORY_IDENTITY_RESOLUTION: str = "IDENTITY_RESOLUTION"
+
+REASON_INVALID_TYPE: str = "INVALID_TYPE"
+REASON_OUT_OF_DEFINED_RANGE: str = "OUT_OF_DEFINED_RANGE"
+REASON_INVALID_DEFINED_STATUS: str = "INVALID_DEFINED_STATUS"
+REASON_UNRESOLVED_IDENTITY: str = "UNRESOLVED_IDENTITY"
+
+# --- §4.4.x Layer-2 outcome states (NOT package disposition) --------------------
+#
+# Layer 2 never changes package disposition (§4.4.25): an accepted package stays
+# ``ACCEPTED`` even when canonical evidence defects are reported.  The only
+# non-``REUSABLE`` outcome is the inherited accepted-view re-verification failure,
+# which is expressed with the existing ``UNUSABLE`` disposition
+# (§4.3.28 C.3 ``MG-2`` / ``IC-12``).
+LAYER2_REUSABLE: str = "REUSABLE"
+LAYER2_UNUSABLE: str = "UNUSABLE"
+
+# --- §4.3.22: registered scalar representations (Layer-2 basis) -----------------
+DATE_PATTERN: str = r"[0-9]{4}-[0-9]{2}-[0-9]{2}"
+TIMESTAMP_PATTERN: str = (
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt ]"
+    r"[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?"
+    r"(?:[Zz]|[+-][0-9]{2}:[0-9]{2})"
+)
+DECIMAL_STRING_PATTERN: str = r"[+-]?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?"
+
+# --- §4.4.26 ～ §4.4.35: per-logical-type Layer-2 rule kind ---------------------
+#
+# ``kind`` selects the registered present-value rule set for a logical type.  It is
+# a classification of *already registered* rules, not a new validation semantic.
+KIND_IDENTIFIER: str = "identifier"
+KIND_ANALYSIS_RUN_ID: str = "analysis_run_id"
+KIND_DATE: str = "date"
+KIND_TIMESTAMP: str = "timestamp"
+KIND_DECIMAL: str = "decimal"
+KIND_NON_NEGATIVE: str = "non_negative"
+KIND_RATIO: str = "ratio"
+KIND_PERCENTAGE: str = "percentage"
+KIND_STATUS: str = "status"
+KIND_TEXT_CONTEXT: str = "text_context"
+
+LOGICAL_TYPE_KINDS: dict[str, str] = {
+    "IDENTIFIER": KIND_IDENTIFIER,
+    "ANALYSIS_RUN_ID": KIND_ANALYSIS_RUN_ID,
+    "DATE": KIND_DATE,
+    "TIMESTAMP": KIND_TIMESTAMP,
+    "DECIMAL_QUANTITY": KIND_DECIMAL,
+    "NON_NEGATIVE_QUANTITY": KIND_NON_NEGATIVE,
+    "RATIO": KIND_RATIO,
+    "PERCENTAGE": KIND_PERCENTAGE,
+    "STATUS": KIND_STATUS,
+    "TEXT_CONTEXT": KIND_TEXT_CONTEXT,
+}
+
+
+@dataclass(frozen=True)
+class Layer2FieldRule:
+    """Present-value rule set for one canonical field (Layer-2 narrowed subset).
+
+    ``vocabulary`` is ``None`` when the field's values are source-specific or have no
+    globally registered vocabulary; in that case **no** allowlist may be built
+    (``§4.4.33``).  ``authoritative`` records whether the present-value rules for this
+    field are fully derivable from current authority: when ``False`` the field is
+    reported as ``not evaluable`` instead of being silently skipped or guessed.
+    """
+
+    name: str
+    logical_type: str
+    authoritative: bool = True
+    vocabulary: tuple[str, ...] | None = None
+    note: str = ""
+
+    @property
+    def kind(self) -> str:
+        return LOGICAL_TYPE_KINDS[self.logical_type]
+
+
+#: Present-value registry for the 30 v0.2 canonical record properties (§4.3.30 B.1).
+#:
+#: Only fields whose Data Dictionary / Data Validation entry registers present-value
+#: rules are marked ``authoritative``.  Fields whose applicability or input channel
+#: is deferred by ``§4.3.30`` keep their representation rule (``§4.3.22`` is
+#: unconditional) but are flagged so that value-level judgement is not implied.
+LAYER2_REGISTRY: tuple[Layer2FieldRule, ...] = (
+    # §4.2.3 Identity & Context
+    Layer2FieldRule("plant_id", "IDENTIFIER"),
+    Layer2FieldRule("material_code", "IDENTIFIER"),
+    Layer2FieldRule("supplier_id", "IDENTIFIER"),
+    Layer2FieldRule("analysis_run_id", "ANALYSIS_RUN_ID"),
+    Layer2FieldRule("AnalysisDate", "DATE"),
+    # §4.2.4 Requirement / BOM
+    Layer2FieldRule("required_date", "DATE"),
+    Layer2FieldRule("ProductionQty", "NON_NEGATIVE_QUANTITY"),
+    Layer2FieldRule("BOMComponentQty", "NON_NEGATIVE_QUANTITY"),
+    Layer2FieldRule("loss_rate", "RATIO"),
+    # §4.2.5 Inventory
+    Layer2FieldRule(
+        "inventory_status",
+        "STATUS",
+        vocabulary=("AVAILABLE", "INSPECTION", "FROZEN"),
+    ),
+    Layer2FieldRule("on_hand_qty", "DECIMAL_QUANTITY"),
+    Layer2FieldRule("inventory_snapshot_time", "TIMESTAMP"),
+    Layer2FieldRule("SafetyStock", "NON_NEGATIVE_QUANTITY"),
+    # §4.2.6 Inbound
+    Layer2FieldRule("ordered_qty", "NON_NEGATIVE_QUANTITY"),
+    Layer2FieldRule("received_qty", "NON_NEGATIVE_QUANTITY"),
+    Layer2FieldRule("effective_arrival_date", "DATE"),
+    Layer2FieldRule(
+        "inbound_status",
+        "STATUS",
+        vocabulary=(
+            "OPEN",
+            "CONFIRMED",
+            "PARTIALLY_RECEIVED",
+            "CANCELLED",
+            "CLOSED",
+            "COMPLETED",
+        ),
+        note="§2.6.3 conservative classification; §4.2.14 approved vocabulary",
+    ),
+    # §4.2.7 Substitute
+    Layer2FieldRule("target_material_code", "IDENTIFIER"),
+    Layer2FieldRule("substitute_material_code", "IDENTIFIER"),
+    Layer2FieldRule("substitution_ratio", "RATIO"),
+    Layer2FieldRule(
+        "approval_status",
+        "STATUS",
+        vocabulary=("APPROVED", "PENDING", "REJECTED", "UNKNOWN"),
+        note="§4.2.14: only APPROVED participates; the others are known states",
+    ),
+    Layer2FieldRule("AllocatedSubstituteQty", "NON_NEGATIVE_QUANTITY"),
+    # §4.2.8 Supplier
+    Layer2FieldRule(
+        "sourcing_status",
+        "STATUS",
+        vocabulary=None,
+        note="§4.4.33: source vocabulary is SOURCE-SPECIFIC; no allowlist may exist",
+    ),
+    Layer2FieldRule("standard_lead_time_days", "NON_NEGATIVE_QUANTITY"),
+    Layer2FieldRule("PerformancePeriod", "TEXT_CONTEXT"),
+    Layer2FieldRule("PerformanceUpdatedAt", "TIMESTAMP"),
+    Layer2FieldRule("DeliveryPerformance", "PERCENTAGE"),
+    Layer2FieldRule("QualityPerformance", "PERCENTAGE"),
+    # §4.2.9 Procurement
+    Layer2FieldRule("RecommendationNeedDate", "DATE"),
+    Layer2FieldRule("ApplicableMOQ", "NON_NEGATIVE_QUANTITY"),
+)
+
+LAYER2_FIELD_RULE_BY_NAME: dict[str, Layer2FieldRule] = {
+    rule.name: rule for rule in LAYER2_REGISTRY
+}
+
+#: Fields that Layer 2 deliberately does not evaluate because their present-value
+#: rules are not derivable from current authority, or because applicability is
+#: deferred (§4.3.30).  They are reported as ``not evaluable`` with an explicit note.
+LAYER2_NOT_EVALUABLE_FIELDS: dict[str, str] = {
+    "PerformancePeriod": (
+        "§4.4.34: measurement-period vocabulary is NOT defined by current design, so a "
+        "present value cannot be judged invalid; defer to the later subtask that owns it"
+    ),
+    "sourcing_status": (
+        "§4.4.33: source vocabulary is SOURCE-SPECIFIC; value legality is not decidable "
+        "here and no allowlist may be built"
+    ),
+}
+

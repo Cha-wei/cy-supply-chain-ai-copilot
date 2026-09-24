@@ -466,6 +466,13 @@ def _accept(
         declared_integrity=tuple(
             (entry.artifact, entry.declared_integrity) for entry in entries
         ),
+        # The exact bytes that were read and verified during acceptance, carried so
+        # that downstream trusted reuse (Layer 2) never has to re-read a file whose
+        # content might have changed since acceptance (§4.3.28 C.2 / C.3).
+        accepted_records=tuple(
+            (entry.role, entry.artifact, artifact_bytes.get(entry.artifact, b""))
+            for entry in entries
+        ),
     )
     return ImportReport(
         disposition=DISPOSITION_ACCEPTED,

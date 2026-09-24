@@ -40,6 +40,13 @@ from .constants import (
     V02_CANONICAL_RECORD_PROPERTIES,
 )
 from .issues import Check, Issue
+from .layer2 import (
+    LAYER2_PRESENT_VALUE_RULES,
+    LAYER2_REGISTRY,
+    Layer2Check,
+    Layer2Report,
+    validate_layer2,
+)
 from .loader import RECORD_PROPERTY_SET_CHECK, load_package, load_package_from_paths
 from .path_scope import validate_artifact_filename
 from .report import ImportReport
@@ -61,6 +68,10 @@ __all__ = [
     "DISPOSITION_UNUSABLE",
     "ImportReport",
     "Issue",
+    "LAYER2_PRESENT_VALUE_RULES",
+    "LAYER2_REGISTRY",
+    "Layer2Check",
+    "Layer2Report",
     "MANIFEST_FILENAME",
     "RECORD_PROPERTY_SET_CHECK",
     "ReuseVerdict",
@@ -72,6 +83,7 @@ __all__ = [
     "load_package_from_paths",
     "parse_strict_json",
     "validate_artifact_filename",
+    "validate_layer2",
 ]
 
 __version__ = "0.1.0"

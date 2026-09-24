@@ -1,4 +1,4 @@
-﻿"""Trusted-reuse re-verification and post-accept mutation tests.
+"""Trusted-reuse re-verification and post-accept mutation tests.
 
 Registered behaviour: ``§4.3.28`` C.2 ``Decision 10A`` (acceptance-time stable view),
 C.3 ``Decision 10B`` ``MG-2`` (re-verify required integrity before trusted reuse;
@@ -201,13 +201,16 @@ class CrossPackageIsolationTests(TrustedReuseTestCase):
         self.assertEqual(
             public,
             {
+                "accepted_records",
                 "boundary_root",
                 "content_view",
                 "content_view_digest",
                 "contract_version",
+                "datasets",
                 "declared_integrity",
                 "package_id",
                 "package_path",
+                "records_for",
                 "reverify",
                 "to_dict",
             },
