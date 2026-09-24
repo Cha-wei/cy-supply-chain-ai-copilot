@@ -6213,13 +6213,27 @@ snapshot_package_id        —— 保持 transport ／ Manifest identity，
                               不成为 business-record canonical property（§4.3.3）
 "_meta"                    —— 由既有独立 known-member contract 管理（§4.3.25 F ／ §4.3.28 E），
                               不作为 ordinary canonical property
-other derived results      —— 本层**不**据以新增或排除任何其他 literal；
-                              "未被列出" 只表示**不在本集合内**，不表示某项已获批准为 wire property
-new canonical field        —— 未经批准者一律不得进入本集合
 ```
 
-**B.3 集合包含不同 Class ／ Requiredness 的 canonical fields（`SOURCE` ／ `CONTEXT` ／
-`POLICY_INPUT` ／ `DERIVED`），Layer 1 对这些类别不做语义合法性判断：**
+**本集合为 closed enumeration：** 只有 **B.1** 逐项列出的 literal（＋ `"_meta"`）属于
+v0.2 known canonical record property set。任何未列出的 literal —— 无论其 Class、
+Requiredness 或语义 —— 都**不在**本集合内，除非经正式 Human Decision 显式加入。
+
+```
+"未被列出" ⇒ 不属于本集合（本层依 UX-A reject）
+"未被列出" ≠ 已被批准为 wire property
+"未被列出" ≠ 本层对其业务语义作出判断
+```
+
+> **§4.2.10 derived result fields：** 该表中的 derived result identifiers
+> （例如 `BaseRequirement` ／ `RecommendedPurchaseQty` ／ `Classification`）**未**出现在
+> B.1 的逐项列示中 ⇒ 依上述 closed-enumeration 规则，它们**不在**本集合内。
+> 本层**不**对 derived result 是否应出现在任何 artifact 中作出判断 ——
+> 该问题由 **Decision 6** 明确 deferred。本小节只登记 literal 集合，
+> **不**为 derived results 新增或排除任何 literal。
+
+**B.3 集合可以包含不同 Class ／ Requiredness 的 canonical fields，Layer 1 对这些类别
+不做语义合法性判断：**
 
 ```
 property known at Layer 1 ≠ field permitted as Snapshot business evidence

@@ -135,6 +135,46 @@ EVALUATION_PASSED: str = "passed"
 EVALUATION_FAILED: str = "failed"
 EVALUATION_NOT_EVALUABLE: str = "not_evaluable"
 
+# --- §4.3.28 C.2 / D.4: which Layer-1 gates are mandatory ----------------------
+#
+# ``FR-3`` requires a prerequisite-blocked check to be reported as ``not evaluable``
+# rather than as passed, and ``Decision 10A`` makes an unestablishable required
+# consistency fail-closed.  A package may therefore only become ``ACCEPTED`` when
+# every check in this set is actually *decided* (``passed`` or ``failed``).
+#
+# A check whose absence merely limits a *detection capability* -- without making the
+# acceptance decision itself undecidable -- is deliberately absent from this set and
+# is reported as an advisory ``not evaluable`` notice instead:
+#   ``artifacts.independent_target_identity`` (platform exposes no file identity)
+#   ``package.stable_root_identity``          (platform exposes no root identity)
+MANDATORY_LAYER1_CHECKS: frozenset[str] = frozenset(
+    {
+        "trust_boundary.configured_and_verifiable",
+        "manifest.readable",
+        "manifest.strict_parse",
+        "manifest.top_level_shape",
+        "manifest.unknown_property",
+        "manifest.package_block_unknown_property",
+        "manifest.package_identity",
+        "manifest.contract_version_present",
+        "manifest.contract_version_supported",
+        "manifest.datasets_collection",
+        "datasets.entry_shape",
+        "datasets.role_uniqueness",
+        "datasets.artifact_reference_valid",
+        "datasets.artifact_uniqueness",
+        "artifacts.declared_exist_and_readable",
+        "artifacts.raw_byte_integrity",
+        "artifacts.strict_parse",
+        "artifacts.record_carrier_shape",
+        "artifact.record_property_known_set",
+        "artifacts.record_count_consistency",
+        "package.root_listable",
+        "package.unreferenced_root_artifact",
+        "package.acceptance_time_stable_view",
+    }
+)
+
 # --- §4.4.2 / §4.4.80 / §4.4.81: inherited taxonomy (no new reason may be added) -
 LAYER_1: int = 1
 

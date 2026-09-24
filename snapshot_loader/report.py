@@ -12,8 +12,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .constants import DISPOSITION_ACCEPTED, DISPOSITION_REJECTED
-from .issues import Issue, IssueCollector
+from .constants import (
+    DISPOSITION_ACCEPTED,
+    DISPOSITION_REJECTED,
+    EVALUATION_NOT_EVALUABLE,
+    MANDATORY_LAYER1_CHECKS,
+)
+from .issues import Check, Issue, IssueCollector
 from .trust import AcceptedPackage, ContentView
 
 
@@ -44,6 +49,42 @@ class ImportReport:
     def issues(self) -> tuple[Issue, ...]:
         return self.collector.sorted_issues()
 
+    @property
+    def undecided_checks(self) -> tuple[Check, ...]:
+        """Checks that were not decided (``not evaluable``), mandatory or not."""
+
+        return tuple(
+            check
+            for check in self.collector.sorted_checks()
+            if check.state == EVALUATION_NOT_EVALUABLE
+        )
+
+    @property
+    def undecided_mandatory_checks(self) -> tuple[Check, ...]:
+        """Mandatory Layer-1 gates whose prerequisite blocked a decision.
+
+        A package may only be ``ACCEPTED`` when this is empty: ``Decision 10A``
+        makes an unestablishable required consistency fail-closed, so an
+        undecidable mandatory gate must never be silently treated as passed.
+        """
+
+        return tuple(
+            check
+            for check in self.undecided_checks
+            if check.name in MANDATORY_LAYER1_CHECKS
+        )
+
+    @property
+    def advisory_undecided_checks(self) -> tuple[Check, ...]:
+        """``not evaluable`` checks that only limit a detection capability."""
+
+        return tuple(
+            check
+            for check in self.undecided_checks
+            if check.name not in MANDATORY_LAYER1_CHECKS
+        )
+
+
     def to_dict(self) -> dict[str, object]:
         return {
             "disposition": self.disposition,
@@ -59,6 +100,13 @@ class ImportReport:
             ),
             "issues": [issue.to_dict() for issue in self.issues],
             "checks": [check.to_dict() for check in self.collector.sorted_checks()],
+            "undecided_checks": [check.to_dict() for check in self.undecided_checks],
+            "undecided_mandatory_checks": [
+                check.name for check in self.undecided_mandatory_checks
+            ],
+            "advisory_undecided_checks": [
+                check.name for check in self.advisory_undecided_checks
+            ],
         }
 
     def render_text(self) -> str:
@@ -79,11 +127,21 @@ class ImportReport:
             lines.append(
                 f"  - [{issue.category}/{issue.reason}] {issue.location}: {issue.detail}"
             )
-        not_evaluable = [
-            check for check in self.collector.sorted_checks() if check.state == "not_evaluable"
-        ]
-        if not_evaluable:
-            lines.append(f"not evaluable    : {len(not_evaluable)} check(s)")
-            for check in not_evaluable:
+
+        mandatory_undecided = self.undecided_mandatory_checks
+        advisory_undecided = self.advisory_undecided_checks
+        if mandatory_undecided:
+            lines.append(
+                f"undecided (MANDATORY): {len(mandatory_undecided)} check(s) -- acceptance "
+                "not decidable, fail closed"
+            )
+            for check in mandatory_undecided:
+                lines.append(f"  - {check.name}: {check.note}")
+        if advisory_undecided:
+            lines.append(
+                f"undecided (advisory): {len(advisory_undecided)} check(s) -- detection "
+                "capability limited, not an acceptance gate"
+            )
+            for check in advisory_undecided:
                 lines.append(f"  - {check.name}: {check.note}")
         return "\n".join(lines)

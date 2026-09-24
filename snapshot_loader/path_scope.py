@@ -11,16 +11,27 @@ Registered semantics (``§4.3.28`` C.1 ``PN-1``, ``§4.3.23`` D/G/H, ``IC-1``/``
 7. two included roles resolving to the same physical target violate the inherited
    independent-artifact invariant.
 
+Plus the two ``§4.3.23`` D physical-naming requirements registered alongside it:
+the serialization extension is ``.json``, and ``manifest.json`` is a reserved name.
+
+This module implements **only** those registered rules.  It deliberately does not
+invent platform-specific filename policy: there is no maximum filename length, no
+Windows reserved-device-name list, no Windows illegal-character set, and no
+"trailing dot/space" or "surrounding whitespace" rule.  Any such extra rejection
+would be an unapproved acceptance criterion, and a filename the host filesystem
+cannot represent is reported as an absent/unreadable declared artifact (``IC-14``)
+rather than as a contract violation here.
+
 Because ``PN-1`` performs no normalisation, a value that is not literally a plain
-filename is rejected outright rather than being repaired into one.  Any accepted
+filename is rejected outright rather than repaired into one.  Any accepted
 reference is a single path component, so the resolved target is inside the package
-root by construction; the containment assertion below is therefore a redundant
-defence-in-depth check, not a normalisation step.
+root by construction; the containment assertion below is redundant
+defence-in-depth, not a normalisation step.
 
 Documented residual: a *decomposed* (NFD) and a *composed* (NFC) spelling of the
 same non-ASCII filename are distinct byte strings under this policy.  The contract
 deliberately forbids normalising them; filesystem-level equivalence between the two
-is outside the Layer-1 scope and is **not** claimed to be detected.
+is outside Layer-1 scope and is **not** claimed to be detected.
 """
 
 from __future__ import annotations
@@ -44,20 +55,6 @@ _URI_SCHEMES = (
     "data:",
     "jar:",
 )
-
-_WINDOWS_ILLEGAL = frozenset('<>:"|?*')
-_WINDOWS_RESERVED_STEMS = frozenset(
-    {
-        "con",
-        "prn",
-        "aux",
-        "nul",
-        *(f"com{digit}" for digit in "123456789"),
-        *(f"lpt{digit}" for digit in "123456789"),
-    }
-)
-
-MAX_ARTIFACT_FILENAME_LENGTH = 255
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,9 +86,7 @@ def validate_artifact_filename(reference: object) -> FilenameRejection | None:
     if reference == "":
         return FilenameRejection("EMPTY", "artifact reference must not be empty")
 
-    lowered = reference.casefold()
-
-    if lowered.startswith(_URI_SCHEMES):
+    if reference.casefold().startswith(_URI_SCHEMES):
         return FilenameRejection(
             "URI_REFERENCE", "URI references are not legal package-root filenames"
         )
@@ -104,7 +99,7 @@ def validate_artifact_filename(reference: object) -> FilenameRejection | None:
                 f"separator {separator!r} is not allowed",
             )
 
-    if reference in {".", ".."} or reference.startswith(".."):
+    if reference == "." or reference.startswith(".."):
         return FilenameRejection(
             "DOT_SEGMENT", "'.' / '..' segments are not allowed in artifact references"
         )
@@ -122,40 +117,8 @@ def validate_artifact_filename(reference: object) -> FilenameRejection | None:
 
     if _has_control_characters(reference):
         return FilenameRejection(
-            "CONTROL_CHARACTER", "control characters are not allowed in a filename"
-        )
-
-    if reference != reference.strip():
-        return FilenameRejection(
-            "SURROUNDING_WHITESPACE",
-            "leading or trailing whitespace is not normalised away; the literal "
-            "filename must not contain it (PN-1 forbids trim)",
-        )
-
-    if reference.endswith((" ", ".")):
-        return FilenameRejection(
-            "TRAILING_DOT_OR_SPACE",
-            "filenames must not end with a space or a dot",
-        )
-
-    if os.name == "nt":
-        illegal = sorted(set(reference) & _WINDOWS_ILLEGAL)
-        if illegal:
-            return FilenameRejection(
-                "ILLEGAL_CHARACTER",
-                f"characters not allowed in a Windows filename: {''.join(illegal)!r}",
-            )
-        if reference.split(".", 1)[0].casefold() in _WINDOWS_RESERVED_STEMS:
-            return FilenameRejection(
-                "RESERVED_DEVICE_NAME",
-                "reserved Windows device names are not usable as artifact filenames",
-            )
-
-    if len(reference) > MAX_ARTIFACT_FILENAME_LENGTH:
-        return FilenameRejection(
-            "TOO_LONG",
-            "artifact filename exceeds the "
-            f"{MAX_ARTIFACT_FILENAME_LENGTH}-character contract limit",
+            "CONTROL_CHARACTER",
+            "control characters are not allowed in a filename",
         )
 
     if not reference.endswith(ARTIFACT_EXTENSION):
@@ -171,9 +134,7 @@ def validate_artifact_filename(reference: object) -> FilenameRejection | None:
             f"{MANIFEST_FILENAME!r} is reserved for the Snapshot Manifest",
         )
 
-    if reference[len(ARTIFACT_EXTENSION) * -1 :] != ARTIFACT_EXTENSION or reference == (
-        ARTIFACT_EXTENSION
-    ):
+    if reference == ARTIFACT_EXTENSION:
         return FilenameRejection(
             "INVALID_FILENAME", "artifact filename has no name portion"
         )

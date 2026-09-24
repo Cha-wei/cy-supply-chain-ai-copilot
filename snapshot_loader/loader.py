@@ -42,10 +42,12 @@ from .constants import (
     DATASET_ENTRY_PROPERTIES,
     DISPOSITION_ACCEPTED,
     DISPOSITION_REJECTED,
+    EVALUATION_NOT_EVALUABLE,
     GROUPING_DATASETS,
     GROUPING_PACKAGE,
     INTEGRITY_EVIDENCE_LENGTH,
     INTEGRITY_HEX_DIGITS,
+    MANDATORY_LAYER1_CHECKS,
     MANIFEST_FILENAME,
     MANIFEST_TOP_LEVEL_PROPERTIES,
     META_MEMBERS,
@@ -189,6 +191,7 @@ def load_package(
     package_path = Path(os.path.abspath(Path(package_dir).expanduser()))
     assert resolution.root is not None
     boundary_root = resolution.root
+    collector = collector.passed("trust_boundary.configured_and_verifiable")
 
     try:
         return _accept(package_path, boundary_root, collector)
@@ -352,6 +355,7 @@ def _accept(
         )
 
     entries, collector = _check_dataset_entries(datasets, collector)
+    collector = collector.passed("manifest.datasets_collection")
 
     # ---- 5. role / cardinality / artifact reference / path checks ----------
     entries, collector = _check_entry_uniqueness(entries, collector)
@@ -374,10 +378,14 @@ def _accept(
     collector = _check_unreferenced_entries(entries, package_path, collector)
 
     # ---- 9. acceptance-time stable view binding (Decision 10A) -------------
+    # The manifest is part of the bounded view too: it carries no declared digest,
+    # so an in-place manifest mutation can only be caught by re-reading it.
+    read_views: dict[str, FileView] = {MANIFEST_FILENAME: manifest_view}
+    read_views.update(artifact_views)
     collector = _check_stable_view(
         package_path=package_path,
         declared_names=tuple(entry.artifact for entry in entries),
-        artifact_views=artifact_views,
+        read_views=read_views,
         collector=collector,
     )
 
@@ -392,6 +400,27 @@ def _accept(
             disposition_basis=(
                 f"{len(issues)} Layer-1 structural defect(s) collected "
                 "(§4.3.28 B.2 FR-3 collect-all; RD-B import-time REJECTED)"
+            ),
+        )
+
+    # A mandatory gate that could not be decided must not yield ACCEPTED.
+    # ``FR-3`` forbids treating a prerequisite-blocked check as passed, and
+    # ``Decision 10A`` makes an unestablishable required consistency fail-closed,
+    # so an undecided mandatory gate is reported as not-decidable rather than
+    # silently accepted.
+    undecided = _undecided_mandatory_checks(collector)
+    if undecided:
+        names = ", ".join(sorted(undecided))
+        return ImportReport(
+            disposition=DISPOSITION_REJECTED,
+            evaluable=False,
+            collector=collector,
+            accepted_package=None,
+            content_view=None,
+            disposition_basis=(
+                "mandatory Layer-1 gate(s) could not be decided, so acceptance is not "
+                f"decidable and fails closed: {names} "
+                "(§4.3.28 B.2 FR-3 + C.2 Decision 10A)"
             ),
         )
 
@@ -431,6 +460,27 @@ def _accept(
 # ---------------------------------------------------------------------------
 # manifest structure
 # ---------------------------------------------------------------------------
+
+
+def _undecided_mandatory_checks(collector: IssueCollector) -> tuple[str, ...]:
+    """Mandatory Layer-1 gates that were *not decided* during this attempt.
+
+    ``§4.3.28`` D.4 + ``FR-3``: a check whose prerequisite is blocked is
+    ``not evaluable due to prerequisite`` and is not passed.  For a mandatory gate
+    that means acceptance itself is not decidable, so the caller must fail closed
+    rather than return ``ACCEPTED``.
+    """
+
+    return tuple(
+        sorted(
+            {
+                check.name
+                for check in collector.checks
+                if check.state == EVALUATION_NOT_EVALUABLE
+                and check.name in MANDATORY_LAYER1_CHECKS
+            }
+        )
+    )
 
 
 def _mark_manifest_dependents_not_evaluable(
@@ -1051,10 +1101,11 @@ def _check_records(
             )
             continue
 
-        if not record:
-            findings.append((location, "record must not be an empty JSON object"))
-            continue
-
+        # An empty JSON object record is NOT a structural defect: it carries no
+        # unknown property, and Layer 1 evaluates property membership and shape
+        # only.  Whether a record is *sufficient* for any purpose is a Layer 2-4
+        # question (§4.3.30 C.2/C.3, IC-17); rejecting it here would promote a
+        # Layer-2 concern into package rejection.
         for key in record.order:
             if key == RECORD_META_NAMESPACE:
                 continue
@@ -1256,19 +1307,35 @@ def _check_stable_view(
     *,
     package_path: Path,
     declared_names: tuple[str, ...],
-    artifact_views: dict[str, FileView],
+    read_views: dict[str, FileView],
     collector: IssueCollector,
 ) -> IssueCollector:
-    """Verify that acceptance is bound to one stable content view (Decision 10A).
+    """Verify acceptance is bound to one stable content view (Decision 10A).
 
-    The check compares the set of files that were actually read and verified against
-    the set the Manifest declared.  A discrepancy means the package changed while
-    acceptance was running -- ``Decision 10A`` requires ``not evaluable`` / fail
-    closed in that case, because the accepted view and the verified view would no
-    longer be the same content.
+    ``Decision 10A`` requires every acceptance-producing result to be bound to the
+    **same** package content view -- the view that is actually accepted and later
+    consumed.  Two independent comparisons establish that:
+
+    1. the set of verified files must equal the set the Manifest declared (catches
+       an added, removed or renamed file);
+    2. every file read during acceptance must still hash to the same raw bytes at
+       the end of acceptance (catches an **in-place mutation** that happened after
+       its content was read but before ``Accepted`` was concluded).
+
+    Comparison 2 is the decisive one: without it, a mutation of an already-read
+    file -- most importantly the Manifest itself, which carries no declared digest
+    -- would leave every acceptance result computed from the stale view while the
+    package on disk had changed, and an ``ACCEPTED`` verdict would be bound to a
+    view that is no longer the package's content.
+
+    Re-reading the bytes is the mechanism this implementation chooses; the contract
+    leaves locking / transaction / atomic-move / storage technology open
+    (``§4.3.28`` C.2).  It doubles package I/O, which is acceptable for POC-sized
+    packages and is the price of an actual guarantee rather than a metadata
+    approximation.
     """
 
-    accepted_names = tuple(sorted((MANIFEST_FILENAME,) + tuple(artifact_views)))
+    accepted_names = tuple(sorted(read_views))
     declared = tuple(sorted((MANIFEST_FILENAME,) + declared_names))
 
     if accepted_names != declared:
@@ -1286,6 +1353,54 @@ def _check_stable_view(
             consequence_context="Package not evaluable / fail closed",
         )
         return collector
+
+    mutated: list[tuple[str, str]] = []
+    for name, expected in sorted(read_views.items()):
+        current = read_file_bytes(package_path / name)
+        if current is None:
+            collector = collector.failed(
+                f"package.stable_view_readable:{name}",
+                "file could not be re-read to re-establish the accepted view",
+            )
+            mutated.append(
+                (
+                    name,
+                    "file could not be re-read after acceptance checks completed, so "
+                    "the accepted view cannot be re-established",
+                )
+            )
+            continue
+        _, observed = current
+        if observed.sha256 != expected.sha256:
+            collector = collector.failed(
+                f"package.stable_view_bytes:{name}",
+                "raw bytes changed after the file was read during acceptance",
+            )
+            mutated.append(
+                (
+                    name,
+                    "raw bytes changed between being read during acceptance and the "
+                    "conclusion of acceptance "
+                    f"(read={expected.sha256}, now={observed.sha256})",
+                )
+            )
+        else:
+            collector = collector.passed(f"package.stable_view_bytes:{name}")
+
+    if mutated:
+        collector = collector.issue_many(
+            mutated,
+            blast_radius="whole package",
+            design_reference="§4.3.28 C.2 (Decision 10A) + IS-24 + IC-12",
+            consequence_context="Package not evaluable / fail closed",
+        )
+        collector = collector.failed(
+            "package.acceptance_time_stable_view",
+            "the package changed during acceptance",
+        )
+        return collector
+
+    collector = collector.passed("package.stable_view_all_files_re_read")
 
     root_identity = physical_identity(package_path)
     if root_identity is None:

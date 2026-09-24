@@ -1,4 +1,4 @@
-﻿"""Strict literal path semantics tests (``§4.3.28`` C.1 ``PN-1``, ``IC-1``/``IC-2``)."""
+"""Strict literal path semantics tests (``§4.3.28`` C.1 ``PN-1``, ``IC-1``/``IC-2``)."""
 
 from __future__ import annotations
 
@@ -11,6 +11,10 @@ from snapshot_loader.path_scope import resolved_within  # noqa: E402
 
 
 class FilenameAcceptanceTests(unittest.TestCase):
+    def assert_accepted(self, reference: str) -> None:
+        rejection = validate_artifact_filename(reference)
+        self.assertIsNone(rejection, msg=f"{reference!r} -> {rejection}")
+
     def assert_accepted(self, reference: str) -> None:
         rejection = validate_artifact_filename(reference)
         self.assertIsNone(rejection, msg=f"{reference!r} -> {rejection}")
@@ -30,6 +34,10 @@ class FilenameAcceptanceTests(unittest.TestCase):
 
 
 class FilenameRejectionTests(unittest.TestCase):
+    def assert_accepted(self, reference: str) -> None:
+        rejection = validate_artifact_filename(reference)
+        self.assertIsNone(rejection, msg=f"{reference!r} -> {rejection}")
+
     def assert_rejected(self, reference: object, code: str) -> None:
         rejection = validate_artifact_filename(reference)
         self.assertIsNotNone(rejection, msg=f"{reference!r} unexpectedly accepted")
@@ -69,28 +77,49 @@ class FilenameRejectionTests(unittest.TestCase):
         self.assert_rejected("requirement", "WRONG_EXTENSION")
         self.assert_rejected("requirement.jsonl", "WRONG_EXTENSION")
 
-    def test_whitespace_is_not_trimmed(self) -> None:
-        self.assert_rejected(" requirement.json", "SURROUNDING_WHITESPACE")
-        self.assert_rejected("requirement.json ", "SURROUNDING_WHITESPACE")
+    def test_whitespace_and_dots_are_legal_literal_filenames(self) -> None:
+        # PN-1 forbids trim / normalisation, but it does not make a filename that
+        # literally contains whitespace or interior dots illegal.  Rejecting these
+        # would be an unapproved acceptance criterion, so they are accepted as the
+        # exact literal strings they are.
+        self.assert_accepted(" requirement.json")
+        self.assert_accepted("data set.json")
+        self.assert_accepted(".requirement.json")
+        self.assert_accepted("data..json")
 
-    def test_trailing_dot_or_space(self) -> None:
-        self.assert_rejected("requirement.json.", "TRAILING_DOT_OR_SPACE")
+    def test_trailing_dot_and_space_are_rejected_only_by_the_extension_rule(self) -> None:
+        # A trailing dot or space means the literal no longer ends in the registered
+        # ``.json`` extension (§4.3.23 D) -- not that a "trailing dot/space" policy
+        # exists.  The distinction matters: no extra acceptance criterion is created.
+        self.assert_rejected("requirement.json ", "WRONG_EXTENSION")
+        self.assert_rejected("requirement.json.", "WRONG_EXTENSION")
+
+    def test_no_invented_length_limit(self) -> None:
+        # No canonical authority registers a maximum filename length.
+        self.assert_accepted("a" * 260 + ".json")
+        self.assert_accepted("a" * 4000 + ".json")
+
+    def test_no_invented_platform_filename_policy(self) -> None:
+        # Windows reserved device names and Windows-illegal characters are NOT
+        # registered PN-1 rules.  A name the host filesystem cannot represent is
+        # reported as an absent/unreadable declared artifact (IC-14), not rejected
+        # here as a contract violation.
+        self.assert_accepted("con.json")
+        self.assert_accepted("LPT1.json")
+        self.assert_accepted("nul.json")
+        self.assert_accepted('req"uirement.json')
 
     def test_control_characters(self) -> None:
         self.assert_rejected("requirement\n.json", "CONTROL_CHARACTER")
         self.assert_rejected("requirement\x00.json", "CONTROL_CHARACTER")
 
-    def test_overlong_filename(self) -> None:
-        self.assert_rejected("a" * 260 + ".json", "TOO_LONG")
-
-    def test_maximum_length_filename_is_accepted(self) -> None:
-        # 255 characters total: the contract limit itself is still a legal filename.
-        self.assertIsNone(validate_artifact_filename("a" * 250 + ".json"))
-
     def test_case_is_not_folded_and_exact_match_required(self) -> None:
-        # PN-1 forbids case folding: a differently-cased reference is simply a
-        # different literal filename, not a rejection reason.
-        self.assertIsNone(validate_artifact_filename("Requirement.JSON".lower()))
+        # PN-1 forbids case folding, but the extension requirement in §4.3.23 D is a
+        # literal suffix rule: ``.JSON`` is not the registered ``.json`` extension.
+        # Case-correctness of the *filename* is enforced by exact literal match when
+        # the declared artifact is read (``IC-14``), not by folding here.
+        self.assertIsNone(validate_artifact_filename("Requirement.json"))
+        self.assert_rejected("REQUIREMENT.JSON", "WRONG_EXTENSION")
 
 
 class ContainmentTests(unittest.TestCase):
