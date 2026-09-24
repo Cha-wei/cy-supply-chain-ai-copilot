@@ -241,6 +241,9 @@ Out of Scope（business out-of-scope ／ deferred ／ prohibited ／ P1 四类�
 > **current-state（Issue #102）：** **四类分离**本身已由 **`GSD-5`** Human Approval 登记为 canonical
 > classification model（见 **`§1.15`**）；本节以下的**分类规则、具体条目归类与判定顺序**仍为本 Review 的
 > **candidate** 内容，final §1 Out of Scope canonical wording 属后续独立 Design Change ／ Closure。
+> **`GSD-7`（Issue #106）的 `S-4` 明确：** 本节的固定判定顺序、先命中者为准、现有 candidate item
+> placement 与 bucket routing 细节**不**因该 criterion 被自动批准；未来 Closure PR 若使用它们，
+> **必须**基于 `GSD-5` 已批准的四类语义重新验证（见 **`§1.7`** ／ **`§1.17`**）。
 
 **分类规则（candidate）：** 四个 label 是**互斥 bucket**，**不是**同一 item 可重复落入的维度标签。
 每条候选 item **只**归入一个 bucket；判定按以下顺序进行，先命中者为准：
@@ -350,29 +353,51 @@ candidate 判断：
 >
 > **current-state（Issue #94）：** `GSD-1` 已 **`REGISTERED`** —— 选择 **`§1 Option 2`**（见 **`§1.11`**）。
 > 上表其余内容仍为其时的 candidate 描述，**未**因该选择而改写；`§1 Option 2` 的具体 canonical wording
-> 仍待 `GSD-7` ／ `GSD-8` 裁定（**`GSD-2` ～ `GSD-6` 已于 Issue #96 ／ #98 ／ #100 ／ #102 ／ #104 分别登记 wording boundary、success boundary layering、In Scope canonical categories、Out of Scope 四类分离与 downstream dependency relationship**，见 **`§1.12`** ／ **`§1.13`** ／ **`§1.14`** ／ **`§1.15`** ／ **`§1.16`**），§1 四项 top-level status **仍为 `DESIGN PENDING`**。
+> 仍待 `GSD-8` 裁定（**`GSD-2` ～ `GSD-7` 已于 Issue #96 ／ #98 ／ #100 ／ #102 ／ #104 ／ #106 分别登记 wording boundary、success boundary layering、In Scope canonical categories、Out of Scope 四类分离、downstream dependency relationship 与 mandatory minimum closure criteria**，见 **`§1.12`** ／ **`§1.13`** ／ **`§1.14`** ／ **`§1.15`** ／ **`§1.16`** ／ **`§1.17`**），§1 四项 top-level status **仍为 `DESIGN PENDING`**。
 
-### 1.7 Proposed Minimum Closure Criteria（candidate —— 待 Human 批准）
+### 1.7 Minimum Closure Criteria（Human-approved —— `GSD-7` ／ Issue #106）
+
+> **`S-1` ～ `S-14` = Human-approved MANDATORY MINIMUM CLOSURE CRITERIA**（`GSD-7` ／ Issue #106）。
+> `S-1` ～ `S-3` ／ `S-5` ／ `S-6` ／ `S-8` ／ `S-10` ／ `S-12` 保持原核心语义；
+> `S-4` ／ `S-7` ／ `S-9` ／ `S-11` ／ `S-13` ／ `S-14` 已按 `GSD-7` 修订（修订内容见各行）。
 
 | # | Criterion | 类别 |
 | --- | --- | --- |
-| `S-1` | P0 Goal 与 `FROZEN` Problem Statement（`FZ-1`）／ `§11`（`FZ-2`）一致，且不改变 P0 闭环（缺料分析 → 采购建议 → HITL） | MANDATORY CLOSURE CRITERION |
-| `S-2` | P1（`FZ-3`）**不**被升级为 P0；`§5.3` `SIMULATED` question baseline 与 `§2.7` `Supplier Risk` **不**被写成 P1 升级 | MANDATORY CLOSURE CRITERION |
-| `S-3` | In Scope **不新增** `FROZEN` 之外的 business scenario；supporting design ／ quality ／ safety infrastructure **不**被写成新 P0 场景 | MANDATORY CLOSURE CRITERION |
-| `S-4` | Out of Scope ／ `deferred` ／ `prohibited` ／ P1 **四类不混淆**，且各自可被单独引用；分类须遵循 `§1.4 C` 的判定规则（每条 item **只**归一 bucket；跨维度引用须显式标注，不得隐式重叠） | MANDATORY CLOSURE CRITERION |
-| `S-5` | `FROZEN` `§16` 的 success dimensions **全部**被 design-level success boundary 映射（design-time ／ runtime-test evidence ／ business-value evidence 三层） | MANDATORY CLOSURE CRITERION |
-| `S-6` | `FROZEN` `§17` failure ／ reassessment boundary 被保留，且**不**被伪装成已验证事实 | MANDATORY CLOSURE CRITERION |
-| `S-7` | current `§2` ～ `§5` 与 P0 scope **无未登记冲突**（1.4 D 核验可复现） | MANDATORY CLOSURE CRITERION |
-| `S-8` | `§6` ～ `§10` pending dependencies 的**责任边界**清楚（哪些留给其他层、§1 只登记 expectation） | MANDATORY CLOSURE CRITERION |
-| `S-9` | `Design closure` ≠ `Implemented` ≠ `Tested` ≠ `Business accepted` ≠ `Production-ready` 的层次关系已在 §1 显式登记 | MANDATORY CLOSURE CRITERION |
-| `S-10` | **不**发明真实 KPI、客户 baseline、使用频率、adoption 或生产系统事实 | MANDATORY CLOSURE CRITERION |
-| `S-11` | **无** architecture ／ technology selection（`§10` 仍无 ADR） | MANDATORY CLOSURE CRITERION |
-| `S-12` | **无** `FROZEN` Discovery 的修改或重新解释 | MANDATORY CLOSURE CRITERION |
-| `S-13` | current-state ／ `docs/project-index.md` navigation 一致性（含 `§1` pending 表述） | MANDATORY CLOSURE CRITERION |
-| `S-14` | **无**未登记的 blocking scope conflict（`GSF-6` 结论保持成立，或新冲突已被登记） | MANDATORY CLOSURE CRITERION |
+| `S-1` | **P0 Goal integrity：** `§1` 的 P0 Goal 与 `FROZEN` Problem Statement（`FZ-1`）／ `§11`（`FZ-2`）一致，且**不得**改变 P0 闭环（缺料分析 → 采购建议 → HITL） | MANDATORY MINIMUM CLOSURE CRITERION |
+| `S-2` | **P1 must not be promoted into P0：** `FZ-3` P1 **不得**升级为 P0；`§5.3` `SIMULATED` question baseline 与 `§2.7` `Supplier Risk` **不得**被写成 P1 已进入 P0 | MANDATORY MINIMUM CLOSURE CRITERION |
+| `S-3` | **No scope inflation via In Scope：** In Scope **不得**新增 `FROZEN` 之外的 business scenario；supporting infrastructure ／ quality ／ safety boundary **不得**被写成新 P0 capability | MANDATORY MINIMUM CLOSURE CRITERION |
+| `S-4` | **Four-way separation without silently approving old candidate routing rules：** 必须保持 `Out of Scope ≠ P1 ≠ Prohibited ≠ Deferred`；每个具体 item 必须有明确 **canonical authority** 与 **primary classification**；存在跨维度关系时**必须**显式说明，**不得**产生隐式重复、语义冲突或 authority inflation。**本 criterion 不自动批准旧 `§1.4 C` candidate 中的固定判定顺序、先命中者为准、现有 candidate item placement 或 bucket routing 细节** —— 未来 §1 Closure PR 如需使用这些 routing 细节，**必须**基于 `GSD-5` 已批准的四类语义重新验证 | MANDATORY MINIMUM CLOSURE CRITERION |
+| `S-5` | **Success dimensions must be fully mapped：** `FROZEN` `§16` success dimensions **全部**映射到 `GSD-3` 已批准的三层 Success Boundary（design-time ／ runtime-test evidence ／ business-value evidence）三层；**不得**把 design-time completion 写成 POC success | MANDATORY MINIMUM CLOSURE CRITERION |
+| `S-6` | **Failure ／ reassessment boundary must be preserved：** `FROZEN` `§17` failure ／ reassessment boundary **完整保留**，**不得**删除、弱化、改写，也**不得**伪装成已验证事实 | MANDATORY MINIMUM CLOSURE CRITERION |
+| `S-7` | **Revalidate `§2` ～ `§5` composition against current main：** Closure PR **必须**基于**当时 current main**重新核验 current `§2` ～ `§5` 与 P0 Goal ／ Scope 是否存在 unresolved composition conflict；**不得**只依赖历史 `§1.4 D` ／ `GSF-6` 旧结论。要求 `Current-main composition check = PASS`、`Unresolved §2～§5 blocking conflict = NONE`；若出现新冲突，**必须**登记并解决，未解决前 closure gate = **FAIL** | MANDATORY MINIMUM CLOSURE CRITERION |
+| `S-8` | **Downstream dependency responsibility must be explicit：** `§6` ～ `§10` pending dependencies 的责任边界清楚，符合 `GSD-6`：`Downstream pending ≠ Automatic §1 closure blocker`；`Dependency expectation ≠ Downstream design completion` | MANDATORY MINIMUM CLOSURE CRITERION |
+| `S-9` | **Explicit lifecycle ／ evidence separation：** §1 **必须**显式保持 `Design closure ≠ Implemented ≠ Runtime validated ／ Tested ≠ Business value proven ／ accepted ≠ POC SUCCESS ≠ Production-ready`；并与 `GSD-3` 一致：`POC SUCCESS` 需要 **runtime-test evidence ＋ business-value evidence** | MANDATORY MINIMUM CLOSURE CRITERION |
+| `S-10` | **No invented real-world evidence：** **不得**发明真实 KPI、客户 baseline、usage frequency、adoption、production-system fact 或 business-value evidence | MANDATORY MINIMUM CLOSURE CRITERION |
+| `S-11` | **`§1` Closure PR must not choose Architecture ／ technology：** §1 Closure PR 本身**不得**选择 Architecture ／ framework ／ database ／ API ／ deployment，**不得**创建或修改 ADR，也**不得**替 `§10` 做技术选型。**本 criterion 不要求 `§10` 永远保持 No ADR** —— `§10` 按其 own current canonical status 独立存在；`§1 closure ≠ Architecture decision` | MANDATORY MINIMUM CLOSURE CRITERION |
+| `S-12` | **`FROZEN` Discovery integrity：** **不得**修改或重新解释 `FROZEN` Discovery，**不得**改写 P0 ／ P1，**不得**用 downstream implementation 反向覆盖 `FROZEN` scope authority | MANDATORY MINIMUM CLOSURE CRITERION |
+| `S-13` | **Current-state ／ `project-index.md` must match actual closure result：** `docs/project-index.md` 与其他 current-state navigation **必须**与 closure 结果一致 —— `closure gate PASS ⇒ §1 actual canonical status must be synchronized consistently`；`closure gate FAIL ⇒ §1 remains DESIGN PENDING`；**不得**出现 document ／ index ／ current-state 相互矛盾 | MANDATORY MINIMUM CLOSURE CRITERION |
+| `S-14` | **No unresolved blocking scope conflict：** closure gate 要求 `Unresolved blocking scope conflict = NONE`；若发现新的 blocking scope conflict，**即使已经登记／已有 Issue 或 mitigation proposal**，只要仍未解决 ⇒ `Closure gate = FAIL`、`§1 remains DESIGN PENDING`；**不得**用「已登记 blocker」替代「已解决 blocker」 | MANDATORY MINIMUM CLOSURE CRITERION |
 
-> `S-1` ～ `S-14` 为 **candidate**；**不得**在本 Review 中被标为 Human-approved。
-> 是否接受、调整或拒绝由 `GSD-7` 裁定。
+**Closure Gate Semantics（`GSD-7` APPROVED）：**
+
+```
+S-1 = PASS ／ … ／ S-14 = PASS  → §1 closure gate = PASS
+任一 S-* = FAIL                 → §1 closure gate = FAIL → §1 remains DESIGN PENDING
+```
+
+**不得** partial-pass。
+
+**Criteria approval ≠ criteria already satisfied：**
+
+```
+Criteria approved
+≠ Criteria verified PASS
+≠ Closure executed
+≠ §1 DESIGN RESOLVED
+```
+
+本 Decision **只**批准 criteria 本身 —— **不**表示 `S-1` ～ `S-14` 当前已全部 PASS，
+也**不**表示 closure 已执行、§1 已 `DESIGN RESOLVED` 或 `GSD-8` 已授权。见 **`§1.17`**。
 
 ### 1.8 Human Decision Required
 
@@ -384,7 +409,7 @@ candidate 判断：
 | `GSD-4` | In Scope 的 canonical categories | ① P0 capability scope ＋ supporting infrastructure ＋ quality ／ safety boundary 三类**← `SELECTED`（`REGISTERED`，Issue #100）**；② 其他 | ① 直接支撑 `S-3`，避免 supporting infrastructure 被读成新 P0 场景 | §1 In Scope 结构 |
 | `GSD-5` | Out of Scope ／ P1 ／ Prohibited ／ Deferred 的分类方式 | ① 四类分离**← `SELECTED`（`REGISTERED`，Issue #102）**；② 其他 | 四类分离支撑 `S-4`，避免「都不做」式压平 | §1 Out of Scope 结构 |
 | `GSD-6` | `§6` ～ `§10` remaining pending 是否阻止 §1 conceptual closure？ | ① 不阻止，§1 只登记 interface ／ dependency expectation**← `SELECTED`（`REGISTERED`，Issue #104）**；② 阻止，需先完成相关层；③ 条件性 | ① 与「§1 是 goal ／ scope 层」一致；② 会把 §1 与多章设计耦合 | §1 closure 时点与顺序 |
-| `GSD-7` | 是否接受 proposed minimum closure criteria `S-1` ～ `S-14`？ | 接受 ／ 调整 ／ 拒绝 | 若调整，需给出替代 criteria | §1 后续 closure gate |
+| `GSD-7` | 是否接受 proposed minimum closure criteria `S-1` ～ `S-14`？ | 接受 ／ 调整 ／ 拒绝**← `SELECTED`（`REGISTERED`，Issue #106：**调整后接受**，`S-1` ～ `S-14` = Human-approved mandatory minimum closure criteria）** | 若调整，需给出替代 criteria | §1 后续 closure gate |
 | `GSD-8` | 是否授权后续独立 §1 Design Change ／ Closure PR？ | 授权 ／ 不授权 | 授权后方可由该 PR 登记 §1 的 canonical goal ／ scope 与状态转换 | §1 是否可离开 `DESIGN PENDING` |
 
 > **current-state（Issue #94 ／ #96 ／ #98 ／ #100 ／ #102 ／ #104）：** `GSD-1` = **`REGISTERED`**（**`§1 Option 2`**，见 **`§1.11`**）；
@@ -393,7 +418,8 @@ candidate 判断：
 > `GSD-4` = **`REGISTERED`**（**Option ① —— P0 capability scope ／ supporting infrastructure ／ quality ／ safety boundary 三类 In Scope canonical categories**，见 **`§1.14`**）；
 > `GSD-5` = **`REGISTERED`**（**Option ① —— Out of Scope ／ P1 ／ Prohibited ／ Deferred 四类分离**，见 **`§1.15`**）；
 > `GSD-6` = **`REGISTERED`**（**Option ① —— `§6` ～ `§10` remaining pending 不阻止 §1 conceptual closure；§1 只登记 interface ／ dependency expectations**，见 **`§1.16`**）；
-> **`GSD-7` ／ `GSD-8` 仍为 `PENDING`**。
+> `GSD-7` = **`REGISTERED`**（**调整后接受 `S-1` ～ `S-14`；`S-1` ～ `S-14` = Human-approved mandatory minimum closure criteria**，见 **`§1.7`** ／ **`§1.17`**）；
+> **`GSD-8` 仍为 `PENDING`**。
 
 **已被 `FROZEN` 唯一决定、因此**不**列为 Human Decision 的事项：**
 
@@ -452,10 +478,12 @@ implementation code ／ schema ／ Mock API ／ Mock Dataset
 §1 In Scope categories（GSD-4）     = REGISTERED（Option ① —— P0 capability scope ／ supporting infrastructure ／ quality ／ safety boundary 三类；见 §1.14）
 §1 Out of Scope classification（GSD-5）= REGISTERED（Option ① —— Out of Scope ／ P1 ／ Prohibited ／ Deferred 四类分离；见 §1.15）
 §1 closure dependency（GSD-6）      = REGISTERED（Option ① —— §6 ～ §10 remaining pending 不阻止 §1 conceptual closure；见 §1.16）
-GSD-7 ／ GSD-8                     = PENDING
+§1 closure criteria（GSD-7）        = REGISTERED（S-1 ～ S-14 = Human-approved mandatory minimum closure criteria；S-1 ～ S-14 verification = NOT EXECUTED）
+GSD-8                              = PENDING
+Dedicated §1 Closure PR            = NOT AUTHORIZED
 §6 ～ §10 status                    = 各自 current canonical status 独立保持（本 Decision 未修改）
 POC success                        = NOT CLAIMED（需 runtime-test evidence ＋ business-value evidence；真实 KPI 需真实客户 baseline）
-S-1 ～ S-14                        = candidate（not Human-approved）
+S-1 ～ S-14                        = Human-approved mandatory minimum closure criteria（verification 未执行）
 §2 P0 Business Rules               = DESIGN RESOLVED
 §3 System Boundary                 = DESIGN RESOLVED（Implementation = NOT STARTED）
 §4 Data & Integration Design       = DESIGN RESOLVED（0 个 DESIGN PENDING 子领域）
@@ -475,8 +503,10 @@ POC Design v0.2                    = DRAFT
 > `GSD-4` = **`REGISTERED`**（Option ① —— 三类 In Scope canonical categories，见 **`§1.14`**）；
 > `GSD-5` = **`REGISTERED`**（Option ① —— 四类分离，见 **`§1.15`**）；
 > `GSD-6` = **`REGISTERED`**（Option ① —— downstream pending 不阻止 §1 conceptual closure，见 **`§1.16`**）；
-> `GSD-7` ／ `GSD-8` = **`PENDING`**；`S-1` ～ `S-14` = **candidate（not Human-approved）**；
-> §1 四项 top-level status **仍为 `DESIGN PENDING`**；**POC success = NOT CLAIMED**。
+> `GSD-7` = **`REGISTERED`**（调整后接受 `S-1` ～ `S-14`；见 **`§1.7`** ／ **`§1.17`**）；
+> `GSD-8` = **`PENDING`**；`S-1` ～ `S-14` = **Human-approved mandatory minimum closure criteria（`Criteria approved ≠ Criteria verified PASS`）**；
+> Dedicated §1 Closure PR = **`NOT AUTHORIZED`**；§1 四项 top-level status **仍为 `DESIGN PENDING`**；
+> **POC success = NOT CLAIMED**。
 
 ### 1.11 Human Decision Record —— `GSD-1`（`SIMULATED POC Design Policy` ＋ `Human-approved`）
 
@@ -1303,6 +1333,173 @@ Dedicated §1 Closure PR           = NOT AUTHORIZED
 §1 In Scope                       = DESIGN PENDING ← 本 Decision 不推进状态
 §1 Out of Scope                   = DESIGN PENDING ← 本 Decision 不推进状态
 §6 ～ §10 status                    = 各自 current canonical status 独立保持（本 Decision 未修改）
+POC success                       = NOT CLAIMED
+POC Design v0.2                   = DRAFT
+```
+
+### 1.17 Human Decision Record —— `GSD-7`（`SIMULATED POC Design Policy` ＋ `Human-approved`）
+
+**Registration Status：`REGISTERED`**
+
+依据 **Issue #106 Human Decision**。本记录**只**登记已批准的 `GSD-7`（调整后接受 `S-1` ～ `S-14` 并
+canonicalize 为 §1 mandatory minimum closure criteria），并执行最小必要 current-state synchronization ——
+**不**决定 `GSD-8`、**不**授权或执行 §1 Closure PR、**不**声明 `S-1` ～ `S-14` 已全部 PASS、
+**不**推进 §1 四项 top-level status、**不**写 final §1 canonical wording、
+**不**替 `§6` ～ `§10` 做具体设计、**不**做 Architecture ／ implementation 选择、
+**不**修改 `FROZEN` Discovery 与 `§2` ～ `§5` approved policy。
+
+```
+Decision Scope     = §1.8 `GSD-7`（proposed minimum closure criteria `S-1` ～ `S-14`）
+Decision Authority = Human（Issue #106）
+Selected Option    = 调整后接受 —— `S-1` ～ `S-14` 全部 canonicalize 为
+                     Human-approved MANDATORY MINIMUM CLOSURE CRITERIA
+Write Scope        = docs/design/poc-design-v0.2.md §1
+```
+
+**`GSD-7.1` Criteria canonicalization（APPROVED）**
+
+`§1.7` 的 `S-1` ～ `S-14` 已由 **candidate** 转为 **Human-approved mandatory minimum closure criteria**：
+
+```
+S-1 ～ S-3 ／ S-5 ／ S-6 ／ S-8 ／ S-10 ／ S-12 = 核心语义保持
+S-4 ／ S-7 ／ S-9 ／ S-11 ／ S-13 ／ S-14        = 按本 Decision 修订（见 GSD-7.2 ～ GSD-7.7）
+```
+
+**`GSD-7.2` `S-4` —— four-way separation without silently approving old candidate routing rules（APPROVED）**
+
+保持 `Out of Scope ≠ P1 ≠ Prohibited ≠ Deferred`；每个具体 item 必须有明确 **canonical authority** 与
+**primary classification**；跨维度关系必须显式说明，不得产生隐式重复、语义冲突或 authority inflation。
+**本 criterion 不自动批准旧 `§1.4 C` candidate 中的固定判定顺序、先命中者为准、现有 candidate item
+placement 或 bucket routing 细节**；未来 §1 Closure PR 如需使用这些 routing 细节，**必须**基于 `GSD-5`
+已批准的四类语义重新验证。
+
+**`GSD-7.3` `S-7` —— revalidate `§2` ～ `§5` composition against current main（APPROVED）**
+
+Closure PR **必须**基于**当时 current main**重新核验 current `§2` ～ `§5` 与 P0 Goal ／ Scope 是否存在
+unresolved composition conflict；**不得**只依赖历史 `§1.4 D` ／ `GSF-6` 旧结论：
+
+```
+Current-main composition check = PASS
+Unresolved §2 ～ §5 blocking conflict = NONE
+```
+
+若出现新冲突，**必须**登记并解决；未解决前 closure gate = **FAIL**。
+
+**`GSD-7.4` `S-9` —— explicit lifecycle ／ evidence separation（APPROVED）**
+
+§1 **必须**显式保持：
+
+```
+Design closure
+≠ Implemented
+≠ Runtime validated ／ Tested
+≠ Business value proven ／ accepted
+≠ POC SUCCESS
+≠ Production-ready
+```
+
+并与 `GSD-3` 保持一致：`POC SUCCESS` 需要 **runtime-test evidence ＋ business-value evidence**。
+
+**`GSD-7.5` `S-11` —— §1 Closure PR must not choose Architecture ／ technology（APPROVED）**
+
+§1 Closure PR 本身**不得**选择 Architecture ／ framework ／ database ／ API ／ deployment，
+**不得**创建或修改 ADR，也**不得**替 `§10` 做技术选型。**本 criterion 不要求 `§10` 永远保持 No ADR** ——
+`§10` 按其 own current canonical status 独立存在。
+
+```
+§1 closure ≠ Architecture decision
+```
+
+**`GSD-7.6` `S-13` —— current-state ／ `project-index.md` must match actual closure result（APPROVED）**
+
+```
+If closure gate PASS → §1 actual canonical status must be synchronized consistently
+If closure gate FAIL → §1 remains DESIGN PENDING
+```
+
+**不得**出现 document ／ index ／ current-state 相互矛盾。
+
+**`GSD-7.7` `S-14` —— no unresolved blocking scope conflict（APPROVED）**
+
+Closure gate 要求 `Unresolved blocking scope conflict = NONE`。若发现新的 blocking scope conflict，
+**即使已经登记 ／ 已有 Issue 或 mitigation proposal**，只要仍未解决：
+
+```
+Closure gate = FAIL
+§1 remains DESIGN PENDING
+```
+
+**不得**用「已登记 blocker」替代「已解决 blocker」。
+
+**`GSD-7.8` Closure gate semantics（APPROVED）**
+
+`S-1` ～ `S-14` 全部是 mandatory minimum criteria，**必须全部 PASS**：
+
+```
+S-1 = PASS ／ … ／ S-14 = PASS  → §1 closure gate = PASS
+任一 S-* = FAIL                 → §1 closure gate = FAIL → §1 remains DESIGN PENDING
+```
+
+**不得** partial-pass。
+
+**`GSD-7.9` Criteria approval ≠ criteria already satisfied（APPROVED）**
+
+```
+Criteria approved
+≠ Criteria verified PASS
+≠ Closure executed
+≠ §1 DESIGN RESOLVED
+```
+
+本 Decision **只**批准 criteria 本身 —— **不**表示 `S-1` ～ `S-14` 当前已全部 PASS，
+也**不**表示 closure 已执行、§1 已 `DESIGN RESOLVED` 或 `GSD-8` 已授权。
+
+**`GSD-7.10` Relationship to `GSD-8`（保持）**
+
+本 Decision **不决定** `GSD-8`：
+
+```
+GSD-8 = PENDING
+Dedicated §1 Closure PR authorization = NOT GRANTED
+```
+
+只有未来 `GSD-8` Human Decision 明确授权后，才允许独立 Closure PR 写 final canonical wording、
+执行 `S-1` ～ `S-14` verification，并根据 PASS ／ FAIL 决定是否 transition §1 status。
+
+**`GSD-7.11` Status boundary（保持）**
+
+本 Decision 不改变：
+
+```
+§1 P0 设计目标       = DESIGN PENDING
+§1 POC 成功边界      = DESIGN PENDING
+§1 In Scope          = DESIGN PENDING
+§1 Out of Scope      = DESIGN PENDING
+POC success          = NOT CLAIMED
+POC Design v0.2      = DRAFT
+```
+
+**`GSD-7.12` Boundaries preserved（保持）**
+
+本 Decision **未**修改 `FROZEN` Discovery、Problem Statement ／ P0 ／ P1；**未**新增业务场景 ／ capability；
+**未**发明 KPI ／ baseline ／ business evidence；**未**修改 `§2` ～ `§5` approved design policy；
+**未**替 `§6` ～ `§10` 做具体设计；**未**修改 `§6` ～ `§10` current canonical status；
+**未**做 Architecture ／ implementation 选择；**未**创建 ADR；**未**写 runtime implementation；
+**未**定义 concrete test ／ KPI ／ threshold ／ Eval harness；**未**创建 credential ／ secret；
+**未**推进 §1 four top-level status；**未**授权或执行 §1 Closure PR。
+
+**执行状态（本 Registration 时点）**
+
+```
+GSD-1 ～ GSD-6                    = REGISTERED
+GSD-7                             = REGISTERED（调整后接受 S-1 ～ S-14）
+GSD-8                             = PENDING
+S-1 ～ S-14                       = Human-approved mandatory minimum closure criteria（verification = NOT EXECUTED）
+Dedicated §1 Closure PR           = NOT AUTHORIZED
+§1 P0 设计目标                     = DESIGN PENDING ← 本 Decision 不推进状态
+§1 POC 成功边界                    = DESIGN PENDING ← 本 Decision 不推进状态
+§1 In Scope                       = DESIGN PENDING ← 本 Decision 不推进状态
+§1 Out of Scope                   = DESIGN PENDING ← 本 Decision 不推进状态
 POC success                       = NOT CLAIMED
 POC Design v0.2                   = DRAFT
 ```
