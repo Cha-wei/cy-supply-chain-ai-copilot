@@ -1070,5 +1070,184 @@ class ReportSurfaceTests(Layer2TestCase):
         self.assertIsInstance(payload["issues"], list)
 
 
+class ReportingVocabularyTests(Layer2TestCase):
+    """The Layer-2 report must not invent a Layer-2 status contract.
+
+    Issue #122 forbids new enums.  The status vocabularies already registered by
+    canonical authority are sufficient:
+
+    * package disposition ``ACCEPTED`` / ``REJECTED`` / ``UNUSABLE`` (§4.3.28 B.1);
+    * trusted reuse ``RE-VERIFIED`` (§4.3.28 C.3);
+    * check state ``passed`` / ``failed`` / ``not_evaluable`` (§4.3.28 B.2 FR-3).
+    """
+
+    def test_no_layer2_outcome_or_aggregate_field_exists_on_the_report(self) -> None:
+        report = self.single(ProductionQty="-1")
+        for forbidden in ("outcome", "evaluation", "status", "reusable_state"):
+            with self.subTest(attribute=forbidden):
+                self.assertFalse(hasattr(report, forbidden), msg=forbidden)
+
+    def test_layer2_report_declares_only_approved_fields(self) -> None:
+        import dataclasses
+
+        declared = {field.name for field in dataclasses.fields(Layer2Report)}
+        self.assertEqual(
+            declared,
+            {
+                "package_id",
+                "disposition",
+                "collector",
+                "accepted_content_view_digest",
+                "note",
+                "inherited_issues",
+            },
+        )
+
+    def test_no_layer2_outcome_enum_is_defined_anywhere(self) -> None:
+        import snapshot_loader.constants as constants_module
+
+        for module in (layer2_module, constants_module):
+            for forbidden in ("LAYER2_REUSABLE", "LAYER2_UNUSABLE"):
+                with self.subTest(module=module.__name__, name=forbidden):
+                    self.assertFalse(hasattr(module, forbidden))
+
+    def test_serialised_report_exposes_only_approved_keys(self) -> None:
+        report = self.single(ProductionQty="-1")
+        payload = report.to_dict()
+        self.assertEqual(
+            set(payload),
+            {
+                "package_id",
+                "layer",
+                "disposition",
+                "accepted_content_view_digest",
+                "note",
+                "issues",
+                "inherited_issues",
+                "checks",
+            },
+        )
+        self.assertNotIn("outcome", payload)
+        self.assertNotIn("evaluation", payload)
+
+    def test_public_report_never_renders_the_unapproved_outcome_literal(self) -> None:
+        # Both the normal path and the MG-2 path are checked: the accepted path must not
+        # emit "REUSABLE", and the failure path expresses itself through the existing
+        # UNUSABLE disposition rather than any new Layer-2 status.
+        healthy, accepted = self.accepted([dict(VALID_RECORD)], name="vocab-ok")
+        ok_report = validate_layer2(accepted)
+        self.assertNotIn("REUSABLE", ok_report.render_text().upper())
+        self.assertNotIn("REUSABLE", json.dumps(ok_report.to_dict()).upper())
+
+        mutated, accepted2 = self.accepted([dict(VALID_RECORD)], name="vocab-bad")
+        (mutated.root / "r.json").unlink()
+        bad_report = validate_layer2(accepted2)
+        blob = json.dumps(bad_report.to_dict()).upper() + bad_report.render_text().upper()
+        self.assertNotIn("REUSABLE", blob)
+        self.assertEqual(bad_report.disposition, DISPOSITION_UNUSABLE)
+        self.assertIn("UNUSABLE", blob)
+
+    def test_mg2_failure_is_expressed_only_through_the_existing_disposition(self) -> None:
+        built, accepted = self.accepted([dict(VALID_RECORD)])
+        (built.root / "r.json").write_bytes(encode_json([{"plant_id": "P1"}]))
+
+        report = validate_layer2(accepted)
+
+        self.assertEqual(report.disposition, DISPOSITION_UNUSABLE)
+        self.assertTrue(report.unusable)
+        self.assertFalse(report.reusable)
+        # No Layer-2 status literal carries the failure; the disposition does, and the
+        # inherited findings keep their original (Layer-1) shape.
+        self.assertFalse(hasattr(report, "outcome"))
+        self.assertTrue(report.inherited_issues)
+        self.assertEqual(report.issues, ())
+
+    def test_field_issue_keeps_the_package_disposition_accepted(self) -> None:
+        report = self.single(
+            ProductionQty="-1",
+            on_hand_qty="-5",
+            substitution_ratio="0",
+            inventory_status="BROKEN",
+        )
+        self.assertTrue(report.issues)
+        self.assertEqual(report.disposition, DISPOSITION_ACCEPTED)
+        self.assertTrue(report.accepted)
+        self.assertFalse(report.unusable)
+
+    def test_per_check_states_are_preserved_without_an_aggregate(self) -> None:
+        # A record that is simultaneously defective, deferred and clean: the per-check
+        # states must all survive, and the report must not collapse them into one
+        # aggregate state.
+        report = self.single(
+            ProductionQty="-1",
+            PerformancePeriod="SIM-2026-Q1",
+            sourcing_status="SOURCE-LOCAL-CODE",
+        )
+        states = {check.state for check in report.checks}
+        self.assertIn("failed", states)
+        self.assertIn("not_evaluable", states)
+        self.assertIn("passed", states)
+
+        not_evaluable_names = {check.name for check in report.not_evaluable_checks}
+        self.assertTrue(
+            any("field_not_evaluable" in name and "PerformancePeriod" in name for name in not_evaluable_names)
+        )
+        self.assertTrue(
+            any("field_not_evaluable" in name and "sourcing_status" in name for name in not_evaluable_names)
+        )
+        # Both a defect and a deferral are present; neither is reported as the
+        # report-level truth of the other.
+        self.assertTrue(report.issues)
+        self.assertTrue(report.not_evaluable_checks)
+
+    def test_reusable_is_derived_and_holds_no_status_literal(self) -> None:
+        from snapshot_loader.issues import IssueCollector
+
+        from snapshot_loader.constants import EVALUATION_FAILED, EVALUATION_PASSED
+
+        report = self.single()
+        self.assertTrue(report.reusable)
+        self.assertEqual(report.disposition, DISPOSITION_ACCEPTED)
+
+        # Same disposition, but the MG-2 gate did not pass: the derived property flips on
+        # the existing check state alone.
+        stale = Layer2Report(
+            package_id="SIMULATED-DERIVED",
+            disposition=DISPOSITION_ACCEPTED,
+            collector=IssueCollector(checks=(
+                layer2_module.Layer2Check(
+                    name=layer2_module.LAYER2_REVERIFICATION, state=EVALUATION_FAILED
+                ),
+            )),
+            accepted_content_view_digest="synthetic",
+        )
+        self.assertFalse(stale.reusable)
+
+        confirmed = Layer2Report(
+            package_id="SIMULATED-DERIVED",
+            disposition=DISPOSITION_ACCEPTED,
+            collector=IssueCollector(checks=(
+                layer2_module.Layer2Check(
+                    name=layer2_module.LAYER2_REVERIFICATION, state=EVALUATION_PASSED
+                ),
+            )),
+            accepted_content_view_digest="synthetic",
+        )
+        self.assertTrue(confirmed.reusable)
+
+    def test_unusable_disposition_is_never_reported_as_reusable(self) -> None:
+        from snapshot_loader.issues import IssueCollector
+
+        vanished = Layer2Report(
+            package_id="SIMULATED-GONE",
+            disposition=DISPOSITION_UNUSABLE,
+            collector=IssueCollector(),
+            accepted_content_view_digest="synthetic",
+        )
+        self.assertFalse(vanished.reusable)
+        self.assertTrue(vanished.unusable)
+        self.assertFalse(vanished.accepted)
+
+
 if __name__ == "__main__":
     unittest.main()

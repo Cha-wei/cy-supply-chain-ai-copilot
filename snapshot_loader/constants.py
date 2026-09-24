@@ -239,15 +239,21 @@ REASON_OUT_OF_DEFINED_RANGE: str = "OUT_OF_DEFINED_RANGE"
 REASON_INVALID_DEFINED_STATUS: str = "INVALID_DEFINED_STATUS"
 REASON_UNRESOLVED_IDENTITY: str = "UNRESOLVED_IDENTITY"
 
-# --- §4.4.x Layer-2 outcome states (NOT package disposition) --------------------
+# --- Layer-2 reporting surface: no new status vocabulary ------------------------
 #
-# Layer 2 never changes package disposition (§4.4.25): an accepted package stays
-# ``ACCEPTED`` even when canonical evidence defects are reported.  The only
-# non-``REUSABLE`` outcome is the inherited accepted-view re-verification failure,
-# which is expressed with the existing ``UNUSABLE`` disposition
-# (§4.3.28 C.3 ``MG-2`` / ``IC-12``).
-LAYER2_REUSABLE: str = "REUSABLE"
-LAYER2_UNUSABLE: str = "UNUSABLE"
+# Current canonical authority registers exactly these status vocabularies, and Layer 2
+# introduces none of its own:
+#
+#   package disposition : ``ACCEPTED`` / ``REJECTED`` / ``UNUSABLE``  (§4.3.28 B.1)
+#   trusted reuse       : ``RE-VERIFIED``                            (§4.3.28 C.3)
+#   check state         : ``passed`` / ``failed`` / ``not_evaluable`` (§4.3.28 B.2 FR-3)
+#
+# A Layer-2 ``outcome`` / report-level aggregate ``evaluation`` string would be a new,
+# unapproved status contract (Issue #122 forbids new enums), so Layer 2 reports its
+# result through the **existing** package ``disposition`` (§4.4.25 keeps an accepted
+# package ``ACCEPTED`` even when canonical evidence defects are reported; the only
+# exception is the inherited ``MG-2`` re-verification failure, which is already
+# expressible as the existing ``UNUSABLE`` disposition) plus the per-check states.
 
 # --- §4.3.22: registered scalar representations (Layer-2 basis) -----------------
 #

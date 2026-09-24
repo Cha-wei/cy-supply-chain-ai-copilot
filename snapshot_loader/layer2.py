@@ -83,8 +83,6 @@ from .constants import (
     LAYER2_FIELD_RULE_BY_NAME,
     LAYER2_NOT_EVALUABLE_FIELDS,
     LAYER2_REGISTRY,
-    LAYER2_REUSABLE,
-    LAYER2_UNUSABLE,
     REASON_INVALID_DEFINED_STATUS,
     REASON_INVALID_TYPE,
     REASON_OUT_OF_DEFINED_RANGE,
@@ -131,21 +129,30 @@ class Layer2Check:
 class Layer2Report:
     """Deterministic Layer-2 validation result for one accepted package.
 
-    ``disposition`` restates the package disposition only: Layer 2 never changes it
-    (``§4.4.25``).  The single exception is the inherited trusted-reuse failure, which
-    is expressed as ``UNUSABLE`` per ``§4.3.28`` C.3 ``MG-2``.
+    The report uses **only** status vocabulary that current canonical authority already
+    registers (Issue #122 forbids new enums).  There is deliberately no Layer-2
+    ``outcome`` field and no report-level aggregate ``evaluation``: a single
+    aggregate status would implicitly define an aggregation precedence that no
+    authority approves.
 
-    ``inherited_issues`` carries defects that Layer 2 **did not produce** -- currently
-    the ``MG-2`` re-verification findings raised by the trusted-reuse boundary.  They
-    are re-published with their original layer, category, reason, location, affected
-    evidence, blast radius and design reference intact, because Layer 2 is not the
-    layer that established them and must not rewrite their meaning.
+    * ``disposition`` -- the existing package disposition
+      (``ACCEPTED`` / ``REJECTED`` / ``UNUSABLE``).  Layer 2 never changes it
+      (``§4.4.25``); the single exception is the inherited trusted-reuse failure, which
+      is already expressible as the existing ``UNUSABLE`` disposition per ``§4.3.28``
+      C.3 ``MG-2``.
+    * ``issues`` -- Layer-2 canonical evidence defects.
+    * ``inherited_issues`` -- defects Layer 2 **did not produce**, currently the
+      ``MG-2`` re-verification findings raised by the trusted-reuse boundary.  They are
+      re-published with their original layer, category, reason, location, affected
+      evidence, blast radius and design reference intact, because Layer 2 is not the
+      layer that established them and must not rewrite their meaning.
+    * ``checks`` -- every check with its own ``passed`` / ``failed`` /
+      ``not_evaluable`` state (``§4.3.28`` B.2 ``FR-3``).  The per-check states are the
+      report's evaluation surface; no aggregate state is derived from them.
     """
 
     package_id: str
     disposition: str
-    outcome: str
-    evaluation: str
     collector: IssueCollector
     accepted_content_view_digest: str
     note: str = ""
@@ -153,7 +160,20 @@ class Layer2Report:
 
     @property
     def reusable(self) -> bool:
-        return self.outcome == LAYER2_REUSABLE
+        """Derived convenience only -- no Layer-2 status literal is created.
+
+        Trusted reuse is possible exactly when the package is still ``ACCEPTED`` and the
+        inherited ``MG-2`` re-verification gate actually passed.  Both facts are already
+        expressed by existing authority (the package disposition and the emitted check
+        state), so this property only reads them back.
+        """
+
+        if self.disposition != DISPOSITION_ACCEPTED:
+            return False
+        return any(
+            check.name == LAYER2_REVERIFICATION and check.state == EVALUATION_PASSED
+            for check in self.collector.checks
+        )
 
     @property
     def unusable(self) -> bool:
@@ -193,8 +213,6 @@ class Layer2Report:
             "package_id": self.package_id,
             "layer": LAYER_2,
             "disposition": self.disposition,
-            "outcome": self.outcome,
-            "evaluation": self.evaluation,
             "accepted_content_view_digest": self.accepted_content_view_digest,
             "note": self.note,
             "issues": [issue.to_dict() for issue in self.issues],
@@ -211,8 +229,6 @@ class Layer2Report:
             "layer            : 2 (Canonical Evidence Validation)",
             f"package id       : {self.package_id}",
             f"disposition      : {self.disposition}",
-            f"outcome          : {self.outcome}",
-            f"evaluation       : {self.evaluation}",
             f"accepted view    : {self.accepted_content_view_digest}",
         ]
         if self.note:
@@ -664,8 +680,6 @@ def validate_layer2(accepted: AcceptedPackage) -> Layer2Report:
         return Layer2Report(
             package_id=accepted.package_id,
             disposition=DISPOSITION_UNUSABLE,
-            outcome=LAYER2_UNUSABLE,
-            evaluation=EVALUATION_FAILED,
             collector=collector.collect(),
             accepted_content_view_digest=digest,
             note=(
@@ -689,8 +703,6 @@ def validate_layer2(accepted: AcceptedPackage) -> Layer2Report:
         return Layer2Report(
             package_id=accepted.package_id,
             disposition=DISPOSITION_ACCEPTED,
-            outcome=LAYER2_REUSABLE,
-            evaluation=EVALUATION_NOT_EVALUABLE,
             collector=collector.collect(),
             accepted_content_view_digest=digest,
             note="no dataset content view available; nothing was evaluated",
@@ -758,11 +770,9 @@ def validate_layer2(accepted: AcceptedPackage) -> Layer2Report:
     else:
         collector.passed(LAYER2_PRESENT_VALUE_RULES)
 
-    evaluation = (
-        EVALUATION_NOT_EVALUABLE
-        if (blocked_datasets or not_evaluable)
-        else (EVALUATION_FAILED if issues else EVALUATION_PASSED)
-    )
+    # The per-check states are the evaluation surface.  No report-level aggregate is
+    # derived from them: choosing one would silently define an aggregation precedence
+    # (for example "issues and not_evaluable both present") that no authority approves.
     note = ""
     if not_evaluable:
         note = (
@@ -774,8 +784,6 @@ def validate_layer2(accepted: AcceptedPackage) -> Layer2Report:
     return Layer2Report(
         package_id=accepted.package_id,
         disposition=DISPOSITION_ACCEPTED,
-        outcome=LAYER2_REUSABLE,
-        evaluation=evaluation,
         collector=collector.collect(),
         accepted_content_view_digest=digest,
         note=note,
