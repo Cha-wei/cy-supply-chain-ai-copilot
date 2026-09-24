@@ -57,6 +57,7 @@
 | 文档 | 状态 |
 | --- | --- |
 | `docs/design/poc-design-v0.2.md` | **`DRAFT`** —— **POC Design 阶段 Canonical Source** |
+| [Adapter Boundary](design/specs/data-integration/adapter-boundary.md) | **`DESIGN RESOLVED`** —— Adapter Boundary concern 的 standalone canonical spec |
 
 `POC Design v0.2` 继承上述两个 `FROZEN` baseline，**不修改、不重新解释** FROZEN Discovery。
 
@@ -79,12 +80,12 @@
 | └ Final Import Contract | **`DESIGN RESOLVED`** | §4.3.28；closure 见 §4.3.29 |
 | Data Validation | **`DESIGN RESOLVED`** | §4.4；closure 见 §4.4.101 |
 | Master Data Mapping | **`DESIGN RESOLVED`**（11 / 11 层） | §4.5；status 见 §4.5.24；scope 见 §4.5.25 |
-| **Adapter Boundary** | **`DESIGN RESOLVED`**（conceptual closure；implementation 未授权） | §4 子章节状态表；closure 见 §4.6.21 |
+| **Adapter Boundary** | **`DESIGN RESOLVED`**（conceptual closure；implementation 未授权） | [Adapter Boundary](design/specs/data-integration/adapter-boundary.md)；closure 见 `adapter-boundary.md` §4.6.21 |
 | AI / Tool Boundary、HITL、Permission & Security、Audit & Observability、Test & AI Eval | 见对应章节 status boundary | §5 ～ §9（§5 status 见 §5.18） |
 | Architecture Decisions | **尚无正式 ADR**；技术栈明确未决定 | §10；`## Explicit Non-Decisions` |
 
 **§4 现有 0 个 `DESIGN PENDING` 设计子领域**（`Adapter Boundary` 已由 Issue #90 Closure Validation = `PASS`
-登记为 `DESIGN RESOLVED`；见 §4.6.21）。
+登记为 `DESIGN RESOLVED`；见 [adapter-boundary.md](design/specs/data-integration/adapter-boundary.md) §4.6.21）。
 **设计层 closure ≠ implemented / tested / production-ready；不得据此声称整个 §4 已实现 / 已验证，
 也不得声称 `POC Design v0.2 overall` 已完成。**
 
@@ -95,7 +96,7 @@
 **当前 Phase：** `POC Design v0.2`（**`DRAFT`**，尚未 `APPROVED` / `FROZEN`）。
 
 **最近已完成的 Gate：** `Adapter Boundary` Closure Validation —— **`PASS`**
-（`Adapter Boundary` → **`DESIGN RESOLVED`**；authoritative 记录见 `docs/design/poc-design-v0.2.md` **§4.6.21**；
+（`Adapter Boundary` → **`DESIGN RESOLVED`**；authoritative 记录见 [adapter-boundary.md](design/specs/data-integration/adapter-boundary.md) **§4.6.21**；
 本文档**不复制** closure rationale）。
 
 **更早：** `Final Import Contract` Closure Validation —— **`PASS`**
