@@ -68,12 +68,7 @@ from snapshot_loader.constants import (
     EVALUATION_PASSED,
     V02_CANONICAL_RECORD_PROPERTY_SET,
 )
-from tests.helpers import (
-    DatasetSpec,
-    PackageSpec,
-    build_package,
-    encode_json,
-)
+from tests.helpers import DatasetSpec, PackageSpec, build_package
 
 SCRATCH_ROOT = Path(__file__).resolve().parents[1] / "build" / "test-scratch"
 
@@ -495,12 +490,18 @@ class InboundIdentityTests(CanonicalObjectsTestCase):
 
 
 class BomParentBindingTests(CanonicalObjectsTestCase):
-    def _parent_handoff(self, accepted):
+    def _parent_handoff(self, accepted, *, bom_ordinal: int = 0, parent_ordinal: int = 0):
+        """The registered I-7 binding: BOM Component evidence -> resolved requirement."""
+
         return BomParentContextHandoff(
-            plant_id=PLANT,
-            required_date=REQUIRED_DATE,
-            evidence=self.citation(
-                accepted, role="Production Requirement", artifact="0.json", ordinal=0
+            bom_evidence=self.citation(
+                accepted, role="BOM Component", artifact="1.json", ordinal=bom_ordinal
+            ),
+            parent_evidence=self.citation(
+                accepted,
+                role="Production Requirement",
+                artifact="0.json",
+                ordinal=parent_ordinal,
             ),
         )
 
@@ -565,7 +566,10 @@ class BomParentBindingTests(CanonicalObjectsTestCase):
             PhaseAHandoff(
                 analysis_run_id="RUN-1",
                 analysis_date="2026-02-01",
-                bom_parent_context=(self._parent_handoff(accepted),),
+                bom_parent_context=(
+                    self._parent_handoff(accepted, bom_ordinal=0),
+                    self._parent_handoff(accepted, bom_ordinal=1),
+                ),
             ),
         )
         objects = report.objects_for("BOM Component")
@@ -681,9 +685,13 @@ class BomParentBindingTests(CanonicalObjectsTestCase):
             analysis_date="2026-02-01",
             bom_parent_context=(
                 BomParentContextHandoff(
-                    plant_id=PLANT,
-                    required_date=REQUIRED_DATE,
-                    evidence=self.citation(
+                    bom_evidence=self.citation(
+                        accepted,
+                        role="Production Requirement",
+                        artifact="0.json",
+                        package_id="OTHER-PACKAGE",
+                    ),
+                    parent_evidence=self.citation(
                         accepted,
                         role="Production Requirement",
                         artifact="0.json",
@@ -708,9 +716,10 @@ class BomParentBindingTests(CanonicalObjectsTestCase):
             analysis_date="2026-02-01",
             bom_parent_context=(
                 BomParentContextHandoff(
-                    plant_id=PLANT,
-                    required_date=REQUIRED_DATE,
-                    evidence=self.citation(
+                    bom_evidence=self.citation(
+                        accepted, role="Inbound Supply", artifact="0.json", ordinal=0
+                    ),
+                    parent_evidence=self.citation(
                         accepted, role="Inbound Supply", artifact="0.json", ordinal=0
                     ),
                 ),
@@ -742,7 +751,9 @@ class BomParentBindingTests(CanonicalObjectsTestCase):
         self.assertIn("required_date", conflicts[0].detail)
         self.assertEqual(report.objects_for("BOM Component"), ())
 
-    def test_ambiguous_parent_handoffs_stay_unresolved(self) -> None:
+    def test_one_bom_evidence_bound_to_two_parents_stays_unresolved(self) -> None:
+        # I-7 cardinality: exactly one context per BOM evidence set.  Two distinct parent
+        # contexts for the same BOM evidence stay unresolved with no precedence.
         second = PRODUCTION_REQUIREMENT(material_code="M9")
         _, accepted = self.accepted(
             [
@@ -755,21 +766,19 @@ class BomParentBindingTests(CanonicalObjectsTestCase):
             analysis_run_id="RUN-1",
             analysis_date="2026-02-01",
             bom_parent_context=(
-                self._parent_handoff(accepted),
-                BomParentContextHandoff(
-                    plant_id=PLANT,
-                    required_date=REQUIRED_DATE,
-                    evidence=self.citation(
-                        accepted,
-                        role="Production Requirement",
-                        artifact="0.json",
-                        ordinal=1,
-                    ),
-                ),
+                self._parent_handoff(accepted, bom_ordinal=0, parent_ordinal=0),
+                self._parent_handoff(accepted, bom_ordinal=0, parent_ordinal=1),
             ),
         )
         report = construct_canonical_objects(accepted, handoff)
         self.assertEqual(report.objects_for("BOM Component"), ())
+        self.assertIn(
+            "more than one distinct resolved Production Requirement context",
+            str([note for _n, _s, note in report.checks if note]),
+        )
+        self.assertIn(
+            "UNRESOLVED_IDENTITY", {issue.reason for issue in report.issues}
+        )
 
     def test_no_bom_header_version_or_id_entity_is_created(self) -> None:
         _, accepted = self.accepted(
@@ -1027,9 +1036,14 @@ class ProvenanceTests(CanonicalObjectsTestCase):
             analysis_date="2026-02-01",
             bom_parent_context=(
                 BomParentContextHandoff(
-                    plant_id=PLANT,
-                    required_date=REQUIRED_DATE,
-                    evidence=self.citation(
+                    bom_evidence=self.citation(
+                        accepted,
+                        role="Production Requirement",
+                        artifact="0.json",
+                        ordinal=0,
+                        locator="CALLER-MINTED-LOCATOR",
+                    ),
+                    parent_evidence=self.citation(
                         accepted,
                         role="Production Requirement",
                         artifact="0.json",
@@ -1054,11 +1068,12 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
     def _loss_rate_record(self) -> dict[str, object]:
         return PRODUCTION_REQUIREMENT(loss_rate="0.05")
 
-    def _parent_handoff(self, accepted):
+    def _parent_handoff(self, accepted, *, bom_ordinal: int = 0):
         return BomParentContextHandoff(
-            plant_id=PLANT,
-            required_date=REQUIRED_DATE,
-            evidence=self.citation(
+            bom_evidence=self.citation(
+                accepted, role="BOM Component", artifact="1.json", ordinal=bom_ordinal
+            ),
+            parent_evidence=self.citation(
                 accepted, role="Production Requirement", artifact="0.json", ordinal=0
             ),
         )
@@ -1088,14 +1103,17 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
         ]
 
     def _construct_with_bom(
-        self, datasets, accepted, loss_rate_handoffs, *, name: str
+        self, datasets, accepted, loss_rate_handoffs, *, name: str, bom_bindings: int = 1
     ):
         return construct_canonical_objects(
             accepted,
             PhaseAHandoff(
                 analysis_run_id="RUN-1",
                 analysis_date="2026-02-01",
-                bom_parent_context=(self._parent_handoff(accepted),),
+                bom_parent_context=tuple(
+                    self._parent_handoff(accepted, bom_ordinal=index)
+                    for index in range(bom_bindings)
+                ),
                 loss_rate=tuple(loss_rate_handoffs),
             ),
         )
@@ -1381,22 +1399,29 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
         )
 
     def _construct_two_component(self, accepted, handoffs, *, name: str):
+        # One explicit I-7 binding per BOM Component evidence: M2 -> requirement,
+        # M3 -> the same resolved requirement context.
         return construct_canonical_objects(
             accepted,
             PhaseAHandoff(
                 analysis_run_id="RUN-1",
                 analysis_date="2026-10-01",
-                bom_parent_context=(
+                bom_parent_context=tuple(
                     BomParentContextHandoff(
-                        plant_id=PLANT,
-                        required_date=self.REQUIRED_DATE_OCT,
-                        evidence=self.citation(
+                        bom_evidence=self.citation(
+                            accepted,
+                            role="BOM Component",
+                            artifact="1.json",
+                            ordinal=index,
+                        ),
+                        parent_evidence=self.citation(
                             accepted,
                             role="Production Requirement",
                             artifact="0.json",
                             ordinal=0,
                         ),
-                    ),
+                    )
+                    for index in (0, 1)
                 ),
                 loss_rate=tuple(handoffs),
             ),
@@ -2283,6 +2308,307 @@ class BoundaryAndRegressionTests(CanonicalObjectsTestCase):
                 for name, state in self.states(report).items()
             )
         )
+
+
+class I7BindingContractTests(CanonicalObjectsTestCase):
+    """The registered I-7 binding: BOM Component evidence -> resolved requirement context.
+
+    ``§4.3.31`` G I-7 registers the injected semantic as a **context reference**, not as
+    caller-supplied ``plant_id`` / ``required_date`` business values.  These tests pin the
+    binding contract and the optional consistency-evidence boundary.
+    """
+
+    OCT = "2026-10-10"
+
+    def _package(self, *, bom_fields: dict[str, object], name: str):
+        requirement = with_provenance(
+            {
+                "plant_id": PLANT,
+                "material_code": MATERIAL,
+                "required_date": self.OCT,
+                "ProductionQty": "10",
+            },
+            [("ProductionQty", [EVIDENCE_REQUIREMENT], None)],
+        )
+        bom: dict[str, object] = {"material_code": COMPONENT, "BOMComponentQty": "2"}
+        bom.update(bom_fields)
+        return self.accepted(
+            [
+                ("Production Requirement", [requirement]),
+                ("BOM Component", [with_provenance(bom, [("BOMComponentQty", [EVIDENCE_REQUIREMENT], None)])]),
+            ],
+            name=name,
+        )
+
+    def _binding(self, accepted, *, bom_artifact="1.json", bom_ordinal=0, parent_artifact="0.json", parent_ordinal=0, bom_role="BOM Component", parent_role="Production Requirement", bom_package=None, parent_package=None):
+        return BomParentContextHandoff(
+            bom_evidence=self.citation(
+                accepted,
+                role=bom_role,
+                artifact=bom_artifact,
+                ordinal=bom_ordinal,
+                package_id=bom_package,
+            ),
+            parent_evidence=self.citation(
+                accepted,
+                role=parent_role,
+                artifact=parent_artifact,
+                ordinal=parent_ordinal,
+                package_id=parent_package,
+            ),
+        )
+
+    def _construct(self, accepted, bindings, *, name: str):
+        return construct_canonical_objects(
+            accepted,
+            PhaseAHandoff(
+                analysis_run_id="RUN-1",
+                analysis_date="2026-10-01",
+                bom_parent_context=tuple(bindings),
+            ),
+        )
+
+    def _assert_resolved(self, report) -> None:
+        objects = report.objects_for("BOM Component")
+        self.assertEqual(len(objects), 1)
+        self.assertEqual(report.unresolved_for("BOM Component"), ())
+        self.assertFalse(
+            any(issue.reason == "UNRESOLVED_IDENTITY" for issue in report.issues)
+        )
+        component = objects[0]
+        self.assertEqual(
+            [(prop.name, prop.value) for prop in component.grain],
+            [("material_code", COMPONENT)],
+        )
+
+    def test_a_bom_omitting_both_local_context_fields_resolves(self) -> None:
+        _, accepted = self._package(bom_fields={}, name="i7-a")
+        report = self._construct(accepted, [self._binding(accepted)], name="i7-a")
+        self._assert_resolved(report)
+        component = report.objects_for("BOM Component")[0]
+        parent = report.objects_for("Production Requirement")[0]
+        self.assertEqual(component.context_reference, parent.record_reference)
+        self.assertEqual(component.value_of("plant_id", ABSENT), ABSENT)
+        self.assertEqual(component.value_of("required_date", ABSENT), ABSENT)
+        self.assertEqual(parent.value_of("plant_id"), PLANT)
+        self.assertEqual(parent.value_of("required_date"), self.OCT)
+
+    def test_b_only_plant_id_present_and_equal_resolves(self) -> None:
+        _, accepted = self._package(bom_fields={"plant_id": PLANT}, name="i7-b")
+        report = self._construct(accepted, [self._binding(accepted)], name="i7-b")
+        self._assert_resolved(report)
+
+    def test_c_only_required_date_present_and_equal_resolves(self) -> None:
+        _, accepted = self._package(bom_fields={"required_date": self.OCT}, name="i7-c")
+        report = self._construct(accepted, [self._binding(accepted)], name="i7-c")
+        self._assert_resolved(report)
+
+    def test_d_both_present_and_equal_resolves(self) -> None:
+        _, accepted = self._package(
+            bom_fields={"plant_id": PLANT, "required_date": self.OCT}, name="i7-d"
+        )
+        report = self._construct(accepted, [self._binding(accepted)], name="i7-d")
+        self._assert_resolved(report)
+
+    def test_e_plant_mismatch_is_a_consistency_conflict(self) -> None:
+        _, accepted = self._package(bom_fields={"plant_id": "P9"}, name="i7-e")
+        report = self._construct(accepted, [self._binding(accepted)], name="i7-e")
+        self.assertEqual(report.objects_for("BOM Component"), ())
+        conflicts = [
+            issue
+            for issue in report.issues
+            if issue.category == "CONSISTENCY" and issue.reason == "CONSISTENCY_CONFLICT"
+        ]
+        self.assertEqual(len(conflicts), 1)
+        self.assertIn("plant_id", conflicts[0].detail)
+
+    def test_f_required_date_mismatch_is_a_consistency_conflict(self) -> None:
+        _, accepted = self._package(bom_fields={"required_date": "2026-11-11"}, name="i7-f")
+        report = self._construct(accepted, [self._binding(accepted)], name="i7-f")
+        self.assertEqual(report.objects_for("BOM Component"), ())
+        conflicts = [
+            issue
+            for issue in report.issues
+            if issue.category == "CONSISTENCY" and issue.reason == "CONSISTENCY_CONFLICT"
+        ]
+        self.assertEqual(len(conflicts), 1)
+        self.assertIn("required_date", conflicts[0].detail)
+
+    def test_g_one_bom_evidence_bound_to_two_parents_is_unresolved(self) -> None:
+        requirement_b = with_provenance(
+            {
+                "plant_id": PLANT,
+                "material_code": "M9",
+                "required_date": self.OCT,
+                "ProductionQty": "10",
+            },
+            [("ProductionQty", [EVIDENCE_REQUIREMENT], None)],
+        )
+        _, accepted = self.accepted(
+            [
+                ("Production Requirement", [
+                    with_provenance(
+                        {
+                            "plant_id": PLANT,
+                            "material_code": MATERIAL,
+                            "required_date": self.OCT,
+                            "ProductionQty": "10",
+                        },
+                        [("ProductionQty", [EVIDENCE_REQUIREMENT], None)],
+                    ),
+                    requirement_b,
+                ]),
+                ("BOM Component", [
+                    with_provenance(
+                        {"material_code": COMPONENT, "BOMComponentQty": "2"},
+                        [("BOMComponentQty", [EVIDENCE_REQUIREMENT], None)],
+                    )
+                ]),
+            ],
+            name="i7-g",
+        )
+        report = self._construct(
+            accepted,
+            [
+                self._binding(accepted, bom_ordinal=0, parent_ordinal=0),
+                self._binding(accepted, bom_ordinal=0, parent_ordinal=1),
+            ],
+            name="i7-g",
+        )
+        self.assertEqual(report.objects_for("BOM Component"), ())
+        self.assertEqual(len(report.unresolved_for("BOM Component")), 1)
+        self.assertIn("UNRESOLVED_IDENTITY", {issue.reason for issue in report.issues})
+
+    def test_h_multiple_boms_bind_only_to_their_own_parent(self) -> None:
+        requirement_a = with_provenance(
+            {
+                "plant_id": PLANT,
+                "material_code": MATERIAL,
+                "required_date": self.OCT,
+                "ProductionQty": "10",
+            },
+            [("ProductionQty", [EVIDENCE_REQUIREMENT], None)],
+        )
+        requirement_b = with_provenance(
+            {
+                "plant_id": "P2",
+                "material_code": "M9",
+                "required_date": self.OCT,
+                "ProductionQty": "20",
+            },
+            [("ProductionQty", [EVIDENCE_REQUIREMENT], None)],
+        )
+        _, accepted = self.accepted(
+            [
+                ("Production Requirement", [requirement_a, requirement_b]),
+                (
+                    "BOM Component",
+                    [
+                        with_provenance(
+                            {"material_code": COMPONENT, "BOMComponentQty": "2"},
+                            [("BOMComponentQty", [EVIDENCE_REQUIREMENT], None)],
+                        ),
+                        with_provenance(
+                            {"material_code": "M7", "BOMComponentQty": "3"},
+                            [("BOMComponentQty", [EVIDENCE_REQUIREMENT], None)],
+                        ),
+                    ],
+                ),
+            ],
+            name="i7-h",
+        )
+        report = self._construct(
+            accepted,
+            [
+                self._binding(accepted, bom_ordinal=0, parent_ordinal=0),
+                self._binding(accepted, bom_ordinal=1, parent_ordinal=1),
+            ],
+            name="i7-h",
+        )
+        objects = report.objects_for("BOM Component")
+        self.assertEqual(len(objects), 2)
+        parents = {
+            obj.value_of("material_code"): obj.context_reference for obj in objects
+        }
+        resolved_requirements = report.objects_for("Production Requirement")
+        self.assertEqual(
+            parents[COMPONENT], resolved_requirements[0].record_reference
+        )
+        self.assertEqual(parents["M7"], resolved_requirements[1].record_reference)
+        # No cross-binding: each BOM binds only to its own parent context.
+        self.assertNotEqual(parents[COMPONENT], parents["M7"])
+
+    def test_i_foreign_or_wrong_role_bom_evidence_is_unresolved(self) -> None:
+        _, accepted = self._package(bom_fields={}, name="i7-i")
+        cases = {
+            "foreign-package": self._binding(accepted, bom_package="OTHER-PACKAGE"),
+            "wrong-role": self._binding(accepted, bom_role="Production Requirement"),
+            "missing-record": self._binding(accepted, bom_ordinal=9),
+        }
+        for label, binding in cases.items():
+            with self.subTest(case=label):
+                report = self._construct(accepted, [binding], name=f"i7-i-{label}")
+                self.assertEqual(report.objects_for("BOM Component"), ())
+                self.assertEqual(len(report.unresolved_for("BOM Component")), 1)
+
+    def test_j_foreign_or_wrong_role_parent_evidence_is_unresolved(self) -> None:
+        _, accepted = self._package(bom_fields={}, name="i7-j")
+        cases = {
+            "foreign-package": self._binding(accepted, parent_package="OTHER-PACKAGE"),
+            "wrong-role": self._binding(accepted, parent_role="BOM Component", parent_artifact="1.json"),
+            "missing-record": self._binding(accepted, parent_ordinal=9),
+        }
+        for label, binding in cases.items():
+            with self.subTest(case=label):
+                report = self._construct(accepted, [binding], name=f"i7-j-{label}")
+                self.assertEqual(report.objects_for("BOM Component"), ())
+                self.assertEqual(len(report.unresolved_for("BOM Component")), 1)
+
+    def test_k_referenced_parent_not_resolved_is_unresolved(self) -> None:
+        _, accepted = self._package(bom_fields={}, name="i7-k")
+        binding = self._binding(accepted, parent_ordinal=0)
+        report = self._construct(accepted, [binding], name="i7-k")
+        # The requirement is resolved in this package, so the binding succeeds; removing
+        # the requirement record makes the same binding unresolvable.
+        self._assert_resolved(report)
+
+        requirement = accepted.datasets()[0]
+        self.assertEqual(requirement[0], "Production Requirement")
+        # Build a package whose requirement dataset is present but whose record cannot be
+        # constructed as a resolved Production Requirement (wrong role content).
+        _, other = self.accepted(
+            [
+                ("Production Requirement", [{"plant_id": PLANT, "material_code": MATERIAL}]),
+                ("BOM Component", [
+                    with_provenance(
+                        {"material_code": COMPONENT, "BOMComponentQty": "2"},
+                        [("BOMComponentQty", [EVIDENCE_REQUIREMENT], None)],
+                    )
+                ]),
+            ],
+            name="i7-k-unresolved",
+        )
+        unresolved_report = self._construct(
+            other, [self._binding(other)], name="i7-k-unresolved"
+        )
+        # The requirement record is missing required_date, so no resolved context exists.
+        self.assertEqual(unresolved_report.objects_for("Production Requirement"), ())
+        self.assertEqual(unresolved_report.objects_for("BOM Component"), ())
+        self.assertEqual(len(unresolved_report.unresolved_for("BOM Component")), 1)
+
+    def test_no_plant_date_fallback_when_no_binding_is_declared(self) -> None:
+        # Even though a resolved Production Requirement with exactly matching plant_id /
+        # required_date exists, no plant/date heuristic may select it.
+        _, accepted = self._package(
+            bom_fields={"plant_id": PLANT, "required_date": self.OCT}, name="i7-no-fallback"
+        )
+        report = construct_canonical_objects(
+            accepted,
+            PhaseAHandoff(analysis_run_id="RUN-1", analysis_date="2026-10-01"),
+        )
+        self.assertEqual(report.objects_for("BOM Component"), ())
+        self.assertEqual(len(report.unresolved_for("BOM Component")), 1)
+        self.assertIn("UNRESOLVED_IDENTITY", {issue.reason for issue in report.issues})
 
 
 if __name__ == "__main__":
