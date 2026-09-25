@@ -46,6 +46,7 @@ from snapshot_loader.inventory_calculation import (
     SAFETY_STOCK_STATE_AMBIGUOUS,
     SAFETY_STOCK_STATE_MISSING,
     SAFETY_STOCK_STATE_RESOLVED,
+    SAFETY_STOCK_STATE_UNUSABLE,
     SAFETY_STOCK_STATE_UNRESOLVED,
     SCOPE_STATE_IN_SCOPE,
     SCOPE_STATE_OUT_OF_SCOPE,
@@ -93,6 +94,31 @@ def with_provenance(
     return out
 
 
+class _Null:
+    """Sentinel selecting an **explicit JSON ``null``** value (distinct from "omitted").
+
+    ``C-2`` registers ``JSON null = explicit missing / unavailable serialized value``, so a
+    fixture must be able to keep the key and serialize ``null`` rather than dropping it.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return "<null>"
+
+
+NULL = _Null()
+
+
+def _assign(record: dict[str, object], key: str, value: Any) -> None:
+    """Set ``key``: ``NULL`` writes an explicit ``null``, ``None`` omits the property."""
+
+    if value is NULL:
+        record[key] = None
+    elif value is not None:
+        record[key] = value
+
+
 def INVENTORY(
     *,
     plant: Any = PLANT,
@@ -103,16 +129,11 @@ def INVENTORY(
     basis: str | None = BASIS_A_IN,
 ) -> dict[str, object]:
     record: dict[str, object] = {}
-    if plant is not None:
-        record["plant_id"] = plant
-    if material is not None:
-        record["material_code"] = material
-    if snapshot_time is not None:
-        record["inventory_snapshot_time"] = snapshot_time
-    if status is not None:
-        record["inventory_status"] = status
-    if on_hand is not None:
-        record["on_hand_qty"] = on_hand
+    _assign(record, "plant_id", plant)
+    _assign(record, "material_code", material)
+    _assign(record, "inventory_snapshot_time", snapshot_time)
+    _assign(record, "inventory_status", status)
+    _assign(record, "on_hand_qty", on_hand)
     associations: list[tuple[str, list[str], str | None]] = []
     if basis is not None:
         associations.append(("plant_id", [LOCATOR_WAREHOUSE], basis))
@@ -144,13 +165,11 @@ def with_scope_basis(record: dict[str, object], basis: str) -> dict[str, object]
 def CONFIGURED_SAFETY_STOCK(
     value: Any = "30", *, plant: Any = PLANT, material: Any = MATERIAL
 ) -> dict[str, object]:
-    record: dict[str, object] = {
-        "plant_id": plant,
-        "material_code": material,
-        "SafetyStock": value,
-    }
-    if value is None:
-        record.pop("SafetyStock")
+    record: dict[str, object] = {}
+    _assign(record, "plant_id", plant)
+    _assign(record, "material_code", material)
+    if value is not None:
+        record["SafetyStock"] = None if value is NULL else value
     return with_provenance(
         record, [("SafetyStock", [EVIDENCE_SAFETY_STOCK], BASIS_SAFETY_STOCK)]
     )
@@ -422,6 +441,81 @@ class AcceptanceExampleTests(InventoryRuleTestCase):
         self.assertIsNone(target.outcome)
         self.assertEqual(target.to_dict()["OpeningUsableInventory"], "0")
 
+    def test_null_inventory_status_is_missing_not_invalid_status(self) -> None:
+        """``C-2``: an explicit JSON ``null`` is missing / unavailable, never invalid."""
+
+        record = INVENTORY(status=NULL)
+        self.assertIn("inventory_status", record)
+        self.assertIsNone(record["inventory_status"])
+        _accepted, _construction, result, target = self.single_target_report(
+            [record],
+            safety_stock=CONFIGURED_SAFETY_STOCK("0"),
+            name="status-null",
+        )
+        self.assertEqual(target.outcome, INVENTORY_DATA_INCOMPLETE)
+        self.assertIsNone(target.opening_usable_inventory)
+        self.assertIsNone(target.evaluations[0].inventory_status)
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in result.rule_issues],
+            [("FIELD_VALUE", "MISSING")],
+        )
+        self.assertNotIn(
+            "INVALID_DEFINED_STATUS", [issue.reason for issue in result.issues]
+        )
+
+    def test_null_on_hand_qty_is_missing_not_invalid_type(self) -> None:
+        record = INVENTORY(on_hand=NULL)
+        self.assertIn("on_hand_qty", record)
+        self.assertIsNone(record["on_hand_qty"])
+        _accepted, _construction, result, target = self.single_target_report(
+            [record],
+            safety_stock=CONFIGURED_SAFETY_STOCK("0"),
+            name="on-hand-null",
+        )
+        self.assertEqual(target.outcome, INVENTORY_DATA_INCOMPLETE)
+        self.assertIsNone(target.opening_usable_inventory)
+        self.assertIsNone(target.evaluations[0].on_hand_qty)
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in result.rule_issues],
+            [("FIELD_VALUE", "MISSING")],
+        )
+        self.assertNotIn("INVALID_TYPE", [issue.reason for issue in result.issues])
+
+    def test_null_safety_stock_is_missing_not_unusable(self) -> None:
+        configured = CONFIGURED_SAFETY_STOCK(NULL)
+        self.assertIn("SafetyStock", configured)
+        self.assertIsNone(configured["SafetyStock"])
+        _accepted, _construction, result, target = self.single_target_report(
+            [INVENTORY(on_hand="130")],
+            safety_stock=configured,
+            name="safety-stock-null",
+        )
+        self.assertIsNone(target.safety_stock)
+        self.assertEqual(target.outcome, INVENTORY_DATA_INCOMPLETE)
+        self.assertEqual(target.safety_stock_state, SAFETY_STOCK_STATE_MISSING)
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in result.rule_issues],
+            [("FIELD_VALUE", "MISSING")],
+        )
+        self.assertNotIn("INVALID_TYPE", [issue.reason for issue in result.issues])
+        self.assertNotEqual(target.safety_stock_state, SAFETY_STOCK_STATE_UNUSABLE)
+
+    def test_malformed_non_null_safety_stock_stays_unusable(self) -> None:
+        """A present but malformed value is still ``INVALID_TYPE`` / unusable."""
+
+        _accepted, _construction, result, target = self.single_target_report(
+            [INVENTORY(on_hand="130")],
+            safety_stock=CONFIGURED_SAFETY_STOCK("not-a-decimal"),
+            name="safety-stock-malformed",
+        )
+        self.assertIsNone(target.safety_stock)
+        self.assertEqual(target.outcome, INVENTORY_DATA_INCOMPLETE)
+        self.assertEqual(target.safety_stock_state, SAFETY_STOCK_STATE_UNUSABLE)
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in result.rule_issues],
+            [("FIELD_VALUE", "INVALID_TYPE")],
+        )
+
     def test_missing_status_is_unresolved_without_default(self) -> None:
         _accepted, _construction, result, target = self.single_target_report(
             [INVENTORY(status=None, on_hand="100")],
@@ -674,6 +768,186 @@ class GrainIsolationTests(InventoryRuleTestCase):
         self.assertEqual(target.to_dict()["OpeningUsableInventory"], LARGE_SUM)
 
 
+class GrainReadinessTests(InventoryRuleTestCase):
+    """``obj.grain is not None`` is never treated as "the calculation grain is reliable"."""
+
+    def readiness_report(
+        self,
+        records: list[dict[str, object]],
+        *,
+        name: str,
+        safety_stock: dict[str, object] | None = None,
+    ):
+        datasets: list[tuple[str, list[dict[str, object]]]] = [
+            (ROLE_INVENTORY, records)
+        ]
+        if safety_stock is not None:
+            datasets.append(("Configured Safety Stock", [safety_stock]))
+        accepted = self.accepted(datasets, name=name)
+        scope = self.scope_handoffs(
+            accepted, inventory_ordinals=tuple(range(len(records)))
+        )
+        construction = construct_canonical_objects(
+            accepted,
+            PhaseAHandoff(
+                analysis_run_id="RUN-1", analysis_date="2026-01-31", inventory_scope=scope
+            ),
+        )
+        return construction, compute_opening_usable_inventory(construction)
+
+    def assert_unassigned(self, construction, result, ordinal: int) -> str:
+        reference = construction.objects_for(ROLE_INVENTORY)[ordinal].record_reference
+        self.assertIn(reference, result.unassigned_inventory_references)
+        for target in result.targets:
+            self.assertNotIn(
+                reference, [item.inventory_reference for item in target.evaluations]
+            )
+        return reference
+
+    def test_null_snapshot_time_forms_no_target(self) -> None:
+        """A: an explicit ``null`` snapshot time is missing, so no grain may be formed."""
+
+        record = INVENTORY(snapshot_time=NULL, on_hand="999")
+        self.assertIn("inventory_snapshot_time", record)
+        self.assertIsNone(record["inventory_snapshot_time"])
+        construction, result = self.readiness_report(
+            [INVENTORY(on_hand="100"), record],
+            safety_stock=CONFIGURED_SAFETY_STOCK("0"),
+            name="null-snapshot-time",
+        )
+        self.assertEqual(len(result.targets), 1)
+        target = result.targets[0]
+        self.assertEqual(target.inventory_snapshot_time, SNAPSHOT_TIME)
+        self.assertEqual(target.to_dict()["OpeningUsableInventory"], "100")
+        self.assert_unassigned(construction, result, 1)
+        self.assertIn("MISSING", [issue.reason for issue in result.issues])
+        self.assertNotIn(
+            ("FIELD_VALUE", "INVALID_TYPE"),
+            [(issue.category, issue.reason) for issue in result.issues],
+        )
+        # No target is ever formed for the null grain, and 999 is never counted anywhere.
+        self.assertIsNone(result.for_grain(PLANT, MATERIAL, None))
+        self.assertNotIn("999", json.dumps(result.to_dict()))
+
+    def test_null_snapshot_time_alone_produces_no_numeric_result(self) -> None:
+        construction, result = self.readiness_report(
+            [INVENTORY(snapshot_time=NULL, on_hand="999")],
+            safety_stock=CONFIGURED_SAFETY_STOCK("0"),
+            name="null-snapshot-time-alone",
+        )
+        self.assertEqual(result.targets, ())
+        self.assert_unassigned(construction, result, 0)
+        self.assertIn("MISSING", [issue.reason for issue in result.issues])
+        self.assertNotIn("999", json.dumps(result.to_dict()))
+
+    def test_malformed_timestamp_forms_no_target_without_repair(self) -> None:
+        """B: a non-``C-4`` timestamp is ``INVALID_TYPE``; nothing is repaired or inferred."""
+
+        for label, value in (
+            ("no-offset", "2026-01-31T08:00:00"),
+            ("impossible-instant", "2026-02-30T08:00:00Z"),
+            ("date-only", "2026-01-31"),
+            ("not-a-timestamp", "not-a-timestamp"),
+            ("non-string", 20260131),
+        ):
+            with self.subTest(case=label):
+                construction, result = self.readiness_report(
+                    [INVENTORY(snapshot_time=value)],
+                    safety_stock=CONFIGURED_SAFETY_STOCK("0"),
+                    name=f"bad-timestamp-{label}",
+                )
+                self.assertEqual(result.targets, ())
+                self.assert_unassigned(construction, result, 0)
+                self.assertEqual(
+                    [(issue.category, issue.reason) for issue in result.rule_issues],
+                    [("FIELD_VALUE", "INVALID_TYPE")],
+                )
+
+    def test_null_and_empty_material_code_form_no_target(self) -> None:
+        """C / D: ``null`` is missing; an empty identifier stays ``UNRESOLVED_IDENTITY``."""
+
+        for label, value, reason in (
+            ("null", NULL, "MISSING"),
+            ("empty", "", "UNRESOLVED_IDENTITY"),
+        ):
+            with self.subTest(case=label):
+                construction, result = self.readiness_report(
+                    [INVENTORY(on_hand="100", material=value)],
+                    safety_stock=CONFIGURED_SAFETY_STOCK("0"),
+                    name=f"material-{label}",
+                )
+                self.assertEqual(result.targets, ())
+                self.assert_unassigned(construction, result, 0)
+                self.assertIn(reason, [issue.reason for issue in result.issues])
+                self.assertIsNone(result.for_grain(PLANT, None, SNAPSHOT_TIME))
+
+    def test_null_and_empty_plant_id_form_no_target(self) -> None:
+        for label, value, reason in (
+            ("null", NULL, "MISSING"),
+            ("empty", "", "UNRESOLVED_IDENTITY"),
+        ):
+            with self.subTest(case=label):
+                construction, result = self.readiness_report(
+                    [INVENTORY(on_hand="100", plant=value)],
+                    name=f"plant-{label}",
+                )
+                self.assertEqual(result.targets, ())
+                self.assert_unassigned(construction, result, 0)
+                self.assertIn(reason, [issue.reason for issue in result.issues])
+                self.assertIsNone(result.for_grain(None, MATERIAL, SNAPSHOT_TIME))
+
+    def test_non_string_identifiers_form_no_target(self) -> None:
+        for label, kwargs in (
+            ("plant-number", {"plant": 5}),
+            ("material-number", {"material": 5}),
+            ("plant-boolean", {"plant": True}),
+        ):
+            with self.subTest(case=label):
+                construction, result = self.readiness_report(
+                    [INVENTORY(on_hand="100", **kwargs)],
+                    safety_stock=CONFIGURED_SAFETY_STOCK("0"),
+                    name=f"identifier-{label}",
+                )
+                self.assertEqual(result.targets, ())
+                self.assert_unassigned(construction, result, 0)
+                self.assertEqual(
+                    [(issue.category, issue.reason) for issue in result.rule_issues],
+                    [("FIELD_VALUE", "INVALID_TYPE")],
+                )
+
+    def test_valid_explicit_offset_timestamps_still_form_normal_targets(self) -> None:
+        """I / J: registered ``C-4`` timestamps keep working and never win over each other."""
+
+        offset = "2026-01-31T08:00:00+08:00"
+        construction, result = self.readiness_report(
+            [INVENTORY(snapshot_time=offset, on_hand="70")],
+            safety_stock=CONFIGURED_SAFETY_STOCK("0"),
+            name="offset-timestamp",
+        )
+        self.assertEqual(len(result.targets), 1)
+        target = result.targets[0]
+        self.assertEqual(target.inventory_snapshot_time, offset)
+        self.assertIsNone(target.outcome)
+        self.assertEqual(target.to_dict()["OpeningUsableInventory"], "70")
+
+        construction, result = self.readiness_report(
+            [
+                INVENTORY(snapshot_time=SNAPSHOT_TIME, on_hand="50"),
+                INVENTORY(snapshot_time=offset, on_hand="80"),
+            ],
+            safety_stock=CONFIGURED_SAFETY_STOCK("0"),
+            name="two-offset-timestamps",
+        )
+        self.assertEqual(len(result.targets), 2)
+        self.assertEqual(
+            sorted(
+                target.to_dict()["OpeningUsableInventory"] for target in result.targets
+            ),
+            ["50", "80"],
+        )
+        self.assertEqual(result.unassigned_inventory_references, ())
+
+
 class SafetyStockTests(InventoryRuleTestCase):
     def test_safety_stock_is_carried_and_never_subtracted(self) -> None:
         records = [INVENTORY(on_hand="100"), INVENTORY(on_hand="30")]
@@ -884,20 +1158,26 @@ class SafetyStockTests(InventoryRuleTestCase):
 
 class PrerequisiteIndependenceTests(InventoryRuleTestCase):
     def test_ownership_unresolved_produces_no_numeric_result(self) -> None:
-        _accepted, construction, result, target = self.single_target_report(
-            [INVENTORY(plant="", on_hand="100")],
-            safety_stock=CONFIGURED_SAFETY_STOCK("0", plant=""),
+        """Defensive path: an I-9 context reporting unresolved ownership stays fail-safe."""
+
+        _accepted, construction, _result, _target = self.single_target_report(
+            [INVENTORY(on_hand="100")],
+            safety_stock=CONFIGURED_SAFETY_STOCK("0"),
             name="ownership-unresolved",
         )
-        scope_context = construction.inventory_scope_contexts[0]
-        self.assertFalse(scope_context.ownership_resolved)
+        context = construction.inventory_scope_contexts[0]
+        self.assertTrue(context.ownership_resolved)
+        tampered = replace(
+            construction,
+            inventory_scope_contexts=(replace(context, ownership_resolved=False),),
+        )
+        result = compute_opening_usable_inventory(tampered)
+        target = result.targets[0]
         evaluation = target.evaluations[0]
         self.assertFalse(evaluation.ownership_resolved)
         self.assertEqual(target.outcome, INVENTORY_DATA_INCOMPLETE)
         self.assertIsNone(target.opening_usable_inventory)
-        self.assertIn(
-            "UNRESOLVED_IDENTITY", [issue.reason for issue in result.issues]
-        )
+        self.assertIn("UNRESOLVED_IDENTITY", [issue.reason for issue in result.issues])
 
     def test_incomplete_grain_is_never_pushed_into_another_target(self) -> None:
         accepted = self.accepted(

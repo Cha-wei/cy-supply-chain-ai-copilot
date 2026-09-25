@@ -53,6 +53,16 @@ that still offers both leaves the value unresolved rather than picking one.  A v
 (``§4.4.80`` MISSING limitation): only the former is ``FIELD_VALUE`` ／ ``MISSING``, while the
 latter stays unresolved as present-but-unresolved and is never restated as missing.
 
+Calculation-grain readiness is verified by the rule itself: ``obj.grain is not None`` only
+means the components are *present*, so ``plant_id`` ／ ``material_code`` must be non-null
+non-empty JSON strings and ``inventory_snapshot_time`` must be a registered valid ``TIMESTAMP``
+(``§4.3.22`` ``C-4``, explicit offset or ``Z``, real instant, no timezone conversion) **before**
+any target is formed.  An observation whose grain is unreliable forms no target at all -- it is
+never grouped under ``None`` ／ ``""`` ／ a malformed value, never lent another record's grain and
+never used to invent a target; it is reported on the deterministic unresolved surface instead.
+JSON ``null`` is an explicit missing ／ unavailable value (``§4.3.22`` ``C-2``), so it is always
+``FIELD_VALUE`` ／ ``MISSING`` and never ``INVALID_TYPE`` ／ ``INVALID_DEFINED_STATUS``.
+
 Deliberately **not** implemented here: ``ProjectedAvailable`` ／ ``Classification`` ／
 ``ShortageQty`` ／ ``BufferGap`` ／ ``FirstShortageDate`` (``BR-SHORTAGE-001``),
 ``BR-SUBSTITUTE-001``, ``BR-PROCUREMENT-001``, supplier risk, any Adapter ／ ERP mapping, any
@@ -86,6 +96,7 @@ from .constants import (
 )
 from .exact_quantity import ExactQuantity, parse_exact_quantity
 from .issues import Issue
+from .layer2 import _timestamp_defect as _registered_timestamp_defect
 from .requirement_calculation import OUTCOME_DATA_INCOMPLETE
 
 # --- vocabulary --------------------------------------------------------------------
@@ -376,9 +387,28 @@ def compute_opening_usable_inventory(
     retained = tuple(construction.objects_for(TARGET_INVENTORY_SNAPSHOT))
     unassignable = tuple(construction.unresolved_for(TARGET_INVENTORY_SNAPSHOT))
 
-    groups: dict[tuple[Any, Any, Any], list[CanonicalObject]] = {}
+    # The constructor only guarantees that a grain component is *present*; the rule verifies
+    # that each component can actually state a calculation grain before any target is formed.
+    ready: list[CanonicalObject] = []
+    unassigned_references: list[str] = [
+        obj.record_reference for obj in unassignable
+    ]
+    readiness_rule_issues: list[Issue] = []
     for obj in retained:
-        assert obj.grain is not None
+        defects = _calculation_grain_defects(obj)
+        if defects:
+            reference = obj.record_reference
+            unassigned_references.append(reference)
+            readiness_rule_issues.extend(
+                _filter_against_inherited(
+                    defects, _issues_for_references(construction, (reference,))
+                )
+            )
+            continue
+        ready.append(obj)
+
+    groups: dict[tuple[Any, Any, Any], list[CanonicalObject]] = {}
+    for obj in ready:
         key = (
             obj.value_of("plant_id", ABSENT),
             obj.value_of("material_code", ABSENT),
@@ -401,28 +431,137 @@ def compute_opening_usable_inventory(
             )
         )
 
-    unassigned_references = tuple(
-        sorted(obj.record_reference for obj in unassignable)
-    )
+    unassigned_references_tuple = tuple(sorted(unassigned_references))
     inherited = [
         issue
         for target in targets
         for issue in target.inherited_issues
     ]
     inherited.extend(
-        _issues_for_references(
-            construction,
-            tuple(obj.record_reference for obj in unassignable),
-        )
+        _issues_for_references(construction, unassigned_references_tuple)
     )
     rule = [issue for target in targets for issue in target.rule_issues]
+    rule.extend(readiness_rule_issues)
 
     return InventoryCalculationResult(
         targets=tuple(targets),
-        unassigned_inventory_references=unassigned_references,
+        unassigned_inventory_references=unassigned_references_tuple,
         inherited_issues=_deduplicate_issues(inherited),
         rule_issues=_deduplicate_issues(rule),
     )
+
+
+def _calculation_grain_defects(obj: CanonicalObject) -> tuple[Issue, ...]:
+    """Defects that make an observation's own calculation grain unreliable.
+
+    ``obj.grain is not None`` only means the canonical components are *present*; the
+    constructor never judges whether their values can state a calculation grain, so
+    ``plant_id`` / ``material_code`` / ``inventory_snapshot_time`` may be JSON ``null``, an
+    empty identifier or a malformed timestamp while the grain still looks resolved.  The rule
+    therefore verifies each component itself before any target may be formed, and never groups
+    an unreliable component under ``None`` ／ ``""`` ／ a malformed value, never borrows another
+    record's grain and never invents a target identity.
+
+    The registered reasons stay as they are: an absent / explicitly ``null`` component, or a
+    present non-string identifier, is ``FIELD_VALUE``; an empty identifier keeps the
+    ``IDENTITY_RESOLUTION`` / ``UNRESOLVED_IDENTITY`` semantics; a malformed ``TIMESTAMP`` is
+    ``FIELD_VALUE`` / ``INVALID_TYPE`` under the registered ``C-4`` representation.  No new
+    taxonomy is introduced and no timestamp is repaired, converted or inferred.
+    """
+
+    artifact, ordinal = _reference_parts(obj.record_reference)
+    location = f"{artifact}[{ordinal}]"
+    issues: list[Issue] = []
+
+    for name in ("plant_id", "material_code"):
+        value = obj.value_of(name, ABSENT)
+        if value is ABSENT or value is None:
+            issues.append(
+                _field_issue(
+                    location=location,
+                    artifact=artifact,
+                    reason=REASON_MISSING,
+                    detail=(
+                        f"{name} is missing or explicitly null, so the canonical "
+                        "calculation grain cannot be stated and no Inventory target is "
+                        "formed for this observation; no value is defaulted or borrowed "
+                        "from another record (§4.2.3 / §4.3.22 C-2)"
+                    ),
+                )
+            )
+        elif not isinstance(value, str):
+            issues.append(
+                _field_issue(
+                    location=location,
+                    artifact=artifact,
+                    reason=REASON_INVALID_TYPE,
+                    detail=(
+                        f"{name} {value!r} is not a JSON string, so it is not a registered "
+                        "canonical identifier and no Inventory target is formed for this "
+                        "observation (§4.2.3 / §4.3.22 C-10)"
+                    ),
+                )
+            )
+        elif value == "":
+            issues.append(
+                _identity_issue(
+                    location=location,
+                    artifact=artifact,
+                    detail=(
+                        f"the canonical {name} is an empty identifier, so the canonical "
+                        "identity cannot be resolved and no Inventory target is formed for "
+                        "this observation; the empty value is never defaulted or borrowed "
+                        "(§4.4.26 / §4.4.80 #4)"
+                    ),
+                )
+            )
+
+    snapshot_time = obj.value_of("inventory_snapshot_time", ABSENT)
+    if snapshot_time is ABSENT or snapshot_time is None:
+        issues.append(
+            _field_issue(
+                location=location,
+                artifact=artifact,
+                reason=REASON_MISSING,
+                detail=(
+                    "inventory_snapshot_time is missing or explicitly null, so the exact "
+                    "Plant-level calculation grain cannot be stated and no Inventory target "
+                    "is formed for this observation; the analysis date or another record's "
+                    "snapshot time is never substituted (§2.2.1 / §4.3.22 C-2)"
+                ),
+            )
+        )
+    elif not isinstance(snapshot_time, str):
+        issues.append(
+            _field_issue(
+                location=location,
+                artifact=artifact,
+                reason=REASON_INVALID_TYPE,
+                detail=(
+                    f"inventory_snapshot_time {snapshot_time!r} is not a JSON string, so it "
+                    "is not a registered TIMESTAMP and no Inventory target is formed for "
+                    "this observation (§4.2.5 / §4.3.22 C-4)"
+                ),
+            )
+        )
+    else:
+        defect = _registered_timestamp_defect(snapshot_time)
+        if defect is not None:
+            issues.append(
+                _field_issue(
+                    location=location,
+                    artifact=artifact,
+                    reason=REASON_INVALID_TYPE,
+                    detail=(
+                        f"inventory_snapshot_time is not a registered valid TIMESTAMP: "
+                        f"{defect}.  The value is never repaired, defaulted or converted and "
+                        "no Inventory target is formed for this observation "
+                        "(§4.2.5 / §4.3.22 C-4)"
+                    ),
+                )
+            )
+
+    return tuple(issues)
 
 
 def _evaluate_target(
@@ -705,7 +844,9 @@ def _evaluate_observation(
         )
 
     # --- inventory status eligibility ----------------------------------------------
-    if status_value is ABSENT:
+    # JSON ``null`` is an explicit missing / unavailable value (``§4.3.22`` ``C-2``): it is
+    # ``MISSING``, never ``INVALID_DEFINED_STATUS``, and it is never defaulted to AVAILABLE.
+    if status_value is ABSENT or status_value is None:
         return evaluation(
             scope_resolved=True,
             ownership_resolved=True,
@@ -713,8 +854,8 @@ def _evaluate_observation(
             scope_state=SCOPE_STATE_IN_SCOPE,
             outcome=INVENTORY_DATA_INCOMPLETE,
             notes=(
-                "inventory_status is missing; the status is never defaulted to AVAILABLE "
-                "(§2.2.3 D)",
+                "inventory_status is missing or explicitly null; the status is never "
+                "defaulted to AVAILABLE (§2.2.3 D / §4.3.22 C-2)",
             ),
             rule_issues=(
                 _field_issue(
@@ -722,9 +863,34 @@ def _evaluate_observation(
                     artifact=artifact,
                     reason=REASON_MISSING,
                     detail=(
-                        "inventory_status is missing, so eligibility cannot be established; "
-                        "the status is never defaulted to AVAILABLE and the grain produces "
-                        "no numeric result (§2.2.3 D / §4.2.5)"
+                        "inventory_status is missing or explicitly null, so eligibility "
+                        "cannot be established; the status is never defaulted to AVAILABLE "
+                        "and the grain produces no numeric result "
+                        "(§2.2.3 D / §4.2.5 / §4.3.22 C-2)"
+                    ),
+                ),
+            ),
+        )
+    if not isinstance(status_value, str):
+        return evaluation(
+            scope_resolved=True,
+            ownership_resolved=True,
+            in_scope=True,
+            scope_state=SCOPE_STATE_IN_SCOPE,
+            outcome=INVENTORY_DATA_INCOMPLETE,
+            notes=(
+                f"inventory_status {status_value!r} is not a registered STATUS "
+                "representation; it is never guessed or treated as 0 (§2.2.3 D)",
+            ),
+            rule_issues=(
+                _field_issue(
+                    location=location,
+                    artifact=artifact,
+                    reason=REASON_INVALID_TYPE,
+                    detail=(
+                        f"inventory_status {status_value!r} is not a JSON string, so it is "
+                        "not a registered STATUS value and eligibility cannot be established "
+                        "(§2.2.3 D / §4.2.14 / §4.3.22 C-10)"
                     ),
                 ),
             ),
@@ -762,11 +928,12 @@ def _evaluate_observation(
     # for every status (``§2.2.8`` / ``§2.2.9``).  A non-contributing record never becomes
     # a way to smuggle invalid evidence past validation.
     if on_hand is None:
-        if on_hand_value is ABSENT:
+        if on_hand_value is ABSENT or on_hand_value is None:
             reason = REASON_MISSING
             detail = (
-                "on_hand_qty is missing, so the eligible quantity cannot be established; "
-                "no default of 0 is applied (§2.2.8 / §4.2.5)"
+                "on_hand_qty is missing or explicitly null, so the eligible quantity cannot "
+                "be established; no default of 0 is applied "
+                "(§2.2.8 / §4.2.5 / §4.3.22 C-2)"
             )
         else:
             reason = REASON_INVALID_TYPE
@@ -981,7 +1148,9 @@ def _resolve_safety_stock(
 
     if total == 1 and not unresolved_evidence:
         raw_value, provenance, source = candidates[0]
-        if raw_value is ABSENT:
+        # JSON ``null`` is an explicit missing / unavailable value (``§4.3.22`` ``C-2``):
+        # it is MISSING, never an unusable representation.
+        if raw_value is ABSENT or raw_value is None:
             return (
                 None,
                 provenance,
@@ -993,14 +1162,16 @@ def _resolve_safety_stock(
                         reason=REASON_MISSING,
                         detail=(
                             f"the resolved SafetyStock evidence {source!r} carries no "
-                            "SafetyStock value; the missing field is never defaulted to 0 "
-                            "(§2.2.5 / §4.2.5)"
+                            "SafetyStock value (absent or explicitly null); the missing "
+                            "value is never defaulted to 0 "
+                            "(§2.2.5 / §4.2.5 / §4.3.22 C-2)"
                         ),
                     ),
                 ),
                 (
                     f"the resolved SafetyStock evidence {source!r} carries no SafetyStock "
-                    "value, so the SafetyStock side is unresolved (§2.2.5)",
+                    "value, so the SafetyStock side is unresolved and is never defaulted to "
+                    "0 (§2.2.5 / §4.3.22 C-2)",
                 ),
             )
 
