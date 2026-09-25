@@ -18,10 +18,14 @@ Canonical authority implemented:
 * ``data-dictionary.md`` §4.2.6 / §4.2.10: ``RemainingInboundQty`` / ``EffectiveInbound`` /
   ``CumulativeEffectiveInbound`` are ``DERIVED`` and their missing behaviour is
   ``DATA_INCOMPLETE``.
-* ``data-validation.md`` §4.4.30 (inbound field boundary), §4.4.88 (valid zero is not an
-  issue), §4.4.89 (valid but ineligible is not an issue by default).
+* ``data-validation.md`` §4.4.30 (inbound field boundary), §4.4.47 / §4.4.92
+  (``received_qty > ordered_qty`` is an internal inconsistency that must be reported with the
+  registered ``CONSISTENCY`` / ``CONSISTENCY_CONFLICT`` taxonomy **and** the registered
+  ``DATA_INCOMPLETE`` outcome), §4.4.88 (valid zero is not an issue), §4.4.89 (valid but
+  ineligible is not an issue by default).
 * ``adr-001-deterministic-core.md``: in-memory, standard-library-first, canonical exact
-  numeric semantics, core independent of the CLI.
+  numeric semantics, core independent of the CLI.  Quantity arithmetic is therefore exact by
+  construction (:class:`ExactQuantity`), never ``Decimal``-context arithmetic.
 
 Input boundary: the rule consumes the already constructed
 :attr:`~snapshot_loader.canonical_objects.CanonicalConstructionReport.inbound_records` and
@@ -46,8 +50,7 @@ from __future__ import annotations
 import datetime as _datetime
 import re
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, Iterable
 
 from .canonical_objects import (
     ABSENT,
@@ -55,7 +58,7 @@ from .canonical_objects import (
     CanonicalObject,
     EvidenceReference,
 )
-from .constants import DECIMAL_STRING_PATTERN
+from .constants import DECIMAL_STRING_PATTERN, LAYER_2
 from .issues import Issue
 from .requirement_calculation import (
     OUTCOME_DATA_INCOMPLETE,
@@ -93,22 +96,133 @@ _DECIMAL_STRING_RE = re.compile(rf"^{DECIMAL_STRING_PATTERN}$")
 _DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 
 
-def _as_decimal(value: Any) -> Decimal | None:
-    """Return the exact base-10 ``Decimal`` for a canonical decimal value.
+@dataclass(frozen=True, slots=True)
+class ExactQuantity:
+    """An exact finite base-10 quantity held as a scaled integer.
 
-    Canonical quantity inputs keep their exact base-10 value: a JSON ``null``, a non-string
-    value or a string outside the registered decimal form yields ``None`` and is never
-    repaired, clamped or defaulted.
+    ADR-001 forbids treating the ``Decimal`` default context as a business precision and
+    forbids silent rounding from a library default.  Standard ``Decimal`` arithmetic is
+    context-driven -- ``Decimal("1E+30") - Decimal("1")`` is silently rounded at the default
+    28-digit precision -- so the rule does **not** do quantity arithmetic in ``Decimal``.
+
+    Instead a canonical base-10 quantity is represented exactly as
+    ``units * 10 ** -scale`` with ``units`` an arbitrary-precision integer, which makes
+    addition and subtraction exact by construction on any operand size.  This is an internal
+    representation only: :meth:`text` renders the registered public contract -- a plain exact
+    finite decimal quantity with no exponent, no rounding, no quantization and no business
+    precision / scale policy (the scale a canonical value states is preserved verbatim).
     """
 
-    if not isinstance(value, str):
+    units: int
+    scale: int
+
+    @property
+    def negative(self) -> bool:
+        return self.units < 0
+
+    def rescale(self, scale: int) -> "ExactQuantity":
+        """Widen to ``scale`` decimal places (never loses value: ``scale`` only grows)."""
+
+        if scale < self.scale:  # pragma: no cover - callers only widen
+            raise ValueError("ExactQuantity cannot be narrowed without rounding")
+        return ExactQuantity(self.units * 10 ** (scale - self.scale), scale)
+
+    def __add__(self, other: "ExactQuantity") -> "ExactQuantity":
+        scale = max(self.scale, other.scale)
+        return ExactQuantity(
+            self.rescale(scale).units + other.rescale(scale).units, scale
+        )
+
+    def __sub__(self, other: "ExactQuantity") -> "ExactQuantity":
+        scale = max(self.scale, other.scale)
+        return ExactQuantity(
+            self.rescale(scale).units - other.rescale(scale).units, scale
+        )
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ExactQuantity):
+            return NotImplemented
+        scale = max(self.scale, other.scale)
+        return self.rescale(scale).units == other.rescale(scale).units
+
+    def __hash__(self) -> int:
+        return hash(self._value_key())
+
+    def __lt__(self, other: "ExactQuantity") -> bool:
+        scale = max(self.scale, other.scale)
+        return self.rescale(scale).units < other.rescale(scale).units
+
+    def __le__(self, other: "ExactQuantity") -> bool:
+        return self < other or self == other
+
+    def __gt__(self, other: "ExactQuantity") -> bool:
+        scale = max(self.scale, other.scale)
+        return self.rescale(scale).units > other.rescale(scale).units
+
+    def __ge__(self, other: "ExactQuantity") -> bool:
+        return self > other or self == other
+
+    def _value_key(self) -> tuple[int, int]:
+        """Value identity, so equal quantities hash equally whatever scale they carry."""
+
+        units, scale = self.units, self.scale
+        while scale > 0 and units % 10 == 0:
+            units //= 10
+            scale -= 1
+        return units, scale
+
+    def text(self) -> str:
+        """The exact canonical decimal text: plain digits, no exponent, no rounding.
+
+        The stored scale is preserved, so a canonical value that states ``"0.50"`` is
+        rendered as ``"0.50"``.  ``IC-10`` forbids rounding, quantization, truncation and
+        silent trimming of a canonical decimal representation; the scale therefore carries
+        no business-precision policy, it is simply never normalised away.
+        """
+
+        sign = "-" if self.units < 0 else ""
+        digits = str(abs(self.units))
+        if self.scale == 0:
+            return f"{sign}{digits}"
+        digits = digits.rjust(self.scale + 1, "0")
+        whole, fraction = digits[: -self.scale], digits[-self.scale :]
+        return f"{sign}{whole}.{fraction}"
+
+
+def parse_exact_quantity(value: Any) -> ExactQuantity | None:
+    """Parse a canonical base-10 decimal string into an exact scaled integer.
+
+    ``None`` means the value is not a registered canonical decimal (JSON ``null``, a
+    non-string, an empty string or a malformed form).  Nothing is repaired or defaulted.
+    """
+
+    if not isinstance(value, str) or not value:
         return None
     if not _DECIMAL_STRING_RE.match(value):
         return None
+    body = value[1:] if value[0] in "+-" else value
+    sign = -1 if value[0] == "-" else 1
+    if "." in body:
+        whole, fraction = body.split(".", 1)
+    else:
+        whole, fraction = body, ""
+    digits = f"{whole or '0'}{fraction}"
     try:
-        return Decimal(value)
-    except InvalidOperation:  # pragma: no cover - guarded by the pattern
+        units = int(digits)
+    except ValueError:  # pragma: no cover - guarded by the registered pattern
         return None
+    return ExactQuantity(sign * units, len(fraction))
+
+
+def parse_non_negative_quantity(value: Any) -> ExactQuantity | None:
+    """Parse a canonical quantity that must be non-negative (``NON_NEGATIVE_QUANTITY``)."""
+
+    parsed = parse_exact_quantity(value)
+    if parsed is None:
+        return None
+    if parsed.negative:
+        return None
+    return parsed
 
 
 def _as_date(value: Any) -> _datetime.date | None:
@@ -122,13 +236,14 @@ def _as_date(value: Any) -> _datetime.date | None:
         return None
 
 
-def remaining_inbound_qty(ordered_qty: Decimal, received_qty: Decimal) -> Decimal:
+def remaining_inbound_qty(
+    ordered_qty: ExactQuantity, received_qty: ExactQuantity
+) -> ExactQuantity:
     """``RemainingInboundQty = ordered_qty - received_qty`` (``§2.6.2``).
 
-    The caller has already established ``ordered_qty >= 0`` and
-    ``received_qty >= 0``.  No clamp, no absolute value and no coercion to ``0`` is applied;
-    a negative result is a data-quality condition handled by the caller as
-    ``DATA_INCOMPLETE``.
+    Exact finite base-10 subtraction on scaled integers: no ``Decimal`` context, no clamp,
+    no absolute value and no coercion to ``0``.  A negative result is a data-quality
+    condition handled by the caller as ``DATA_INCOMPLETE``.
     """
 
     return ordered_qty - received_qty
@@ -157,17 +272,29 @@ class EffectiveInboundEvaluation:
     target_required_date: Any
     inbound_reference: str
     inbound_role: str
-    ordered_qty: Decimal | None
-    received_qty: Decimal | None
-    remaining_inbound_qty: Decimal | None
+    ordered_qty: ExactQuantity | None
+    received_qty: ExactQuantity | None
+    remaining_inbound_qty: ExactQuantity | None
     inbound_status: Any
     effective_arrival_date: Any
     status_eligible: bool | None
-    effective_inbound_qty: Decimal | None
+    effective_inbound_qty: ExactQuantity | None
     outcome: str | None = None
     notes: tuple[str, ...] = ()
     provenance: EvidenceReference | None = None
+    #: Canonical findings that already describe this accepted record, re-published verbatim.
     inherited_issues: tuple[Issue, ...] = ()
+    #: Findings this rule itself must raise under its registered design references -- here
+    #: the ``CONSISTENCY`` / ``CONSISTENCY_CONFLICT`` finding ``§2.6.2`` / ``§4.4.47``
+    #: require for ``received_qty > ordered_qty``.  No new category, reason or severity is
+    #: introduced, so they are kept separate from the re-published upstream findings.
+    rule_issues: tuple[Issue, ...] = ()
+
+    @property
+    def issues(self) -> tuple[Issue, ...]:
+        """Every canonical finding relevant to this evaluation, deterministically ordered."""
+
+        return _deduplicate_issues(self.inherited_issues + self.rule_issues)
 
     @property
     def data_incomplete(self) -> bool:
@@ -180,7 +307,7 @@ class EffectiveInboundEvaluation:
         return (
             self.outcome is None
             and self.effective_inbound_qty is not None
-            and self.effective_inbound_qty > Decimal("0")
+            and self.effective_inbound_qty > ExactQuantity(0, 0)
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -217,6 +344,7 @@ class EffectiveInboundEvaluation:
                 }
             ),
             "inherited_issues": [issue.to_dict() for issue in self.inherited_issues],
+            "rule_issues": [issue.to_dict() for issue in self.rule_issues],
         }
 
 
@@ -233,12 +361,24 @@ class EffectiveInboundTarget:
     material_code: Any
     required_date: Any
     evaluations: tuple[EffectiveInboundEvaluation, ...]
-    cumulative_effective_inbound: Decimal | None
+    cumulative_effective_inbound: ExactQuantity | None
     outcome: str | None = None
     notes: tuple[str, ...] = ()
-    requirement_reference: str | None = None
-    requirement_provenance: EvidenceReference | None = None
+    #: Every upstream `BR-REQUIREMENT-001` calculation reference contributing to this
+    #: target grain, in deterministic order.  The target is a **group**, never one
+    #: arbitrarily chosen representative row.
+    requirement_references: tuple[str, ...] = ()
+    requirement_provenances: tuple[EvidenceReference, ...] = ()
     inherited_issues: tuple[Issue, ...] = ()
+    #: Findings this rule itself raised for the inbound records evaluated against this
+    #: target, one logical finding per ``location + category + reason``.
+    rule_issues: tuple[Issue, ...] = ()
+
+    @property
+    def issues(self) -> tuple[Issue, ...]:
+        """Every canonical finding relevant to this target, deterministically ordered."""
+
+        return _deduplicate_issues(self.inherited_issues + self.rule_issues)
 
     @property
     def data_incomplete(self) -> bool:
@@ -259,9 +399,10 @@ class EffectiveInboundTarget:
             ),
             "outcome": self.outcome,
             "notes": list(self.notes),
-            "requirement_reference": self.requirement_reference,
+            "requirement_references": list(self.requirement_references),
             "evaluations": [item.to_dict() for item in self.evaluations],
             "inherited_issues": [issue.to_dict() for issue in self.inherited_issues],
+            "rule_issues": [issue.to_dict() for issue in self.rule_issues],
         }
 
 
@@ -298,12 +439,12 @@ class EffectiveInboundResult:
         }
 
 
-def _quantity_text(value: Decimal | None) -> str | None:
+def _quantity_text(value: ExactQuantity | None) -> str | None:
     """Render a canonical quantity exactly: plain base-10 digits, never an exponent."""
 
     if value is None:
         return None
-    return format(value, "f")
+    return value.text()
 
 
 # --- rule execution ----------------------------------------------------------------
@@ -320,13 +461,18 @@ def compute_effective_inbound(
     ``required_date`` and the requirement result is not modified.  Every constructed inbound
     record is evaluated against every target independently: inbound records are never
     deduplicated, aggregated across plants / materials, or reconciled by any precedence.
+
+    A target grain is a **group** of every upstream requirement calculation row that states
+    it.  There is no first-row-wins / last-row-wins / same-value-dedup representative: if any
+    upstream row of that grain is ``DATA_INCOMPLETE``, the target is ``DATA_INCOMPLETE`` and
+    no numeric cumulative supply is produced.
     """
 
     targets = _targets_from_requirements(requirements)
     inbounds = tuple(construction.inbound_records)
 
     outbound: list[EffectiveInboundTarget] = []
-    for plant_id, material_code, required_date, requirement in targets:
+    for plant_id, material_code, required_date, rows in targets:
         evaluations = tuple(
             _evaluate_inbound(
                 inbound=inbound,
@@ -337,16 +483,18 @@ def compute_effective_inbound(
             )
             for inbound in inbounds
         )
-        cumulative: Decimal | None = Decimal("0")
+        cumulative: ExactQuantity | None = ExactQuantity(0, 0)
         notes: list[str] = []
         outcome: str | None = None
 
-        if requirement is None or requirement.data_incomplete:
+        unreliable_rows = [row for row in rows if row.data_incomplete]
+        if not rows or unreliable_rows:
             cumulative = None
             outcome = EFFECTIVE_INBOUND_DATA_INCOMPLETE
             notes.append(
-                "the required-date evaluation context is DATA_INCOMPLETE, so no numeric "
-                "cumulative effective inbound supply is produced (§2.6.6)"
+                "at least one upstream BR-REQUIREMENT-001 calculation for this target grain "
+                "is DATA_INCOMPLETE, so the required-date evaluation context is not reliable "
+                "and no numeric cumulative effective inbound supply is produced (§2.6.6)"
             )
         elif any(item.data_incomplete for item in evaluations):
             # A required-date boundary cannot be resolved while any contributing inbound
@@ -364,10 +512,12 @@ def compute_effective_inbound(
                 cumulative = cumulative + item.effective_inbound_qty
 
         inherited: list[Issue] = []
+        rule_findings: list[Issue] = []
         for item in evaluations:
             inherited.extend(item.inherited_issues)
-        if requirement is not None:
-            inherited.extend(requirement.inherited_issues)
+            rule_findings.extend(item.rule_issues)
+        for row in rows:
+            inherited.extend(row.inherited_issues)
 
         outbound.append(
             EffectiveInboundTarget(
@@ -378,17 +528,20 @@ def compute_effective_inbound(
                 cumulative_effective_inbound=cumulative,
                 outcome=outcome,
                 notes=tuple(notes),
-                requirement_reference=(
-                    requirement.bom_component_reference
-                    if requirement is not None
-                    else None
+                requirement_references=tuple(
+                    reference
+                    for reference in (
+                        row.bom_component_reference for row in rows
+                    )
+                    if reference is not None
                 ),
-                requirement_provenance=(
-                    requirement.loss_rate_provenance
-                    if requirement is not None
-                    else None
+                requirement_provenances=tuple(
+                    provenance
+                    for provenance in (row.loss_rate_provenance for row in rows)
+                    if provenance is not None
                 ),
-                inherited_issues=tuple(sorted(inherited, key=Issue.sort_key)),
+                inherited_issues=_deduplicate_issues(inherited),
+                rule_issues=_deduplicate_issues(rule_findings),
             )
         )
 
@@ -402,32 +555,48 @@ def compute_effective_inbound(
     return EffectiveInboundResult(targets=tuple(outbound))
 
 
-def _targets_from_requirements(
-    requirements: RequirementCalculationResult,
-) -> tuple[tuple[Any, Any, Any, RequirementCalculation | None], ...]:
-    """The registered targets: ``plant_id`` + ``material_code`` + ``required_date``.
+def _deduplicate_issues(issues: Iterable[Issue]) -> tuple[Issue, ...]:
+    """Keep one logical finding per ``location + category + reason``.
 
-    The contexts come from the resolved ``BR-REQUIREMENT-001`` result, so no caller-supplied
-    business ``required_date`` is accepted and no raw artifact is re-read.  A requirement
-    row whose calculation is ``DATA_INCOMPLETE`` still states the grain and therefore
-    produces a ``DATA_INCOMPLETE`` target rather than a silently missing one.
+    The same inbound evidence can be evaluated against many target required dates; an
+    evidence-level defect must not be invented as N distinct defects just because it was
+    reached N times.
     """
 
-    seen: dict[tuple[Any, Any, Any], RequirementCalculation] = {}
+    unique: dict[tuple[str, str, str], Issue] = {}
+    for issue in issues:
+        unique.setdefault(
+            (issue.location, issue.category, issue.reason), issue
+        )
+    return tuple(sorted(unique.values(), key=Issue.sort_key))
+
+
+def _targets_from_requirements(
+    requirements: RequirementCalculationResult,
+) -> tuple[
+    tuple[Any, Any, Any, tuple[RequirementCalculation, ...]], ...
+]:
+    """Group requirement rows into the registered targets.
+
+    The grain is ``plant_id`` + component ``material_code`` + ``required_date``.  **Every**
+    upstream row stating that grain belongs to the same target: no row is treated as a
+    representative, and no first / last wins.  A row whose calculation is
+    ``DATA_INCOMPLETE`` still states the grain, so it produces a ``DATA_INCOMPLETE`` target
+    rather than a silently missing one.
+    """
+
+    grouped: dict[tuple[Any, Any, Any], list[RequirementCalculation]] = {}
     for calculation in requirements.calculations:
         key = (
             calculation.plant_id,
             calculation.component_material_code,
             calculation.required_date,
         )
-        if key in seen:
-            continue
-        seen[key] = calculation
+        grouped.setdefault(key, []).append(calculation)
 
     return tuple(
-        (plant_id, material_code, required_date, seen[key])
-        for key in sorted(seen, key=lambda item: tuple(_sort_text(part) for part in item))
-        for plant_id, material_code, required_date in (key,)
+        (key[0], key[1], key[2], tuple(grouped[key]))
+        for key in sorted(grouped, key=lambda item: tuple(_sort_text(part) for part in item))
     )
 
 
@@ -445,8 +614,10 @@ def _evaluate_inbound(
 ) -> EffectiveInboundEvaluation:
     """Evaluate one inbound record against one target required date (``§2.6.6``)."""
 
-    ordered_qty = _as_decimal(inbound.value_of("ordered_qty", ABSENT))
-    received_qty = _as_decimal(inbound.value_of("received_qty", ABSENT))
+    ordered_qty = parse_non_negative_quantity(inbound.value_of("ordered_qty", ABSENT))
+    received_qty = parse_non_negative_quantity(
+        inbound.value_of("received_qty", ABSENT)
+    )
     status_value = inbound.value_of("inbound_status", ABSENT)
     arrival_value = inbound.value_of("effective_arrival_date", ABSENT)
     inbound_material = inbound.value_of("material_code", ABSENT)
@@ -454,11 +625,12 @@ def _evaluate_inbound(
 
     def evaluation(
         *,
-        remaining: Decimal | None,
+        remaining: ExactQuantity | None,
         status_eligible: bool | None,
-        effective: Decimal | None,
+        effective: ExactQuantity | None,
         outcome: str | None,
         notes: tuple[str, ...],
+        issues: tuple[Issue, ...] = (),
     ) -> EffectiveInboundEvaluation:
         return EffectiveInboundEvaluation(
             target_plant_id=plant_id,
@@ -479,6 +651,7 @@ def _evaluate_inbound(
             notes=notes,
             provenance=inbound.provenance,
             inherited_issues=_relevant_issues(inbound, construction),
+            rule_issues=issues,
         )
 
     # --- prerequisite: the inbound must map to this plant / material ----------------
@@ -499,7 +672,7 @@ def _evaluate_inbound(
         return evaluation(
             remaining=None,
             status_eligible=None,
-            effective=Decimal("0"),
+            effective=ExactQuantity(0, 0),
             outcome=None,
             notes=(
                 "the inbound record belongs to another plant; it does not contribute to "
@@ -523,7 +696,7 @@ def _evaluate_inbound(
         return evaluation(
             remaining=None,
             status_eligible=None,
-            effective=Decimal("0"),
+            effective=ExactQuantity(0, 0),
             outcome=None,
             notes=(
                 "the inbound record belongs to another material; it does not contribute to "
@@ -539,19 +712,9 @@ def _evaluate_inbound(
             effective=None,
             outcome=EFFECTIVE_INBOUND_DATA_INCOMPLETE,
             notes=(
-                "ordered_qty is missing or is not a registered base-10 decimal; no "
-                "remaining quantity is produced and no default is applied (§2.6.2)",
-            ),
-        )
-    if ordered_qty < Decimal("0"):
-        return evaluation(
-            remaining=None,
-            status_eligible=None,
-            effective=None,
-            outcome=EFFECTIVE_INBOUND_DATA_INCOMPLETE,
-            notes=(
-                "ordered_qty is negative, which is not a registered canonical quantity "
-                "(§2.6.2 / §4.2.6)",
+                "ordered_qty is missing, non-numeric or negative; it is not a registered "
+                "canonical NON_NEGATIVE_QUANTITY, so no remaining quantity is produced "
+                "and no default is applied (§2.6.2 / §4.2.6)",
             ),
         )
     if received_qty is None:
@@ -561,32 +724,30 @@ def _evaluate_inbound(
             effective=None,
             outcome=EFFECTIVE_INBOUND_DATA_INCOMPLETE,
             notes=(
-                "received_qty is missing or is not a registered base-10 decimal; no "
-                "remaining quantity is produced and no default is applied (§2.6.2)",
-            ),
-        )
-    if received_qty < Decimal("0"):
-        return evaluation(
-            remaining=None,
-            status_eligible=None,
-            effective=None,
-            outcome=EFFECTIVE_INBOUND_DATA_INCOMPLETE,
-            notes=(
-                "received_qty is negative, which is not a registered canonical quantity "
-                "(§2.6.2 / §4.2.6)",
+                "received_qty is missing, non-numeric or negative; it is not a registered "
+                "canonical NON_NEGATIVE_QUANTITY, so no remaining quantity is produced "
+                "and no default is applied (§2.6.2 / §4.2.6)",
             ),
         )
     if received_qty > ordered_qty:
-        # ``§2.6.2``: never clamped, never coerced to 0, never interpreted.
+        # ``§2.6.2`` / ``§4.4.47``: never clamped, never coerced to 0, never interpreted.
+        # ``§4.4.92`` registers the taxonomy for this cross-field defect.
         return evaluation(
             remaining=None,
             status_eligible=None,
             effective=None,
             outcome=EFFECTIVE_INBOUND_DATA_INCOMPLETE,
             notes=(
-                f"received_qty {received_qty} exceeds ordered_qty {ordered_qty}; the "
-                "remaining quantity is not clamped, not replaced by 0 and not given a "
-                "guessed business meaning (§2.6.2)",
+                f"received_qty {received_qty.text()} exceeds ordered_qty "
+                f"{ordered_qty.text()}; the remaining quantity is not clamped, not replaced "
+                "by 0 and not given a guessed business meaning (§2.6.2 / §4.4.47)"
+            ),
+            issues=(
+                _over_receipt_issue(
+                    inbound=inbound,
+                    ordered_qty=ordered_qty,
+                    received_qty=received_qty,
+                ),
             ),
         )
 
@@ -652,18 +813,18 @@ def _evaluate_inbound(
         return evaluation(
             remaining=remaining,
             status_eligible=False,
-            effective=Decimal("0"),
+            effective=ExactQuantity(0, 0),
             outcome=None,
             notes=(
                 "status is valid but ineligible for future supply; the record stays valid "
                 "and contributes 0 (§2.6.3 / §4.4.89)",
             ),
         )
-    if remaining <= Decimal("0"):
+    if remaining <= ExactQuantity(0, 0):
         return evaluation(
             remaining=remaining,
             status_eligible=True,
-            effective=Decimal("0"),
+            effective=ExactQuantity(0, 0),
             outcome=None,
             notes=(
                 "RemainingInboundQty is 0, which is a valid value and contributes 0 "
@@ -674,7 +835,7 @@ def _evaluate_inbound(
         return evaluation(
             remaining=remaining,
             status_eligible=True,
-            effective=Decimal("0"),
+            effective=ExactQuantity(0, 0),
             outcome=None,
             notes=(
                 "effective_arrival_date is after the target required_date; it is not a "
@@ -689,6 +850,52 @@ def _evaluate_inbound(
         effective=remaining,
         outcome=None,
         notes=(),
+    )
+
+
+def _over_receipt_issue(
+    *,
+    inbound: CanonicalObject,
+    ordered_qty: ExactQuantity,
+    received_qty: ExactQuantity,
+) -> Issue:
+    """The registered Data Quality Issue for ``received_qty > ordered_qty``.
+
+    ``§2.6.2`` / ``§4.4.47`` require ``DATA_INCOMPLETE`` **plus** a Data Quality Issue, and
+    ``§4.4.92`` already registers the taxonomy for this cross-field defect.  The existing
+    :class:`~snapshot_loader.issues.Issue` shape is reused: no new category, reason,
+    severity or error code is introduced.
+
+    The finding describes the **inbound evidence**, not a target date, so the same record
+    evaluated against several required dates yields one logical finding
+    (deduplicated by location + category + reason).
+    """
+
+    reference = inbound.record_reference or ""
+    parts = reference.split("|")
+    artifact = parts[2] if len(parts) > 2 else ""
+    ordinal = parts[3] if len(parts) > 3 else ""
+    location = f"{artifact}[{ordinal}]" if artifact and ordinal else (artifact or reference)
+
+    return Issue(
+        location=location,
+        detail=(
+            f"received_qty {received_qty.text()} exceeds ordered_qty "
+            f"{ordered_qty.text()}; the inbound record is internally inconsistent"
+        ),
+        category="CONSISTENCY",
+        reason="CONSISTENCY_CONFLICT",
+        layer=LAYER_2,
+        affected_evidence=artifact or inbound.canonicalization_role,
+        blast_radius=(
+            "affected inbound evidence / effective-inbound target only (no package "
+            "rejection)"
+        ),
+        design_reference="§2.6.2 / §4.4.47 / §4.4.92",
+        consequence_context=(
+            "the affected inbound and its effective-inbound target are DATA_INCOMPLETE; no "
+            "clamp is applied and the package disposition is unchanged"
+        ),
     )
 
 
@@ -727,6 +934,7 @@ def _relevant_issues(
             matched.append(issue)
     return tuple(sorted(matched, key=Issue.sort_key))
 
+
 __all__ = [
     "EFFECTIVE_INBOUND_DATA_INCOMPLETE",
     "ELIGIBLE_INBOUND_STATUSES",
@@ -736,6 +944,9 @@ __all__ = [
     "EffectiveInboundEvaluation",
     "EffectiveInboundResult",
     "EffectiveInboundTarget",
+    "ExactQuantity",
     "compute_effective_inbound",
+    "parse_exact_quantity",
+    "parse_non_negative_quantity",
     "remaining_inbound_qty",
 ]

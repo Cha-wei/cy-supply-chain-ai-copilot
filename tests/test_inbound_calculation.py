@@ -25,13 +25,13 @@ from __future__ import annotations
 
 import unittest
 import uuid
-from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from snapshot_loader import (
     BomParentContextHandoff,
     EFFECTIVE_INBOUND_DATA_INCOMPLETE,
+    ExactQuantity,
     HandoffEvidence,
     INBOUND_RULE_ID,
     LossRateHandoff,
@@ -41,6 +41,8 @@ from snapshot_loader import (
     compute_requirement_calculation,
     construct_canonical_objects,
     load_package,
+    parse_exact_quantity,
+    parse_non_negative_quantity,
     remaining_inbound_qty,
 )
 from tests.helpers import DatasetSpec, PackageSpec, build_package
@@ -306,25 +308,93 @@ class EffectiveInboundTestCase(unittest.TestCase):
 
     # --- assertions ----------------------------------------------------------------
 
-    def assert_qty(self, value: Decimal | None, expected: str) -> None:
+    def assert_qty(self, value: ExactQuantity | None, expected: str) -> None:
+        """Assert the exact canonical decimal text -- never a rounded / parsed value."""
+
         self.assertIsNotNone(value)
         assert value is not None
-        self.assertEqual(value, Decimal(expected))
+        self.assertIsInstance(value, ExactQuantity)
+        self.assertEqual(value.text(), expected)
 
 
 class ArithmeticTests(EffectiveInboundTestCase):
     def test_remaining_inbound_qty_is_the_exact_difference(self) -> None:
         self.assert_qty(
-            remaining_inbound_qty(Decimal("100"), Decimal("40")), "60"
+            remaining_inbound_qty(
+                parse_exact_quantity("100"), parse_exact_quantity("40")
+            ),
+            "60",
         )
         self.assert_qty(
-            remaining_inbound_qty(Decimal("100"), Decimal("100")), "0"
+            remaining_inbound_qty(
+                parse_exact_quantity("100"), parse_exact_quantity("100")
+            ),
+            "0",
         )
 
     def test_no_binary_float_is_used(self) -> None:
-        value = remaining_inbound_qty(Decimal("0.3"), Decimal("0.1"))
-        self.assertIsInstance(value, Decimal)
-        self.assertEqual(value, Decimal("0.2"))
+        value = remaining_inbound_qty(
+            parse_exact_quantity("0.3"), parse_exact_quantity("0.1")
+        )
+        self.assertIsInstance(value, ExactQuantity)
+        self.assertEqual(value.text(), "0.2")
+
+    def test_subtraction_is_exact_beyond_the_decimal_default_precision(self) -> None:
+        """Regression: the Decimal default context silently rounds at 28 digits.
+
+        ``Decimal("123456789012345678901234567890") - Decimal("1")`` is silently rounded to
+        ``123456789012345678901234567000`` at the default precision, which would invent a
+        business quantity.  The rule must produce the exact difference.
+        """
+
+        value = remaining_inbound_qty(
+            parse_exact_quantity("123456789012345678901234567890"),
+            parse_exact_quantity("1"),
+        )
+        self.assertEqual(value.text(), "123456789012345678901234567889")
+
+    def test_cumulative_supply_is_exact_beyond_the_decimal_default_precision(self) -> None:
+        """Regression: cumulative supply must be the exact sum, never a rounded one."""
+
+        first = parse_exact_quantity("123456789012345678901234567889")
+        second = parse_exact_quantity("100000000000000000000000000001")
+        assert first is not None and second is not None
+        self.assertEqual(
+            (first + second).text(), "223456789012345678901234567890"
+        )
+
+    def test_canonical_quantity_text_has_no_exponent_and_keeps_its_scale(self) -> None:
+        """``IC-10``: no rounding / quantization / truncation / silent trimming."""
+
+        self.assertEqual(parse_exact_quantity("0.10").text(), "0.10")
+        self.assertEqual(parse_exact_quantity("100").text(), "100")
+        self.assertEqual(parse_exact_quantity("0.500").text(), "0.500")
+        self.assertEqual(parse_exact_quantity("+0.500").text(), "0.500")
+        self.assertEqual(parse_exact_quantity("-0.50").text(), "-0.50")
+        self.assertEqual(
+            parse_exact_quantity("0.000000000000000000000000000001").text(),
+            "0.000000000000000000000000000001",
+        )
+
+    def test_equal_quantities_at_different_scales_compare_and_hash_equally(self) -> None:
+        self.assertEqual(parse_exact_quantity("5"), parse_exact_quantity("5.00"))
+        self.assertEqual(
+            hash(parse_exact_quantity("5")), hash(parse_exact_quantity("5.00"))
+        )
+        self.assertEqual(
+            len({parse_exact_quantity("5"), parse_exact_quantity("5.00")}), 1
+        )
+        self.assertNotEqual(parse_exact_quantity("5"), parse_exact_quantity("5.01"))
+
+    def test_non_canonical_quantities_are_never_repaired(self) -> None:
+        for raw in (None, "", "1e5", "1E+5", " 1", "1 ", "abc", "1,5", [], 1):
+            with self.subTest(raw=raw):
+                self.assertIsNone(parse_exact_quantity(raw))
+        # A sign is canonical syntax, but a negative value is not a registered
+        # NON_NEGATIVE_QUANTITY, so the rule-level parse refuses it.
+        self.assertIsNotNone(parse_exact_quantity("-1"))
+        self.assertIsNone(parse_non_negative_quantity("-1"))
+        self.assertIsNone(parse_non_negative_quantity("-0.5"))
 
 
 class AcceptanceExampleTests(EffectiveInboundTestCase):
@@ -381,7 +451,9 @@ class AcceptanceExampleTests(EffectiveInboundTestCase):
         self.assert_qty(evaluation.remaining_inbound_qty, "60")
         self.assert_qty(evaluation.effective_inbound_qty, "60")
         self.assert_qty(target.cumulative_effective_inbound, "60")
-        self.assertNotEqual(evaluation.effective_inbound_qty, Decimal("100"))
+        self.assertNotEqual(
+            evaluation.effective_inbound_qty, parse_exact_quantity("100")
+        )
 
     def test_example_d_ineligible_statuses_contribute_zero(self) -> None:
         for status in ("CANCELLED", "CLOSED", "COMPLETED"):
@@ -606,7 +678,7 @@ class FailSafeTests(EffectiveInboundTestCase):
             inbound=self.inbound_record(arrival=OMIT),
         )
         for evaluation in target.evaluations:
-            for issue in evaluation.inherited_issues:
+            for issue in evaluation.issues:
                 self.assertIn(issue.category, allowed)
         self.assertNotIn(INBOUND_RULE_ID, allowed)
 
@@ -684,6 +756,25 @@ class OutputAndBoundaryTests(EffectiveInboundTestCase):
             compute_requirement_calculation(construction).to_dict(),
         )
 
+    def test_canonical_input_representation_is_retained_in_the_output(self) -> None:
+        """``IC-10``: a canonical decimal is never rounded, quantized or trimmed."""
+
+        _construction, result, target = self.evaluate(
+            name="representation",
+            inbound=self.inbound_record(
+                status="PARTIALLY_RECEIVED",
+                ordered_qty="100.00",
+                received_qty="0.50",
+                arrival="2026-10-12",
+            ),
+        )
+        payload = target.evaluations[0].to_dict()
+        self.assertEqual(payload["ordered_qty"], "100.00")
+        self.assertEqual(payload["received_qty"], "0.50")
+        self.assertEqual(payload["RemainingInboundQty"], "99.50")
+        self.assertEqual(payload["EffectiveInboundQty"], "99.50")
+        self.assert_qty(target.cumulative_effective_inbound, "99.50")
+
     def test_minimum_output_fields(self) -> None:
         _construction, result, target = self.evaluate(
             name="minimum-output",
@@ -726,6 +817,258 @@ class OutputAndBoundaryTests(EffectiveInboundTestCase):
         for forbidden in ("purchase_order", "po_id", "PO-"):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, payload)
+
+
+class GroupedRequirementTargetTests(EffectiveInboundTestCase):
+    """Regression: a target grain is a **group** of upstream requirement rows.
+
+    ``BR-INBOUND-001`` takes its required-date context from ``BR-REQUIREMENT-001``.  Several
+    BOM Component relationships can state the same grain (``plant_id`` + component
+    ``material_code`` + ``required_date``): here two different parent materials of the same
+    plant demand the same component on the same date, so two ``BR-REQUIREMENT-001`` rows
+    exist for one target.  No row may be treated as a representative: if any upstream row of
+    the grain is ``DATA_INCOMPLETE`` the target is ``DATA_INCOMPLETE`` and no numeric
+    cumulative supply is produced -- whatever the rows' order.
+    """
+
+    PARENT_B = "M1B"
+
+    def _two_parent_rows(self, *, unusable_position: int | None):
+        """Two upstream rows on one target grain; one may be ``DATA_INCOMPLETE``."""
+
+        requirements = [
+            self.requirement_record(
+                material=PARENT,
+                production_qty=(
+                    "not-a-decimal" if unusable_position == 0 else "10"
+                ),
+            ),
+            self.requirement_record(
+                material=self.PARENT_B,
+                production_qty=(
+                    "not-a-decimal" if unusable_position == 1 else "10"
+                ),
+            ),
+        ]
+        return self.build(
+            name=f"grouped-{unusable_position}",
+            inbounds=[self.inbound_record(ordered_qty="50", arrival="2026-10-12")],
+            requirements=requirements,
+            bom_components=[
+                self.bom_record(material=COMPONENT),
+                self.bom_record(material=COMPONENT),
+            ],
+        )
+
+    def test_grouped_rows_are_one_target(self) -> None:
+        construction, result = self._two_parent_rows(unusable_position=None)
+        upstream = compute_requirement_calculation(construction)
+        self.assertEqual(len(upstream.calculations), 2)
+        self.assertEqual(
+            len(
+                {
+                    (
+                        row.plant_id,
+                        row.component_material_code,
+                        row.required_date,
+                    )
+                    for row in upstream.calculations
+                }
+            ),
+            1,
+            msg="fixture must state one target grain from two requirement rows",
+        )
+        self.assertEqual(len(result.targets), 1)
+        target = result.targets[0]
+        self.assertIsNone(target.outcome)
+        self.assert_qty(target.cumulative_effective_inbound, "50")
+        # Both upstream rows are retained in the trace: neither is discarded.
+        self.assertEqual(len(target.requirement_references), 2)
+        self.assertEqual(len(set(target.requirement_references)), 2)
+
+    def test_data_incomplete_row_first_makes_the_target_data_incomplete(self) -> None:
+        _construction, result = self._two_parent_rows(unusable_position=0)
+        self.assertEqual(len(result.targets), 1)
+        target = result.targets[0]
+        self.assertEqual(target.outcome, EFFECTIVE_INBOUND_DATA_INCOMPLETE)
+        self.assertIsNone(target.cumulative_effective_inbound)
+
+    def test_data_incomplete_row_last_makes_the_target_data_incomplete(self) -> None:
+        """The former first-row-wins behaviour must not hide a later unreliable row."""
+
+        _construction, result = self._two_parent_rows(unusable_position=1)
+        self.assertEqual(len(result.targets), 1)
+        target = result.targets[0]
+        self.assertEqual(target.outcome, EFFECTIVE_INBOUND_DATA_INCOMPLETE)
+        self.assertIsNone(target.cumulative_effective_inbound)
+
+    def test_grouped_data_incomplete_target_keeps_every_upstream_trace(self) -> None:
+        _construction, result = self._two_parent_rows(unusable_position=1)
+        target = result.targets[0]
+        self.assertEqual(len(target.requirement_references), 2)
+        self.assertEqual(len(set(target.requirement_references)), 2)
+        self.assertTrue(target.notes)
+
+    def test_incomplete_row_does_not_remove_a_sole_normal_row(self) -> None:
+        """A single normal row is still a normal target (no invented representative)."""
+
+        _construction, result = self.build(
+            name="grouped-single-row",
+            inbounds=[self.inbound_record(ordered_qty="50", arrival="2026-10-12")],
+            requirements=[self.requirement_record(production_qty="10")],
+            bom_components=[self.bom_record()],
+        )
+        target = result.targets[0]
+        self.assertIsNone(target.outcome)
+        self.assert_qty(target.cumulative_effective_inbound, "50")
+        self.assertEqual(len(target.requirement_references), 1)
+
+
+class OverReceiptIssueTests(EffectiveInboundTestCase):
+    """Regression: ``received_qty > ordered_qty`` must also raise a Data Quality Issue.
+
+    ``§2.6.2`` / ``§4.4.47`` require the ``DATA_INCOMPLETE`` outcome **and** a reported
+    finding, using the already registered ``CONSISTENCY`` / ``CONSISTENCY_CONFLICT``
+    taxonomy (``§4.4.92``).  No new category, reason or severity is introduced.
+    """
+
+    @staticmethod
+    def _conflicts(issues) -> list:
+        return [
+            issue
+            for issue in issues
+            if issue.category == "CONSISTENCY"
+            and issue.reason == "CONSISTENCY_CONFLICT"
+        ]
+
+    def test_over_receipt_emits_exactly_one_registered_conflict(self) -> None:
+        _construction, _result, target = self.evaluate(
+            name="over-receipt-issue",
+            inbound=self.inbound_record(ordered_qty="100", received_qty="120"),
+        )
+        evaluation = target.evaluations[0]
+        self.assertEqual(evaluation.outcome, EFFECTIVE_INBOUND_DATA_INCOMPLETE)
+        evaluation_conflicts = self._conflicts(evaluation.rule_issues)
+        self.assertEqual(len(evaluation_conflicts), 1)
+        issue = evaluation_conflicts[0]
+        self.assertEqual(issue.category, "CONSISTENCY")
+        self.assertEqual(issue.reason, "CONSISTENCY_CONFLICT")
+        # Layer 2 (evidence/value validation), not Layer 1 package structure.
+        self.assertEqual(issue.layer, 2)
+        self.assertTrue(issue.location)
+        self.assertTrue(issue.design_reference)
+        self.assertIn("120", issue.detail)
+        self.assertIn("100", issue.detail)
+        # The consolidated finding surface exposes it too, and only once.
+        self.assertEqual(len(self._conflicts(evaluation.issues)), 1)
+        # Exactly one logical finding at target level too: no N-fold duplication.
+        self.assertEqual(len(self._conflicts(target.rule_issues)), 1)
+        self.assertEqual(len(self._conflicts(target.issues)), 1)
+
+    def test_over_receipt_conflict_is_deduplicated_across_required_dates(self) -> None:
+        _construction, result = self.build(
+            name="over-receipt-multi-date",
+            inbounds=[self.inbound_record(ordered_qty="100", received_qty="120")],
+            requirements=[
+                self.requirement_record(required_date="2026-10-15"),
+                self.requirement_record(required_date="2026-10-20"),
+            ],
+            bom_components=[
+                self.bom_record(required_date="2026-10-15"),
+                self.bom_record(required_date="2026-10-20"),
+            ],
+        )
+        keys: set[tuple[str, str, str]] = set()
+        for target in result.targets:
+            conflicts = self._conflicts(target.rule_issues)
+            self.assertEqual(len(conflicts), 1)
+            for issue in conflicts:
+                keys.add((issue.location, issue.category, issue.reason))
+        # The defect belongs to the inbound evidence, not to a required date.
+        self.assertEqual(len(keys), 1)
+
+    def test_over_receipt_conflict_uses_no_new_taxonomy(self) -> None:
+        _construction, _result, target = self.evaluate(
+            name="over-receipt-taxonomy",
+            inbound=self.inbound_record(ordered_qty="0", received_qty="0.5"),
+        )
+        conflicts = self._conflicts(target.rule_issues)
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(
+            {issue.category for issue in conflicts}, {"CONSISTENCY"}
+        )
+        self.assertEqual(
+            {issue.reason for issue in conflicts}, {"CONSISTENCY_CONFLICT"}
+        )
+
+    def test_valid_non_contributing_records_raise_no_conflict(self) -> None:
+        cases = {
+            "ineligible-cancelled": dict(status="CANCELLED", arrival="2026-10-12"),
+            "ineligible-closed": dict(status="CLOSED", arrival="2026-10-12"),
+            "ineligible-completed": dict(status="COMPLETED", arrival="2026-10-12"),
+            "arrival-after-required": dict(status="OPEN", arrival="2026-10-20"),
+            "zero-remaining": dict(
+                status="OPEN", ordered_qty="100", received_qty="100"
+            ),
+            "fully-open": dict(status="OPEN", ordered_qty="100", received_qty="0"),
+        }
+        for name, kwargs in cases.items():
+            with self.subTest(case=name):
+                _construction, _result, target = self.evaluate(
+                    name=f"no-conflict-{name}",
+                    inbound=self.inbound_record(**kwargs),
+                )
+                self.assertIsNone(target.evaluations[0].outcome)
+                self.assertEqual(self._conflicts(target.rule_issues), [])
+                self.assertEqual(self._conflicts(target.issues), [])
+
+    def test_missing_and_negative_quantities_do_not_invent_a_conflict(self) -> None:
+        for name, kwargs in {
+            "missing-ordered": dict(ordered_qty=OMIT),
+            "missing-received": dict(received_qty=OMIT),
+            "negative-ordered": dict(ordered_qty="-1"),
+            "negative-received": dict(received_qty="-5"),
+        }.items():
+            with self.subTest(case=name):
+                _construction, _result, target = self.evaluate(
+                    name=f"no-conflict-{name}",
+                    inbound=self.inbound_record(**kwargs),
+                )
+                self.assertEqual(
+                    target.evaluations[0].outcome, EFFECTIVE_INBOUND_DATA_INCOMPLETE
+                )
+                # A missing / negative quantity is not a cross-field conflict.
+                self.assertEqual(self._conflicts(target.rule_issues), [])
+
+    def test_over_receipt_conflict_is_json_serialisable(self) -> None:
+        _construction, result, _target = self.evaluate(
+            name="over-receipt-json",
+            inbound=self.inbound_record(ordered_qty="100", received_qty="120"),
+        )
+        payload = result.to_dict()
+        target_payload = payload["targets"][0]
+        for surface in ("rule_issues", "inherited_issues"):
+            with self.subTest(surface=surface):
+                self.assertIn(surface, target_payload)
+        conflicts = [
+            issue
+            for issue in target_payload["rule_issues"]
+            if issue["category"] == "CONSISTENCY"
+            and issue["reason"] == "CONSISTENCY_CONFLICT"
+        ]
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(conflicts[0]["layer"], 2)
+        self.assertEqual(
+            len(
+                [
+                    issue
+                    for issue in target_payload["evaluations"][0]["rule_issues"]
+                    if issue["category"] == "CONSISTENCY"
+                    and issue["reason"] == "CONSISTENCY_CONFLICT"
+                ]
+            ),
+            1,
+        )
 
 
 if __name__ == "__main__":

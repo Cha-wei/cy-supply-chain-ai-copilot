@@ -79,7 +79,10 @@ from .inbound_calculation import (
     EffectiveInboundEvaluation,
     EffectiveInboundResult,
     EffectiveInboundTarget,
+    ExactQuantity,
     compute_effective_inbound,
+    parse_exact_quantity,
+    parse_non_negative_quantity,
     remaining_inbound_qty,
 )
 from .layer2 import (
@@ -130,6 +133,7 @@ __all__ = [
     "EffectiveInboundEvaluation",
     "EffectiveInboundResult",
     "EffectiveInboundTarget",
+    "ExactQuantity",
     "EvidenceReference",
     "HandoffEvidence",
     "INBOUND_RULE_ID",
@@ -163,6 +167,8 @@ __all__ = [
     "construct_canonical_objects",
     "load_package",
     "load_package_from_paths",
+    "parse_exact_quantity",
+    "parse_non_negative_quantity",
     "parse_strict_json",
     "remaining_inbound_qty",
     "validate_artifact_filename",
