@@ -6641,9 +6641,66 @@ Phase B 不得阻塞 Phase A
 | I-6 | Inbound Supply technical record reference（G3-A）—— **非** injected business value | A | current AcceptedPackage identity ＋ recognized role `Inbound Supply` ＋ dataset-internal record ordinal | technical record reference（**不是** canonical ／ wire property ／ `"_meta"` member） | required（绑定 same AcceptedPackage ／ accepted content view） | n/a | exactly one reference per accepted inbound record | 无法形成 → `UNRESOLVED_IDENTITY` | **Stage A**（§4.5.3 condition **C**）→ `UNRESOLVED_IDENTITY` |
 | I-7 | BOM parent ／ requirement context（G4-A） | A | `BOM Component` evidence → resolved Production Requirement context | context reference | required | n/a | exactly one context per evidence set | `UNRESOLVED_IDENTITY` | **Stage A**（§4.4.11）→ `UNRESOLVED_IDENTITY` |
 | I-8 | effective demand context relation outcomes（G5-A） | A | source substitute material ＋ target material ＋ allocation record | two independent relation outcomes（references） | required（same AcceptedPackage-scoped source provenance） | required | exactly one pair or unresolved | `SEMANTIC_UNRESOLVED` | **Stage A**（§4.4.60 path **B**）→ `SEMANTIC_UNRESOLVED` |
+| I-9 | Inventory ownership ／ POC Inventory Scope resolution（A′） | A | exact `Inventory Snapshot` evidence citation | runtime Inventory scope context（ownership ＋ scope membership），derived by the approved deterministic basis registry | required（same AcceptedPackage-scoped source provenance） | required（exact association `mapping_basis`） | exactly one applicable resolution per Inventory evidence or unresolved | ownership → `IDENTITY_RESOLUTION` ／ `UNRESOLVED_IDENTITY`；scope → `SCOPE_COVERAGE` ／ `UNRESOLVED_SCOPE` | **Stage A**（§4.4.102 C）→ unresolved；不得 first ／ last wins、不得同值去重、不得跨 association 借用 basis |
 
 injection **不**决定任何真实 ERP ／ source file ／ ERP field physical carrier；`loss_rate` 的
 Entity ／ Dataset ／ Source Field 归属仍**不得**决定（§4.4.15）。
+
+**I-9 —— Inventory ownership ／ POC Inventory Scope resolution（A′，Issue #136 Human Decision）**
+
+**Registration Status：`REGISTERED`** —— 依据 **Issue #136 Human Decision**（**Inventory Runtime
+Seam Decision `A′` = `APPROVED`**，2026-09-25）。
+
+```text
+Phase                     = A
+binding key               = exact Inventory Snapshot evidence citation
+input authority           = same AcceptedPackage evidence only
+association               = exact existing canonical observation
+                            + exact Stable Source Evidence Locator
+                            + exact mapping_basis
+outcome                   = runtime Inventory scope context
+                            derived by approved deterministic basis registry
+caller-provided outcome   = FORBIDDEN
+cardinality               = exactly one applicable resolution per Inventory evidence, or unresolved
+unresolved ownership      = IDENTITY_RESOLUTION / UNRESOLVED_IDENTITY
+unresolved scope          = SCOPE_COVERAGE / UNRESOLVED_SCOPE
+```
+
+**严格限定：**
+
+```text
+not a new external evidence source
+not a transport carrier
+not a second Snapshot Package
+not a canonical field
+not a Warehouse entity
+not a new calculation grain
+```
+
+caller **只能**引用 exact AcceptedPackage evidence ＋ exact existing canonical observation
+association ＋ exact evidence locator ＋ exact `mapping_basis` registered on that association；
+**不得**提供 `in_scope` ／ scope membership value ／ `warehouse_id` ／ Plant ownership value 等任何
+outcome 值。scope outcome **必须**由已经登记的 deterministic SIMULATED mapping registry 导出：
+
+```text
+exact association + exact registered mapping_basis + approved inventory-scope mapping rule
+  → deterministic scope outcome
+```
+
+**注意（不得混淆）：**
+
+```text
+mapping_basis ≠ mapping outcome
+```
+
+仅仅存在 `mapping_basis` **不足以**证明 scope membership；Plant ownership 始终来自 accepted
+canonical evidence（该 record 自身的 `plant_id`），**不得**来自 caller、**不得**默认成 current
+Plant、**不得**由 Warehouse 名称 ／ description 推断。`§4.5.12` 登记 Shape A ／ Shape B 的
+basis literal → semantic（`IN_SCOPE` ／ `OUT_OF_SCOPE`）；`OUT_OF_SCOPE` 是**合法 exclusion**，
+**不是** `DATA_INCOMPLETE`、**不是** Data Quality defect。
+
+**本登记不修改 D-10，不新增 wire property ／ `"_meta"` member ／ canonical business field ／
+canonical entity，也不新增 Validation Category ／ Reason ／ status ／ enum。**
 
 **H. Registration Boundary ／ status**
 

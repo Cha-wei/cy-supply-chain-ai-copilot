@@ -443,6 +443,20 @@ Supplier-Material relationship unresolved。
 
 例如：同一 Plant 内多个 Inventory records 可能因**合法 aggregation** 而存在。
 
+**注册澄清（Issue #136 Human Decision A′）：**
+
+```text
+same Plant-level canonical grain may contain multiple
+Inventory Snapshot evidence records for legal downstream aggregation.
+```
+
+即：多条 `Inventory Snapshot` evidence records 可以合法共享同一个 Plant-level canonical grain
+（`plant_id` ＋ `material_code` ＋ `inventory_snapshot_time`，`§2.2.1` 未改变），由下游
+`BR-INVENTORY-001` 在**scope resolution 完成后**聚合；canonicalization 阶段**不得** sum
+quantities ／ first ／ last wins ／ same-value dedup ／ average。**但**只有当 scope resolution
+完成后，这些 evidence 才能进入正常 numeric inventory calculation（见 `§4.4.50` / `§4.3.31`
+G `I-9`）。
+
 但：如果多个记录在 canonical grain 上产生**无法解释的 conflicting values**，
 **且当前 Design 没有 aggregation / precedence rule**，**不得**：
 
@@ -1298,6 +1312,22 @@ Warehouse canonical role = source / mapping / scope context
 
 **不得**创建新的 Warehouse canonical entity 或 physical key；
 也**不得**因为 consistency validation 改变既有 Plant-level calculation grain。
+
+**Runtime resolution（Issue #136 Human Decision A′）**
+
+Plant ownership ／ POC Inventory Scope membership 的 runtime 判定由 **`§4.3.31` G `I-9`**
+登记（same-package、evidence-only、association-specific、basis-gated）；本层**只**使用既有
+taxonomy，**不新增** vocabulary：
+
+```text
+ownership 无法可靠建立            → IDENTITY_RESOLUTION / UNRESOLVED_IDENTITY
+plant 已解析但 scope 无法可靠判定  → SCOPE_COVERAGE / UNRESOLVED_SCOPE
+```
+
+两条 root condition 都落在 affected inventory grain 上（→ `DATA_INCOMPLETE`，**不**产出
+normalised numeric inventory result），且**不得**默认 included ／ excluded。resolved
+`OUT_OF_SCOPE` 是**合法 exclusion**：**不是** `DATA_INCOMPLETE`、**不是** Data Quality
+defect，其 contribution = 0。
 
 #### 4.4.51 Configured Safety Stock Grain Consistency
 
