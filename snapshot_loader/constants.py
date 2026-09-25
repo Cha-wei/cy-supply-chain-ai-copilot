@@ -239,6 +239,16 @@ REASON_OUT_OF_DEFINED_RANGE: str = "OUT_OF_DEFINED_RANGE"
 REASON_INVALID_DEFINED_STATUS: str = "INVALID_DEFINED_STATUS"
 REASON_UNRESOLVED_IDENTITY: str = "UNRESOLVED_IDENTITY"
 
+#: Canonicalization semantics that cannot be reliably resolved from the approved Design
+#: use the **inherited** ``§4.4.80`` category / ``§4.4.81`` reason, exactly as
+#: ``§4.4.102`` D registers.  ``SEMANTIC_UNRESOLVED`` is deliberately distinct from
+#: ``FIELD_VALUE`` / ``MISSING``: the latter means a *resolved* context whose required
+#: value is absent (``§4.4.15`` root A), while this one means the context /
+#: applicability itself could not be established (root B, ``§4.4.95``).  No new
+#: category, reason, severity or error code is introduced.
+CATEGORY_SEMANTIC_RESOLUTION: str = "SEMANTIC_RESOLUTION"
+REASON_SEMANTIC_UNRESOLVED: str = "SEMANTIC_UNRESOLVED"
+
 # --- Layer-2 reporting surface: no new status vocabulary ------------------------
 #
 # Current canonical authority registers exactly these status vocabularies, and Layer 2
