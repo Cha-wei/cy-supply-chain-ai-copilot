@@ -238,6 +238,10 @@ REASON_INVALID_TYPE: str = "INVALID_TYPE"
 REASON_OUT_OF_DEFINED_RANGE: str = "OUT_OF_DEFINED_RANGE"
 REASON_INVALID_DEFINED_STATUS: str = "INVALID_DEFINED_STATUS"
 REASON_UNRESOLVED_IDENTITY: str = "UNRESOLVED_IDENTITY"
+#: ``§4.4.81`` #3 -- a required field is absent.  ``MISSING`` describes a field that *should*
+#: exist and does not; it is never used for valid absence, not-applicable or "role not
+#: provided" (``§4.4.80`` MISSING limitation).
+REASON_MISSING: str = "MISSING"
 
 #: Canonicalization semantics that cannot be reliably resolved from the approved Design
 #: use the **inherited** ``§4.4.80`` category / ``§4.4.81`` reason, exactly as
