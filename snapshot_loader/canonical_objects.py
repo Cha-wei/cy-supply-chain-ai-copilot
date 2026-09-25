@@ -1385,6 +1385,28 @@ def _grain_key(record: JsonObject, keys: Iterable[str]) -> tuple[Any, ...] | Non
     return tuple(key)
 
 
+def _grouping_key(values: tuple[Any, ...]) -> tuple[Any, ...] | None:
+    """Return a deterministic grouping key, or ``None`` when the values cannot serve as one.
+
+    An accepted JSON value is legal *wire* content but not necessarily usable as a Python
+    hash key: a JSON array or object is unhashable, so ``dict.setdefault`` ／ ``set.add`` on a
+    grain built from it raises ``TypeError`` and would break the whole construction.
+
+    The canonical property values are carried **unchanged** here -- nothing is retyped,
+    stringified, wrapped or reordered to obtain hashability -- because that would silently
+    redefine the canonical value.  A grain component that cannot be used as a deterministic
+    grouping key therefore leaves the affected canonical target unresolved instead
+    (``§4.4.26``), while Layer 2 keeps owning the field-level ``FIELD_VALUE`` ／
+    ``INVALID_TYPE`` defect (``§4.4.80``).
+    """
+
+    try:
+        hash(values)
+    except TypeError:
+        return None
+    return values
+
+
 def _grain_label(grain: tuple[CanonicalProperty, ...] | None) -> str:
     if not grain:
         return "<no grain>"
@@ -2214,7 +2236,34 @@ def _resolve_grain_keyed(
                 design_reference="§4.4.26 / §4.4.94 / §4.1.3",
             )
             continue
-        buckets[target].setdefault(key, []).append(obj)
+        grouping_key = _grouping_key(key)
+        if grouping_key is None:
+            # The accepted representation is present but cannot be used as a deterministic
+            # grouping key.  The canonical value is carried unchanged and the target simply
+            # stays unresolved (``§4.4.26``); no key is fabricated, retyped or borrowed, and
+            # Layer 2 keeps owning the field-level defect (``§4.4.80``).
+            ungrainable[target].append(obj)
+            build.check(
+                f"{CANONICALIZATION_GRAIN_RESOLUTION}:{target}:{reference.reference}",
+                EVALUATION_NOT_EVALUABLE,
+                "a canonical identity component of this grain cannot be used as a "
+                "deterministic grouping key because its accepted representation is not "
+                "hashable; the object stays unresolved, the value is never retyped, "
+                "stringified or wrapped and no key is fabricated (§4.4.26 / §4.4.102 C)",
+            )
+            build.unresolved_identity(
+                location=f"{artifact}[{ordinal}]",
+                detail=(
+                    f"{target} identity cannot be resolved: a registered canonical identity "
+                    "component carries an accepted representation that is not usable as a "
+                    "deterministic grouping key; the canonical value is carried unchanged "
+                    "and the field-level defect stays with Layer 2 (§4.4.26 / §4.4.94)"
+                ),
+                affected_evidence=artifact,
+                design_reference="§4.4.26 / §4.4.94 / §4.1.3",
+            )
+            continue
+        buckets[target].setdefault(grouping_key, []).append(obj)
 
     object_sets: list[CanonicalObjectSet] = []
     resolved_by_target: dict[str, tuple[CanonicalObject, ...]] = {}
@@ -2322,7 +2371,36 @@ def _assign_identity_context(
                 "record; the identity stays unresolved instead of receiving a default",
             )
             continue
-        buckets[target].setdefault((record[key_name],), []).append(obj)
+        grouping_key = _grouping_key((record[key_name],))
+        if grouping_key is None:
+            # Each identity component is judged on its own grain: an unusable representation
+            # on one component leaves only that identity unresolved and never takes the other
+            # component's side down with it.  The value is carried unchanged and Layer 2 owns
+            # the field-level defect.
+            ungrainable[target].append(obj)
+            build.check(
+                f"{CANONICALIZATION_GRAIN_RESOLUTION}:{target}:{reference.reference}",
+                EVALUATION_NOT_EVALUABLE,
+                f"identity component {key_name!r} cannot be used as a deterministic grouping "
+                "key because its accepted representation is not hashable; this identity "
+                "stays unresolved, the other identity component of the same evidence is "
+                "unaffected, and the value is never retyped, stringified or wrapped "
+                "(§4.4.26 / §4.4.102 C)",
+            )
+            build.unresolved_identity(
+                location=f"{artifact}[{ordinal}]",
+                detail=(
+                    f"{target} identity cannot be resolved: identity component {key_name!r} "
+                    "carries an accepted representation that is not usable as a "
+                    "deterministic grouping key; the canonical value is carried unchanged, "
+                    "the other identity component is unaffected and the field-level defect "
+                    "stays with Layer 2 (§4.4.26 / §4.4.94)"
+                ),
+                affected_evidence=artifact,
+                design_reference="§4.4.26 / §4.4.94 / §4.1.3",
+            )
+            continue
+        buckets[target].setdefault(grouping_key, []).append(obj)
 
 
 def _construct_inbound(
@@ -3754,8 +3832,14 @@ def _configured_safety_stock_grains(
             if not path.startswith(f"{artifact}#"):
                 continue
             grain = _safety_stock_record_grain(accepted_records, path)
-            if grain is not None:
-                grains.add(grain)
+            grouping_key = None if grain is None else _grouping_key(grain)
+            if grouping_key is None:
+                # A missing grain is skipped as before; an accepted representation that cannot
+                # serve as a grouping key is skipped too, so this index never crashes.  The
+                # affected record's own canonical target resolution already reports the
+                # unresolved identity, and Layer 2 owns the field-level defect.
+                continue
+            grains.add(grouping_key)
     return grains
 
 
@@ -3784,9 +3868,15 @@ def _report_safety_stock_grain_conflicts(
             if "SafetyStock" not in record:
                 continue
             grain = _safety_stock_record_grain(accepted_records, path)
-            if grain is None:
+            grouping_key = None if grain is None else _grouping_key(grain)
+            if grouping_key is None:
+                # A missing grain or a representation that cannot serve as a grouping key
+                # simply does not participate in this conflict scan; nothing is retyped and
+                # the affected target stays unresolved through the generic path.
                 continue
-            per_grain.setdefault(grain, []).append((path, record["SafetyStock"]))
+            per_grain.setdefault(grouping_key, []).append(
+                (path, record["SafetyStock"])
+            )
 
     conflicting: set[tuple[Any, Any]] = set()
     for grain in sorted(per_grain, key=lambda item: repr(item)):
