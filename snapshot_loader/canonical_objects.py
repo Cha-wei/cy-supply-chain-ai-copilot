@@ -63,11 +63,13 @@ import re
 
 from .constants import (
     CATEGORY_IDENTITY_RESOLUTION,
+    CATEGORY_SEMANTIC_RESOLUTION,
     DECIMAL_STRING_PATTERN,
     EVALUATION_FAILED,
     EVALUATION_NOT_EVALUABLE,
     EVALUATION_PASSED,
     LAYER_2,
+    REASON_SEMANTIC_UNRESOLVED,
     REASON_UNRESOLVED_IDENTITY,
     V02_CANONICAL_RECORD_PROPERTY_SET,
 )
@@ -959,6 +961,44 @@ class _Construction:
                 "evidence stays unresolved; no value is invented and the package "
                 "disposition is unchanged"
             ),
+        )
+
+    def unresolved_semantic(
+        self,
+        *,
+        location: str,
+        detail: str,
+        affected_evidence: str,
+        design_reference: str,
+    ) -> None:
+        """Registered ``SEMANTIC_RESOLUTION`` / ``SEMANTIC_UNRESOLVED`` finding.
+
+        Used when a semantic cannot be reliably resolved from the approved Design -- here
+        an applicability / resolution failure, where no exact canonical context could be
+        established.  It is deliberately distinct from ``FIELD_VALUE`` / ``MISSING``,
+        which describes a *resolved* context whose required value is absent
+        (``§4.4.15`` root A vs root B / ``§4.4.95`` / ``§4.4.102`` D).  No new taxonomy
+        is introduced, and the blast radius is limited to the affected canonical
+        context: the package disposition is untouched.
+        """
+
+        self.issues.append(
+            Issue(
+                location=location,
+                detail=detail,
+                category=CATEGORY_SEMANTIC_RESOLUTION,
+                reason=REASON_SEMANTIC_UNRESOLVED,
+                layer=LAYER_2,
+                affected_evidence=affected_evidence,
+                blast_radius=(
+                    "affected canonical context only (no package rejection)"
+                ),
+                design_reference=design_reference,
+                consequence_context=(
+                    "evidence stays unresolved; no value is invented and the package "
+                    "disposition is unchanged"
+                ),
+            )
         )
 
 
@@ -2467,6 +2507,11 @@ def _handoff_loss_rate(
 
     for index, entry in enumerate(handoff.loss_rate):
         check_name = f"{CANONICALIZATION_HANDOFF_EVIDENCE}:loss_rate[{index}]"
+        context_location = (
+            "loss_rate.requirement_calculation_context"
+            f"[plant_id={entry.plant_id!r}, parent material_code="
+            f"{entry.parent_material_code!r}, required_date={entry.required_date!r}]"
+        )
 
         if entry.component_material_code is ABSENT:
             build.check(
@@ -2476,6 +2521,20 @@ def _handoff_loss_rate(
                 "does not state the component material_code, so the applicable loss_rate "
                 "cannot be distinguished per BOM component; the value is not carried and "
                 "no Material-level fallback is applied (§4.3.31 G I-2)",
+            )
+            # Applicability / resolution failure (``§4.4.15`` root B): the exact
+            # Requirement Calculation Context could not be established at all, which is a
+            # semantic-resolution finding -- never ``FIELD_VALUE`` / ``MISSING``.
+            build.unresolved_semantic(
+                location=context_location,
+                detail=(
+                    "loss_rate applicability cannot be resolved: the Requirement "
+                    "Calculation Context does not state the component material_code, so "
+                    "no exact canonical context exists and no Material-level / "
+                    "requirement-level reuse is applied (§4.3.31 G I-2 / §4.4.15 root B)"
+                ),
+                affected_evidence="loss_rate",
+                design_reference="§4.4.95 / §4.4.102 D / §4.3.31 G I-2",
             )
             continue
 
@@ -2496,6 +2555,19 @@ def _handoff_loss_rate(
                 "is not carried and cross-component reuse is refused (§4.3.31 G I-2 / "
                 "§4.1.13 C)",
             )
+            build.unresolved_semantic(
+                location=context_location,
+                detail=(
+                    "loss_rate applicability cannot be resolved: no resolved BOM "
+                    "Component relationship matches the exact Requirement Calculation "
+                    "Context grain (component material_code="
+                    f"{entry.component_material_code!r}), so no exact canonical context "
+                    "exists and cross-component reuse is refused (§4.3.31 G I-2 / "
+                    "§4.4.15 root B)"
+                ),
+                affected_evidence="loss_rate",
+                design_reference="§4.4.95 / §4.4.102 D / §4.3.31 G I-2 / §4.1.13 C",
+            )
             continue
         if context is _AMBIGUOUS_CONTEXT:
             build.check(
@@ -2507,6 +2579,18 @@ def _handoff_loss_rate(
                 f"{entry.parent_material_code!r}, required_date={entry.required_date!r}, "
                 f"component material_code={entry.component_material_code!r}); the context "
                 "stays unresolved and no precedence is applied (§4.4.102 C Stage A)",
+            )
+            build.unresolved_semantic(
+                location=context_location,
+                detail=(
+                    "loss_rate applicability cannot be resolved: more than one resolved "
+                    "BOM Component relationship matches the Requirement Calculation "
+                    "Context grain (component material_code="
+                    f"{entry.component_material_code!r}); no precedence is applied and no "
+                    "value is carried (§4.4.102 C Stage A / §4.4.95)"
+                ),
+                affected_evidence="loss_rate",
+                design_reference="§4.4.95 / §4.4.102 C-D / §4.3.31 G I-2",
             )
             continue
 

@@ -1489,6 +1489,32 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
                 for name, state in self.states(report).items()
             )
         )
+        semantic = [
+            issue for issue in report.issues if issue.reason == "SEMANTIC_UNRESOLVED"
+        ]
+        self.assertTrue(semantic)
+        self.assertTrue(
+            all(issue.category == "SEMANTIC_RESOLUTION" for issue in semantic)
+        )
+        self.assertTrue(
+            any("component material_code" in issue.detail for issue in semantic)
+        )
+        # It is a semantic-resolution finding, never FIELD_VALUE / MISSING.
+        self.assertFalse(
+            any(
+                issue.category == "FIELD_VALUE" and issue.reason == "MISSING"
+                for issue in report.issues
+            )
+        )
+        # Blast radius is limited to the affected Requirement Calculation Context.
+        self.assertTrue(
+            all(
+                "loss_rate" in (issue.affected_evidence or "")
+                and issue.blast_radius is not None
+                and "package rejection" in issue.blast_radius
+                for issue in semantic
+            )
+        )
 
     def test_unknown_component_context_stays_unresolved(self) -> None:
         _, accepted = self._two_component_package()
@@ -1497,6 +1523,23 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
             accepted, [handoff], name="loss-rate-unknown-component"
         )
         self.assertEqual(report.loss_rate_contexts, ())
+        semantic = [
+            issue for issue in report.issues if issue.reason == "SEMANTIC_UNRESOLVED"
+        ]
+        self.assertTrue(semantic)
+        self.assertTrue(
+            all(issue.category == "SEMANTIC_RESOLUTION" for issue in semantic)
+        )
+        self.assertTrue(
+            any("no resolved BOM Component relationship" in issue.detail for issue in semantic)
+        )
+        self.assertTrue(
+            any(
+                name.startswith(f"{CANONICALIZATION_HANDOFF_EVIDENCE}:loss_rate")
+                and state == EVALUATION_NOT_EVALUABLE
+                for name, state in self.states(report).items()
+            )
+        )
 
     def test_ambiguous_component_context_stays_unresolved(self) -> None:
         requirement = with_provenance(
@@ -1541,6 +1584,93 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
                 for _name, _state, note in report.checks
             )
         )
+        semantic = [
+            issue for issue in report.issues if issue.reason == "SEMANTIC_UNRESOLVED"
+        ]
+        self.assertTrue(semantic)
+        self.assertTrue(
+            all(issue.category == "SEMANTIC_RESOLUTION" for issue in semantic)
+        )
+        self.assertTrue(
+            any(
+                "more than one resolved BOM Component relationship" in issue.detail
+                for issue in semantic
+            )
+        )
+
+    def test_unresolved_component_context_is_semantic_unresolved_not_missing(self) -> None:
+        """The three applicability-resolution failures use the registered root B reason."""
+
+        scenarios: dict[str, tuple] = {}
+
+        _, accepted = self._two_component_package()
+        handoff = self._component_handoff(accepted, "M2", "0.02")
+        scenarios["omitted"] = (
+            accepted,
+            [replace(handoff, component_material_code=ABSENT)],
+        )
+        scenarios["unknown"] = (accepted, [self._component_handoff(accepted, "M9", "0.02")])
+
+        requirement = with_provenance(
+            {
+                "plant_id": PLANT,
+                "material_code": MATERIAL,
+                "required_date": self.REQUIRED_DATE_OCT,
+                "ProductionQty": "10",
+            },
+            [("ProductionQty", [EVIDENCE_REQUIREMENT], None)],
+        )
+        _, ambiguous = self.accepted(
+            [
+                ("Production Requirement", [requirement]),
+                (
+                    "BOM Component",
+                    [
+                        BOM_COMPONENT(
+                            required_date=self.REQUIRED_DATE_OCT, material_code="M2"
+                        ),
+                        BOM_COMPONENT(
+                            required_date=self.REQUIRED_DATE_OCT, material_code="M2"
+                        ),
+                    ],
+                ),
+            ],
+            name="loss-rate-root-b",
+        )
+        scenarios["ambiguous"] = (
+            ambiguous,
+            [self._component_handoff(ambiguous, "M2", "0.02")],
+        )
+
+        for label, (package, handoffs) in scenarios.items():
+            with self.subTest(scenario=label):
+                report = self._construct_two_component(
+                    package, handoffs, name=f"loss-rate-root-b-{label}"
+                )
+                self.assertEqual(report.loss_rate_contexts, ())
+                semantic = [
+                    issue
+                    for issue in report.issues
+                    if issue.category == "SEMANTIC_RESOLUTION"
+                    and issue.reason == "SEMANTIC_UNRESOLVED"
+                ]
+                self.assertTrue(semantic)
+                self.assertFalse(
+                    any(
+                        issue.category == "FIELD_VALUE" and issue.reason == "MISSING"
+                        for issue in report.issues
+                    ),
+                    msg="root B must not be reported as FIELD_VALUE / MISSING",
+                )
+                self.assertTrue(
+                    all(
+                        issue.blast_radius is not None
+                        and issue.blast_radius.startswith(
+                            "affected canonical context only"
+                        )
+                        for issue in semantic
+                    )
+                )
 
     def test_equal_loss_rate_values_are_not_deduplicated_across_components(self) -> None:
         # Both components state the same value: two contexts are still constructed.
