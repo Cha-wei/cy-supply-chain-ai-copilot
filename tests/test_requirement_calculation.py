@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import unittest
 import uuid
+from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,8 @@ from snapshot_loader.canonical_objects import (
 from snapshot_loader.requirement_calculation import (
     OUTCOME_DATA_INCOMPLETE,
     RULE_ID,
+    _context_by_grain,
+    _with_cumulative,
     base_requirement,
     gross_requirement,
 )
@@ -1282,6 +1285,309 @@ class OutputAndBoundaryTests(RequirementCalculationTestCase):
         for forbidden in ("NUMERIC", "OK", "SUCCESS", "COMPLETE", "READY"):
             with self.subTest(forbidden=forbidden):
                 self.assertNotEqual(calculation["outcome"], forbidden)
+
+
+class NonHashableGrainLookupTests(RequirementCalculationTestCase):
+    """A non-hashable grain value is never a Python ``TypeError`` (Issue #142).
+
+    ``list`` / ``dict`` accepted values are legal wire content but cannot be used as
+    deterministic mapping keys.  The rule must keep the original canonical value, keep the
+    affected calculation in the result as ``DATA_INCOMPLETE`` with no numeric derived fields,
+    and never retype, stringify, serialize or borrow a value to obtain a key.
+    """
+
+    def simple_construction(self, *, name: str, material: Any, include_loss_rate: bool):
+        """Real package: one requirement + one BOM Component with the given material.
+
+        The I-2 handoff names the very same component material, so a non-hashable component
+        really does travel into the resolved Requirement Calculation Context grain (the
+        canonicalization seam carries the value unchanged).
+        """
+
+        return self.single_component_construction(
+            name=name,
+            component=material,
+            component_material=material,
+            include_loss_rate=include_loss_rate,
+        )
+
+    def assert_malformed_row(self, calculation, material: Any) -> None:
+        self.assertEqual(calculation.outcome, OUTCOME_DATA_INCOMPLETE)
+        self.assertIsNone(calculation.base_requirement)
+        self.assertIsNone(calculation.gross_requirement)
+        self.assertIsNone(calculation.cumulative_gross_requirement)
+        self.assertFalse(calculation.has_numeric_result)
+        # The original accepted representation is retained for trace / audit.
+        self.assertEqual(calculation.component_material_code, material)
+
+    def test_list_component_material_is_data_incomplete_without_crash(self) -> None:
+        """A: a real BOM Component with ``material_code = []`` never crashes."""
+
+        construction = self.simple_construction(
+            name="list-material", material=[], include_loss_rate=False
+        )
+        result = compute_requirement_calculation(construction)
+        self.assertEqual(len(result.calculations), 1)
+        self.assert_malformed_row(result.calculations[0], [])
+        self.assertIn("loss_rate", result.calculations[0].notes[0])
+
+    def test_dict_component_material_is_data_incomplete_without_crash(self) -> None:
+        """B: ``material_code = {}`` behaves the same way."""
+
+        construction = self.simple_construction(
+            name="dict-material", material={}, include_loss_rate=False
+        )
+        result = compute_requirement_calculation(construction)
+        self.assert_malformed_row(result.calculations[0], {})
+
+    def test_list_component_material_with_a_loss_rate_handoff(self) -> None:
+        """The I-2 context path is equally safe when the component grain is not hashable.
+
+        This is a **reachable** path: the handoff names the same non-hashable component, so
+        the resolved context grain really carries ``[]`` (never retyped) and the context
+        index must not crash on it.
+        """
+
+        construction = self.simple_construction(
+            name="list-material-with-loss-rate",
+            material=[],
+            include_loss_rate=True,
+        )
+        self.assertEqual(len(construction.loss_rate_contexts), 1)
+        self.assertEqual(
+            [prop.value for prop in construction.loss_rate_contexts[0].grain],
+            [PLANT, PARENT, REQUIRED_DATE, []],
+        )
+        result = compute_requirement_calculation(construction)
+        self.assert_malformed_row(result.calculations[0], [])
+        # The unusable context is never selected and loss_rate is never defaulted.
+        self.assertIsNone(result.calculations[0].loss_rate)
+        self.assertIsNone(result.calculations[0].loss_rate_provenance)
+
+    def test_dict_component_material_with_a_loss_rate_handoff(self) -> None:
+        construction = self.simple_construction(
+            name="dict-material-with-loss-rate",
+            material={},
+            include_loss_rate=True,
+        )
+        self.assertEqual(len(construction.loss_rate_contexts), 1)
+        result = compute_requirement_calculation(construction)
+        self.assert_malformed_row(result.calculations[0], {})
+        self.assertIsNone(result.calculations[0].loss_rate)
+
+    def test_valid_component_alongside_malformed_component(self) -> None:
+        """C / D: the malformed calculation never poisons the valid one."""
+
+        requirement = self.requirement_record(production_qty="100")
+        dates = ("2026-10-10", "2026-10-15")
+        _, accepted = self.accepted(
+            [
+                (
+                    "Production Requirement",
+                    [
+                        self.requirement_record(required_date=dates[0], production_qty="100"),
+                        self.requirement_record(required_date=dates[1], production_qty="70"),
+                    ],
+                ),
+                (
+                    "BOM Component",
+                    [
+                        self.bom_record(
+                            required_date=dates[0], material=COMPONENT, bom_component_qty="1", loss_rate="0"
+                        ),
+                        self.bom_record(
+                            required_date=dates[1], material=COMPONENT, bom_component_qty="1", loss_rate="0"
+                        ),
+                        self.bom_record(
+                            required_date=dates[0], material=[], bom_component_qty="5", loss_rate=OMIT
+                        ),
+                    ],
+                ),
+            ],
+            name="valid-and-malformed",
+        )
+        construction = construct_canonical_objects(
+            accepted,
+            PhaseAHandoff(
+                analysis_run_id="RUN-1",
+                analysis_date="2026-10-01",
+                bom_parent_context=tuple(
+                    BomParentContextHandoff(
+                        bom_evidence=self.citation(
+                            accepted, role="BOM Component", artifact="1.json", ordinal=index
+                        ),
+                        parent_evidence=self.citation(
+                            accepted,
+                            role="Production Requirement",
+                            artifact="0.json",
+                            ordinal=0 if index == 0 else 1,
+                        ),
+                    )
+                    for index in (0, 1, 2)
+                ),
+                loss_rate=tuple(
+                    self.loss_rate_handoff(
+                        accepted,
+                        value="0",
+                        required_date=dates[index],
+                        ordinal=index,
+                    )
+                    for index in (0, 1)
+                ),
+            ),
+        )
+        result = compute_requirement_calculation(construction)
+        self.assertEqual(len(result.calculations), 3)
+
+        numeric = {row.required_date: row for row in result.calculations if row.has_numeric_result}
+        self.assertEqual(sorted(numeric), list(dates))
+        first, second = numeric[dates[0]], numeric[dates[1]]
+        self.assert_exact(first.gross_requirement, Fraction(100))
+        self.assert_exact(first.cumulative_gross_requirement, Fraction(100))
+        self.assert_exact(second.gross_requirement, Fraction(70))
+        self.assert_exact(second.cumulative_gross_requirement, Fraction(170))
+
+        malformed = [row for row in result.calculations if not row.has_numeric_result]
+        self.assertEqual(len(malformed), 1)
+        self.assert_malformed_row(malformed[0], [])
+        # The invalid evidence never joins the valid cumulative group.
+        self.assertIsNone(malformed[0].cumulative_gross_requirement)
+
+    def test_loss_rate_context_with_non_hashable_grain_is_not_indexed(self) -> None:
+        """E: an injected context whose grain cannot be a key is never indexed or selected."""
+
+        provenance = EvidenceReference(
+            snapshot_package_identity="SIMULATED-PKG-0001",
+            logical_dataset_role="BOM Component",
+            artifact="1.json",
+            record_ordinal=0,
+            logical_observation="loss_rate",
+            stable_source_evidence_locators=("SIMULATED-SRC-LOSS-M2",),
+            mapping_resolution_basis=BASIS_LOSS_RATE,
+        )
+        tampered = ContextValueReference(
+            semantic="loss_rate",
+            grain=(
+                CanonicalProperty("plant_id", PLANT),
+                CanonicalProperty("material_code", []),
+                CanonicalProperty("required_date", REQUIRED_DATE),
+                CanonicalProperty("component_material_code", COMPONENT),
+            ),
+            value="0.05",
+            provenance=provenance,
+        )
+        # The unsafe context is simply not indexed -- no crash, no replacement of a valid one.
+        self.assertEqual(_context_by_grain((tampered,)), {})
+
+        construction = self.single_component_construction(
+            name="tampered-context", component=COMPONENT, include_loss_rate=False
+        )
+        self.assertEqual(construction.loss_rate_contexts, ())
+        report = replace(construction, loss_rate_contexts=(tampered,))
+        result = compute_requirement_calculation(report)
+        calculation = result.calculations[0]
+        self.assertEqual(calculation.outcome, OUTCOME_DATA_INCOMPLETE)
+        self.assertIsNone(calculation.gross_requirement)
+        # No loss_rate default and no selection of the unusable context.
+        self.assertIsNone(calculation.loss_rate)
+        self.assertIsNone(calculation.loss_rate_provenance)
+
+    def test_dict_loss_rate_context_grain_is_not_indexed(self) -> None:
+        tampered = ContextValueReference(
+            semantic="loss_rate",
+            grain=(
+                CanonicalProperty("plant_id", PLANT),
+                CanonicalProperty("material_code", PARENT),
+                CanonicalProperty("required_date", REQUIRED_DATE),
+                CanonicalProperty("component_material_code", {}),
+            ),
+            value="0.05",
+            provenance=EvidenceReference(
+                snapshot_package_identity="SIMULATED-PKG-0001",
+                logical_dataset_role="BOM Component",
+                artifact="1.json",
+                record_ordinal=0,
+            ),
+        )
+        self.assertEqual(_context_by_grain((tampered,)), {})
+
+    def test_normal_loss_rate_context_still_resolves(self) -> None:
+        """F: the registered four-part grain keeps working."""
+
+        construction = self.single_component_construction(
+            name="normal-context", component=COMPONENT, include_loss_rate=True
+        )
+        self.assertEqual(len(construction.loss_rate_contexts), 1)
+        result = compute_requirement_calculation(construction)
+        calculation = result.calculations[0]
+        self.assertIsNone(calculation.outcome)
+        self.assert_exact(calculation.gross_requirement, Fraction(200))
+
+    def test_duplicate_valid_contexts_remain_unresolved_without_precedence(self) -> None:
+        """G: exactly-one-or-unresolved is unchanged -- no first / last wins, no dedup."""
+
+        construction = self.single_component_construction(
+            name="duplicate-contexts", component=COMPONENT, include_loss_rate=True
+        )
+        context = construction.loss_rate_contexts[0]
+        duplicated = replace(
+            construction, loss_rate_contexts=(context, context)
+        )
+        result = compute_requirement_calculation(duplicated)
+        calculation = result.calculations[0]
+        self.assertEqual(calculation.outcome, OUTCOME_DATA_INCOMPLETE)
+        self.assertIsNone(calculation.gross_requirement)
+        self.assertIsNone(calculation.loss_rate)
+
+    def test_cumulative_pass_keeps_numeric_and_malformed_rows(self) -> None:
+        """D / defensive: the cumulative pass tolerates an ungroupable numeric grain."""
+
+        construction = self.two_date_construction(
+            name="cumulative-mixed",
+            quantities=("100", "70"),
+            loss_rates=("0", "0"),
+        )
+        numeric = list(compute_requirement_calculation(construction).calculations)
+        self.assertTrue(all(row.has_numeric_result for row in numeric))
+
+        tampered = [replace(row, component_material_code=[]) for row in numeric]
+        outbound = _with_cumulative(tampered)
+        self.assertEqual(len(outbound), 2)
+        for row in outbound:
+            # The value is never retyped and no group is fabricated from repr()/str().
+            self.assertEqual(row.component_material_code, [])
+            self.assertIsNone(row.cumulative_gross_requirement)
+            self.assertIsNotNone(row.gross_requirement)
+
+    def test_exact_arithmetic_and_non_terminating_fractions_are_unchanged(self) -> None:
+        """H: the exact rational results, including 4000/19, are untouched."""
+
+        construction = self.single_component_construction(
+            name="exact-unchanged", component=COMPONENT, loss_rate="0.05"
+        )
+        calculation = compute_requirement_calculation(construction).calculations[0]
+        self.assertIsNone(calculation.outcome)
+        self.assert_exact(calculation.base_requirement, Fraction(200))
+        self.assert_exact(calculation.gross_requirement, Fraction(4000, 19))
+        self.assertEqual(calculation.gross_requirement.denominator, 19)
+        self.assert_exact(calculation.cumulative_gross_requirement, Fraction(4000, 19))
+
+    def test_malformed_row_serialization_is_deterministic(self) -> None:
+        """I: trace keeps the original value, the numeric fields stay null, deterministically."""
+
+        construction = self.simple_construction(
+            name="malformed-serialization", material=[], include_loss_rate=False
+        )
+        first = compute_requirement_calculation(construction).to_dict()
+        second = compute_requirement_calculation(construction).to_dict()
+        self.assertEqual(first, second)
+        payload = first["calculations"][0]
+        self.assertEqual(payload["component_material_code"], [])
+        self.assertEqual(payload["outcome"], OUTCOME_DATA_INCOMPLETE)
+        self.assertIsNone(payload["BaseRequirement"])
+        self.assertIsNone(payload["GrossRequirement"])
+        self.assertIsNone(payload["CumulativeGrossRequirement"])
+        self.assertIsNone(payload["loss_rate"])
 
 
 if __name__ == "__main__":
