@@ -288,6 +288,27 @@ def _context_grain_key(context: ContextValueReference) -> tuple[Any, ...]:
     return tuple(prop.value for prop in context.grain)
 
 
+def _groupable(values: tuple[Any, ...]) -> bool:
+    """Whether a calculation grain can be used as a deterministic mapping / grouping key.
+
+    A canonical grain component is legal wire / runtime content but not necessarily
+    hashable: a JSON array or object in a ``ContextValueReference.grain`` or in an accepted
+    component ``material_code`` makes ``dict.get`` / ``dict.setdefault`` raise ``TypeError``
+    and would break the whole requirement calculation.
+
+    The values are never retyped, stringified or serialized to obtain hashability; a grain
+    that cannot be used as a key simply provides no reliable exact Requirement Calculation
+    Context and leaves the affected calculation ``DATA_INCOMPLETE`` (``§2.4.7`` /
+    ``§4.4.15``).  No new taxonomy is introduced.
+    """
+
+    try:
+        hash(values)
+    except TypeError:
+        return False
+    return True
+
+
 def _context_by_grain(
     contexts: Iterable[ContextValueReference],
 ) -> dict[tuple[Any, ...], ContextValueReference]:
@@ -296,12 +317,19 @@ def _context_by_grain(
     Exactly one context per registered four-part grain is the canonicalization contract
     (``§4.3.31`` G I-2 / ``§4.4.15``); if one grain somehow appears more than once it is
     kept out of the index rather than letting one silently win.
+
+    A context whose grain cannot serve as a deterministic grouping key is not indexed at
+    all: it can never be selected, and it neither replaces nor is replaced by another
+    context.  The affected calculation then simply finds no exact context and stays
+    ``DATA_INCOMPLETE`` -- ``loss_rate`` is never defaulted to 0.
     """
 
     index: dict[tuple[Any, ...], ContextValueReference] = {}
     duplicated: set[tuple[Any, ...]] = set()
     for context in contexts:
         key = _context_grain_key(context)
+        if not _groupable(key):
+            continue
         if key in index:
             duplicated.add(key)
             continue
@@ -553,9 +581,22 @@ def _calculate_component(
         )
 
     # --- prerequisite: resolved loss_rate Requirement Calculation Context ----------
-    context = contexts.get(
-        (plant_id, parent_material, required_date, component_material)
-    )
+    context_key = (plant_id, parent_material, required_date, component_material)
+    if not _groupable(context_key):
+        # The exact Requirement Calculation Context cannot even be looked up: one grain
+        # component carries an accepted representation that is not usable as a
+        # deterministic key.  The original value is retained for trace / audit, nothing is
+        # retyped, stringified or borrowed, and no loss_rate default is applied.
+        return incomplete(
+            "the calculation grain cannot be used as a deterministic lookup key because a "
+            "grain component carries an accepted representation that is not hashable "
+            f"(plant_id={plant_id!r}, parent material_code={parent_material!r}, "
+            f"required_date={required_date!r}, component material_code="
+            f"{component_material!r}); no Requirement Calculation Context is selected, the "
+            "value is never retyped or stringified and no loss_rate default is applied "
+            "(§2.4.7 / §4.4.15)"
+        )
+    context = contexts.get(context_key)
     if context is None:
         # ``§4.4.15`` root A / B: the exact context was never resolved for this grain, or
         # its required value is absent.  Both are ``DATA_INCOMPLETE``, and the value is
@@ -665,13 +706,23 @@ def _with_cumulative(
     first-wins / last-wins selection -- and no cross-plant or cross-component aggregation
     happens.  The accumulation stays in exact rational arithmetic: no ``Decimal`` context
     precision is re-entered.
+
+    Only calculations that actually carry a numeric ``GrossRequirement`` enter the grouping:
+    an incomplete calculation keeps ``CumulativeGrossRequirement = None`` and is never pulled
+    into a group (its grain representation may not even be usable as a grouping key).  As a
+    defensive guarantee, a numeric grain that still cannot be grouped keeps an unresolved
+    cumulative value instead of breaking the whole result -- the value is never retyped,
+    stringified or grouped by ``repr``, and no same-value deduplication happens.
     """
 
     groups: dict[tuple[Any, Any], list[int]] = {}
     for position, item in enumerate(calculations):
-        groups.setdefault((item.plant_id, item.component_material_code), []).append(
-            position
-        )
+        if not item.has_numeric_result:
+            continue
+        key = (item.plant_id, item.component_material_code)
+        if not _groupable(key):
+            continue
+        groups.setdefault(key, []).append(position)
 
     cumulative: dict[int, Fraction] = {}
     for positions in groups.values():
