@@ -38,16 +38,20 @@ Input boundary: the rule consumes the already constructed
 :class:`~snapshot_loader.canonical_objects.CanonicalConstructionReport` only --
 ``objects_for`` ／ ``unresolved_for("Inventory Snapshot")``, the I-9
 ``inventory_scope_contexts`` ／ ``inventory_scope_for()``, the resolved ``Configured Safety
-Stock`` canonical objects (``§4.1.4 O`` -- the registered carrier of the configured value)
-and ``safety_stock_contexts`` (the I-5 injected policy context).  It never re-reads a raw
-snapshot artifact, never re-resolves a Warehouse, never re-runs source mapping, never infers
-scope from a dataset role or a Warehouse name, never reads ``_meta`` itself, and never
-creates a ``warehouse_id`` or any new canonical field.
+Stock`` canonical objects (``§4.1.4 O`` -- the registered carrier of the configured value),
+their **unresolved** surface (present-but-unresolved evidence) and ``safety_stock_contexts``
+(the I-5 injected policy context).  It never re-reads a raw snapshot artifact, never
+re-resolves a Warehouse, never re-runs source mapping, never infers scope from a dataset role
+or a Warehouse name, never reads ``_meta`` itself, and never creates a ``warehouse_id`` or any
+new canonical field.
 
 ``SafetyStock`` is resolved from **exactly one** candidate across both surfaces; the two are
 never merged and no precedence is applied (``§4.4.102`` C): the seam already refuses the I-5
 handoff when the ``Configured Safety Stock`` dataset itself states the grain, so a report
-that still offers both leaves the value unresolved rather than picking one.
+that still offers both leaves the value unresolved rather than picking one.  A value that is
+**absent** and a value that **exists but cannot be resolved to exactly one** are kept apart
+(``§4.4.80`` MISSING limitation): only the former is ``FIELD_VALUE`` ／ ``MISSING``, while the
+latter stays unresolved as present-but-unresolved and is never restated as missing.
 
 Deliberately **not** implemented here: ``ProjectedAvailable`` ／ ``Classification`` ／
 ``ShortageQty`` ／ ``BufferGap`` ／ ``FirstShortageDate`` (``BR-SHORTAGE-001``),
@@ -122,6 +126,17 @@ SCOPE_STATE_UNRESOLVED: str = "SCOPE_UNRESOLVED"
 EXCLUSION_OUT_OF_SCOPE: str = "OUT_OF_SCOPE"
 EXCLUSION_INSPECTION: str = "INSPECTION"
 EXCLUSION_FROZEN: str = "FROZEN"
+
+#: Runtime resolution states of the independent ``SafetyStock`` input, for trace only (they
+#: are runtime labels, not canonical vocabulary and not a new Data Quality taxonomy).  They
+#: exist so a downstream rule can tell a genuinely absent value apart from one that exists
+#: but cannot be resolved -- ``missing != present-but-unresolved`` (``§4.4.80`` MISSING
+#: limitation / ``§4.4.12``).
+SAFETY_STOCK_STATE_RESOLVED: str = "SAFETY_STOCK_RESOLVED"
+SAFETY_STOCK_STATE_MISSING: str = "SAFETY_STOCK_MISSING"
+SAFETY_STOCK_STATE_UNRESOLVED: str = "SAFETY_STOCK_EVIDENCE_UNRESOLVED"
+SAFETY_STOCK_STATE_UNUSABLE: str = "SAFETY_STOCK_EVIDENCE_UNUSABLE"
+SAFETY_STOCK_STATE_AMBIGUOUS: str = "SAFETY_STOCK_AMBIGUOUS"
 
 
 # --- result representation ---------------------------------------------------------
@@ -217,10 +232,15 @@ class InventoryTarget:
 
     ``opening_usable_inventory`` is ``None`` when the **inventory side** of the target is
     unreliable (scope ／ ownership ／ status ／ ``on_hand_qty``); ``safety_stock`` is ``None``
-    when the **SafetyStock side** is unreliable (missing ／ invalid ／ negative ／ more than one
-    reliable value).  ``outcome`` is ``DATA_INCOMPLETE`` when either side is unreliable -- the
-    two independent inputs are reported separately (``§2.2.7`` ／ ``§2.2.9``) and a partial
-    success never becomes a normal numeric result.
+    when the **SafetyStock side** is unreliable.  ``safety_stock_state`` keeps the root
+    condition of that side distinguishable: a genuinely absent value
+    (``SAFETY_STOCK_MISSING``), evidence that exists but could not be resolved to exactly one
+    value at the canonical layer (``SAFETY_STOCK_EVIDENCE_UNRESOLVED``), a resolved value
+    that is unusable (``SAFETY_STOCK_EVIDENCE_UNUSABLE``), more than one runtime resolved
+    candidate (``SAFETY_STOCK_AMBIGUOUS``) or a usable value
+    (``SAFETY_STOCK_RESOLVED``).  ``outcome`` is ``DATA_INCOMPLETE`` when either side is
+    unreliable -- the two independent inputs are reported separately (``§2.2.7`` ／
+    ``§2.2.9``) and a partial success never becomes a normal numeric result.
     """
 
     plant_id: Any
@@ -230,6 +250,7 @@ class InventoryTarget:
     opening_usable_inventory: ExactQuantity | None
     safety_stock: ExactQuantity | None
     outcome: str | None = None
+    safety_stock_state: str = SAFETY_STOCK_STATE_MISSING
     safety_stock_provenance: EvidenceReference | None = None
     notes: tuple[str, ...] = ()
     inherited_issues: tuple[Issue, ...] = ()
@@ -265,6 +286,7 @@ class InventoryTarget:
             "inventory_snapshot_time": self.inventory_snapshot_time,
             "OpeningUsableInventory": _quantity_text(self.opening_usable_inventory),
             "SafetyStock": _quantity_text(self.safety_stock),
+            "safety_stock_state": self.safety_stock_state,
             "outcome": self.outcome,
             "notes": list(self.notes),
             "safety_stock_provenance": _provenance_payload(self.safety_stock_provenance),
@@ -373,7 +395,7 @@ def compute_opening_usable_inventory(
                 material_code=key[1],
                 inventory_snapshot_time=key[2],
                 observations=tuple(groups[key]),
-                safety_stock_candidates=_safety_stock_candidates(
+                safety_stock_evidence=_safety_stock_evidence(
                     construction, plant_id=key[0], material_code=key[1]
                 ),
             )
@@ -410,8 +432,8 @@ def _evaluate_target(
     material_code: Any,
     inventory_snapshot_time: Any,
     observations: tuple[CanonicalObject, ...],
-    safety_stock_candidates: tuple[
-        tuple[Any, EvidenceReference | None, str], ...
+    safety_stock_evidence: tuple[
+        tuple[tuple[Any, EvidenceReference | None, str], ...], tuple[str, ...]
     ],
 ) -> InventoryTarget:
     """Evaluate one exact Plant-level grain: inventory side + independent SafetyStock side."""
@@ -462,10 +484,17 @@ def _evaluate_target(
             )
 
     # --- SafetyStock side (independent classification threshold, §2.2.5 / §2.2.7) ---
-    safety_stock, safety_provenance, safety_rule_issues, safety_notes = _resolve_safety_stock(
+    (
+        safety_stock,
+        safety_provenance,
+        safety_state,
+        safety_rule_issues,
+        safety_notes,
+    ) = _resolve_safety_stock(
         plant_id=plant_id,
         material_code=material_code,
-        candidates=safety_stock_candidates,
+        candidates=safety_stock_evidence[0],
+        unresolved_evidence=safety_stock_evidence[1],
     )
     notes.extend(safety_notes)
 
@@ -495,6 +524,7 @@ def _evaluate_target(
         opening_usable_inventory=opening,
         safety_stock=safety_stock,
         outcome=outcome,
+        safety_stock_state=safety_state,
         safety_stock_provenance=safety_provenance,
         notes=tuple(notes),
         inherited_issues=inherited,
@@ -725,28 +755,12 @@ def _evaluate_observation(
             ),
         )
 
-    if status_value in INELIGIBLE_INVENTORY_STATUSES:
-        # Valid but ineligible (INSPECTION ／ FROZEN): contributes 0, no Data Quality Issue.
-        exclusion = (
-            EXCLUSION_INSPECTION
-            if status_value == "INSPECTION"
-            else EXCLUSION_FROZEN
-        )
-        return evaluation(
-            scope_resolved=True,
-            ownership_resolved=True,
-            in_scope=True,
-            scope_state=SCOPE_STATE_IN_SCOPE,
-            eligible=ExactQuantity(0, 0),
-            contribution=ExactQuantity(0, 0),
-            exclusion_reason=exclusion,
-            notes=(
-                f"inventory_status {status_value} is valid but ineligible: contribution 0 "
-                "and no Data Quality Issue (§2.2.3 B ／ C)",
-            ),
-        )
-
     # --- on_hand_qty (exact canonical quantity) -------------------------------------
+    # The quantity is validated **before** eligibility is applied: ``INSPECTION`` /
+    # ``FROZEN`` are only "valid but ineligible" when the record itself is valid, and a
+    # negative / missing / malformed ``on_hand_qty`` is a rule-level invalid prerequisite
+    # for every status (``§2.2.8`` / ``§2.2.9``).  A non-contributing record never becomes
+    # a way to smuggle invalid evidence past validation.
     if on_hand is None:
         if on_hand_value is ABSENT:
             reason = REASON_MISSING
@@ -768,7 +782,7 @@ def _evaluate_observation(
             outcome=INVENTORY_DATA_INCOMPLETE,
             notes=(
                 "on_hand_qty is not a usable canonical quantity, so the grain produces no "
-                "numeric result (§2.2.8 / §2.2.9)",
+                "numeric result regardless of the inventory status (§2.2.8 / §2.2.9)",
             ),
             rule_issues=(
                 _field_issue(
@@ -783,7 +797,8 @@ def _evaluate_observation(
     if on_hand.negative:
         # Negative inventory is a rule-level invalid prerequisite: never clamped, never
         # abs()'d, never dropped while the rest of the grain keeps a normal total
-        # (``§2.2.8``: even ``100 + (-5) = 95`` is forbidden).
+        # (``§2.2.8``: even ``100 + (-5) = 95`` is forbidden) -- and never waived because the
+        # status happens to be ineligible.
         return evaluation(
             scope_resolved=True,
             ownership_resolved=True,
@@ -809,6 +824,28 @@ def _evaluate_observation(
             ),
         )
 
+    if status_value in INELIGIBLE_INVENTORY_STATUSES:
+        # ``INSPECTION`` / ``FROZEN`` are valid but ineligible: the record passed the status
+        # and quantity validation above, so it contributes 0 with no Data Quality Issue.
+        exclusion = (
+            EXCLUSION_INSPECTION
+            if status_value == "INSPECTION"
+            else EXCLUSION_FROZEN
+        )
+        return evaluation(
+            scope_resolved=True,
+            ownership_resolved=True,
+            in_scope=True,
+            scope_state=SCOPE_STATE_IN_SCOPE,
+            eligible=ExactQuantity(0, 0),
+            contribution=ExactQuantity(0, 0),
+            exclusion_reason=exclusion,
+            notes=(
+                f"inventory_status {status_value} is valid but ineligible: contribution 0 "
+                "and no Data Quality Issue (§2.2.3 B ／ C)",
+            ),
+        )
+
     return evaluation(
         scope_resolved=True,
         ownership_resolved=True,
@@ -826,16 +863,23 @@ def _evaluate_observation(
 # --- SafetyStock ------------------------------------------------------------------
 
 
-def _safety_stock_candidates(
+def _safety_stock_evidence(
     construction: CanonicalConstructionReport, *, plant_id: Any, material_code: Any
-) -> tuple[tuple[Any, EvidenceReference | None, str], ...]:
-    """Every resolved SafetyStock candidate of one ``plant_id`` + ``material_code`` grain.
+) -> tuple[tuple[tuple[Any, EvidenceReference | None, str], ...], tuple[str, ...]]:
+    """Resolved SafetyStock candidates **and** present-but-unresolved evidence of one grain.
 
     Two approved surfaces can carry the configured value: the resolved ``Configured Safety
     Stock`` canonical objects (``§4.1.4 O``) and the I-5 injected ``safety_stock_contexts``
     (a policy evidence record inside the same package).  Both are collected **without**
     merging them and without any precedence (``§4.4.102`` C): the caller receives the full
     candidate set so ``>1`` stays unresolved instead of silently winning.
+
+    Accepted ``Configured Safety Stock`` evidence that the canonical layer could **not**
+    resolve to exactly one object (more than one record on the same grain -- conflicting or
+    equal-valued) is returned separately as ``unresolved_evidence``.  That distinction is
+    what keeps a genuinely absent value apart from a value that is *present but
+    unresolved*: the canonical layer owns that finding (``§4.4.12`` / ``§4.4.102`` C) and the
+    rule must never restate it as ``MISSING``.  No unresolved value is ever read.
 
     The grain is ``plant_id`` + ``material_code`` only -- the inventory snapshot time is
     deliberately irrelevant (``§2.2.5``).
@@ -866,7 +910,17 @@ def _safety_stock_candidates(
         candidates.append(
             (context.value, context.provenance, "injected SafetyStock context (I-5)")
         )
-    return tuple(candidates)
+
+    unresolved_evidence = tuple(
+        sorted(
+            obj.record_reference
+            for obj in construction.unresolved_for("Configured Safety Stock")
+            if obj.grain is not None
+            and obj.value_of("plant_id", ABSENT) == plant_id
+            and obj.value_of("material_code", ABSENT) == material_code
+        )
+    )
+    return tuple(candidates), unresolved_evidence
 
 
 def _resolve_safety_stock(
@@ -874,20 +928,38 @@ def _resolve_safety_stock(
     plant_id: Any,
     material_code: Any,
     candidates: tuple[tuple[Any, EvidenceReference | None, str], ...],
-) -> tuple[ExactQuantity | None, EvidenceReference | None, tuple[Issue, ...], tuple[str, ...]]:
+    unresolved_evidence: tuple[str, ...],
+) -> tuple[
+    ExactQuantity | None,
+    EvidenceReference | None,
+    str,
+    tuple[Issue, ...],
+    tuple[str, ...],
+]:
     """Resolve the independent ``SafetyStock`` classification threshold for one grain.
 
-    Exactly one reliable candidate is used; ``0`` is a legal configured value and is never
-    treated as missing, while a missing, invalid, negative or ambiguous value leaves
-    ``SafetyStock`` unresolved (never defaulted to 0, never clamped, never chosen by
-    precedence).
+    The four registered resolution states stay distinguishable so a downstream rule can tell
+    a genuinely absent value apart from one that exists but cannot be resolved::
+
+        A. no applicable evidence at all              -> SAFETY_STOCK_MISSING
+        B. exactly one resolved candidate             -> validate and use (or UNUSABLE)
+        C. evidence exists but exactly-one resolution
+           is unavailable at the canonical layer      -> SAFETY_STOCK_UNRESOLVED (never MISSING)
+        D. more than one runtime resolved candidate   -> SAFETY_STOCK_AMBIGUOUS (no precedence)
+
+    ``0`` is a legal configured value and is never treated as missing.  No value is
+    defaulted to 0, clamped, chosen by first ／ last wins ／ min ／ max, or deduplicated by
+    equal value.
     """
 
     location = f"SafetyStock[{plant_id}|{material_code}]"
-    if not candidates:
+    total = len(candidates)
+
+    if total == 0 and not unresolved_evidence:
         return (
             None,
             None,
+            SAFETY_STOCK_STATE_MISSING,
             (
                 _field_issue(
                     location=location,
@@ -901,121 +973,147 @@ def _resolve_safety_stock(
                 ),
             ),
             (
-                "no reliable SafetyStock value exists for this plant + material grain, so "
-                "the SafetyStock side is unresolved and is never defaulted to 0 "
+                "no SafetyStock evidence exists for this plant + material grain, so the "
+                "SafetyStock side is unresolved and is never defaulted to 0 "
                 "(§2.2.5 / §2.2.6)",
             ),
         )
 
-    if len(candidates) > 1:
-        sources = ", ".join(sorted(source for _value, _prov, source in candidates))
-        return (
-            None,
-            None,
-            (
-                Issue(
-                    location=location,
-                    detail=(
-                        f"{len(candidates)} resolved SafetyStock candidates exist for grain "
-                        f"plant_id={plant_id!r} + material_code={material_code!r} "
-                        f"({sources}); no precedence, min ／ max, first ／ last wins or "
-                        "same-value deduplication is applied and the value stays unresolved "
-                        "(§2.2.5 / §4.4.51)"
-                    ),
-                    category="CONSISTENCY",
-                    reason="CONSISTENCY_CONFLICT",
-                    layer=LAYER_2,
-                    affected_evidence="SafetyStock",
-                    blast_radius=(
-                        "affected SafetyStock grain only (no package rejection)"
-                    ),
-                    design_reference="§4.4.51 / §4.4.92 / §4.4.102 C Stage B",
-                    consequence_context=(
-                        "SafetyStock stays unresolved; no precedence is invented and the "
-                        "package disposition is unchanged"
+    if total == 1 and not unresolved_evidence:
+        raw_value, provenance, source = candidates[0]
+        if raw_value is ABSENT:
+            return (
+                None,
+                provenance,
+                SAFETY_STOCK_STATE_MISSING,
+                (
+                    _field_issue(
+                        location=location,
+                        artifact="SafetyStock",
+                        reason=REASON_MISSING,
+                        detail=(
+                            f"the resolved SafetyStock evidence {source!r} carries no "
+                            "SafetyStock value; the missing field is never defaulted to 0 "
+                            "(§2.2.5 / §4.2.5)"
+                        ),
                     ),
                 ),
-            ),
+                (
+                    f"the resolved SafetyStock evidence {source!r} carries no SafetyStock "
+                    "value, so the SafetyStock side is unresolved (§2.2.5)",
+                ),
+            )
+
+        value = parse_exact_quantity(raw_value)
+        if value is None:
+            return (
+                None,
+                provenance,
+                SAFETY_STOCK_STATE_UNUSABLE,
+                (
+                    _field_issue(
+                        location=location,
+                        artifact="SafetyStock",
+                        reason=REASON_INVALID_TYPE,
+                        detail=(
+                            f"the resolved SafetyStock value {raw_value!r} is not a "
+                            "registered canonical base-10 decimal quantity; it is never "
+                            "coerced and never replaced by 0 (§2.2.5 / §4.4.51)"
+                        ),
+                    ),
+                ),
+                (
+                    "the resolved SafetyStock value is not a usable canonical quantity, so "
+                    "the SafetyStock side is unresolved (§2.2.5)",
+                ),
+            )
+        if value.negative:
+            return (
+                None,
+                provenance,
+                SAFETY_STOCK_STATE_UNUSABLE,
+                (
+                    _field_issue(
+                        location=location,
+                        artifact="SafetyStock",
+                        reason=REASON_OUT_OF_DEFINED_RANGE,
+                        detail=(
+                            f"SafetyStock {value.text()} is negative, which is invalid input; "
+                            "it is never clamped to 0 (§2.2.5 / §4.2.5)"
+                        ),
+                    ),
+                ),
+                (
+                    f"SafetyStock {value.text()} is negative: the SafetyStock side is "
+                    "unresolved and the value is never clamped (§2.2.5)",
+                ),
+            )
+
+        return (
+            value,
+            provenance,
+            SAFETY_STOCK_STATE_RESOLVED,
+            (),
             (
-                f"{len(candidates)} resolved SafetyStock candidates exist for this grain; no "
-                "precedence is applied and the SafetyStock side stays unresolved "
-                "(§2.2.5 / §4.4.51)",
+                f"SafetyStock resolved as {value.text()} from {source} for grain plant_id + "
+                "material_code; it stays an independent classification threshold and is never "
+                "subtracted from OpeningUsableInventory (§2.2.5 / §2.2.7)",
             ),
         )
 
-    raw_value, provenance, source = candidates[0]
-    if raw_value is ABSENT:
+    # Exactly-one resolution is unavailable.  Evidence that exists is *present but
+    # unresolved*, never missing, and no precedence is invented.
+    if unresolved_evidence and total == 0:
         return (
             None,
-            provenance,
+            None,
+            SAFETY_STOCK_STATE_UNRESOLVED,
+            (),
             (
-                _field_issue(
-                    location=location,
-                    artifact="SafetyStock",
-                    reason=REASON_MISSING,
-                    detail=(
-                        f"the resolved SafetyStock evidence {source!r} carries no SafetyStock "
-                        "value; it is never defaulted to 0 (§2.2.5 / §4.2.5)"
-                    ),
-                ),
-            ),
-            (
-                "the resolved SafetyStock evidence carries no value, so the SafetyStock side "
-                "is unresolved and is never defaulted to 0 (§2.2.5)",
+                "SafetyStock evidence exists for this grain but the canonical layer could not "
+                "resolve it to exactly one value (" + ", ".join(unresolved_evidence) + "); the "
+                "SafetyStock side stays unresolved as present-but-unresolved and is never "
+                "reported as missing (§4.4.12 / §4.4.51 / §4.4.102 C)",
             ),
         )
 
-    value = parse_exact_quantity(raw_value)
-    if value is None:
-        return (
-            None,
-            provenance,
-            (
-                _field_issue(
-                    location=location,
-                    artifact="SafetyStock",
-                    reason=REASON_INVALID_TYPE,
-                    detail=(
-                        f"the resolved SafetyStock value {raw_value!r} is not a registered "
-                        "canonical base-10 decimal quantity; it is never coerced and never "
-                        "replaced by 0 (§2.2.5 / §4.4.51)"
-                    ),
-                ),
-            ),
-            (
-                "the resolved SafetyStock value is not a usable canonical quantity, so the "
-                "SafetyStock side is unresolved (§2.2.5)",
-            ),
-        )
-    if value.negative:
-        return (
-            None,
-            provenance,
-            (
-                _field_issue(
-                    location=location,
-                    artifact="SafetyStock",
-                    reason=REASON_OUT_OF_DEFINED_RANGE,
-                    detail=(
-                        f"SafetyStock {value.text()} is negative, which is invalid input; it "
-                        "is never clamped to 0 (§2.2.5 / §4.2.5)"
-                    ),
-                ),
-            ),
-            (
-                f"SafetyStock {value.text()} is negative: the SafetyStock side is "
-                "unresolved and the value is never clamped (§2.2.5)",
-            ),
-        )
-
+    sources = ", ".join(sorted(source for _value, _prov, source in candidates))
+    ambiguous_evidence = (
+        "; unresolved evidence: " + ", ".join(unresolved_evidence)
+        if unresolved_evidence
+        else ""
+    )
     return (
-        value,
-        provenance,
-        (),
+        None,
+        None,
+        SAFETY_STOCK_STATE_AMBIGUOUS,
         (
-            f"SafetyStock resolved as {value.text()} from {source} for grain plant_id + "
-            "material_code; it stays an independent classification threshold and is never "
-            "subtracted from OpeningUsableInventory (§2.2.5 / §2.2.7)",
+            Issue(
+                location=location,
+                detail=(
+                    f"{total} resolved SafetyStock candidates exist for grain "
+                    f"plant_id={plant_id!r} + material_code={material_code!r} "
+                    f"({sources}){ambiguous_evidence}; no precedence, min ／ max, first ／ "
+                    "last wins or same-value deduplication is applied and the value stays "
+                    "unresolved (§2.2.5 / §4.4.51)"
+                ),
+                category="CONSISTENCY",
+                reason="CONSISTENCY_CONFLICT",
+                layer=LAYER_2,
+                affected_evidence="SafetyStock",
+                blast_radius=(
+                    "affected SafetyStock grain only (no package rejection)"
+                ),
+                design_reference="§4.4.51 / §4.4.92 / §4.4.102 C Stage B",
+                consequence_context=(
+                    "SafetyStock stays unresolved; no precedence is invented and the package "
+                    "disposition is unchanged"
+                ),
+            ),
+        ),
+        (
+            f"{total} resolved SafetyStock candidates exist for this grain; no precedence is "
+            "applied and the SafetyStock side stays unresolved (§2.2.5 / §4.4.51)",
         ),
     )
 
@@ -1211,6 +1309,11 @@ __all__ = [
     "INVENTORY_DATA_INCOMPLETE",
     "INVENTORY_RULE_ID",
     "REGISTERED_INVENTORY_STATUSES",
+    "SAFETY_STOCK_STATE_AMBIGUOUS",
+    "SAFETY_STOCK_STATE_MISSING",
+    "SAFETY_STOCK_STATE_RESOLVED",
+    "SAFETY_STOCK_STATE_UNRESOLVED",
+    "SAFETY_STOCK_STATE_UNUSABLE",
     "SCOPE_STATE_IN_SCOPE",
     "SCOPE_STATE_OUT_OF_SCOPE",
     "SCOPE_STATE_UNRESOLVED",

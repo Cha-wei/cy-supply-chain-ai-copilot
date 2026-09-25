@@ -43,6 +43,10 @@ from snapshot_loader.inventory_calculation import (
     EXCLUSION_INSPECTION,
     EXCLUSION_OUT_OF_SCOPE,
     INVENTORY_RULE_ID,
+    SAFETY_STOCK_STATE_AMBIGUOUS,
+    SAFETY_STOCK_STATE_MISSING,
+    SAFETY_STOCK_STATE_RESOLVED,
+    SAFETY_STOCK_STATE_UNRESOLVED,
     SCOPE_STATE_IN_SCOPE,
     SCOPE_STATE_OUT_OF_SCOPE,
     SCOPE_STATE_UNRESOLVED,
@@ -253,7 +257,7 @@ class InventoryRuleTestCase(unittest.TestCase):
         self,
         records: list[dict[str, object]],
         *,
-        safety_stock: dict[str, object] | None = None,
+        safety_stock: dict[str, object] | list[dict[str, object]] | None = None,
         name: str,
         out_of_scope_ordinals: tuple[int, ...] = (),
         no_scope_ordinals: tuple[int, ...] = (),
@@ -268,7 +272,10 @@ class InventoryRuleTestCase(unittest.TestCase):
             (ROLE_INVENTORY, records)
         ]
         if safety_stock is not None:
-            datasets.append(("Configured Safety Stock", [safety_stock]))
+            safety_records = (
+                safety_stock if isinstance(safety_stock, list) else [safety_stock]
+            )
+            datasets.append(("Configured Safety Stock", safety_records))
         accepted = self.accepted(datasets, name=name)
         in_scope_ordinals = tuple(
             index
@@ -451,6 +458,81 @@ class AcceptanceExampleTests(InventoryRuleTestCase):
                 # Never repaired into a number.
                 self.assertIsNone(target.to_dict()["OpeningUsableInventory"])
 
+    def test_inspection_and_frozen_do_not_bypass_quantity_validation(self) -> None:
+        """A valid-but-ineligible status is only valid when the record itself is valid.
+
+        ``INSPECTION`` / ``FROZEN`` contribute 0 -- but a negative, missing or malformed
+        ``on_hand_qty`` is a rule-level invalid prerequisite for **every** status
+        (``§2.2.8`` / ``§2.2.9``), so it must never be waived as a "non-contributing" row.
+        """
+
+        cases = (
+            ("INSPECTION", "-5", "OUT_OF_DEFINED_RANGE"),
+            ("FROZEN", "-5", "OUT_OF_DEFINED_RANGE"),
+            ("INSPECTION", None, "MISSING"),
+            ("FROZEN", "not-a-decimal", "INVALID_TYPE"),
+        )
+        for status, on_hand, reason in cases:
+            with self.subTest(status=status, on_hand=on_hand):
+                _accepted, _construction, result, target = self.single_target_report(
+                    [INVENTORY(status=status, on_hand=on_hand)],
+                    safety_stock=CONFIGURED_SAFETY_STOCK("0"),
+                    name=f"{status.lower()}-{reason.lower()}",
+                )
+                self.assertEqual(target.outcome, INVENTORY_DATA_INCOMPLETE)
+                self.assertIsNone(target.opening_usable_inventory)
+                self.assertIsNone(target.to_dict()["OpeningUsableInventory"])
+                evaluation = target.evaluations[0]
+                self.assertIsNone(evaluation.contribution)
+                self.assertIsNone(evaluation.eligible_on_hand_qty)
+                # It is a defect, not a legal exclusion.
+                self.assertIsNone(evaluation.exclusion_reason)
+                self.assertEqual(
+                    [(issue.category, issue.reason) for issue in result.rule_issues],
+                    [("FIELD_VALUE", reason)],
+                )
+
+    def test_valid_ineligible_statuses_still_contribute_zero(self) -> None:
+        """The valid-but-ineligible path is not weakened by the quantity validation."""
+
+        for status, value, exclusion in (
+            ("INSPECTION", "40", EXCLUSION_INSPECTION),
+            ("FROZEN", "20", EXCLUSION_FROZEN),
+            ("INSPECTION", "0", EXCLUSION_INSPECTION),
+        ):
+            with self.subTest(status=status, on_hand=value):
+                _accepted, _construction, result, target = self.single_target_report(
+                    [INVENTORY(status=status, on_hand=value)],
+                    safety_stock=CONFIGURED_SAFETY_STOCK("0"),
+                    name=f"valid-{status.lower()}-{value}",
+                )
+                self.assertIsNone(target.outcome)
+                self.assertEqual(target.to_dict()["OpeningUsableInventory"], "0")
+                self.assertEqual(target.evaluations[0].exclusion_reason, exclusion)
+                self.assertEqual(result.issues, ())
+
+    def test_out_of_scope_exclusion_does_not_require_status_or_quantity(self) -> None:
+        """The scope gate stays first: an out-of-scope record is legally excluded."""
+
+        for kwargs in (
+            {"status": "INSPECTION", "on_hand": "-5"},
+            {"status": "UNKNOWN", "on_hand": "not-a-decimal"},
+            {"status": None, "on_hand": None},
+        ):
+            with self.subTest(case=kwargs):
+                _accepted, _construction, result, target = self.single_target_report(
+                    [INVENTORY(basis=BASIS_A_OUT, **kwargs)],
+                    safety_stock=CONFIGURED_SAFETY_STOCK("0"),
+                    name="out-of-scope-no-qty-gate",
+                    out_of_scope_ordinals=(0,),
+                )
+                self.assertIsNone(target.outcome)
+                evaluation = target.evaluations[0]
+                self.assertEqual(evaluation.exclusion_reason, EXCLUSION_OUT_OF_SCOPE)
+                self.assertEqual(evaluation.contribution.text(), "0")
+                self.assertEqual(target.to_dict()["OpeningUsableInventory"], "0")
+                self.assertEqual(result.issues, ())
+
     def test_inspection_only_and_frozen_only_are_valid_zeroes(self) -> None:
         for status, exclusion in (
             ("INSPECTION", EXCLUSION_INSPECTION),
@@ -626,6 +708,71 @@ class SafetyStockTests(InventoryRuleTestCase):
         self.assertEqual(target.to_dict()["SafetyStock"], "0")
         self.assertIsNotNone(target.safety_stock)
 
+    def test_conflicting_configured_safety_stock_is_present_but_unresolved(self) -> None:
+        """``5`` + ``7`` on one grain is a conflict, never a missing value."""
+
+        _accepted, construction, result, target = self.single_target_report(
+            [INVENTORY(on_hand="130")],
+            safety_stock=[
+                CONFIGURED_SAFETY_STOCK("5"),
+                CONFIGURED_SAFETY_STOCK("7"),
+            ],
+            name="safety-stock-conflict",
+        )
+        # The canonical layer keeps both records unresolved and reports the conflict.
+        self.assertEqual(construction.objects_for("Configured Safety Stock"), ())
+        self.assertEqual(len(construction.unresolved_for("Configured Safety Stock")), 2)
+        self.assertIn(
+            ("CONSISTENCY", "CONSISTENCY_CONFLICT"),
+            [(issue.category, issue.reason) for issue in construction.issues],
+        )
+
+        self.assertIsNone(target.safety_stock)
+        self.assertEqual(target.outcome, INVENTORY_DATA_INCOMPLETE)
+        self.assertEqual(target.safety_stock_state, SAFETY_STOCK_STATE_UNRESOLVED)
+        # The upstream conflict is retained and no synthetic MISSING is manufactured.
+        self.assertIn(
+            ("CONSISTENCY", "CONSISTENCY_CONFLICT"),
+            [(issue.category, issue.reason) for issue in target.inherited_issues],
+        )
+        self.assertIn(
+            ("CONSISTENCY", "CONSISTENCY_CONFLICT"),
+            [(issue.category, issue.reason) for issue in result.issues],
+        )
+        self.assertNotIn("MISSING", [issue.reason for issue in result.issues])
+        self.assertNotIn("MISSING", [issue.reason for issue in result.rule_issues])
+        self.assertTrue(any("present-but-unresolved" in note for note in target.notes))
+
+    def test_equal_valued_configured_safety_stock_is_not_deduplicated(self) -> None:
+        """``5`` + ``5`` is never auto-deduplicated into one value and never "missing"."""
+
+        _accepted, construction, result, target = self.single_target_report(
+            [INVENTORY(on_hand="130")],
+            safety_stock=[
+                CONFIGURED_SAFETY_STOCK("5"),
+                CONFIGURED_SAFETY_STOCK("5"),
+            ],
+            name="safety-stock-duplicate",
+        )
+        self.assertEqual(construction.objects_for("Configured Safety Stock"), ())
+        self.assertEqual(len(construction.unresolved_for("Configured Safety Stock")), 2)
+        # No equal-value conflict issue is registered anywhere (§4.4.102 C Stage A), and the
+        # rule must not invent one -- but the value is also not silently taken.
+        self.assertEqual(construction.issues, ())
+        self.assertIsNone(target.safety_stock)
+        self.assertEqual(target.outcome, INVENTORY_DATA_INCOMPLETE)
+        self.assertEqual(target.safety_stock_state, SAFETY_STOCK_STATE_UNRESOLVED)
+        self.assertEqual(result.rule_issues, ())
+        self.assertEqual(result.issues, ())
+        # Evidence exists, so "missing" would be a lie; the runtime state and note say so.
+        self.assertNotEqual(target.safety_stock_state, SAFETY_STOCK_STATE_MISSING)
+        self.assertTrue(
+            any(
+                "present-but-unresolved" in note and "SafetyStock" in note
+                for note in target.notes
+            )
+        )
+
     def test_missing_safety_stock_is_unresolved_and_never_defaulted(self) -> None:
         _accepted, _construction, result, target = self.single_target_report(
             [INVENTORY(on_hand="130")],
@@ -635,6 +782,7 @@ class SafetyStockTests(InventoryRuleTestCase):
         self.assertEqual(target.outcome, INVENTORY_DATA_INCOMPLETE)
         self.assertIsNone(target.safety_stock)
         self.assertIsNone(target.to_dict()["SafetyStock"])
+        self.assertEqual(target.safety_stock_state, SAFETY_STOCK_STATE_MISSING)
         # The reliable inventory side stays reported independently (never a normal result:
         # the target outcome is DATA_INCOMPLETE), and 0 is never invented.
         self.assertEqual(target.to_dict()["OpeningUsableInventory"], "130")
@@ -700,6 +848,7 @@ class SafetyStockTests(InventoryRuleTestCase):
         target = result.targets[0]
         self.assertIsNone(target.outcome)
         self.assertEqual(target.to_dict()["SafetyStock"], "30")
+        self.assertEqual(target.safety_stock_state, SAFETY_STOCK_STATE_RESOLVED)
 
     def test_multiple_safety_stock_candidates_stay_unresolved(self) -> None:
         accepted, construction, _result, target = self.single_target_report(
@@ -726,6 +875,7 @@ class SafetyStockTests(InventoryRuleTestCase):
         ambiguous = result.targets[0]
         self.assertEqual(ambiguous.outcome, INVENTORY_DATA_INCOMPLETE)
         self.assertIsNone(ambiguous.safety_stock)
+        self.assertEqual(ambiguous.safety_stock_state, SAFETY_STOCK_STATE_AMBIGUOUS)
         self.assertEqual(
             [(issue.category, issue.reason) for issue in result.rule_issues],
             [("CONSISTENCY", "CONSISTENCY_CONFLICT")],
@@ -894,6 +1044,7 @@ class OutputAndTraceTests(InventoryRuleTestCase):
             "inventory_snapshot_time",
             "OpeningUsableInventory",
             "SafetyStock",
+            "safety_stock_state",
             "outcome",
             "inventory_evaluations",
             "safety_stock_provenance",
