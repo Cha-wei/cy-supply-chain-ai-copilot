@@ -82,7 +82,6 @@ from .path_scope import validate_artifact_filename
 from .report import ImportReport
 from .requirement_calculation import (
     OUTCOME_DATA_INCOMPLETE,
-    OUTCOME_NUMERIC,
     RULE_ID,
     RequirementCalculation,
     RequirementCalculationResult,
@@ -125,7 +124,6 @@ __all__ = [
     "LossRateHandoff",
     "MANIFEST_FILENAME",
     "OUTCOME_DATA_INCOMPLETE",
-    "OUTCOME_NUMERIC",
     "PHASE_A_ROLE_LITERALS",
     "PhaseAHandoff",
     "RECORD_PROPERTY_SET_CHECK",

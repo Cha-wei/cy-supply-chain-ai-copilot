@@ -51,7 +51,8 @@ from __future__ import annotations
 import datetime as _datetime
 import re
 from dataclasses import dataclass, replace
-from decimal import Decimal, InvalidOperation, localcontext
+from decimal import Decimal, InvalidOperation
+from fractions import Fraction
 from typing import Any, Iterable, Mapping
 
 from .canonical_objects import (
@@ -69,27 +70,19 @@ from .issues import Issue
 
 # --- registered outcome vocabulary -------------------------------------------------
 
-#: Business outcome used by ``§2.4`` and by ``§4.4.85``: a business result, not a
-#: validation issue category / reason.  No new taxonomy is introduced.
-OUTCOME_NUMERIC: str = "NUMERIC"
+#: The only business outcome this rule expresses, and only on failure.  Current canonical
+#: authority registers ``DATA_INCOMPLETE`` (``§2.4.11`` / ``data-dictionary`` §4.2.10 /
+#: ``data-validation`` §4.4.85) and **no** success status such as ``NUMERIC`` / ``OK`` /
+#: ``SUCCESS``.  A successful calculation is expressed by its exact numeric derived results
+#: themselves, with :attr:`RequirementCalculation.outcome` left ``None``.
 OUTCOME_DATA_INCOMPLETE: str = "DATA_INCOMPLETE"
 
 #: The rule identity this module implements.
 RULE_ID: str = "BR-REQUIREMENT-001"
 
 #: ``0 <= loss_rate < 1`` (``§2.4.5`` / ``§2.4.6``).
-LOSS_RATE_MINIMUM: Decimal = Decimal("0")
-LOSS_RATE_MAXIMUM_EXCLUSIVE: Decimal = Decimal("1")
-
-#: Working precision for the ``GrossRequirement`` division.
-#:
-#: ``BaseRequirement / (1 - loss_rate)`` need not terminate in base 10, so the division
-#: is performed under an explicitly widened precision instead of silently inheriting the
-#: library default.  This is **not** a business precision / rounding policy (``§2.4.8``
-#: leaves that to a later Design Rule): no rounding, quantizing or truncation is applied;
-#: the operation is merely carried out with a precision far beyond any registered
-#: quantity semantics so that no intermediate step silently loses digits.
-WORKING_DECIMAL_PRECISION: int = 60
+LOSS_RATE_MINIMUM: Fraction = Fraction(0)
+LOSS_RATE_MAXIMUM_EXCLUSIVE: Fraction = Fraction(1)
 
 _DECIMAL_STRING_RE = re.compile(rf"^{DECIMAL_STRING_PATTERN}$")
 _DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
@@ -104,19 +97,38 @@ CALCULATION_GRAIN_PROPERTIES: tuple[str, ...] = (
 # --- result representation ---------------------------------------------------------
 
 
+def _rational_payload(value: Fraction | None) -> dict[str, int] | None:
+    """Lossless deterministic serialisation of an exact rational quantity.
+
+    ``{"numerator": <integer>, "denominator": <positive integer>}`` -- the canonical
+    in-memory representation of a derived requirement quantity, never a truncated decimal
+    expansion and never a rounded quantity.
+    """
+
+    if value is None:
+        return None
+    return {"numerator": value.numerator, "denominator": value.denominator}
+
+
 @dataclass(frozen=True, slots=True)
 class RequirementCalculation:
     """One deterministic requirement calculation for one calculation grain.
 
     ``grain`` is the calculation grain registered by ``§2.4.2``: ``plant_id`` + component
-    ``material_code`` + ``required_date``.  ``base_requirement`` / ``gross_requirement``
-    are ``None`` exactly when ``outcome`` is ``DATA_INCOMPLETE``: a ``DATA_INCOMPLETE``
-    calculation never carries a numeric ``GrossRequirement`` (``§2.4.11``).
+    ``material_code`` + ``required_date``.  ``outcome`` is ``None`` for a successful
+    calculation and ``DATA_INCOMPLETE`` when a registered prerequisite could not be
+    reliably obtained; a ``DATA_INCOMPLETE`` calculation never carries a numeric
+    ``BaseRequirement`` / ``GrossRequirement`` (``§2.4.11``).
+
+    ``base_requirement`` / ``gross_requirement`` / ``cumulative_gross_requirement`` are
+    **exact rational** values (:class:`fractions.Fraction`).  ``loss_rate`` is the resolved
+    canonical input value parsed exactly from its canonical decimal string; it is not
+    redefined as a new canonical rational field.
 
     Traceability (``§2.4.2``): ``production_requirement_reference`` and
-    ``bom_component_reference`` name the resolved canonical objects this calculation was
-    derived from, ``context_reference`` is the resolved Production Requirement context the
-    BOM Component relationship was bound to, and ``loss_rate_provenance`` is the resolved
+    ``bom_component_reference`` name the canonical objects this calculation was derived
+    from, ``context_reference`` is the resolved Production Requirement context the BOM
+    Component relationship was bound to, and ``loss_rate_provenance`` is the resolved
     Requirement Calculation Context's own provenance.
     """
 
@@ -124,11 +136,11 @@ class RequirementCalculation:
     component_material_code: Any
     required_date: Any
     grain: tuple[CanonicalProperty, ...]
-    base_requirement: Decimal | None
-    loss_rate: Decimal | None
-    gross_requirement: Decimal | None
-    cumulative_gross_requirement: Decimal | None
-    outcome: str
+    base_requirement: Fraction | None
+    loss_rate: Fraction | None
+    gross_requirement: Fraction | None
+    cumulative_gross_requirement: Fraction | None
+    outcome: str | None = None
     notes: tuple[str, ...] = ()
     production_requirement_reference: str | None = None
     bom_component_reference: str | None = None
@@ -144,8 +156,14 @@ class RequirementCalculation:
         return self.outcome == OUTCOME_DATA_INCOMPLETE
 
     @property
-    def numeric(self) -> bool:
-        return self.outcome == OUTCOME_NUMERIC
+    def has_numeric_result(self) -> bool:
+        """Whether this calculation produced an exact numeric derived requirement.
+
+        Derived from the presence of the numeric result itself; **no** success status
+        vocabulary is created or surfaced.
+        """
+
+        return self.gross_requirement is not None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -156,10 +174,10 @@ class RequirementCalculation:
             "grain": [
                 {"name": prop.name, "value": prop.value} for prop in self.grain
             ],
-            "BaseRequirement": _decimal_text(self.base_requirement),
-            "loss_rate": _decimal_text(self.loss_rate),
-            "GrossRequirement": _decimal_text(self.gross_requirement),
-            "CumulativeGrossRequirement": _decimal_text(
+            "BaseRequirement": _rational_payload(self.base_requirement),
+            "loss_rate": _rational_payload(self.loss_rate),
+            "GrossRequirement": _rational_payload(self.gross_requirement),
+            "CumulativeGrossRequirement": _rational_payload(
                 self.cumulative_gross_requirement
             ),
             "outcome": self.outcome,
@@ -187,17 +205,20 @@ class RequirementCalculation:
 class RequirementCalculationResult:
     """Deterministic result of ``BR-REQUIREMENT-001`` for one construction.
 
-    ``calculations`` is ordered deterministically by calculation grain.  No cross-plant or
-    cross-component aggregation is performed: the cumulative value is reported per
-    calculation grain (``plant_id`` + component ``material_code``), which is exactly the
-    grouping ``§2.4.9`` registers.
+    ``calculations`` is ordered deterministically by calculation grain and covers every
+    BOM Component relationship the construction exposes -- resolved relationships produce
+    a numeric calculation when all prerequisites are reliable, and unresolved ones produce
+    the registered ``DATA_INCOMPLETE`` fail-safe result (``§2.4.11`` / Example E) with no
+    numeric derived requirement.  No cross-plant or cross-component aggregation is
+    performed: the cumulative value is reported per calculation grain (``plant_id`` +
+    component ``material_code``), which is exactly the grouping ``§2.4.9`` registers.
     """
 
     calculations: tuple[RequirementCalculation, ...]
 
     @property
     def numeric(self) -> tuple[RequirementCalculation, ...]:
-        return tuple(item for item in self.calculations if item.numeric)
+        return tuple(item for item in self.calculations if item.has_numeric_result)
 
     @property
     def data_incomplete(self) -> tuple[RequirementCalculation, ...]:
@@ -230,14 +251,6 @@ class RequirementCalculationResult:
             "rule": RULE_ID,
             "calculations": [item.to_dict() for item in self.calculations],
         }
-
-
-def _decimal_text(value: Decimal | None) -> str | None:
-    """Render a canonical quantity exactly: plain base-10 digits, never an exponent."""
-
-    if value is None:
-        return None
-    return format(value, "f")
 
 
 # --- arithmetic --------------------------------------------------------------------
@@ -281,9 +294,10 @@ def _context_by_grain(
 def _as_decimal(value: Any) -> Decimal | None:
     """Return the exact base-10 ``Decimal`` for a canonical decimal value.
 
-    Returns ``None`` for JSON ``null``, for a non-string value and for a string that is
-    not a registered base-10 decimal (``§4.3.25`` C-5).  No binary floating point is used,
-    and no value is repaired or defaulted.
+    This is the **canonical input** parser: the accepted decimal string is read exactly as
+    written.  Returns ``None`` for JSON ``null``, for a non-string value and for a string
+    that is not a registered base-10 decimal (``§4.3.25`` C-5).  No binary floating point
+    is used, and no value is repaired or defaulted.
     """
 
     if not isinstance(value, str):
@@ -294,6 +308,20 @@ def _as_decimal(value: Any) -> Decimal | None:
         return Decimal(value)
     except InvalidOperation:  # pragma: no cover - guarded by the pattern
         return None
+
+
+def _as_rational(value: Any) -> Fraction | None:
+    """Parse a canonical decimal value into its **exact** rational value.
+
+    ``Decimal("0.05")`` becomes ``Fraction(1, 20)`` with no intermediate binary float and no
+    dependence on any ``Decimal`` context precision.  ``None`` means the value is not a
+    registered base-10 decimal string (or is absent), and it is never defaulted.
+    """
+
+    parsed = _as_decimal(value)
+    if parsed is None:
+        return None
+    return Fraction(parsed)
 
 
 def _as_date(value: Any) -> _datetime.date | None:
@@ -307,27 +335,30 @@ def _as_date(value: Any) -> _datetime.date | None:
         return None
 
 
-def base_requirement(production_qty: Decimal, bom_component_qty: Decimal) -> Decimal:
-    """``BaseRequirement = ProductionQty x BOMComponentQty`` (``§2.4.3``)."""
+def base_requirement(production_qty: Fraction, bom_component_qty: Fraction) -> Fraction:
+    """``BaseRequirement = ProductionQty x BOMComponentQty`` (``§2.4.3``).
 
-    with localcontext() as context:
-        context.prec = WORKING_DECIMAL_PRECISION
-        return production_qty * bom_component_qty
-
-
-def gross_requirement(base: Decimal, loss_rate: Decimal) -> Decimal:
-    """``GrossRequirement = BaseRequirement / (1 - loss_rate)`` (``§2.4.5``).
-
-    The caller has already established ``0 <= loss_rate < 1``.  No rounding, ceiling,
-    flooring, truncation or pack-size adjustment is applied (``§2.4.8``).
+    Exact rational arithmetic: no ``Decimal`` context precision, no rounding and no
+    conversion back to a finite decimal.
     """
 
-    with localcontext() as context:
-        context.prec = WORKING_DECIMAL_PRECISION
-        return base / (Decimal("1") - loss_rate)
+    return Fraction(production_qty) * Fraction(bom_component_qty)
 
 
-def _valid_loss_rate(value: Decimal) -> bool:
+def gross_requirement(base: Fraction, loss_rate: Fraction) -> Fraction:
+    """``GrossRequirement = BaseRequirement / (1 - loss_rate)`` (``§2.4.5``).
+
+    The caller has already established ``0 <= loss_rate < 1``.  The result is an exact
+    rational value, so a non-terminating base-10 quantity such as ``200 / 0.95`` is kept as
+    ``Fraction(4000, 19)`` instead of being truncated at some finite ``Decimal`` precision.
+    No rounding, ceiling, flooring, truncation or pack-size adjustment is applied
+    (``§2.4.8``).
+    """
+
+    return Fraction(base) / (Fraction(1) - Fraction(loss_rate))
+
+
+def _valid_loss_rate(value: Fraction) -> bool:
     return LOSS_RATE_MINIMUM <= value < LOSS_RATE_MAXIMUM_EXCLUSIVE
 
 
@@ -337,13 +368,15 @@ def _valid_loss_rate(value: Decimal) -> bool:
 def compute_requirement_calculation(
     report: CanonicalConstructionReport,
 ) -> RequirementCalculationResult:
-    """Run ``BR-REQUIREMENT-001`` over resolved canonical construction output.
+    """Run ``BR-REQUIREMENT-001`` over the canonical construction output.
 
-    Only resolved canonical objects are consumed: a ``BOM Component`` that
-    canonicalization left unresolved produces **no** calculation grain at all, so the rule
-    never fabricates a BOM, a quantity or a ``required_date``.  Every calculation whose
-    registered prerequisites cannot be reliably obtained is reported ``DATA_INCOMPLETE``
-    with no numeric ``GrossRequirement``.
+    Every ``BOM Component`` relationship the construction exposes is accounted for exactly
+    once: a **resolved** relationship produces an exact numeric calculation when all
+    registered prerequisites are reliable, and an **unresolved** relationship produces the
+    registered ``DATA_INCOMPLETE`` fail-safe result (``§2.4.11`` / Example E) with **no**
+    numeric derived requirement.  The rule never fabricates a BOM, a quantity, a
+    ``required_date`` or a ``loss_rate``: unresolved canonical state is only ever reported,
+    never repaired.
     """
 
     contexts = _context_by_grain(report.loss_rate_contexts)
@@ -352,6 +385,10 @@ def compute_requirement_calculation(
         for obj in report.objects_for(ROLE_PRODUCTION_REQUIREMENT)
     }
 
+    components = list(report.objects_for(ROLE_BOM_COMPONENT)) + list(
+        report.unresolved_for(ROLE_BOM_COMPONENT)
+    )
+
     calculations = [
         _calculate_component(
             component=component,
@@ -359,7 +396,7 @@ def compute_requirement_calculation(
             contexts=contexts,
             report=report,
         )
-        for component in report.objects_for(ROLE_BOM_COMPONENT)
+        for component in components
     ]
 
     calculations.sort(
@@ -384,11 +421,26 @@ def _calculate_component(
     contexts: Mapping[tuple[Any, ...], ContextValueReference],
     report: CanonicalConstructionReport,
 ) -> RequirementCalculation:
-    plant_id = component.value_of("plant_id", ABSENT)
-    component_material = component.value_of("material_code", ABSENT)
-    required_date = component.value_of("required_date", ABSENT)
+    """Derive one calculation for one BOM Component relationship.
+
+    The **parent / requirement context of a resolved BOM Component relationship is the
+    resolved Production Requirement context**, so ``plant_id``, the parent
+    ``material_code``, ``required_date`` and ``ProductionQty`` are read from that context.
+    The resolved BOM Component supplies the component ``material_code`` and
+    ``BOMComponentQty``.  Values the BOM record happens to repeat locally are upstream
+    consistency evidence, not the calculation context authority.
+    """
 
     parent = requirements.get(component.context_reference or "")
+
+    plant_id = parent.value_of("plant_id", ABSENT) if parent is not None else ABSENT
+    parent_material = (
+        parent.value_of("material_code", ABSENT) if parent is not None else ABSENT
+    )
+    required_date = (
+        parent.value_of("required_date", ABSENT) if parent is not None else ABSENT
+    )
+    component_material = component.value_of("material_code", ABSENT)
 
     grain = (
         CanonicalProperty("plant_id", plant_id),
@@ -422,12 +474,25 @@ def _calculate_component(
             inherited_issues=_relevant_issues(report, component=component),
         )
 
-    # --- prerequisite: calculation grain identity ----------------------------------
-    if plant_id is ABSENT:
-        return incomplete("plant identity is unresolved; no requirement calculation")
-    if component_material is ABSENT:
+    # --- prerequisite: resolved Production Requirement (parent) context -------------
+    if parent is None:
         return incomplete(
-            "component material identity is unresolved; no requirement calculation"
+            "no resolved Production Requirement context is available for this BOM "
+            "Component relationship, so the Requirement Calculation Context cannot be "
+            "established; no numeric requirement is produced and no parent context is "
+            "guessed (§2.4.3 / §2.4.11)"
+        )
+
+    # --- prerequisite: calculation grain identity (from the parent context) --------
+    if plant_id is ABSENT:
+        return incomplete(
+            "plant identity is unresolved in the resolved Production Requirement context; "
+            "no requirement calculation"
+        )
+    if parent_material is ABSENT:
+        return incomplete(
+            "the parent / requirement material identity is unresolved; no requirement "
+            "calculation"
         )
     if required_date is ABSENT:
         return incomplete("required_date is missing; no requirement calculation")
@@ -437,37 +502,37 @@ def _calculate_component(
             "calculation"
         )
 
-    # --- prerequisite: resolved Production Requirement context ---------------------
-    if parent is None:
+    # --- prerequisite: component material identity ---------------------------------
+    if component_material is ABSENT:
         return incomplete(
-            "the resolved Production Requirement context referenced by this BOM "
-            "Component is unavailable; no requirement calculation"
+            "component material identity is unresolved, so the calculation grain cannot "
+            "be stated; no numeric requirement and no material code is invented "
+            "(§2.4.11)"
         )
 
-    production_qty = _as_decimal(parent.value_of("ProductionQty", ABSENT))
+    production_qty = _as_rational(parent.value_of("ProductionQty", ABSENT))
     if production_qty is None:
         return incomplete(
             "ProductionQty is missing or is not a registered base-10 decimal; no "
             "requirement calculation and no default is applied (§2.4.11)"
         )
-    if production_qty < Decimal("0"):
+    if production_qty < Fraction(0):
         return incomplete(
             "ProductionQty is negative; no requirement calculation (§2.4.3 / §2.4.11)"
         )
 
-    bom_component_qty = _as_decimal(component.value_of("BOMComponentQty", ABSENT))
+    bom_component_qty = _as_rational(component.value_of("BOMComponentQty", ABSENT))
     if bom_component_qty is None:
         return incomplete(
             "BOMComponentQty is missing or is not a registered base-10 decimal; no "
             "requirement calculation and no BOM quantity is guessed (§2.4.11)"
         )
-    if bom_component_qty < Decimal("0"):
+    if bom_component_qty < Fraction(0):
         return incomplete(
             "BOMComponentQty is negative; no requirement calculation (§2.4.3 / §2.4.11)"
         )
 
     # --- prerequisite: resolved loss_rate Requirement Calculation Context ----------
-    parent_material = parent.value_of("material_code", ABSENT)
     context = contexts.get(
         (plant_id, parent_material, required_date, component_material)
     )
@@ -483,7 +548,7 @@ def _calculate_component(
             "defaulted to 0 (§2.4.7 / §4.4.15)"
         )
 
-    loss_rate = _as_decimal(context.value)
+    loss_rate = _as_rational(context.value)
     if loss_rate is None:
         return incomplete(
             "the resolved loss_rate value is missing or is not a registered base-10 "
@@ -491,9 +556,9 @@ def _calculate_component(
         )
     if not _valid_loss_rate(loss_rate):
         return incomplete(
-            f"loss_rate {loss_rate} is outside the registered range 0 <= loss_rate < 1; "
-            "the value is not clamped, not replaced by 0 and not replaced by the maximum "
-            "(§2.4.6 / §4.4.15 root C)"
+            f"loss_rate {context.value!r} is outside the registered range "
+            "0 <= loss_rate < 1; the value is not clamped, not replaced by 0 and not "
+            "replaced by the maximum (§2.4.6 / §4.4.15 root C)"
         )
 
     base = base_requirement(production_qty, bom_component_qty)
@@ -508,7 +573,7 @@ def _calculate_component(
         loss_rate=loss_rate,
         gross_requirement=gross,
         cumulative_gross_requirement=None,  # filled by the cumulative pass
-        outcome=OUTCOME_NUMERIC,
+        outcome=None,  # success is expressed by the exact numeric results themselves
         production_requirement_reference=parent.record_reference,
         bom_component_reference=component.record_reference,
         context_reference=component.context_reference,
@@ -528,17 +593,39 @@ def _relevant_issues(
     The rule **reuses** the existing canonical / validation issues instead of creating a
     new taxonomy: it never rewrites ``SEMANTIC_UNRESOLVED`` into ``MISSING``, never adds a
     category / reason and never changes the package disposition.  Matching is by the
-    affected component material identity, and the issues are re-published unchanged.
+    accepted record the issue is reported against, and the issues are re-published
+    unchanged so the affected calculation stays auditable.
     """
 
+    reference = component.record_reference or ""
+    parts = reference.split("|")
+    artifact = parts[2] if len(parts) > 2 else ""
+    ordinal = parts[3] if len(parts) > 3 else ""
+    record_location = f"{artifact}[{ordinal}]" if artifact and ordinal else ""
+
     material = component.value_of("material_code", ABSENT)
-    if not isinstance(material, str):
-        return ()
-    matched = [
-        issue
-        for issue in report.issues
-        if material and material in (issue.detail or "")
-    ]
+    matched = []
+    for issue in report.issues:
+        haystacks = (
+            issue.location or "",
+            issue.affected_evidence or "",
+            issue.detail or "",
+        )
+        record_hit = any(
+            reference in haystack or (record_location and record_location in haystack)
+            for haystack in haystacks
+        )
+        artifact_hit = bool(
+            artifact
+            and ordinal
+            and artifact in (issue.location or "")
+            and f"[{ordinal}]" in (issue.location or "")
+        )
+        material_hit = bool(
+            isinstance(material, str) and material and material in (issue.detail or "")
+        )
+        if record_hit or artifact_hit or material_hit:
+            matched.append(issue)
     return tuple(sorted(matched, key=Issue.sort_key))
 
 
@@ -548,11 +635,12 @@ def _with_cumulative(
     """Attach ``CumulativeGrossRequirement`` per registered grouping (``§2.4.9``).
 
     The grouping is ``plant_id`` + component ``material_code``; within a group the
-    cumulative value at a calculation's ``required_date`` is the sum over **all** numeric
-    ``GrossRequirement`` contributions whose ``required_date`` is less than or equal to
-    it.  Several contributions on the same date all enter the sum -- there is no
+    cumulative value at a calculation's ``required_date`` is the exact rational sum over
+    **all** numeric ``GrossRequirement`` contributions whose ``required_date`` is less than
+    or equal to it.  Several contributions on the same date all enter the sum -- there is no
     first-wins / last-wins selection -- and no cross-plant or cross-component aggregation
-    happens.
+    happens.  The accumulation stays in exact rational arithmetic: no ``Decimal`` context
+    precision is re-entered.
     """
 
     groups: dict[tuple[Any, Any], list[int]] = {}
@@ -561,17 +649,17 @@ def _with_cumulative(
             position
         )
 
-    cumulative: dict[int, Decimal] = {}
+    cumulative: dict[int, Fraction] = {}
     for positions in groups.values():
         dated: list[tuple[str, int]] = []
         for position in positions:
             item = calculations[position]
-            if not item.numeric:
+            if not item.has_numeric_result:
                 continue
             dated.append((_sort_text(item.required_date), position))
         dated.sort(key=lambda pair: (pair[0], pair[1]))
 
-        running = Decimal("0")
+        running = Fraction(0)
         pending: list[int] = []
         current_date: str | None = None
         for date_key, position in dated:
@@ -583,6 +671,7 @@ def _with_cumulative(
             # Every contribution on the same date joins the same cumulative total: no
             # first-wins / last-wins selection.
             pending.append(position)
+            assert calculations[position].gross_requirement is not None
             running = running + calculations[position].gross_requirement  # type: ignore[operator]
         for queued in pending:
             cumulative[queued] = running
@@ -598,9 +687,7 @@ __all__ = [
     "LOSS_RATE_MAXIMUM_EXCLUSIVE",
     "LOSS_RATE_MINIMUM",
     "OUTCOME_DATA_INCOMPLETE",
-    "OUTCOME_NUMERIC",
     "RULE_ID",
-    "WORKING_DECIMAL_PRECISION",
     "RequirementCalculation",
     "RequirementCalculationResult",
     "base_requirement",
