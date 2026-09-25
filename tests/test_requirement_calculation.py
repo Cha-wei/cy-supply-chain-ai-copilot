@@ -155,13 +155,27 @@ class RequirementCalculationTestCase(unittest.TestCase):
         )
 
     def parent_handoff(
-        self, accepted, *, plant: str = PLANT, required_date: str = REQUIRED_DATE
+        self,
+        accepted,
+        *,
+        bom_ordinal: int = 0,
+        parent_ordinal: int = 0,
+        bom_artifact: str = "1.json",
     ) -> BomParentContextHandoff:
+        """The registered I-7 binding: BOM Component evidence -> resolved requirement."""
+
         return BomParentContextHandoff(
-            plant_id=plant,
-            required_date=required_date,
-            evidence=self.citation(
-                accepted, role="Production Requirement", artifact="0.json", ordinal=0
+            bom_evidence=self.citation(
+                accepted,
+                role="BOM Component",
+                artifact=bom_artifact,
+                ordinal=bom_ordinal,
+            ),
+            parent_evidence=self.citation(
+                accepted,
+                role="Production Requirement",
+                artifact="0.json",
+                ordinal=parent_ordinal,
             ),
         )
 
@@ -178,19 +192,20 @@ class RequirementCalculationTestCase(unittest.TestCase):
         ordinal: int = 0,
         locator: str | None = None,
         basis: str = BASIS_LOSS_RATE,
+        role: str = "BOM Component",
     ) -> LossRateHandoff:
         return LossRateHandoff(
             plant_id=plant,
             parent_material_code=parent_material,
             required_date=required_date,
             evidence=self.citation(
-                accepted, role="BOM Component", artifact=artifact, ordinal=ordinal
+                accepted, role=role, artifact=artifact, ordinal=ordinal
             ),
             component_material_code=component,
             loss_rate_evidence=(
                 self.citation(
                     accepted,
-                    role="BOM Component",
+                    role=role,
                     artifact=artifact,
                     ordinal=ordinal,
                     locator=locator or f"SIMULATED-SRC-LOSS-{component}",
@@ -328,9 +343,13 @@ class RequirementCalculationTestCase(unittest.TestCase):
                 analysis_date="2026-10-01",
                 bom_parent_context=tuple(
                     BomParentContextHandoff(
-                        plant_id=PLANT,
-                        required_date=dates[index],
-                        evidence=self.citation(
+                        bom_evidence=self.citation(
+                            accepted,
+                            role="BOM Component",
+                            artifact="1.json",
+                            ordinal=index,
+                        ),
+                        parent_evidence=self.citation(
                             accepted,
                             role="Production Requirement",
                             artifact="0.json",
@@ -714,6 +733,90 @@ class ExactCumulativeTests(RequirementCalculationTestCase):
         self.assertEqual(second.cumulative_gross_requirement.denominator, 19)
 
 
+class I7DownstreamIntegrationTests(RequirementCalculationTestCase):
+    """Issue #132 regression: the canonical -> business-rule seam actually works.
+
+    A BOM Component record that omits its local ``plant_id`` / ``required_date`` is a valid
+    shape (the resolved Production Requirement context is the canonical relationship
+    context), so an explicit I-7 evidence binding must let the relationship resolve and
+    ``BR-REQUIREMENT-001`` must produce an exact numeric result rather than
+    ``DATA_INCOMPLETE``.
+    """
+
+    def test_bom_without_local_context_fields_feeds_a_numeric_rule_result(self) -> None:
+        requirement = with_provenance(
+            {
+                "plant_id": PLANT,
+                "material_code": PARENT,
+                "required_date": REQUIRED_DATE,
+                "ProductionQty": "100",
+                "loss_rate": "0.05",
+            },
+            [
+                ("ProductionQty", [EVIDENCE_REQUIREMENT], None),
+                ("loss_rate", ["SIMULATED-SRC-LOSS-M2"], BASIS_LOSS_RATE),
+            ],
+        )
+        # The BOM record carries neither plant_id nor required_date locally.
+        bom = with_provenance(
+            {"material_code": COMPONENT, "BOMComponentQty": "2"},
+            [("BOMComponentQty", [EVIDENCE_BOM], None)],
+        )
+        _, accepted = self.accepted(
+            [
+                ("Production Requirement", [requirement]),
+                ("BOM Component", [bom]),
+            ],
+            name="i7-downstream",
+        )
+        construction = construct_canonical_objects(
+            accepted,
+            PhaseAHandoff(
+                analysis_run_id="RUN-1",
+                analysis_date="2026-01-15",
+                bom_parent_context=(
+                    # Explicit I-7 binding: BOM evidence -> resolved requirement.
+                    BomParentContextHandoff(
+                        bom_evidence=self.citation(
+                            accepted,
+                            role="BOM Component",
+                            artifact="1.json",
+                            ordinal=0,
+                        ),
+                        parent_evidence=self.citation(
+                            accepted,
+                            role="Production Requirement",
+                            artifact="0.json",
+                            ordinal=0,
+                        ),
+                    ),
+                ),
+                loss_rate=(
+                    self.loss_rate_handoff(
+                        accepted,
+                        value="0.05",
+                        artifact="0.json",
+                        ordinal=0,
+                        locator="SIMULATED-SRC-LOSS-M2",
+                        role="Production Requirement",
+                    ),
+                ),
+            ),
+        )
+        self.assertEqual(len(construction.objects_for("BOM Component")), 1)
+        self.assertEqual(construction.unresolved_for("BOM Component"), ())
+        result = compute_requirement_calculation(construction)
+        self.assertEqual(len(result.calculations), 1)
+        calculation = result.calculations[0]
+        self.assertIsNone(calculation.outcome)
+        self.assertTrue(calculation.has_numeric_result)
+        # The calculation context comes from the parent requirement, not the BOM record.
+        self.assertEqual(calculation.plant_id, PLANT)
+        self.assertEqual(calculation.required_date, REQUIRED_DATE)
+        self.assert_exact(calculation.base_requirement, Fraction(200, 1))
+        self.assert_exact(calculation.gross_requirement, Fraction(4000, 19))
+
+
 class CanonicalLossRateRepresentationTests(RequirementCalculationTestCase):
     """``loss_rate`` is a resolved canonical **input**, not a derived quantity."""
 
@@ -846,9 +949,13 @@ class GrainAndIsolationTests(RequirementCalculationTestCase):
                 analysis_date="2026-01-15",
                 bom_parent_context=(
                     BomParentContextHandoff(
-                        plant_id=PLANT,
-                        required_date=REQUIRED_DATE,
-                        evidence=self.citation(
+                        bom_evidence=self.citation(
+                            accepted,
+                            role="BOM Component",
+                            artifact="1.json",
+                            ordinal=0,
+                        ),
+                        parent_evidence=self.citation(
                             accepted,
                             role="Production Requirement",
                             artifact="0.json",
@@ -856,9 +963,13 @@ class GrainAndIsolationTests(RequirementCalculationTestCase):
                         ),
                     ),
                     BomParentContextHandoff(
-                        plant_id=PLANT_B,
-                        required_date=REQUIRED_DATE,
-                        evidence=self.citation(
+                        bom_evidence=self.citation(
+                            accepted,
+                            role="BOM Component",
+                            artifact="1.json",
+                            ordinal=1,
+                        ),
+                        parent_evidence=self.citation(
                             accepted,
                             role="Production Requirement",
                             artifact="0.json",
@@ -932,7 +1043,10 @@ class GrainAndIsolationTests(RequirementCalculationTestCase):
             PhaseAHandoff(
                 analysis_run_id="RUN-1",
                 analysis_date="2026-01-15",
-                bom_parent_context=(self.parent_handoff(accepted),),
+                bom_parent_context=(
+                    self.parent_handoff(accepted, bom_ordinal=0),
+                    self.parent_handoff(accepted, bom_ordinal=1),
+                ),
                 loss_rate=(
                     self.loss_rate_handoff(
                         accepted, component=COMPONENT, value="0.02", ordinal=0
@@ -987,7 +1101,10 @@ class GrainAndIsolationTests(RequirementCalculationTestCase):
             PhaseAHandoff(
                 analysis_run_id="RUN-1",
                 analysis_date="2026-01-15",
-                bom_parent_context=(self.parent_handoff(accepted),),
+                bom_parent_context=(
+                    self.parent_handoff(accepted, bom_ordinal=0),
+                    self.parent_handoff(accepted, bom_ordinal=1),
+                ),
                 loss_rate=(
                     self.loss_rate_handoff(
                         accepted, component=COMPONENT, value="0.02", ordinal=0

@@ -656,15 +656,26 @@ class SafetyStockHandoff:
 class BomParentContextHandoff:
     """G4-A BOM parent / requirement context binding (injection I-7, Phase A).
 
-    ``evidence`` must point at accepted ``Production Requirement`` evidence in the same
-    AcceptedPackage, and that evidence record must itself have been constructed and
-    grain-resolved.  A caller therefore cannot create a parent context without source
-    evidence (``§4.1.13`` C).
+    The registered injected semantic is the **binding** between one package-scoped
+    ``BOM Component`` evidence and one package-scoped **already resolved**
+    ``Production Requirement`` context (``§4.3.31`` G I-7: binding key = BOM Component
+    evidence -> resolved Production Requirement context; value = context reference;
+    provenance = required; cardinality = exactly one context per evidence set;
+    unresolved = ``UNRESOLVED_IDENTITY``).
+
+    ``bom_evidence`` therefore names the BOM Component evidence side of that binding and
+    ``parent_evidence`` names the resolved Production Requirement side.  Both citations
+    must resolve inside the same ``AcceptedPackage`` / accepted content view, so a caller
+    cannot declare a parent relationship without source evidence on both sides.
+
+    This is the existing in-process logical handoff interface: it is **not** a new external
+    input carrier, not a wire property, not a canonical field and not a new entity.  The
+    BOM record's own ``plant_id`` / ``required_date`` are **not** a binding key; when they
+    are present they are only consistency evidence that must equal the resolved context.
     """
 
-    plant_id: Any
-    required_date: Any
-    evidence: HandoffEvidence
+    bom_evidence: HandoffEvidence
+    parent_evidence: HandoffEvidence
     resolution_note: str = ""
 
 
@@ -2085,10 +2096,11 @@ def _construct_bom_components(
     """G4-A BOM Component construction with a resolved parent context reference.
 
     ``material_code`` is the **component** material identity.  The parent / requirement
-    context is a reference to an already constructed / resolved ``Production
-    Requirement`` context (``plant_id`` + parent ``material_code`` + ``required_date``);
-    a caller cannot create that context without accepted source evidence, and the
-    binding's own provenance is preserved on the object rather than discarded.
+    context is a reference to an already constructed / resolved ``Production Requirement``
+    context, established by the registered I-7 binding
+    ``BOM Component evidence -> resolved Production Requirement context``
+    (``§4.3.31`` G I-7): the handoff names both sides, both must resolve inside the same
+    accepted content view, and exactly one context is allowed per BOM evidence set.
 
     The constructed grain is the canonical one (``§4.1.13`` C):
     ``plant_id`` + parent ``material_code`` + ``required_date`` + component
@@ -2096,62 +2108,109 @@ def _construct_bom_components(
     context**, never invented, and no ``parent_material_code`` canonical field is
     created.
 
-    When the BOM record also carries ``plant_id`` / ``required_date`` they must be
-    **exactly equal** to the referenced context, otherwise the registered
-    ``CONSISTENCY`` / ``CONSISTENCY_CONFLICT`` finding is raised and no silent
-    precedence is applied.
+    The BOM record's own ``plant_id`` / ``required_date`` are **optional consistency
+    evidence**, not a parent-selection prerequisite and not a binding key.  When present
+    they must be **exactly equal** to the referenced context; otherwise the registered
+    ``CONSISTENCY`` / ``CONSISTENCY_CONFLICT`` finding is raised and no silent precedence
+    is applied.  A record that omits either or both is still perfectly valid.
     """
 
     applicability = APPLICABILITY_BY_ROLE[ROLE_BOM_COMPONENT]
 
-    parents: dict[tuple[Any, ...], list[tuple[CanonicalObject, EvidenceReference]]] = {}
+    # --- I-7 binding: BOM Component evidence -> resolved Production Requirement -----
+    parents_by_bom_evidence: dict[str, CanonicalObject] = {}
+    parent_provenance_by_bom_evidence: dict[str, EvidenceReference] = {}
+    conflicting_bom_evidence: set[str] = set()
+
     for entry in handoff.bom_parent_context:
-        verification = _verify_handoff_evidence(
+        bom_verification = _verify_handoff_evidence(
             accepted=accepted,
-            evidence=entry.evidence,
+            evidence=entry.bom_evidence,
+            located=located,
+            records=accepted_records,
+            expected_roles=(ROLE_BOM_COMPONENT,),
+        )
+        if not bom_verification.verified:
+            build.check(
+                f"{CANONICALIZATION_HANDOFF_EVIDENCE}:bom_parent_context",
+                EVALUATION_NOT_EVALUABLE,
+                bom_verification.problem
+                or "the BOM Component side of the I-7 binding is not package-scoped",
+            )
+            continue
+
+        bom_reference = _record_reference(
+            package=accepted,
+            role=bom_verification.role or ROLE_BOM_COMPONENT,
+            artifact=bom_verification.artifact or "",
+            ordinal=bom_verification.ordinal or 0,
+        ).reference
+
+        parent_verification = _verify_handoff_evidence(
+            accepted=accepted,
+            evidence=entry.parent_evidence,
             located=located,
             records=accepted_records,
             expected_roles=(ROLE_PRODUCTION_REQUIREMENT,),
         )
-        if not verification.verified:
+        if not parent_verification.verified:
             build.check(
-                f"{CANONICALIZATION_HANDOFF_EVIDENCE}:bom_parent_context",
+                f"{CANONICALIZATION_HANDOFF_EVIDENCE}:bom_parent_context:{bom_reference}",
                 EVALUATION_NOT_EVALUABLE,
-                verification.problem or "handoff evidence is not package-scoped",
+                parent_verification.problem
+                or "the Production Requirement side of the I-7 binding is not "
+                "package-scoped",
             )
             continue
-        reference = _record_reference(
+
+        parent_reference = _record_reference(
             package=accepted,
-            role=verification.role or ROLE_PRODUCTION_REQUIREMENT,
-            artifact=verification.artifact or "",
-            ordinal=verification.ordinal or 0,
-        )
+            role=parent_verification.role or ROLE_PRODUCTION_REQUIREMENT,
+            artifact=parent_verification.artifact or "",
+            ordinal=parent_verification.ordinal or 0,
+        ).reference
         parent = next(
             (
                 item
                 for item in production_requirements
-                if item.record_reference == reference.reference
+                if item.record_reference == parent_reference
             ),
             None,
         )
         if parent is None:
             build.check(
-                f"{CANONICALIZATION_HANDOFF_EVIDENCE}:bom_parent_context",
+                f"{CANONICALIZATION_HANDOFF_EVIDENCE}:bom_parent_context:{bom_reference}",
                 EVALUATION_NOT_EVALUABLE,
-                "the referenced Production Requirement context is not resolved, so it "
-                "cannot serve as a BOM parent context (§4.1.13 C)",
+                "the referenced Production Requirement context is not constructed / "
+                "resolved, so it cannot serve as a BOM parent context (§4.1.13 C / "
+                "§4.3.31 G I-7)",
             )
             continue
-        parents.setdefault((entry.plant_id, entry.required_date), []).append(
-            (parent, _resolved_evidence_reference(accepted=accepted, verification=verification))
-        )
 
-    # Package-level index used only to recognise a grain mismatch against a *unique*
-    # resolved Production Requirement context of the same plant.  It never selects a
-    # parent on its own: ambiguity always stays unresolved (``§4.4.102`` C).
-    by_plant: dict[Any, list[CanonicalObject]] = {}
-    for item in production_requirements:
-        by_plant.setdefault(item.value_of("plant_id", ABSENT), []).append(item)
+        bound = parents_by_bom_evidence.get(bom_reference)
+        if bound is not None and bound.record_reference != parent.record_reference:
+            # Cardinality: exactly one context per BOM evidence set.  No first / last wins
+            # and no same-value deduplication between distinct contexts.
+            conflicting_bom_evidence.add(bom_reference)
+            build.check(
+                f"{CANONICALIZATION_HANDOFF_EVIDENCE}:bom_parent_context:{bom_reference}",
+                EVALUATION_NOT_EVALUABLE,
+                "more than one distinct resolved Production Requirement context was bound "
+                "to the same BOM Component evidence; the binding stays unresolved and no "
+                "precedence is applied (§4.3.31 G I-7 / §4.4.102 C)",
+            )
+            continue
+        if bound is None:
+            parents_by_bom_evidence[bom_reference] = parent
+            parent_provenance_by_bom_evidence[bom_reference] = (
+                _resolved_evidence_reference(
+                    accepted=accepted, verification=parent_verification
+                )
+            )
+
+    for bom_reference in conflicting_bom_evidence:
+        parents_by_bom_evidence.pop(bom_reference, None)
+        parent_provenance_by_bom_evidence.pop(bom_reference, None)
 
     resolved: list[CanonicalObject] = []
     unresolved: list[CanonicalObject] = []
@@ -2179,6 +2238,22 @@ def _construct_bom_components(
             provenance=provenance,
         )
 
+    def _unresolved(*notes: str) -> None:
+        build.check(
+            f"{CANONICALIZATION_BOM_PARENT}:{reference.reference}",
+            EVALUATION_NOT_EVALUABLE,
+            notes[0],
+        )
+        build.unresolved_identity(
+            location=f"{artifact}[{ordinal}]",
+            detail=notes[-1],
+            affected_evidence=artifact,
+            design_reference="§4.1.13 C / §4.3.31 G I-7",
+        )
+        unresolved.append(
+            _unresolved_object(properties, non_applicable, reference, provenance)
+        )
+
     for role, artifact, ordinal, record in records:
         if role != ROLE_BOM_COMPONENT:
             continue
@@ -2198,140 +2273,72 @@ def _construct_bom_components(
         record_required = (
             record["required_date"] if "required_date" in record else ABSENT
         )
-        candidates = parents.get((record_plant, record_required), [])
-        if record_plant is ABSENT or record_required is ABSENT:
+
+        parent = parents_by_bom_evidence.get(reference.reference)
+        if parent is None:
+            _unresolved(
+                "no I-7 binding from this BOM Component evidence to a resolved "
+                "Production Requirement context was established; the parent / requirement "
+                "context stays unresolved and is never guessed from the record's own "
+                "plant_id / required_date (§4.3.31 G I-7 / §4.1.13 C)",
+                "BOM Component parent / requirement context is unresolved: no "
+                "package-scoped I-7 binding to a resolved Production Requirement context",
+            )
+            continue
+
+        # Component material identity comes from the BOM Component evidence and is part of
+        # the effective grain; it is never invented.
+        component_material = record["material_code"] if "material_code" in record else ABSENT
+        if component_material is ABSENT:
             build.check(
                 f"{CANONICALIZATION_BOM_PARENT}:{reference.reference}",
                 EVALUATION_NOT_EVALUABLE,
-                "the BOM evidence does not carry plant_id / required_date, so no BOM "
-                "parent / requirement context can be bound from it; no parent context "
-                "is created and no value is guessed (§4.1.13 C)",
+                "the BOM Component evidence does not carry its component material_code, so "
+                "the effective BOM grain cannot be stated; the object stays unresolved "
+                "instead of receiving a default (§4.1.13 C / §4.4.26)",
             )
             build.unresolved_identity(
                 location=f"{artifact}[{ordinal}]",
                 detail=(
-                    "BOM Component parent / requirement context cannot be bound: the "
-                    "accepted evidence does not carry the grain key"
+                    "BOM Component effective grain is incomplete: the accepted evidence "
+                    "omits the component material_code"
                 ),
                 affected_evidence=artifact,
-                design_reference="§4.1.13 C / §4.3.31 G I-7",
+                design_reference="§4.1.13 C / §4.4.26 / §4.4.94",
             )
             unresolved.append(
                 _unresolved_object(properties, non_applicable, reference, provenance)
             )
             continue
 
-        if not candidates:
-            # No parent context was handed in for this grain key.  A *unique* resolved
-            # Production Requirement context of the same plant lets an exact-equality
-            # violation be recognised as the registered ``CONSISTENCY`` finding instead
-            # of being silently reported as "no parent".  Ambiguity (more than one
-            # resolved requirement for the plant) never resolves here.
-            same_plant = by_plant.get(record_plant, [])
-            if len(same_plant) == 1:
-                sole = same_plant[0]
-                sole_required = sole.value_of("required_date", ABSENT)
-                sole_plant = sole.value_of("plant_id", ABSENT)
-                grain_agrees = sole_plant == record_plant and sole_required == record_required
-                if not grain_agrees:
-                    build.check(
-                        f"{CANONICALIZATION_BOM_PARENT}:{reference.reference}",
-                        EVALUATION_FAILED,
-                        "BOM record grain values do not match the resolved Production "
-                        "Requirement context of the same plant: "
-                        f"plant_id record={record_plant!r} vs context={sole_plant!r}; "
-                        f"required_date record={record_required!r} vs "
-                        f"context={sole_required!r}",
-                    )
-                    build.issue(
-                        category="CONSISTENCY",
-                        reason="CONSISTENCY_CONFLICT",
-                        location=f"{artifact}[{ordinal}]",
-                        detail=(
-                            "BOM Component record carries plant_id / required_date that "
-                            "differ from the referenced Production Requirement context: "
-                            f"plant_id record={record_plant!r} vs context={sole_plant!r}; "
-                            f"required_date record={record_required!r} vs "
-                            f"context={sole_required!r}"
-                        ),
-                        affected_evidence=artifact,
-                        design_reference="§4.1.13 C (G4-A) / §4.4.102 C Stage B",
-                        consequence_context=(
-                            "the affected BOM Component relationship stays unresolved; "
-                            "no silent precedence and no package rejection"
-                        ),
-                    )
-                    unresolved.append(
-                        _unresolved_object(
-                            properties, non_applicable, reference, provenance
-                        )
-                    )
-                    continue
-                # The grain agrees but no package-scoped parent evidence was handed in:
-                # the parent context still cannot be created from nothing (§4.1.13 C).
-                build.check(
-                    f"{CANONICALIZATION_BOM_PARENT}:{reference.reference}",
-                    EVALUATION_NOT_EVALUABLE,
-                    "a resolved Production Requirement context with the same grain "
-                    "exists, but no accepted package-scoped parent evidence was handed "
-                    "in; no parent context is created from nothing (§4.1.13 C)",
-                )
-                build.unresolved_identity(
-                    location=f"{artifact}[{ordinal}]",
-                    detail=(
-                        "BOM Component parent / requirement context is unresolved: no "
-                        "package-scoped parent / requirement context evidence was "
-                        "provided (§4.3.31 G I-7)"
-                    ),
-                    affected_evidence=artifact,
-                    design_reference="§4.1.13 C / §4.3.31 G I-7",
-                )
-                unresolved.append(
-                    _unresolved_object(properties, non_applicable, reference, provenance)
-                )
-                continue
-
+        parent_material = parent.value_of("material_code", ABSENT)
+        if parent_material is ABSENT:
             build.check(
                 f"{CANONICALIZATION_BOM_PARENT}:{reference.reference}",
                 EVALUATION_NOT_EVALUABLE,
-                "no resolved Production Requirement context is bound for "
-                f"plant_id={record_plant!r} + required_date={record_required!r}; the "
-                "parent stays unresolved and no parent context is invented "
-                "(§4.1.13 C / §4.3.31 C)",
+                "the resolved Production Requirement context does not carry a "
+                "material_code, so the BOM Component grain cannot be stated; the object "
+                "stays unresolved instead of receiving a default (§4.1.13 C)",
             )
             build.unresolved_identity(
                 location=f"{artifact}[{ordinal}]",
                 detail=(
-                    "BOM Component parent / requirement context is unresolved: no "
-                    "resolved Production Requirement context with exact match on "
-                    "plant_id + required_date"
+                    "BOM Component grain is incomplete: the resolved Production "
+                    "Requirement context carries no parent material_code"
                 ),
                 affected_evidence=artifact,
-                design_reference="§4.1.13 C / §4.3.31 G I-7",
+                design_reference="§4.1.13 C / §4.4.26 / §4.4.94",
             )
             unresolved.append(
                 _unresolved_object(properties, non_applicable, reference, provenance)
             )
             continue
 
-        distinct = {item[0].record_reference for item in candidates}
-        if len(distinct) > 1:
-            build.check(
-                f"{CANONICALIZATION_BOM_PARENT}:{reference.reference}",
-                EVALUATION_NOT_EVALUABLE,
-                f"{len(distinct)} different resolved parent contexts were handed in for "
-                "the same grain key; the binding stays unresolved and no precedence is "
-                "applied (§4.4.102 C)",
-            )
-            unresolved.append(
-                _unresolved_object(properties, non_applicable, reference, provenance)
-            )
-            continue
-
-        parent, parent_evidence = candidates[0]
+        # BOM-local plant_id / required_date: optional consistency evidence only.  Only a
+        # value that is actually present participates, and a mismatch is the registered
+        # CONSISTENCY / CONSISTENCY_CONFLICT finding -- never a silent precedence.
         parent_plant = parent.value_of("plant_id", ABSENT)
         parent_required = parent.value_of("required_date", ABSENT)
-
         mismatch: list[str] = []
         if record_plant is not ABSENT and parent_plant is not ABSENT:
             if record_plant != parent_plant:
@@ -2346,8 +2353,6 @@ def _construct_bom_components(
                 )
 
         if mismatch:
-            # ``§4.1.13`` C: an exact-equality violation is the registered
-            # ``CONSISTENCY`` / ``CONSISTENCY_CONFLICT`` finding; no silent precedence.
             build.check(
                 f"{CANONICALIZATION_BOM_PARENT}:{reference.reference}",
                 EVALUATION_FAILED,
@@ -2366,8 +2371,8 @@ def _construct_bom_components(
                 affected_evidence=artifact,
                 design_reference="§4.1.13 C (G4-A) / §4.4.102 C Stage B",
                 consequence_context=(
-                    "the affected BOM Component relationship stays unresolved; no "
-                    "silent precedence and no package rejection"
+                    "the affected BOM Component relationship stays unresolved; no silent "
+                    "precedence and no package rejection"
                 ),
             )
             unresolved.append(
@@ -2375,12 +2380,18 @@ def _construct_bom_components(
             )
             continue
 
+        parent_evidence = parent_provenance_by_bom_evidence.get(reference.reference)
         build.check(
             f"{CANONICALIZATION_BOM_PARENT}:{reference.reference}",
             EVALUATION_PASSED,
-            "parent / requirement context bound to resolved Production Requirement "
+            "parent / requirement context bound to the resolved Production Requirement "
             "context "
-            f"[{_grain_label(parent.grain)}] via {parent_evidence.record_path}",
+            f"[{_grain_label(parent.grain)}] via I-7 evidence binding"
+            + (
+                f" ({parent_evidence.record_path})"
+                if parent_evidence is not None
+                else ""
+            ),
         )
         # ``§4.1.13`` C / ``§4.1.4`` N canonical semantic for this relationship is
         # ``resolved Production Requirement context`` + ``component material_code``.
