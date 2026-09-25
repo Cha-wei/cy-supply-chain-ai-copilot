@@ -6658,6 +6658,8 @@ input authority           = same AcceptedPackage evidence only
 association               = exact existing canonical observation
                             + exact Stable Source Evidence Locator
                             + exact mapping_basis
+association semantics     = each approved basis literal registers the observation(s) it
+                            applies to; the association must be the one that rule applies to
 outcome                   = runtime Inventory scope context
                             derived by approved deterministic basis registry
 caller-provided outcome   = FORBIDDEN
@@ -6665,6 +6667,26 @@ cardinality               = exactly one applicable resolution per Inventory evid
 unresolved ownership      = IDENTITY_RESOLUTION / UNRESOLVED_IDENTITY
 unresolved scope          = SCOPE_COVERAGE / UNRESOLVED_SCOPE
 ```
+
+**三类 prerequisite 相互独立（不得互相代替）：**
+
+```text
+canonical Inventory grain readiness
+  !=  Plant ownership resolution
+  !=  POC Inventory Scope resolution
+```
+
+`obj.grain is None` **不得**被当作 Plant ownership unresolved 的代理：`inventory_snapshot_time`
+或 `material_code` 缺失只影响 canonical Inventory grain readiness，Plant ownership 仍按
+accepted canonical evidence 的可用 `plant_id` 独立判断；scope resolution 亦按其自身 evidence
+contract 独立执行。三者可以同时成立或分别不成立，后续 deterministic rule 必须分别检查。
+
+**Shape A ownership provenance（不得偷拿 `plant_id`）：** warehouse-level 家族的 approved basis
+（`§4.5.12` 登记的 A 系 literal）**必须**登记在 `plant_id` association 上 —— 该 association 才是
+`source warehouse context → canonical plant_id` 的证明。若 A 系 basis 仅登记在
+`on_hand_qty` ／ `inventory_status` ／ `inventory_snapshot_time` ／ `material_code` 等 association 上，
+则 ownership **未**被证明（记 `IDENTITY_RESOLUTION` ／ `UNRESOLVED_IDENTITY`）且 scope membership
+保持 unresolved；record 上恰好存在的 `plant_id` value **不**因此被视为已证明 ownership。
 
 **严格限定：**
 

@@ -1329,6 +1329,18 @@ normalised numeric inventory result），且**不得**默认 included ／ exclud
 `OUT_OF_SCOPE` 是**合法 exclusion**：**不是** `DATA_INCOMPLETE`、**不是** Data Quality
 defect，其 contribution = 0。
 
+**三类 prerequisite 相互独立（不得互相代替）：**
+
+```text
+canonical Inventory grain readiness
+  !=  Plant ownership resolution
+  !=  POC Inventory Scope resolution
+```
+
+`inventory_snapshot_time` 或 `material_code` 缺失只令 canonical Inventory grain readiness
+不成立，**不**表示 Plant ownership unresolved；Plant ownership 只按 accepted canonical evidence
+中可用的 `plant_id` 独立判断。三者可以分别成立，后续 deterministic rule 必须分别检查。
+
 #### 4.4.51 Configured Safety Stock Grain Consistency
 
 Configured Safety Stock 的既有 grain：

@@ -249,6 +249,14 @@ class InventoryScopeSeamTestCase(unittest.TestCase):
     def scope_contexts(self, report) -> tuple[InventoryScopeContext, ...]:
         return report.inventory_scope_contexts
 
+    def resolve(self, record: dict[str, object], handoff_factory, *, name: str):
+        """Construct one single-record Inventory package and return (report, context)."""
+
+        dataset = [(ROLE_INVENTORY_SNAPSHOT, [record])]
+        accepted = self.accepted(dataset, name=name)
+        report = construct_canonical_objects(accepted, handoff_factory(accepted))
+        return report, self.only_context(report)
+
     def only_context(self, report) -> InventoryScopeContext:
         contexts = self.scope_contexts(report)
         self.assertEqual(len(contexts), 1)
@@ -336,18 +344,115 @@ class SameGrainRetentionTests(InventoryScopeSeamTestCase):
             ["UNRESOLVED_IDENTITY"],
         )
         context = self.only_context(report)
+        # Plant ownership is judged from the accepted evidence alone: a missing grain
+        # component does not make ownership unresolved (it is a separate prerequisite).
+        self.assertTrue(context.ownership_resolved)
+        self.assert_unresolved_scope(context)
+
+    # --- Plant ownership is decoupled from full grain resolution -------------------
+
+    def test_valid_plant_ownership_survives_a_missing_snapshot_time(self) -> None:
+        """A: plant_id + material_code valid, snapshot_time missing, valid I-9 evidence."""
+
+        record = INVENTORY(snapshot_time=None)
+        report, context = self.resolve(
+            record,
+            lambda accepted: self.scope_handoff(accepted, basis=BASIS_A_IN),
+            name="ownership-with-missing-snapshot-time",
+        )
+        # The canonical Inventory object itself stays unresolved (grain incomplete) ...
+        self.assertEqual(report.objects_for(ROLE_INVENTORY_SNAPSHOT), ())
+        self.assertEqual(len(report.unresolved_for(ROLE_INVENTORY_SNAPSHOT)), 1)
+        # ... while ownership and scope resolution are judged independently.
+        self.assertTrue(context.ownership_resolved)
+        self.assertTrue(context.scope_resolved)
+        self.assertIs(context.in_scope, True)
+        self.assertEqual(context.plant_id, PLANT)
+        self.assertTrue(
+            any("grain stays unresolved" in note for note in context.notes)
+        )
+        # The grain-readiness finding is not an ownership finding.
+        self.assertEqual(
+            [issue.reason for issue in self.issues_with(report, "UNRESOLVED_IDENTITY")],
+            ["UNRESOLVED_IDENTITY"],
+        )
+        self.assertNotIn(
+            "Plant ownership", self.issues_with(report, "UNRESOLVED_IDENTITY")[0].detail
+        )
+
+    def test_valid_plant_ownership_survives_a_missing_material_code(self) -> None:
+        """B: plant_id valid, material_code missing, valid I-9 evidence."""
+
+        record = INVENTORY(material_code=None)
+        report, context = self.resolve(
+            record,
+            lambda accepted: self.scope_handoff(accepted, basis=BASIS_A_IN),
+            name="ownership-with-missing-material",
+        )
+        self.assertEqual(report.objects_for(ROLE_INVENTORY_SNAPSHOT), ())
+        self.assertTrue(context.ownership_resolved)
+        self.assertTrue(context.scope_resolved)
+        self.assertIs(context.in_scope, True)
+        self.assertIsNone(context.material_code)
+        self.assertNotIn(
+            "Plant ownership", self.issues_with(report, "UNRESOLVED_IDENTITY")[0].detail
+        )
+
+    def test_unusable_plant_id_is_reported_as_ownership_unresolved(self) -> None:
+        """C: plant_id missing / unusable, other grain fields valid."""
+
+        for label, record in {
+            "missing": INVENTORY(plant_id=None),
+            "empty": INVENTORY(plant_id=""),
+            "null": INVENTORY(plant_id=None, snapshot_time=SNAPSHOT_TIME),
+        }.items():
+            with self.subTest(case=label):
+                report, context = self.resolve(
+                    record,
+                    lambda accepted: self.scope_handoff(accepted, basis=BASIS_A_IN),
+                    name=f"ownership-unusable-{label}",
+                )
+                self.assertFalse(context.ownership_resolved)
+                self.assert_unresolved_scope(context)
+                ownership_findings = [
+                    issue
+                    for issue in self.issues_with(report, "UNRESOLVED_IDENTITY")
+                    if "Plant ownership" in issue.detail
+                ]
+                self.assertEqual(len(ownership_findings), 1)
+                self.assertEqual(ownership_findings[0].category, "IDENTITY_RESOLUTION")
+                # The scope resolution never defaults to included / excluded.
+                self.assertIsNone(context.in_scope)
+
+    def test_missing_and_unusable_plant_identity_are_distinguishable(self) -> None:
+        """Different root causes stay distinguishable in the report / context."""
+
+        # (i) missing grain component with a usable plant_id: grain finding only.
+        grain_report = self.construct(
+            [(ROLE_INVENTORY_SNAPSHOT, [INVENTORY(snapshot_time=None)])],
+            name="distinguish-grain",
+        )
+        grain_findings = self.issues_with(grain_report, "UNRESOLVED_IDENTITY")
+        self.assertEqual(len(grain_findings), 1)
+        self.assertNotIn("Plant ownership", grain_findings[0].detail)
+        self.assertTrue(self.only_context(grain_report).ownership_resolved)
+
+        # (ii) unusable plant_id: ownership finding (plus the grain finding when the
+        # property is absent altogether).
+        ownership_report = self.construct(
+            [(ROLE_INVENTORY_SNAPSHOT, [INVENTORY(plant_id="")])],
+            name="distinguish-ownership",
+        )
+        ownership_findings = self.issues_with(ownership_report, "UNRESOLVED_IDENTITY")
+        self.assertEqual(len(ownership_findings), 1)
+        self.assertIn("Plant ownership", ownership_findings[0].detail)
+        context = self.only_context(ownership_report)
         self.assertFalse(context.ownership_resolved)
         self.assert_unresolved_scope(context)
 
 
 class InventoryScopeResolutionTests(InventoryScopeSeamTestCase):
     """The A′ resolution matrix: exact association → exact basis → exact outcome."""
-
-    def resolve(self, record: dict[str, object], handoff_factory, *, name: str):
-        dataset = [(ROLE_INVENTORY_SNAPSHOT, [record])]
-        accepted = self.accepted(dataset, name=name)
-        report = construct_canonical_objects(accepted, handoff_factory(accepted))
-        return report, self.only_context(report)
 
     # --- Shape A ----------------------------------------------------------------
 
@@ -373,6 +478,87 @@ class InventoryScopeResolutionTests(InventoryScopeSeamTestCase):
         )
         # A resolved scope is not a Data Quality defect.
         self.assertEqual(self.issues_with(report, REASON_UNRESOLVED_SCOPE), [])
+
+    def test_shape_a_basis_on_another_observation_does_not_prove_ownership(self) -> None:
+        """A Shape A basis must be the one registered on the plant_id association.
+
+        A ``plant_id`` value that merely exists on the record is never accepted as proven
+        ownership: the approved warehouse-level basis has to be the association that
+        proves ``source warehouse context -> canonical plant_id``.
+        """
+
+        record = INVENTORY(
+            associations=[("on_hand_qty", [LOCATOR_WAREHOUSE], BASIS_A_IN)]
+        )
+        report, context = self.resolve(
+            record,
+            lambda accepted: self.scope_handoff(
+                accepted, observation="on_hand_qty", basis=BASIS_A_IN
+            ),
+            name="shape-a-wrong-observation",
+        )
+        # No ownership + scope success.
+        self.assertFalse(context.ownership_resolved)
+        self.assert_unresolved_scope(context)
+        self.assertIsNone(context.in_scope)
+        ownership_findings = [
+            issue
+            for issue in self.issues_with(report, "UNRESOLVED_IDENTITY")
+            if "Plant ownership" in issue.detail
+        ]
+        self.assertEqual(len(ownership_findings), 1)
+        self.assertEqual(ownership_findings[0].category, "IDENTITY_RESOLUTION")
+        self.assertEqual(len(self.issues_with(report, REASON_UNRESOLVED_SCOPE)), 1)
+
+    def test_shape_a_basis_on_the_plant_id_association_still_resolves(self) -> None:
+        record = INVENTORY(
+            associations=[
+                ("on_hand_qty", [LOCATOR_AGGREGATE], BASIS_B_IN),
+                ("plant_id", [LOCATOR_WAREHOUSE], BASIS_A_IN),
+            ]
+        )
+        report, context = self.resolve(
+            record,
+            lambda accepted: self.scope_handoff(
+                accepted, observation="plant_id", basis=BASIS_A_IN
+            ),
+            name="shape-a-plant-id-association",
+        )
+        self.assertTrue(context.ownership_resolved)
+        self.assertTrue(context.scope_resolved)
+        self.assertIs(context.in_scope, True)
+        self.assertEqual(context.mapping_basis, BASIS_A_IN)
+
+    def test_shape_a_basis_is_not_accepted_on_the_unapproved_observations(self) -> None:
+        for observation in (
+            "on_hand_qty",
+            "inventory_status",
+            "inventory_snapshot_time",
+            "material_code",
+        ):
+            with self.subTest(observation=observation):
+                record = INVENTORY(
+                    associations=[(observation, [LOCATOR_WAREHOUSE], BASIS_A_IN)]
+                )
+                report, context = self.resolve(
+                    record,
+                    lambda accepted: self.scope_handoff(
+                        accepted, observation=observation, basis=BASIS_A_IN
+                    ),
+                    name=f"shape-a-unapproved-{observation}",
+                )
+                self.assertFalse(context.ownership_resolved)
+                self.assert_unresolved_scope(context)
+                self.assertEqual(
+                    len(
+                        [
+                            issue
+                            for issue in self.issues_with(report, "UNRESOLVED_IDENTITY")
+                            if "Plant ownership" in issue.detail
+                        ]
+                    ),
+                    1,
+                )
 
     def test_shape_a_out_of_scope_is_a_legal_exclusion(self) -> None:
         report, context = self.resolve(
@@ -706,17 +892,44 @@ class InventoryScopeBoundaryTests(InventoryScopeSeamTestCase):
         json.dumps(first)
 
     def test_registered_basis_registry_is_exact_literal_to_exact_semantic(self) -> None:
+        """``basis literal -> source shape -> membership -> observation semantics``."""
+
         registry = {
-            entry.basis: (entry.source_shape, entry.membership)
+            entry.basis: (
+                entry.source_shape,
+                entry.membership,
+                entry.allowed_observations,
+                entry.ownership_observation,
+            )
             for entry in INVENTORY_SCOPE_BASIS_REGISTRY
         }
         self.assertEqual(
             registry,
             {
-                BASIS_A_IN: (INVENTORY_SCOPE_SHAPE_WAREHOUSE, INVENTORY_SCOPE_IN),
-                BASIS_A_OUT: (INVENTORY_SCOPE_SHAPE_WAREHOUSE, INVENTORY_SCOPE_OUT),
-                BASIS_B_IN: (INVENTORY_SCOPE_SHAPE_PLANT_AGGREGATE, INVENTORY_SCOPE_IN),
-                BASIS_B_OUT: (INVENTORY_SCOPE_SHAPE_PLANT_AGGREGATE, INVENTORY_SCOPE_OUT),
+                BASIS_A_IN: (
+                    INVENTORY_SCOPE_SHAPE_WAREHOUSE,
+                    INVENTORY_SCOPE_IN,
+                    ("plant_id",),
+                    "plant_id",
+                ),
+                BASIS_A_OUT: (
+                    INVENTORY_SCOPE_SHAPE_WAREHOUSE,
+                    INVENTORY_SCOPE_OUT,
+                    ("plant_id",),
+                    "plant_id",
+                ),
+                BASIS_B_IN: (
+                    INVENTORY_SCOPE_SHAPE_PLANT_AGGREGATE,
+                    INVENTORY_SCOPE_IN,
+                    ("plant_id", "on_hand_qty"),
+                    None,
+                ),
+                BASIS_B_OUT: (
+                    INVENTORY_SCOPE_SHAPE_PLANT_AGGREGATE,
+                    INVENTORY_SCOPE_OUT,
+                    ("plant_id", "on_hand_qty"),
+                    None,
+                ),
             },
         )
 

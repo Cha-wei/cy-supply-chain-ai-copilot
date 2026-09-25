@@ -2637,16 +2637,48 @@ Plant-level aggregate → automatically in scope
 
 **已登记的 SIMULATED scope basis registry（exact literal → exact semantic）**
 
-| exact `mapping_basis` literal | source shape | scope membership |
-| --- | --- | --- |
-| `SIMULATED-INV-SCOPE-A-IN` | A（warehouse-level） | `IN_SCOPE` |
-| `SIMULATED-INV-SCOPE-A-OUT` | A（warehouse-level） | `OUT_OF_SCOPE` |
-| `SIMULATED-INV-SCOPE-B-IN` | B（already Plant-scoped aggregate） | `IN_SCOPE` |
-| `SIMULATED-INV-SCOPE-B-OUT` | B（already Plant-scoped aggregate） | `OUT_OF_SCOPE` |
+| exact `mapping_basis` literal | source shape | scope membership | required observation semantics |
+| --- | --- | --- | --- |
+| `SIMULATED-INV-SCOPE-A-IN` | A（warehouse-level） | `IN_SCOPE` | 必须登记在 `plant_id` association 上 |
+| `SIMULATED-INV-SCOPE-A-OUT` | A（warehouse-level） | `OUT_OF_SCOPE` | 必须登记在 `plant_id` association 上 |
+| `SIMULATED-INV-SCOPE-B-IN` | B（already Plant-scoped aggregate） | `IN_SCOPE` | `plant_id` 或 `on_hand_qty` association |
+| `SIMULATED-INV-SCOPE-B-OUT` | B（already Plant-scoped aggregate） | `OUT_OF_SCOPE` | `plant_id` 或 `on_hand_qty` association |
 
 这些 literal 是 **SIMULATED POC 的 technical mapping identifiers**（`§4.5.22` Layer 4
 Mapping ／ Resolution Basis 的一个 approved family）；它们**不是** canonical property、
 **不是** wire property、**不是** status vocabulary，也**不**定义任何真实 ERP field naming。
+
+**Shape A 的 ownership provenance（重要）**
+
+warehouse-level 家族的 basis **必须**登记在 `plant_id` association 上：只有该 association 才证明
+
+```text
+source warehouse context → canonical plant_id
+```
+
+若 A 系 basis 登记在 `on_hand_qty` ／ `inventory_status` ／ `inventory_snapshot_time` ／
+`material_code` 等其它 association 上，则：
+
+```text
+Plant ownership 未被证明 → IDENTITY_RESOLUTION / UNRESOLVED_IDENTITY
+scope membership 保持 unresolved → SCOPE_COVERAGE / UNRESOLVED_SCOPE
+```
+
+**不得**因为 record 上恰好存在 `plant_id` value 就把它当作已证明 ownership。
+Shape B 不得因此退化：Plant-scoped aggregate 仍由其 approved aggregate ／ Plant association
+＋ basis 证明「该 aggregate 已按当前 POC Inventory Scope 形成」。
+
+**三类 prerequisite 相互独立**
+
+```text
+canonical Inventory grain readiness
+  !=  Plant ownership resolution
+  !=  POC Inventory Scope resolution
+```
+
+missing `inventory_snapshot_time` 或 missing `material_code` 只令 canonical Inventory grain
+readiness 不成立；Plant ownership 仍按 accepted canonical evidence 中可用的 `plant_id` 独立判断，
+scope resolution 亦独立执行。三者由后续 deterministic rule 分别检查。
 
 **Runtime 行为（不得默认 included ／ excluded）：**
 
