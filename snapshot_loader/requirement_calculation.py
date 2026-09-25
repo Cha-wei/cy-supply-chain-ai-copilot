@@ -98,11 +98,13 @@ CALCULATION_GRAIN_PROPERTIES: tuple[str, ...] = (
 
 
 def _rational_payload(value: Fraction | None) -> dict[str, int] | None:
-    """Lossless deterministic serialisation of an exact rational quantity.
+    """Lossless deterministic serialisation of an exact rational **derived quantity**.
 
-    ``{"numerator": <integer>, "denominator": <positive integer>}`` -- the canonical
-    in-memory representation of a derived requirement quantity, never a truncated decimal
-    expansion and never a rounded quantity.
+    ``{"numerator": <integer>, "denominator": <positive integer>}`` -- the in-memory
+    representation of a derived requirement quantity, never a truncated decimal expansion
+    and never a rounded quantity.  Only the Human-approved derived quantities
+    (``BaseRequirement`` / ``GrossRequirement`` / ``CumulativeGrossRequirement``) are
+    expressed this way.
     """
 
     if value is None:
@@ -120,10 +122,16 @@ class RequirementCalculation:
     reliably obtained; a ``DATA_INCOMPLETE`` calculation never carries a numeric
     ``BaseRequirement`` / ``GrossRequirement`` (``§2.4.11``).
 
-    ``base_requirement`` / ``gross_requirement`` / ``cumulative_gross_requirement`` are
-    **exact rational** values (:class:`fractions.Fraction`).  ``loss_rate`` is the resolved
-    canonical input value parsed exactly from its canonical decimal string; it is not
-    redefined as a new canonical rational field.
+    ``base_requirement`` / ``gross_requirement`` / ``cumulative_gross_requirement`` are the
+    Human-approved **exact rational** derived quantities (:class:`fractions.Fraction`).
+
+    ``loss_rate`` is the **resolved canonical input**, kept exactly as the accepted canonical
+    value states it (the canonical base-10 decimal representation, character for character).
+    It is *not* a derived quantity and is *not* redefined as a rational output field: the
+    exact operand used by the arithmetic is an internal, temporary conversion
+    (canonical decimal -> ``Fraction`` operand -> ``GrossRequirement``) that never replaces
+    the retained canonical representation and never normalises it
+    (``"0.050"`` stays ``"0.050"``).
 
     Traceability (``§2.4.2``): ``production_requirement_reference`` and
     ``bom_component_reference`` name the canonical objects this calculation was derived
@@ -137,7 +145,7 @@ class RequirementCalculation:
     required_date: Any
     grain: tuple[CanonicalProperty, ...]
     base_requirement: Fraction | None
-    loss_rate: Fraction | None
+    loss_rate: Any
     gross_requirement: Fraction | None
     cumulative_gross_requirement: Fraction | None
     outcome: str | None = None
@@ -150,6 +158,17 @@ class RequirementCalculation:
     loss_rate_context_grain: tuple[CanonicalProperty, ...] | None = None
     loss_rate_provenance: EvidenceReference | None = None
     inherited_issues: tuple[Issue, ...] = ()
+
+    def exact_loss_rate(self) -> Fraction | None:
+        """Return the exact rational **operand** for the retained canonical ``loss_rate``.
+
+        This is a read-only exact view of the canonical input used for arithmetic; it does
+        not replace the canonical representation and does not introduce any precision or
+        rounding policy.  ``None`` means the canonical value is absent or is not a
+        registered base-10 decimal.
+        """
+
+        return _as_rational(self.loss_rate)
 
     @property
     def data_incomplete(self) -> bool:
@@ -175,7 +194,8 @@ class RequirementCalculation:
                 {"name": prop.name, "value": prop.value} for prop in self.grain
             ],
             "BaseRequirement": _rational_payload(self.base_requirement),
-            "loss_rate": _rational_payload(self.loss_rate),
+            # The resolved canonical input keeps its registered decimal representation.
+            "loss_rate": self.loss_rate,
             "GrossRequirement": _rational_payload(self.gross_requirement),
             "CumulativeGrossRequirement": _rational_payload(
                 self.cumulative_gross_requirement
@@ -548,21 +568,25 @@ def _calculate_component(
             "defaulted to 0 (§2.4.7 / §4.4.15)"
         )
 
-    loss_rate = _as_rational(context.value)
-    if loss_rate is None:
+    # The retained canonical input is the accepted canonical representation, unchanged.
+    canonical_loss_rate = context.value
+    # Exact rational **operand** used for the arithmetic only: the canonical decimal is
+    # converted temporarily and never replaces the retained canonical value.
+    loss_rate_operand = _as_rational(canonical_loss_rate)
+    if loss_rate_operand is None:
         return incomplete(
             "the resolved loss_rate value is missing or is not a registered base-10 "
             "decimal; no requirement calculation and no default is applied (§2.4.7)"
         )
-    if not _valid_loss_rate(loss_rate):
+    if not _valid_loss_rate(loss_rate_operand):
         return incomplete(
-            f"loss_rate {context.value!r} is outside the registered range "
+            f"loss_rate {canonical_loss_rate!r} is outside the registered range "
             "0 <= loss_rate < 1; the value is not clamped, not replaced by 0 and not "
             "replaced by the maximum (§2.4.6 / §4.4.15 root C)"
         )
 
     base = base_requirement(production_qty, bom_component_qty)
-    gross = gross_requirement(base, loss_rate)
+    gross = gross_requirement(base, loss_rate_operand)
 
     return RequirementCalculation(
         plant_id=plant_id,
@@ -570,7 +594,7 @@ def _calculate_component(
         required_date=required_date,
         grain=grain,
         base_requirement=base,
-        loss_rate=loss_rate,
+        loss_rate=canonical_loss_rate,
         gross_requirement=gross,
         cumulative_gross_requirement=None,  # filled by the cumulative pass
         outcome=None,  # success is expressed by the exact numeric results themselves

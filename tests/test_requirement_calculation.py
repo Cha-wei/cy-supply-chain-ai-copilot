@@ -547,7 +547,9 @@ class AcceptanceExampleTests(RequirementCalculationTestCase):
         self.assertEqual(calculation.component_material_code, COMPONENT)
         self.assertEqual(calculation.required_date, REQUIRED_DATE)
         self.assert_exact(calculation.base_requirement, Fraction(200, 1))
-        self.assert_exact(calculation.loss_rate, Fraction(0, 1))
+        # The resolved canonical input keeps its exact decimal representation.
+        self.assertEqual(calculation.loss_rate, '0')
+        self.assert_exact(calculation.exact_loss_rate(), Fraction(0, 1))
         self.assert_exact(calculation.gross_requirement, Fraction(200, 1))
         self.assert_exact(calculation.cumulative_gross_requirement, Fraction(200, 1))
 
@@ -559,7 +561,8 @@ class AcceptanceExampleTests(RequirementCalculationTestCase):
         calculation = result.calculations[0]
         self.assertIsNone(calculation.outcome)
         self.assert_exact(calculation.base_requirement, Fraction(200, 1))
-        self.assert_exact(calculation.loss_rate, Fraction(1, 20))
+        self.assertEqual(calculation.loss_rate, '0.05')
+        self.assert_exact(calculation.exact_loss_rate(), Fraction(1, 20))
         self.assert_exact(calculation.gross_requirement, Fraction(4000, 19))
         self.assertEqual(calculation.gross_requirement.numerator, 4000)
         self.assertEqual(calculation.gross_requirement.denominator, 19)
@@ -711,6 +714,60 @@ class ExactCumulativeTests(RequirementCalculationTestCase):
         self.assertEqual(second.cumulative_gross_requirement.denominator, 19)
 
 
+class CanonicalLossRateRepresentationTests(RequirementCalculationTestCase):
+    """``loss_rate`` is a resolved canonical **input**, not a derived quantity."""
+
+    def test_canonical_decimal_representation_is_preserved_exactly(self) -> None:
+        # ``0.050`` must stay ``0.050``: the exact operand used for arithmetic never
+        # normalises or replaces the retained canonical representation.
+        report = self.canonical_report(loss_rate_value="0.050")
+        result = compute_requirement_calculation(report)
+        calculation = result.calculations[0]
+        self.assertEqual(calculation.loss_rate, "0.050")
+        self.assertEqual(calculation.to_dict()["loss_rate"], "0.050")
+        # The mathematics is still exact: 0.050 = 1/20 and 200 / (1 - 1/20) = 4000/19.
+        self.assert_exact(calculation.exact_loss_rate(), Fraction(1, 20))
+        self.assert_exact(calculation.base_requirement, Fraction(200, 1))
+        self.assert_exact(calculation.gross_requirement, Fraction(4000, 19))
+
+    def test_loss_rate_is_not_serialised_as_a_rational_field(self) -> None:
+        report = self.canonical_report(loss_rate_value="0.05")
+        calculation = compute_requirement_calculation(report).to_dict()[
+            "calculations"
+        ][0]
+        self.assertIsInstance(calculation["loss_rate"], str)
+        self.assertNotIsInstance(calculation["loss_rate"], dict)
+        # Derived quantities are the ones expressed as exact rationals.
+        self.assertEqual(
+            calculation["GrossRequirement"], {"numerator": 4000, "denominator": 19}
+        )
+        self.assertEqual(
+            calculation["BaseRequirement"], {"numerator": 200, "denominator": 1}
+        )
+
+    def test_no_new_loss_rate_field_or_field_renaming(self) -> None:
+        report = self.canonical_report()
+        payload = compute_requirement_calculation(report).to_dict()["calculations"][0]
+        for forbidden in ("loss_rate_ratio", "loss_rate_fraction", "loss_rate_rational"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, payload)
+
+    def test_zero_loss_rate_stays_a_valid_explicit_zero(self) -> None:
+        report = self.canonical_report(loss_rate_value="0")
+        calculation = compute_requirement_calculation(report).calculations[0]
+        self.assertEqual(calculation.loss_rate, "0")
+        self.assert_exact(calculation.exact_loss_rate(), Fraction(0, 1))
+        self.assert_exact(calculation.gross_requirement, Fraction(200, 1))
+
+    def test_missing_loss_rate_is_never_a_rational_default(self) -> None:
+        report = self.canonical_report(include_loss_rate_context=False)
+        calculation = compute_requirement_calculation(report).calculations[0]
+        self.assertEqual(calculation.outcome, OUTCOME_DATA_INCOMPLETE)
+        self.assertIsNone(calculation.loss_rate)
+        self.assertIsNone(calculation.exact_loss_rate())
+        self.assertIsNone(calculation.to_dict()["loss_rate"])
+
+
 class ContextSourceTests(RequirementCalculationTestCase):
     def test_calculation_context_comes_from_the_parent_requirement(self) -> None:
         report = self.canonical_report(component_local_plant_and_date=False)
@@ -842,8 +899,10 @@ class GrainAndIsolationTests(RequirementCalculationTestCase):
         first = result.for_grain(PLANT, COMPONENT, "2026-10-10")
         second = result.for_grain(PLANT, COMPONENT, "2026-10-15")
         assert first is not None and second is not None
-        self.assert_exact(first.loss_rate, Fraction(0, 1))
-        self.assert_exact(second.loss_rate, Fraction(1, 2))
+        self.assertEqual(first.loss_rate, '0')
+        self.assertEqual(second.loss_rate, '0.5')
+        self.assert_exact(first.exact_loss_rate(), Fraction(0, 1))
+        self.assert_exact(second.exact_loss_rate(), Fraction(1, 2))
         self.assert_exact(first.gross_requirement, Fraction(200, 1))
         self.assert_exact(second.gross_requirement, Fraction(400, 1))
         self.assertNotEqual(
@@ -889,9 +948,11 @@ class GrainAndIsolationTests(RequirementCalculationTestCase):
         m3 = result.for_grain(PLANT, COMPONENT_B, REQUIRED_DATE)
         assert m2 is not None and m3 is not None
         self.assert_exact(m2.base_requirement, Fraction(200, 1))
-        self.assert_exact(m2.loss_rate, Fraction(1, 50))
+        self.assertEqual(m2.loss_rate, '0.02')
+        self.assert_exact(m2.exact_loss_rate(), Fraction(1, 50))
         self.assert_exact(m3.base_requirement, Fraction(400, 1))
-        self.assert_exact(m3.loss_rate, Fraction(3, 50))
+        self.assertEqual(m3.loss_rate, '0.06')
+        self.assert_exact(m3.exact_loss_rate(), Fraction(3, 50))
         self.assert_exact(
             m2.gross_requirement, gross_requirement(Fraction(200), Fraction(1, 50))
         )
@@ -1049,9 +1110,8 @@ class OutputAndBoundaryTests(RequirementCalculationTestCase):
         self.assertEqual(
             calculation["BaseRequirement"], {"numerator": 200, "denominator": 1}
         )
-        self.assertEqual(
-            calculation["loss_rate"], {"numerator": 1, "denominator": 20}
-        )
+        # The canonical input keeps its exact decimal representation, not a rational field.
+        self.assertEqual(calculation["loss_rate"], "0.05")
         trace = calculation["trace"]
         self.assertIn("production_requirement_reference", trace)
         self.assertIn("bom_component_reference", trace)
