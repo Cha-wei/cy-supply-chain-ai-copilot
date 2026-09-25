@@ -3961,11 +3961,21 @@ def _effective_demand_references(
     issues: list[Issue] = []
     seen_pairs: dict[tuple[Any, Any], set[str]] = {}
 
-    def _unresolved(*, role: str, detail: str) -> None:
+    #: Appended to a per-entry finding when the caller-supplied pair cannot serve as a
+    #: deterministic bookkeeping key.  The pair values are never converted, stringified or
+    #: invented, and the entry is never skipped because of it.
+    ungroupable_pair_note = (
+        " The exact substitute/target pair bookkeeping could not be established because the "
+        "supplied runtime pair representation is not usable as a deterministic key; the pair "
+        "values are never converted, stringified or invented and the pair is not registered "
+        "in the completeness bookkeeping (§4.1.13 D / §4.3.31 G I-8)."
+    )
+
+    def _unresolved(*, role: str, detail: str, ungroupable_pair: bool = False) -> None:
         issues.append(
             Issue(
                 location="effective_demand_context",
-                detail=detail,
+                detail=detail + (ungroupable_pair_note if ungroupable_pair else ""),
                 category="SEMANTIC_RESOLUTION",
                 reason="SEMANTIC_UNRESOLVED",
                 layer=LAYER_2,
@@ -3980,8 +3990,14 @@ def _effective_demand_references(
         )
 
     for entry in handoff.effective_demand:
-        key = (entry.source_substitute_material, entry.target_material)
-        seen_pairs.setdefault(key, set()).add(entry.relation)
+        pair = (entry.source_substitute_material, entry.target_material)
+        # A pair that cannot be used as a deterministic bookkeeping key is never registered
+        # and never keyed by a fabricated value -- but the entry itself is **not** skipped:
+        # it still runs its relation validation, evidence verification and mapping boundary
+        # below, and its finding carries the bookkeeping note.
+        bookkeepable = _grouping_key(pair) is not None
+        if bookkeepable:
+            seen_pairs.setdefault(pair, set()).add(entry.relation)
 
         if entry.relation not in G5_RELATIONS:
             _unresolved(
@@ -3990,6 +4006,7 @@ def _effective_demand_references(
                     f"relation {entry.relation!r} is not one of the registered G5-A "
                     f"relations {list(G5_RELATIONS)}; the pair stays unresolved"
                 ),
+                ungroupable_pair=not bookkeepable,
             )
             continue
 
@@ -4007,6 +4024,7 @@ def _effective_demand_references(
                     verification.problem
                     or "the cited mapping evidence is not verifiable in this package"
                 ),
+                ungroupable_pair=not bookkeepable,
             )
             continue
 
@@ -4027,6 +4045,7 @@ def _effective_demand_references(
                 "the conceptual outcome stays unresolved and is never taken from the "
                 "caller nor invented by canonicalization (§4.1.13 D)"
             ),
+            ungroupable_pair=not bookkeepable,
         )
 
     for key in sorted(seen_pairs, key=lambda item: repr(item)):

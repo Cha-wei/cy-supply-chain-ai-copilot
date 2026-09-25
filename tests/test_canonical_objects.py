@@ -986,6 +986,338 @@ class EffectiveDemandTests(CanonicalObjectsTestCase):
         self.assertIn("mapping_basis", fields)
 
 
+class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
+    """G5-A / I-8: a non-hashable caller pair is never a Python ``TypeError`` (Issue #144).
+
+    The pair values are runtime bookkeeping, not business identity: they are never converted,
+    stringified or invented, the entry is never skipped because of it, and no conceptual
+    outcome is derived from them.  Phase A still emits no effective-demand context.
+    """
+
+    NOTE_MARKER = "pair bookkeeping could not be established"
+    COMPLETENESS_MARKER = "carry no mapping evidence"
+
+    def datasets(self):
+        return [
+            (
+                "Substitute Allocation",
+                [
+                    {
+                        "plant_id": PLANT,
+                        "target_material_code": MATERIAL,
+                        "substitute_material_code": "M3",
+                        "AllocatedSubstituteQty": "4",
+                        "_meta": {
+                            "provenance_associations": [
+                                {
+                                    "observation": "AllocatedSubstituteQty",
+                                    "evidence": [EVIDENCE_ALLOCATION],
+                                }
+                            ]
+                        },
+                    }
+                ],
+            ),
+            (
+                "Substitute Relationship",
+                [
+                    {
+                        "plant_id": PLANT,
+                        "target_material_code": MATERIAL,
+                        "substitute_material_code": "M3",
+                        "substitution_ratio": "0.5",
+                        "approval_status": "APPROVED",
+                        "_meta": {
+                            "provenance_associations": [
+                                {
+                                    "observation": "approval_status",
+                                    "evidence": [EVIDENCE_RELATIONSHIP],
+                                }
+                            ]
+                        },
+                    }
+                ],
+            ),
+        ]
+
+    def entry(
+        self,
+        accepted,
+        *,
+        source: object,
+        target: object,
+        relation: str = RELATION_TARGET_APPLICABILITY,
+        role: str = "Substitute Relationship",
+        artifact: str = "1.json",
+        locator: str | None = EVIDENCE_RELATIONSHIP,
+        package_id: str | None = None,
+        ordinal: int = 0,
+    ) -> EffectiveDemandRelationHandoff:
+        return EffectiveDemandRelationHandoff(
+            source_substitute_material=source,
+            target_material=target,
+            relation=relation,
+            evidence=self.citation(
+                accepted,
+                role=role,
+                artifact=artifact,
+                ordinal=ordinal,
+                locator=locator,
+                package_id=package_id,
+            ),
+            mapping_basis="SIMULATED approved applicability mapping",
+        )
+
+    def run_entries(self, *, name: str, entries):
+        _, accepted = self.accepted(self.datasets(), name=name)
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-02-01",
+            effective_demand=tuple(entries(accepted)),
+        )
+        return accepted, build_effective_demand_contexts(accepted, handoff)
+
+    def assert_unresolved_only(self, issues) -> None:
+        self.assertTrue(issues)
+        self.assertTrue(all(issue.reason == "SEMANTIC_UNRESOLVED" for issue in issues))
+        self.assertTrue(
+            all(issue.category == "SEMANTIC_RESOLUTION" for issue in issues)
+        )
+
+    def test_list_source_material_does_not_crash(self) -> None:
+        """A: ``source_substitute_material = []`` -- no crash, no context, no conversion."""
+
+        source: list[object] = []
+        _, (contexts, issues) = self.run_entries(
+            name="g5a-source-list",
+            entries=lambda accepted: (
+                self.entry(accepted, source=source, target=MATERIAL),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assert_unresolved_only(issues)
+        self.assertEqual(len(issues), 1)
+        self.assertIn(self.NOTE_MARKER, issues[0].detail)
+        # No fabricated pair key: the completeness pass never saw this pair.
+        self.assertNotIn(self.COMPLETENESS_MARKER, issues[0].detail)
+        # The caller's value is untouched -- not converted, stringified or widened.
+        self.assertEqual(source, [])
+
+    def test_dict_target_material_does_not_crash(self) -> None:
+        """B: ``target_material = {}``."""
+
+        target: dict[str, object] = {}
+        _, (contexts, issues) = self.run_entries(
+            name="g5a-target-dict",
+            entries=lambda accepted: (
+                self.entry(accepted, source="M3", target=target),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assert_unresolved_only(issues)
+        self.assertEqual(len(issues), 1)
+        self.assertIn(self.NOTE_MARKER, issues[0].detail)
+        self.assertEqual(target, {})
+
+    def test_both_values_non_hashable(self) -> None:
+        """C: both components non-hashable."""
+
+        _, (contexts, issues) = self.run_entries(
+            name="g5a-both",
+            entries=lambda accepted: (
+                self.entry(accepted, source=[], target={}),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assert_unresolved_only(issues)
+        self.assertEqual(len(issues), 1)
+        self.assertIn(self.NOTE_MARKER, issues[0].detail)
+
+    def test_verified_evidence_is_still_verified_for_a_non_hashable_pair(self) -> None:
+        """D: the entry still runs evidence verification -- it is never skipped."""
+
+        _, (contexts, issues) = self.run_entries(
+            name="g5a-verified",
+            entries=lambda accepted: (
+                self.entry(
+                    accepted,
+                    source=[],
+                    target=MATERIAL,
+                    relation=RELATION_TARGET_APPLICABILITY,
+                ),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assert_unresolved_only(issues)
+        self.assertEqual(len(issues), 1)
+        # The verified-evidence branch really ran: the finding reports the accepted record
+        # path and the missing approved source-value -> outcome mapping.
+        self.assertIn("supports relation", issues[0].detail)
+        self.assertIn("no approved source-value", issues[0].detail)
+        self.assertIn("1.json#0", issues[0].detail)
+        self.assertIn(self.NOTE_MARKER, issues[0].detail)
+
+    def test_invalid_relation_literal_is_not_masked(self) -> None:
+        """E: the invalid relation literal stays visible next to the bookkeeping note."""
+
+        _, (contexts, issues) = self.run_entries(
+            name="g5a-invalid-relation",
+            entries=lambda accepted: (
+                self.entry(accepted, source=[], target=MATERIAL, relation="NOT_A_RELATION"),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assert_unresolved_only(issues)
+        self.assertEqual(len(issues), 1)
+        self.assertIn("is not one of the registered G5-A relations", issues[0].detail)
+        self.assertIn(self.NOTE_MARKER, issues[0].detail)
+
+    def test_foreign_evidence_failure_is_not_masked(self) -> None:
+        """F: an unverifiable citation stays visible for a non-hashable pair."""
+
+        _, (contexts, issues) = self.run_entries(
+            name="g5a-foreign",
+            entries=lambda accepted: (
+                self.entry(
+                    accepted,
+                    source=[],
+                    target=MATERIAL,
+                    package_id="SIMULATED-PKG-9999",
+                ),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assert_unresolved_only(issues)
+        self.assertEqual(len(issues), 1)
+        self.assertIn("Snapshot Package Identity", issues[0].detail)
+        self.assertIn(self.NOTE_MARKER, issues[0].detail)
+        # The unverified citation never becomes a fabricated bookkeeping pair either.
+        self.assertNotIn(self.COMPLETENESS_MARKER, issues[0].detail)
+
+    def test_hashable_pair_with_one_relation_keeps_the_completeness_finding(self) -> None:
+        """G: existing hashable-pair behaviour is unchanged."""
+
+        _, (contexts, issues) = self.run_entries(
+            name="g5a-one-relation",
+            entries=lambda accepted: (
+                self.entry(accepted, source="M3", target=MATERIAL),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assert_unresolved_only(issues)
+        # One finding for the entry plus the registered missing-relation completeness finding.
+        self.assertEqual(len(issues), 2)
+        completeness = [
+            issue for issue in issues if self.COMPLETENESS_MARKER in issue.detail
+        ]
+        self.assertEqual(len(completeness), 1)
+        self.assertIn(RELATION_SOURCE_RESERVATION_OVERLAP, completeness[0].detail)
+        self.assertNotIn(self.NOTE_MARKER, "".join(issue.detail for issue in issues))
+
+    def test_hashable_pair_with_both_relations_has_no_false_missing_finding(self) -> None:
+        """H / J: both relations stay independently unresolved and no context is emitted."""
+
+        _, (contexts, issues) = self.run_entries(
+            name="g5a-both-relations",
+            entries=lambda accepted: (
+                self.entry(accepted, source="M3", target=MATERIAL),
+                self.entry(
+                    accepted,
+                    source="M3",
+                    target=MATERIAL,
+                    relation=RELATION_SOURCE_RESERVATION_OVERLAP,
+                    role="Substitute Allocation",
+                    artifact="0.json",
+                    locator=EVIDENCE_ALLOCATION,
+                ),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assert_unresolved_only(issues)
+        self.assertEqual(len(issues), 2)
+        self.assertFalse(
+            any(self.COMPLETENESS_MARKER in issue.detail for issue in issues)
+        )
+        self.assertEqual(
+            {
+                RELATION_TARGET_APPLICABILITY if "Target Applicability" in i.detail else RELATION_SOURCE_RESERVATION_OVERLAP
+                for i in issues
+            },
+            {RELATION_TARGET_APPLICABILITY, RELATION_SOURCE_RESERVATION_OVERLAP},
+        )
+
+    def test_repeated_relation_evidence_is_not_deduplicated(self) -> None:
+        """I: repeats are reported, never collapsed by same-value dedup or first/last wins."""
+
+        _, (contexts, issues) = self.run_entries(
+            name="g5a-repeat",
+            entries=lambda accepted: (
+                self.entry(accepted, source="M3", target=MATERIAL),
+                self.entry(
+                    accepted,
+                    source="M3",
+                    target=MATERIAL,
+                    relation=RELATION_SOURCE_RESERVATION_OVERLAP,
+                    role="Substitute Allocation",
+                    artifact="0.json",
+                    locator=EVIDENCE_ALLOCATION,
+                ),
+                self.entry(accepted, source="M3", target=MATERIAL),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assert_unresolved_only(issues)
+        self.assertEqual(len(issues), 3)
+
+    def test_repeated_non_hashable_entries_are_not_deduplicated(self) -> None:
+        _, (contexts, issues) = self.run_entries(
+            name="g5a-repeat-ungroupable",
+            entries=lambda accepted: (
+                self.entry(accepted, source=[], target=MATERIAL),
+                self.entry(accepted, source=[], target=MATERIAL),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assert_unresolved_only(issues)
+        self.assertEqual(len(issues), 2)
+
+    def test_non_hashable_pair_bookkeeping_is_deterministic(self) -> None:
+        """K: identical input reproduces identical findings and serialized output."""
+
+        _, accepted = self.accepted(self.datasets(), name="g5a-determinism")
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-02-01",
+            effective_demand=(self.entry(accepted, source=[], target={}),),
+        )
+        first_contexts, first_issues = build_effective_demand_contexts(accepted, handoff)
+        second_contexts, second_issues = build_effective_demand_contexts(accepted, handoff)
+        self.assertEqual(first_contexts, second_contexts)
+        self.assertEqual(first_issues, second_issues)
+        first_report = construct_canonical_objects(accepted, handoff).to_dict()
+        second_report = construct_canonical_objects(accepted, handoff).to_dict()
+        self.assertEqual(first_report, second_report)
+        self.assertEqual(first_report["effective_demand_contexts"], [])
+
+    def test_no_caller_outcome_channel_is_introduced(self) -> None:
+        """The handoff still carries evidence bookkeeping only."""
+
+        fields = set(EffectiveDemandRelationHandoff.__dataclass_fields__)
+        self.assertEqual(
+            fields,
+            {
+                "source_substitute_material",
+                "target_material",
+                "relation",
+                "evidence",
+                "mapping_basis",
+            },
+        )
+        for forbidden in ("outcome", "applicable", "overlaps", "result", "boolean"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, fields)
+
+
 class ProvenanceTests(CanonicalObjectsTestCase):
     def test_provenance_carries_the_registered_accepted_locators(self) -> None:
         report = self.construct(
