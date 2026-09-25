@@ -80,6 +80,14 @@ from .layer2 import (
 from .loader import RECORD_PROPERTY_SET_CHECK, load_package, load_package_from_paths
 from .path_scope import validate_artifact_filename
 from .report import ImportReport
+from .requirement_calculation import (
+    OUTCOME_DATA_INCOMPLETE,
+    OUTCOME_NUMERIC,
+    RULE_ID,
+    RequirementCalculation,
+    RequirementCalculationResult,
+    compute_requirement_calculation,
+)
 from .strict_json import StrictJsonError, parse_strict_json
 from .trust import (
     AcceptedPackage,
@@ -116,10 +124,15 @@ __all__ = [
     "Layer2Report",
     "LossRateHandoff",
     "MANIFEST_FILENAME",
+    "OUTCOME_DATA_INCOMPLETE",
+    "OUTCOME_NUMERIC",
     "PHASE_A_ROLE_LITERALS",
     "PhaseAHandoff",
     "RECORD_PROPERTY_SET_CHECK",
+    "RULE_ID",
     "RecordReference",
+    "RequirementCalculation",
+    "RequirementCalculationResult",
     "ReuseVerdict",
     "SUPPORTED_CONTRACT_VERSION",
     "SafetyStockHandoff",
@@ -127,6 +140,7 @@ __all__ = [
     "TrustedInputBoundary",
     "V02_CANONICAL_RECORD_PROPERTIES",
     "build_effective_demand_contexts",
+    "compute_requirement_calculation",
     "construct_canonical_objects",
     "load_package",
     "load_package_from_paths",
