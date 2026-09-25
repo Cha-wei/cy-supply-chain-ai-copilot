@@ -363,17 +363,35 @@ class ArithmeticTests(EffectiveInboundTestCase):
             (first + second).text(), "223456789012345678901234567890"
         )
 
-    def test_canonical_quantity_text_has_no_exponent_and_keeps_its_scale(self) -> None:
-        """``IC-10``: no rounding / quantization / truncation / silent trimming."""
+    def test_canonical_quantity_text_is_lossless_and_keeps_the_stated_scale(self) -> None:
+        """No rounding / quantization / truncation / scale normalisation is applied."""
 
         self.assertEqual(parse_exact_quantity("0.10").text(), "0.10")
         self.assertEqual(parse_exact_quantity("100").text(), "100")
         self.assertEqual(parse_exact_quantity("0.500").text(), "0.500")
-        self.assertEqual(parse_exact_quantity("+0.500").text(), "0.500")
         self.assertEqual(parse_exact_quantity("-0.50").text(), "-0.50")
         self.assertEqual(
             parse_exact_quantity("0.000000000000000000000000000001").text(),
             "0.000000000000000000000000000001",
+        )
+
+    def test_quantity_text_is_a_lossless_value_rendering_not_a_lexical_transcript(
+        self,
+    ) -> None:
+        """The exact value and scale survive, but this is not character-for-character.
+
+        The registered canonical grammar admits forms whose lexical spelling is not part of
+        the quantity itself (``"+"`` sign, leading zeros); the rendered text is the exact
+        value, not a copy of the source characters.
+        """
+
+        self.assertEqual(parse_exact_quantity("+5.00").text(), "5.00")
+        self.assertEqual(parse_exact_quantity("001.20").text(), "1.20")
+        self.assertEqual(
+            parse_exact_quantity("+5.00"), parse_exact_quantity("5.00")
+        )
+        self.assertEqual(
+            parse_exact_quantity("001.20"), parse_exact_quantity("1.20")
         )
 
     def test_equal_quantities_at_different_scales_compare_and_hash_equally(self) -> None:
@@ -756,8 +774,8 @@ class OutputAndBoundaryTests(EffectiveInboundTestCase):
             compute_requirement_calculation(construction).to_dict(),
         )
 
-    def test_canonical_input_representation_is_retained_in_the_output(self) -> None:
-        """``IC-10``: a canonical decimal is never rounded, quantized or trimmed."""
+    def test_canonical_input_value_and_scale_survive_into_the_output(self) -> None:
+        """The exact value and stated fractional scale are serialized losslessly."""
 
         _construction, result, target = self.evaluate(
             name="representation",
@@ -774,6 +792,23 @@ class OutputAndBoundaryTests(EffectiveInboundTestCase):
         self.assertEqual(payload["RemainingInboundQty"], "99.50")
         self.assertEqual(payload["EffectiveInboundQty"], "99.50")
         self.assert_qty(target.cumulative_effective_inbound, "99.50")
+
+    def test_non_lexical_canonical_forms_keep_their_exact_value(self) -> None:
+        """``"+5.00"`` / ``"001.20"`` are consumed exactly; only the value is rendered."""
+
+        _construction, _result, target = self.evaluate(
+            name="representation-lexical",
+            inbound=self.inbound_record(
+                status="PARTIALLY_RECEIVED",
+                ordered_qty="001.20",
+                received_qty="+0.20",
+                arrival="2026-10-12",
+            ),
+        )
+        payload = target.evaluations[0].to_dict()
+        self.assertEqual(payload["ordered_qty"], "1.20")
+        self.assertEqual(payload["received_qty"], "0.20")
+        self.assertEqual(payload["RemainingInboundQty"], "1.00")
 
     def test_minimum_output_fields(self) -> None:
         _construction, result, target = self.evaluate(
@@ -883,8 +918,125 @@ class GroupedRequirementTargetTests(EffectiveInboundTestCase):
         self.assertIsNone(target.outcome)
         self.assert_qty(target.cumulative_effective_inbound, "50")
         # Both upstream rows are retained in the trace: neither is discarded.
-        self.assertEqual(len(target.requirement_references), 2)
-        self.assertEqual(len(set(target.requirement_references)), 2)
+        self.assertEqual(len(target.requirement_traces), 2)
+        self.assertEqual(
+            len(
+                {
+                    trace.production_requirement_reference
+                    for trace in target.requirement_traces
+                }
+            ),
+            2,
+        )
+
+    def test_grouped_target_retains_every_upstream_trace_dimension(self) -> None:
+        """Each upstream row keeps its real parent, BOM Component and provenance.
+
+        Publishing the ``BOM Component`` reference as a "requirement reference" -- or the
+        ``loss_rate`` provenance as the requirement provenance -- would mis-describe the
+        evidence for every downstream consumer.
+        """
+
+        construction, result = self._two_parent_rows(unusable_position=None)
+        target = result.targets[0]
+        traces = target.requirement_traces
+        self.assertEqual(len(traces), 2)
+
+        parent_references = {
+            trace.production_requirement_reference for trace in traces
+        }
+        component_references = {trace.bom_component_reference for trace in traces}
+        self.assertEqual(len(parent_references), 2)
+        self.assertEqual(len(component_references), 2)
+        # A BOM Component reference is never published as a Production Requirement one.
+        self.assertEqual(parent_references & component_references, set())
+
+        for trace in traces:
+            assert trace.production_requirement_reference is not None
+            assert trace.bom_component_reference is not None
+            self.assertIn(
+                "|Production Requirement|", trace.production_requirement_reference
+            )
+            self.assertIn("|BOM Component|", trace.bom_component_reference)
+            self.assertTrue(trace.production_requirement_context_reference)
+
+            parent = trace.production_requirement_provenance
+            component = trace.bom_component_provenance
+            loss_rate = trace.loss_rate_provenance
+            assert parent is not None and component is not None and loss_rate is not None
+            # Each dimension keeps its own provenance; no dimension masquerades as another.
+            self.assertEqual(parent.logical_dataset_role, "Production Requirement")
+            self.assertEqual(component.logical_dataset_role, "BOM Component")
+            self.assertEqual(
+                parent.stable_source_evidence_locators, (EVIDENCE_REQUIREMENT,)
+            )
+            self.assertIn(EVIDENCE_BOM, component.stable_source_evidence_locators)
+            self.assertEqual(
+                loss_rate.stable_source_evidence_locators, ("SIMULATED-SRC-LOSS",)
+            )
+            # The parent evidence is never replaced by the BOM Component evidence.
+            self.assertNotEqual(parent, component)
+            self.assertNotEqual(parent.logical_dataset_role, component.logical_dataset_role)
+            # The retained reference and the retained provenance describe the same record.
+            self.assertTrue(
+                trace.production_requirement_reference.endswith(
+                    parent.record_path.replace("#", "|")
+                )
+            )
+            self.assertTrue(
+                trace.bom_component_reference.endswith(
+                    component.record_path.replace("#", "|")
+                )
+            )
+
+        # The traces are exactly the upstream requirement calculation rows, in their order.
+        upstream = compute_requirement_calculation(construction)
+        self.assertEqual(
+            [trace.production_requirement_reference for trace in traces],
+            [
+                row.production_requirement_reference
+                for row in upstream.calculations
+            ],
+        )
+
+        # The serialized output states the same semantics as the runtime objects.
+        payload = target.to_dict()["requirement_traces"]
+        self.assertEqual(len(payload), 2)
+        self.assertEqual(
+            [item["production_requirement_reference"] for item in payload],
+            [trace.production_requirement_reference for trace in traces],
+        )
+        self.assertEqual(
+            [item["bom_component_reference"] for item in payload],
+            [trace.bom_component_reference for trace in traces],
+        )
+        self.assertEqual(
+            [
+                item["production_requirement_context_reference"]
+                for item in payload
+            ],
+            [trace.production_requirement_context_reference for trace in traces],
+        )
+        for item, trace in zip(payload, traces):
+            self.assertNotEqual(
+                item["production_requirement_reference"],
+                item["bom_component_reference"],
+            )
+            assert trace.production_requirement_provenance is not None
+            assert trace.bom_component_provenance is not None
+            assert trace.loss_rate_provenance is not None
+            self.assertEqual(
+                item["production_requirement_provenance"]["accepted_record_path"],
+                trace.production_requirement_provenance.record_path,
+            )
+            self.assertEqual(
+                item["bom_component_provenance"]["accepted_record_path"],
+                trace.bom_component_provenance.record_path,
+            )
+            self.assertEqual(
+                item["loss_rate_provenance"]["accepted_record_path"],
+                trace.loss_rate_provenance.record_path,
+            )
 
     def test_data_incomplete_row_first_makes_the_target_data_incomplete(self) -> None:
         _construction, result = self._two_parent_rows(unusable_position=0)
@@ -905,8 +1057,20 @@ class GroupedRequirementTargetTests(EffectiveInboundTestCase):
     def test_grouped_data_incomplete_target_keeps_every_upstream_trace(self) -> None:
         _construction, result = self._two_parent_rows(unusable_position=1)
         target = result.targets[0]
-        self.assertEqual(len(target.requirement_references), 2)
-        self.assertEqual(len(set(target.requirement_references)), 2)
+        self.assertEqual(len(target.requirement_traces), 2)
+        self.assertEqual(
+            len(
+                {
+                    trace.production_requirement_reference
+                    for trace in target.requirement_traces
+                }
+            ),
+            2,
+        )
+        self.assertEqual(
+            len({trace.bom_component_reference for trace in target.requirement_traces}),
+            2,
+        )
         self.assertTrue(target.notes)
 
     def test_incomplete_row_does_not_remove_a_sole_normal_row(self) -> None:
@@ -921,7 +1085,10 @@ class GroupedRequirementTargetTests(EffectiveInboundTestCase):
         target = result.targets[0]
         self.assertIsNone(target.outcome)
         self.assert_qty(target.cumulative_effective_inbound, "50")
-        self.assertEqual(len(target.requirement_references), 1)
+        self.assertEqual(len(target.requirement_traces), 1)
+        trace = target.requirement_traces[0]
+        self.assertIn("|Production Requirement|", trace.production_requirement_reference)
+        self.assertIn("|BOM Component|", trace.bom_component_reference)
 
 
 class OverReceiptIssueTests(EffectiveInboundTestCase):
@@ -941,8 +1108,31 @@ class OverReceiptIssueTests(EffectiveInboundTestCase):
             and issue.reason == "CONSISTENCY_CONFLICT"
         ]
 
+    @staticmethod
+    def _payload_conflicts(issues: list) -> list:
+        return [
+            issue
+            for issue in issues
+            if issue["category"] == "CONSISTENCY"
+            and issue["reason"] == "CONSISTENCY_CONFLICT"
+        ]
+
+    def _two_required_dates(self, *, name: str, inbounds: list[dict[str, Any]]):
+        return self.build(
+            name=name,
+            inbounds=inbounds,
+            requirements=[
+                self.requirement_record(required_date="2026-10-15"),
+                self.requirement_record(required_date="2026-10-20"),
+            ],
+            bom_components=[
+                self.bom_record(required_date="2026-10-15"),
+                self.bom_record(required_date="2026-10-20"),
+            ],
+        )
+
     def test_over_receipt_emits_exactly_one_registered_conflict(self) -> None:
-        _construction, _result, target = self.evaluate(
+        _construction, result, target = self.evaluate(
             name="over-receipt-issue",
             inbound=self.inbound_record(ordered_qty="100", received_qty="120"),
         )
@@ -964,19 +1154,13 @@ class OverReceiptIssueTests(EffectiveInboundTestCase):
         # Exactly one logical finding at target level too: no N-fold duplication.
         self.assertEqual(len(self._conflicts(target.rule_issues)), 1)
         self.assertEqual(len(self._conflicts(target.issues)), 1)
+        # And exactly one at the authoritative result level.
+        self.assertEqual(len(self._conflicts(result.rule_issues)), 1)
 
     def test_over_receipt_conflict_is_deduplicated_across_required_dates(self) -> None:
-        _construction, result = self.build(
+        _construction, result = self._two_required_dates(
             name="over-receipt-multi-date",
             inbounds=[self.inbound_record(ordered_qty="100", received_qty="120")],
-            requirements=[
-                self.requirement_record(required_date="2026-10-15"),
-                self.requirement_record(required_date="2026-10-20"),
-            ],
-            bom_components=[
-                self.bom_record(required_date="2026-10-15"),
-                self.bom_record(required_date="2026-10-20"),
-            ],
         )
         keys: set[tuple[str, str, str]] = set()
         for target in result.targets:
@@ -986,6 +1170,62 @@ class OverReceiptIssueTests(EffectiveInboundTestCase):
                 keys.add((issue.location, issue.category, issue.reason))
         # The defect belongs to the inbound evidence, not to a required date.
         self.assertEqual(len(keys), 1)
+
+    def test_result_rule_issues_register_one_evidence_defect_once(self) -> None:
+        """A: one over-receipt inbound + 2 required dates -> exactly one logical finding.
+
+        The defect is an **inbound evidence** defect, not a ``(required_date, inbound)``
+        defect, so the authoritative result-level surface must not repeat it per target.
+        """
+
+        _construction, result = self._two_required_dates(
+            name="over-receipt-result-dedup",
+            inbounds=[self.inbound_record(ordered_qty="100", received_qty="120")],
+        )
+        self.assertEqual(len(result.targets), 2)
+        # Local trace may carry it on every target it was re-reached from.
+        for target in result.targets:
+            self.assertEqual(len(self._conflicts(target.rule_issues)), 1)
+        self.assertEqual(len(result.rule_issues), 1)
+        self.assertEqual(len(self._conflicts(result.rule_issues)), 1)
+        # The affected inbound evidence is still identified, not lost to the dedup.
+        issue = result.rule_issues[0]
+        self.assertIn("2.json[0]", issue.location)
+        self.assertIn("120", issue.detail)
+
+        payload = result.to_dict()
+        self.assertEqual(len(self._payload_conflicts(payload["rule_issues"])), 1)
+        self.assertEqual(len(self._payload_conflicts(payload["issues"])), 1)
+        self.assertEqual(
+            payload["rule_issues"][0],
+            result.rule_issues[0].to_dict(),
+        )
+
+    def test_two_distinct_inbound_records_keep_two_logical_findings(self) -> None:
+        """B: two distinct G3-A over-receipt records -> two logical findings.
+
+        Content-identical records at different ordinals are distinct supply evidence, so the
+        result-level dedup must not merge their defects.
+        """
+
+        record = self.inbound_record(ordered_qty="100", received_qty="120")
+        _construction, result = self._two_required_dates(
+            name="over-receipt-two-records",
+            inbounds=[dict(record), dict(record)],
+        )
+        self.assertEqual(len(result.targets), 2)
+        self.assertEqual(len(result.rule_issues), 2)
+        self.assertEqual(
+            len({issue.location for issue in result.rule_issues}), 2
+        )
+
+        payload = result.to_dict()
+        self.assertEqual(len(self._payload_conflicts(payload["rule_issues"])), 2)
+        self.assertEqual(len(self._payload_conflicts(payload["issues"])), 2)
+        self.assertEqual(
+            {issue["location"] for issue in payload["rule_issues"]},
+            {issue.location for issue in result.rule_issues},
+        )
 
     def test_over_receipt_conflict_uses_no_new_taxonomy(self) -> None:
         _construction, _result, target = self.evaluate(
@@ -1046,8 +1286,11 @@ class OverReceiptIssueTests(EffectiveInboundTestCase):
             inbound=self.inbound_record(ordered_qty="100", received_qty="120"),
         )
         payload = result.to_dict()
+        for surface in ("rule_issues", "issues"):
+            with self.subTest(surface=surface):
+                self.assertIn(surface, payload)
         target_payload = payload["targets"][0]
-        for surface in ("rule_issues", "inherited_issues"):
+        for surface in ("rule_issues", "inherited_issues", "requirement_traces"):
             with self.subTest(surface=surface):
                 self.assertIn(surface, target_payload)
         conflicts = [
@@ -1068,6 +1311,11 @@ class OverReceiptIssueTests(EffectiveInboundTestCase):
                 ]
             ),
             1,
+        )
+        # C: the top-level finding surface keeps the same cardinality.
+        self.assertEqual(len(self._payload_conflicts(payload["rule_issues"])), 1)
+        self.assertEqual(
+            payload["rule_issues"], target_payload["rule_issues"]
         )
 
 

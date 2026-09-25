@@ -110,7 +110,9 @@ class ExactQuantity:
     addition and subtraction exact by construction on any operand size.  This is an internal
     representation only: :meth:`text` renders the registered public contract -- a plain exact
     finite decimal quantity with no exponent, no rounding, no quantization and no business
-    precision / scale policy (the scale a canonical value states is preserved verbatim).
+    precision / scale policy.  The exact numeric value and the stated fractional scale are
+    preserved; this is **not** a character-for-character transcript of a canonical source
+    string (for example ``"+5.00"`` renders as ``"5.00"`` and ``"001.20"`` as ``"1.20"``).
     """
 
     units: int
@@ -174,10 +176,12 @@ class ExactQuantity:
     def text(self) -> str:
         """The exact canonical decimal text: plain digits, no exponent, no rounding.
 
-        The stored scale is preserved, so a canonical value that states ``"0.50"`` is
-        rendered as ``"0.50"``.  ``IC-10`` forbids rounding, quantization, truncation and
-        silent trimming of a canonical decimal representation; the scale therefore carries
-        no business-precision policy, it is simply never normalised away.
+        The exact value and the stored fractional scale are preserved, so ``"0.50"`` is
+        rendered as ``"0.50"``: no rounding, quantization, truncation or scale normalisation
+        is applied, and the scale carries no business-precision policy.  This is a lossless
+        rendering of the *value*, not a character-for-character transcript of the source
+        string -- a leading ``"+"`` or leading zeros are not lexical content of the quantity
+        (``"+5.00"`` -> ``"5.00"``, ``"001.20"`` -> ``"1.20"``).
         """
 
         sign = "-" if self.units < 0 else ""
@@ -329,22 +333,57 @@ class EffectiveInboundEvaluation:
             "EffectiveInboundQty": _quantity_text(self.effective_inbound_qty),
             "outcome": self.outcome,
             "notes": list(self.notes),
-            "provenance": (
-                None
-                if self.provenance is None
-                else {
-                    "snapshot_package_identity": (
-                        self.provenance.snapshot_package_identity
-                    ),
-                    "logical_dataset_role": self.provenance.logical_dataset_role,
-                    "stable_source_evidence_locators": list(
-                        self.provenance.stable_source_evidence_locators
-                    ),
-                    "accepted_record_path": self.provenance.record_path,
-                }
-            ),
+            "provenance": _provenance_payload(self.provenance),
             "inherited_issues": [issue.to_dict() for issue in self.inherited_issues],
             "rule_issues": [issue.to_dict() for issue in self.rule_issues],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class UpstreamRequirementTrace:
+    """The real upstream trace of **one** ``BR-REQUIREMENT-001`` calculation row.
+
+    A target grain is a group of upstream requirement calculations, and each row names
+    several *different* upstream objects.  Publishing one of them under another's name
+    (for example a ``BOM Component`` reference as a "requirement reference", or the
+    Requirement Calculation Context ``loss_rate`` provenance as the requirement
+    provenance) mis-describes the evidence for every downstream consumer, so each
+    dimension ``RequirementCalculation`` provides is kept under its own name:
+
+    * ``production_requirement_reference`` / ``production_requirement_provenance`` -- the
+      resolved parent ``Production Requirement`` context;
+    * ``bom_component_reference`` / ``bom_component_provenance`` -- the ``BOM Component``
+      relationship the calculation was derived from;
+    * ``production_requirement_context_reference`` -- the resolved Production Requirement
+      context reference the BOM Component relationship was bound to;
+    * ``loss_rate_provenance`` -- the resolved Requirement Calculation Context provenance.
+
+    This is an immutable **runtime** trace representation, one instance per upstream row,
+    retained in deterministic order with no first / last wins.  It is not a canonical
+    entity, not a canonical field and not a wire schema: it creates no business identity.
+    """
+
+    production_requirement_reference: str | None = None
+    bom_component_reference: str | None = None
+    production_requirement_context_reference: str | None = None
+    production_requirement_provenance: EvidenceReference | None = None
+    bom_component_provenance: EvidenceReference | None = None
+    loss_rate_provenance: EvidenceReference | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "production_requirement_reference": self.production_requirement_reference,
+            "bom_component_reference": self.bom_component_reference,
+            "production_requirement_context_reference": (
+                self.production_requirement_context_reference
+            ),
+            "production_requirement_provenance": _provenance_payload(
+                self.production_requirement_provenance
+            ),
+            "bom_component_provenance": _provenance_payload(
+                self.bom_component_provenance
+            ),
+            "loss_rate_provenance": _provenance_payload(self.loss_rate_provenance),
         }
 
 
@@ -355,6 +394,11 @@ class EffectiveInboundTarget:
     ``cumulative_effective_inbound`` is ``None`` when the affected target is
     ``DATA_INCOMPLETE``; a normalised cumulative supply is never produced for an
     unreliable target.
+
+    ``requirement_traces`` retains the true upstream trace of **every**
+    ``BR-REQUIREMENT-001`` calculation row stating this grain, in deterministic order: the
+    target is a group, never one arbitrarily chosen representative row, and no upstream row
+    is dropped from the trace.
     """
 
     plant_id: Any
@@ -364,11 +408,9 @@ class EffectiveInboundTarget:
     cumulative_effective_inbound: ExactQuantity | None
     outcome: str | None = None
     notes: tuple[str, ...] = ()
-    #: Every upstream `BR-REQUIREMENT-001` calculation reference contributing to this
-    #: target grain, in deterministic order.  The target is a **group**, never one
-    #: arbitrarily chosen representative row.
-    requirement_references: tuple[str, ...] = ()
-    requirement_provenances: tuple[EvidenceReference, ...] = ()
+    #: One :class:`UpstreamRequirementTrace` per upstream `BR-REQUIREMENT-001` row of this
+    #: grain, in deterministic row order.
+    requirement_traces: tuple[UpstreamRequirementTrace, ...] = ()
     inherited_issues: tuple[Issue, ...] = ()
     #: Findings this rule itself raised for the inbound records evaluated against this
     #: target, one logical finding per ``location + category + reason``.
@@ -399,7 +441,7 @@ class EffectiveInboundTarget:
             ),
             "outcome": self.outcome,
             "notes": list(self.notes),
-            "requirement_references": list(self.requirement_references),
+            "requirement_traces": [trace.to_dict() for trace in self.requirement_traces],
             "evaluations": [item.to_dict() for item in self.evaluations],
             "inherited_issues": [issue.to_dict() for issue in self.inherited_issues],
             "rule_issues": [issue.to_dict() for issue in self.rule_issues],
@@ -412,9 +454,31 @@ class EffectiveInboundResult:
 
     ``targets`` is ordered deterministically by ``plant_id`` + ``material_code`` +
     ``required_date``.  No cross-plant or cross-material aggregation is performed.
+
+    ``rule_issues`` is the **authoritative result-level finding surface**.  A defect of the
+    inbound *evidence* is one logical defect regardless of how many target required dates
+    re-reached it, so this surface is deduplicated across the whole result by
+    ``location + category + reason``.  Per-target / per-evaluation findings remain available
+    for local trace, but a logical defect is registered here exactly once.
     """
 
     targets: tuple[EffectiveInboundTarget, ...]
+
+    @property
+    def rule_issues(self) -> tuple[Issue, ...]:
+        """Every finding this rule raised, one logical finding per defect, result-wide."""
+
+        return _deduplicate_issues(
+            issue for target in self.targets for issue in target.rule_issues
+        )
+
+    @property
+    def issues(self) -> tuple[Issue, ...]:
+        """Result-wide view of the re-published upstream findings plus the rule findings."""
+
+        return _deduplicate_issues(
+            issue for target in self.targets for issue in target.issues
+        )
 
     @property
     def data_incomplete_targets(self) -> tuple[EffectiveInboundTarget, ...]:
@@ -436,7 +500,41 @@ class EffectiveInboundResult:
         return {
             "rule": INBOUND_RULE_ID,
             "targets": [item.to_dict() for item in self.targets],
+            "rule_issues": [issue.to_dict() for issue in self.rule_issues],
+            "issues": [issue.to_dict() for issue in self.issues],
         }
+
+
+def _provenance_payload(value: EvidenceReference | None) -> dict[str, object] | None:
+    """Render one package-scoped evidence reference deterministically."""
+
+    if value is None:
+        return None
+    return {
+        "snapshot_package_identity": value.snapshot_package_identity,
+        "logical_dataset_role": value.logical_dataset_role,
+        "stable_source_evidence_locators": list(value.stable_source_evidence_locators),
+        "accepted_record_path": value.record_path,
+    }
+
+
+def _requirement_trace(row: RequirementCalculation) -> UpstreamRequirementTrace:
+    """Keep every upstream trace dimension of one requirement calculation row.
+
+    Each dimension keeps its own meaning: the parent ``Production Requirement`` reference
+    and provenance are never replaced by the BOM Component reference, and the
+    ``BOM Component`` / ``loss_rate`` provenance are never published as the requirement
+    provenance.
+    """
+
+    return UpstreamRequirementTrace(
+        production_requirement_reference=row.production_requirement_reference,
+        bom_component_reference=row.bom_component_reference,
+        production_requirement_context_reference=row.context_reference,
+        production_requirement_provenance=row.production_requirement_provenance,
+        bom_component_provenance=row.bom_component_provenance,
+        loss_rate_provenance=row.loss_rate_provenance,
+    )
 
 
 def _quantity_text(value: ExactQuantity | None) -> str | None:
@@ -465,7 +563,9 @@ def compute_effective_inbound(
     A target grain is a **group** of every upstream requirement calculation row that states
     it.  There is no first-row-wins / last-row-wins / same-value-dedup representative: if any
     upstream row of that grain is ``DATA_INCOMPLETE``, the target is ``DATA_INCOMPLETE`` and
-    no numeric cumulative supply is produced.
+    no numeric cumulative supply is produced.  Every row's true upstream trace (parent
+    ``Production Requirement``, ``BOM Component``, resolved context, and each one's own
+    provenance) is retained per row on the target.
     """
 
     targets = _targets_from_requirements(requirements)
@@ -528,17 +628,8 @@ def compute_effective_inbound(
                 cumulative_effective_inbound=cumulative,
                 outcome=outcome,
                 notes=tuple(notes),
-                requirement_references=tuple(
-                    reference
-                    for reference in (
-                        row.bom_component_reference for row in rows
-                    )
-                    if reference is not None
-                ),
-                requirement_provenances=tuple(
-                    provenance
-                    for provenance in (row.loss_rate_provenance for row in rows)
-                    if provenance is not None
+                requirement_traces=tuple(
+                    _requirement_trace(row) for row in rows
                 ),
                 inherited_issues=_deduplicate_issues(inherited),
                 rule_issues=_deduplicate_issues(rule_findings),
@@ -945,6 +1036,7 @@ __all__ = [
     "EffectiveInboundResult",
     "EffectiveInboundTarget",
     "ExactQuantity",
+    "UpstreamRequirementTrace",
     "compute_effective_inbound",
     "parse_exact_quantity",
     "parse_non_negative_quantity",
