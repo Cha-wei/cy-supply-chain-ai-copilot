@@ -1054,6 +1054,15 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
     def _loss_rate_record(self) -> dict[str, object]:
         return PRODUCTION_REQUIREMENT(loss_rate="0.05")
 
+    def _parent_handoff(self, accepted):
+        return BomParentContextHandoff(
+            plant_id=PLANT,
+            required_date=REQUIRED_DATE,
+            evidence=self.citation(
+                accepted, role="Production Requirement", artifact="0.json", ordinal=0
+            ),
+        )
+
     def _loss_rate_handoff(self, accepted, **overrides: object) -> LossRateHandoff:
         payload: dict[str, object] = {
             "plant_id": PLANT,
@@ -1062,6 +1071,7 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
             "evidence": self.citation(
                 accepted, role="Production Requirement", artifact="0.json"
             ),
+            "component_material_code": COMPONENT,
             "loss_rate_evidence": (),  # filled per test
             "loss_rate": "0.05",
             "resolution_basis": BASIS_LOSS_RATE,
@@ -1069,9 +1079,56 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
         payload.update(overrides)
         return LossRateHandoff(**payload)  # type: ignore[arg-type]
 
+    def _with_bom_component(self, requirement: dict[str, object]):
+        """Requirement + one resolved BOM Component relationship for COMPONENT."""
+
+        return [
+            ("Production Requirement", [requirement]),
+            ("BOM Component", [BOM_COMPONENT()]),
+        ]
+
+    def _construct_with_bom(
+        self, datasets, accepted, loss_rate_handoffs, *, name: str
+    ):
+        return construct_canonical_objects(
+            accepted,
+            PhaseAHandoff(
+                analysis_run_id="RUN-1",
+                analysis_date="2026-02-01",
+                bom_parent_context=(self._parent_handoff(accepted),),
+                loss_rate=tuple(loss_rate_handoffs),
+            ),
+        )
+
+    def test_loss_rate_requires_a_resolved_component_context(self) -> None:
+        record = with_provenance(
+            self._loss_rate_record(),
+            [("loss_rate", [EVIDENCE_LOSS_RATE], BASIS_LOSS_RATE)],
+        )
+        # No resolved BOM Component relationship exists for this component identity.
+        _, accepted = self.accepted(
+            [("Production Requirement", [record])], name="loss-rate-no-component"
+        )
+        handoff = self._loss_rate_handoff(
+            accepted,
+            loss_rate_evidence=(
+                self.citation(
+                    accepted,
+                    role="Production Requirement",
+                    artifact="0.json",
+                    ordinal=0,
+                    locator=EVIDENCE_LOSS_RATE,
+                ),
+            ),
+        )
+        report = self._construct_with_bom(
+            None, accepted, [handoff], name="loss-rate-no-component"
+        )
+        self.assertEqual(report.loss_rate_contexts, ())
+
     def test_loss_rate_requires_registered_accepted_provenance(self) -> None:
         _, accepted = self.accepted(
-            [("Production Requirement", [self._loss_rate_record()])],
+            self._with_bom_component(self._loss_rate_record()),
             name="loss-rate-provenance",
         )
         # The record carries ``loss_rate`` but registers no association for it.
@@ -1102,7 +1159,7 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
             ],
         )
         _, accepted = self.accepted(
-            [("Production Requirement", [record])], name="loss-rate-registered"
+            self._with_bom_component(record), name="loss-rate-registered"
         )
         handoff = self._loss_rate_handoff(
             accepted,
@@ -1116,14 +1173,7 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
                 ),
             ),
         )
-        report = construct_canonical_objects(
-            accepted,
-            PhaseAHandoff(
-                analysis_run_id="RUN-1",
-                analysis_date="2026-02-01",
-                loss_rate=(handoff,),
-            ),
-        )
+        report = self._construct_with_bom(None, accepted, [handoff], name="loss-rate-case")
         self.assertEqual(len(report.loss_rate_contexts), 1)
         context = report.loss_rate_contexts[0]
         self.assertEqual(context.value, "0.05")
@@ -1139,7 +1189,7 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
             [("loss_rate", [EVIDENCE_LOSS_RATE], None)],
         )
         _, accepted = self.accepted(
-            [("Production Requirement", [record])], name="loss-rate-no-basis"
+            self._with_bom_component(record), name="loss-rate-no-basis"
         )
         handoff = self._loss_rate_handoff(
             accepted,
@@ -1153,14 +1203,7 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
                 ),
             ),
         )
-        report = construct_canonical_objects(
-            accepted,
-            PhaseAHandoff(
-                analysis_run_id="RUN-1",
-                analysis_date="2026-02-01",
-                loss_rate=(handoff,),
-            ),
-        )
+        report = self._construct_with_bom(None, accepted, [handoff], name="loss-rate-case")
         self.assertEqual(report.loss_rate_contexts, ())
 
     def test_caller_free_string_is_not_an_approved_mapping_basis(self) -> None:
@@ -1169,7 +1212,7 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
             [("loss_rate", [EVIDENCE_LOSS_RATE], BASIS_LOSS_RATE)],
         )
         _, accepted = self.accepted(
-            [("Production Requirement", [record])], name="loss-rate-basis-mismatch"
+            self._with_bom_component(record), name="loss-rate-basis-mismatch"
         )
         handoff = self._loss_rate_handoff(
             accepted,
@@ -1184,14 +1227,7 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
             ),
             resolution_basis="CALLER-INVENTED-BASIS",
         )
-        report = construct_canonical_objects(
-            accepted,
-            PhaseAHandoff(
-                analysis_run_id="RUN-1",
-                analysis_date="2026-02-01",
-                loss_rate=(handoff,),
-            ),
-        )
+        report = self._construct_with_bom(None, accepted, [handoff], name="loss-rate-case")
         self.assertEqual(report.loss_rate_contexts, ())
 
     def test_loss_rate_value_the_evidence_does_not_carry_is_rejected(self) -> None:
@@ -1200,7 +1236,7 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
             [("loss_rate", [EVIDENCE_LOSS_RATE], BASIS_LOSS_RATE)],
         )
         _, accepted = self.accepted(
-            [("Production Requirement", [record])], name="loss-rate-unbacked"
+            self._with_bom_component(record), name="loss-rate-unbacked"
         )
         handoff = self._loss_rate_handoff(
             accepted,
@@ -1215,14 +1251,7 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
             ),
             loss_rate="0.99",
         )
-        report = construct_canonical_objects(
-            accepted,
-            PhaseAHandoff(
-                analysis_run_id="RUN-1",
-                analysis_date="2026-02-01",
-                loss_rate=(handoff,),
-            ),
-        )
+        report = self._construct_with_bom(None, accepted, [handoff], name="loss-rate-case")
         self.assertEqual(report.loss_rate_contexts, ())
 
     def test_multiple_applicable_loss_rate_evidence_is_not_deduplicated(self) -> None:
@@ -1231,7 +1260,10 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
             [("loss_rate", [EVIDENCE_LOSS_RATE], BASIS_LOSS_RATE)],
         )
         _, accepted = self.accepted(
-            [("Production Requirement", [record, copy.deepcopy(record)])],
+            [
+                ("Production Requirement", [record, copy.deepcopy(record)]),
+                ("BOM Component", [BOM_COMPONENT()]),
+            ],
             name="loss-rate-two-evidence",
         )
         handoff = self._loss_rate_handoff(
@@ -1253,14 +1285,7 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
                 ),
             ),
         )
-        report = construct_canonical_objects(
-            accepted,
-            PhaseAHandoff(
-                analysis_run_id="RUN-1",
-                analysis_date="2026-02-01",
-                loss_rate=(handoff,),
-            ),
-        )
+        report = self._construct_with_bom(None, accepted, [handoff], name="loss-rate-case")
         self.assertEqual(report.loss_rate_contexts, ())
 
     def test_foreign_package_loss_rate_evidence_is_not_used(self) -> None:
@@ -1269,7 +1294,7 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
             [("loss_rate", [EVIDENCE_LOSS_RATE], BASIS_LOSS_RATE)],
         )
         _, accepted = self.accepted(
-            [("Production Requirement", [record])], name="loss-rate-foreign"
+            self._with_bom_component(record), name="loss-rate-foreign"
         )
         handoff = self._loss_rate_handoff(
             accepted,
@@ -1289,15 +1314,312 @@ class InjectionBoundaryTests(CanonicalObjectsTestCase):
                 ),
             ),
         )
-        report = construct_canonical_objects(
+        report = self._construct_with_bom(None, accepted, [handoff], name="loss-rate-case")
+        self.assertEqual(report.loss_rate_contexts, ())
+
+    # --- Requirement Calculation Context grain (component material identity) --------
+
+    REQUIRED_DATE_OCT = "2026-10-10"
+
+    def _two_component_package(self):
+        """Requirement P1 / M1 / 2026-10-10 with BOM M1 -> M2 and M1 -> M3.
+
+        Each BOM Component carries its own canonical ``loss_rate`` value with its own
+        registered ``loss_rate`` provenance association, so the two Requirement
+        Calculation Contexts resolve to different values.
+        """
+
+        requirement = with_provenance(
+            {
+                "plant_id": PLANT,
+                "material_code": MATERIAL,
+                "required_date": self.REQUIRED_DATE_OCT,
+                "ProductionQty": "10",
+            },
+            [("ProductionQty", [EVIDENCE_REQUIREMENT], None)],
+        )
+
+        def component(material: str, loss_rate: str) -> dict[str, object]:
+            return with_provenance(
+                {
+                    "plant_id": PLANT,
+                    "required_date": self.REQUIRED_DATE_OCT,
+                    "material_code": material,
+                    "BOMComponentQty": "2",
+                    "loss_rate": loss_rate,
+                },
+                [
+                    ("BOMComponentQty", [EVIDENCE_REQUIREMENT], None),
+                    ("loss_rate", [f"{EVIDENCE_LOSS_RATE}-{material}"], BASIS_LOSS_RATE),
+                ],
+            )
+
+        return self.accepted(
+            [
+                ("Production Requirement", [requirement]),
+                ("BOM Component", [component("M2", "0.02"), component("M3", "0.06")]),
+            ],
+            name="loss-rate-per-component",
+        )
+
+    def _component_handoff(self, accepted, component: str, value: str) -> LossRateHandoff:
+        return self._loss_rate_handoff(
+            accepted,
+            parent_material_code=MATERIAL,
+            required_date=self.REQUIRED_DATE_OCT,
+            component_material_code=component,
+            loss_rate=value,
+            loss_rate_evidence=(
+                self.citation(
+                    accepted,
+                    role="BOM Component",
+                    artifact="1.json",
+                    ordinal=0 if component == "M2" else 1,
+                    locator=f"{EVIDENCE_LOSS_RATE}-{component}",
+                ),
+            ),
+        )
+
+    def _construct_two_component(self, accepted, handoffs, *, name: str):
+        return construct_canonical_objects(
             accepted,
             PhaseAHandoff(
                 analysis_run_id="RUN-1",
-                analysis_date="2026-02-01",
-                loss_rate=(handoff,),
+                analysis_date="2026-10-01",
+                bom_parent_context=(
+                    BomParentContextHandoff(
+                        plant_id=PLANT,
+                        required_date=self.REQUIRED_DATE_OCT,
+                        evidence=self.citation(
+                            accepted,
+                            role="Production Requirement",
+                            artifact="0.json",
+                            ordinal=0,
+                        ),
+                    ),
+                ),
+                loss_rate=tuple(handoffs),
             ),
         )
+
+    def test_per_component_loss_rate_contexts_are_distinguishable(self) -> None:
+        _, accepted = self._two_component_package()
+        report = self._construct_two_component(
+            accepted,
+            [
+                self._component_handoff(accepted, "M2", "0.02"),
+                self._component_handoff(accepted, "M3", "0.06"),
+            ],
+            name="loss-rate-two-components",
+        )
+        self.assertEqual(len(report.loss_rate_contexts), 2)
+        by_component = {
+            next(
+                prop.value
+                for prop in context.grain
+                if prop.name == "component_material_code"
+            ): context.value
+            for context in report.loss_rate_contexts
+        }
+        self.assertEqual(by_component, {"M2": "0.02", "M3": "0.06"})
+        for context in report.loss_rate_contexts:
+            self.assertEqual(
+                [prop.name for prop in context.grain],
+                [
+                    "plant_id",
+                    "material_code",
+                    "required_date",
+                    "component_material_code",
+                ],
+            )
+        self.assertEqual(len(report.objects_for("BOM Component")), 2)
+
+    def test_no_cross_component_loss_rate_reuse(self) -> None:
+        _, accepted = self._two_component_package()
+        report = self._construct_two_component(
+            accepted,
+            [
+                self._component_handoff(accepted, "M2", "0.02"),
+                self._component_handoff(accepted, "M3", "0.06"),
+            ],
+            name="loss-rate-no-cross-reuse",
+        )
+        values = {
+            next(
+                prop.value
+                for prop in context.grain
+                if prop.name == "component_material_code"
+            ): context.value
+            for context in report.loss_rate_contexts
+        }
+        self.assertEqual(values, {"M2": "0.02", "M3": "0.06"})
+        self.assertNotEqual(values["M2"], values["M3"])
+
+    def test_single_component_context_does_not_leak_to_the_other_component(self) -> None:
+        _, accepted = self._two_component_package()
+        # Only M2 states a loss_rate; M3 must stay unresolved rather than inherit M2's.
+        report = self._construct_two_component(
+            accepted,
+            [self._component_handoff(accepted, "M2", "0.02")],
+            name="loss-rate-single-component",
+        )
+        self.assertEqual(len(report.loss_rate_contexts), 1)
+        self.assertEqual(report.loss_rate_contexts[0].value, "0.02")
+        self.assertEqual(
+            [
+                prop.value
+                for prop in report.loss_rate_contexts[0].grain
+                if prop.name == "component_material_code"
+            ],
+            ["M2"],
+        )
+
+    def test_omitted_component_context_stays_unresolved(self) -> None:
+        _, accepted = self._two_component_package()
+        handoff = self._component_handoff(accepted, "M2", "0.02")
+        without_component = replace(handoff, component_material_code=ABSENT)
+        report = self._construct_two_component(
+            accepted, [without_component], name="loss-rate-no-component-grain"
+        )
         self.assertEqual(report.loss_rate_contexts, ())
+        self.assertTrue(
+            any(
+                name.startswith(f"{CANONICALIZATION_HANDOFF_EVIDENCE}:loss_rate")
+                and state == EVALUATION_NOT_EVALUABLE
+                for name, state in self.states(report).items()
+            )
+        )
+
+    def test_unknown_component_context_stays_unresolved(self) -> None:
+        _, accepted = self._two_component_package()
+        handoff = self._component_handoff(accepted, "M9", "0.02")
+        report = self._construct_two_component(
+            accepted, [handoff], name="loss-rate-unknown-component"
+        )
+        self.assertEqual(report.loss_rate_contexts, ())
+
+    def test_ambiguous_component_context_stays_unresolved(self) -> None:
+        requirement = with_provenance(
+            {
+                "plant_id": PLANT,
+                "material_code": MATERIAL,
+                "required_date": self.REQUIRED_DATE_OCT,
+                "ProductionQty": "10",
+            },
+            [
+                ("ProductionQty", [EVIDENCE_REQUIREMENT], None),
+                ("loss_rate", [EVIDENCE_LOSS_RATE], BASIS_LOSS_RATE),
+            ],
+        )
+        # Two resolved BOM Component relationships state the same component identity, so
+        # the context is ambiguous and no precedence may be applied.
+        _, accepted = self.accepted(
+            [
+                ("Production Requirement", [requirement]),
+                (
+                    "BOM Component",
+                    [
+                        BOM_COMPONENT(
+                            required_date=self.REQUIRED_DATE_OCT, material_code="M2"
+                        ),
+                        BOM_COMPONENT(
+                            required_date=self.REQUIRED_DATE_OCT, material_code="M2"
+                        ),
+                    ],
+                ),
+            ],
+            name="loss-rate-ambiguous-component",
+        )
+        handoff = self._component_handoff(accepted, "M2", "0.02")
+        report = self._construct_two_component(
+            accepted, [handoff], name="loss-rate-ambiguous-component"
+        )
+        self.assertEqual(report.loss_rate_contexts, ())
+        self.assertTrue(
+            any(
+                "more than one resolved BOM Component relationship" in (note or "")
+                for _name, _state, note in report.checks
+            )
+        )
+
+    def test_equal_loss_rate_values_are_not_deduplicated_across_components(self) -> None:
+        # Both components state the same value: two contexts are still constructed.
+        requirement = with_provenance(
+            {
+                "plant_id": PLANT,
+                "material_code": MATERIAL,
+                "required_date": self.REQUIRED_DATE_OCT,
+                "ProductionQty": "10",
+            },
+            [("ProductionQty", [EVIDENCE_REQUIREMENT], None)],
+        )
+
+        def component(material: str) -> dict[str, object]:
+            return with_provenance(
+                {
+                    "plant_id": PLANT,
+                    "required_date": self.REQUIRED_DATE_OCT,
+                    "material_code": material,
+                    "BOMComponentQty": "2",
+                    "loss_rate": "0.02",
+                },
+                [
+                    ("BOMComponentQty", [EVIDENCE_REQUIREMENT], None),
+                    ("loss_rate", [f"{EVIDENCE_LOSS_RATE}-{material}"], BASIS_LOSS_RATE),
+                ],
+            )
+
+        _, accepted = self.accepted(
+            [
+                ("Production Requirement", [requirement]),
+                ("BOM Component", [component("M2"), component("M3")]),
+            ],
+            name="loss-rate-equal-values",
+        )
+        report = self._construct_two_component(
+            accepted,
+            [
+                self._component_handoff(accepted, "M2", "0.02"),
+                self._component_handoff(accepted, "M3", "0.02"),
+            ],
+            name="loss-rate-equal-values",
+        )
+        self.assertEqual(len(report.loss_rate_contexts), 2)
+        self.assertEqual(
+            sorted(context.value for context in report.loss_rate_contexts),
+            ["0.02", "0.02"],
+        )
+        self.assertEqual(
+            sorted(
+                next(
+                    prop.value
+                    for prop in context.grain
+                    if prop.name == "component_material_code"
+                )
+                for context in report.loss_rate_contexts
+            ),
+            ["M2", "M3"],
+        )
+
+    def test_loss_rate_is_not_represented_as_a_bom_component_attribute(self) -> None:
+        _, accepted = self._two_component_package()
+        report = self._construct_two_component(
+            accepted,
+            [
+                self._component_handoff(accepted, "M2", "0.02"),
+                self._component_handoff(accepted, "M3", "0.06"),
+            ],
+            name="loss-rate-not-bom-attribute",
+        )
+        for obj in report.objects_for("BOM Component"):
+            with self.subTest(component=obj.value_of("material_code")):
+                self.assertFalse(obj.has("loss_rate"))
+                self.assertIn("loss_rate", obj.non_applicable_properties)
+        # The value is owned by the Requirement Calculation Context, not the BOM relation.
+        self.assertEqual(
+            sorted(context.value for context in report.loss_rate_contexts),
+            ["0.02", "0.06"],
+        )
 
     def test_absent_safety_stock_dataset_never_becomes_a_default_value(self) -> None:
         report = self.construct(

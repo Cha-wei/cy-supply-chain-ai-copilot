@@ -582,20 +582,42 @@ class HandoffEvidence:
 class LossRateHandoff:
     """``loss_rate`` + Requirement Calculation Context (injection I-2, Phase A).
 
+    The Requirement Calculation Context grain registered by ``§4.3.31`` G I-2 /
+    ``§4.1.12`` is:
+
+    ```
+    plant_id
+      + parent / requirement material_code
+      + required_date
+      + component material_code
+    ```
+
+    ``component_material_code`` is therefore part of the binding key, not an optional
+    annotation: it is the **component** material identity of the resolved
+    ``BOM Component`` relationship the calculation context belongs to.  It is never an
+    attribute of ``loss_rate`` (``loss_rate`` stays owned by the Requirement Calculation
+    Context, not by the BOM Component) and it never becomes a canonical field.
+
     The value is **not** trusted: it is carried only when the ``§4.4.15`` /
     ``§4.4.102`` Stage A resolution really used exactly one applicable package-scoped
-    ``loss_rate`` reference.  ``loss_rate_evidence`` lists the accepted
-    ``loss_rate`` evidence the resolution used; when it is empty, or contains more than
-    one reference, or any reference cannot be resolved against the same
-    ``AcceptedPackage``, or no resolution basis is given, the value stays unresolved and
-    is never carried (``§4.2.18`` role 2 forbids the ``Production Requirement`` record
-    itself from assigning ``loss_rate``).
+    ``loss_rate`` reference.  ``loss_rate_evidence`` lists the accepted ``loss_rate``
+    evidence the resolution used; when it is empty, or contains more than one reference,
+    or any reference cannot be resolved against the same ``AcceptedPackage``, or no
+    registered ``mapping_basis`` backs it, the value stays unresolved and is never
+    carried (``§4.2.18`` role 2 forbids the ``Production Requirement`` record itself from
+    assigning ``loss_rate``).
+
+    When ``component_material_code`` is ``ABSENT``, or no resolved ``BOM Component``
+    relationship matches this complete grain, the value also stays unresolved: a
+    Material-level or Production-Requirement-level fallback would be a silent reuse of
+    another component's ``loss_rate``.
     """
 
     plant_id: Any
     parent_material_code: Any
     required_date: Any
     evidence: HandoffEvidence
+    component_material_code: Any = ABSENT
     loss_rate_evidence: tuple[HandoffEvidence, ...] = ()
     loss_rate: Any = None
     resolution_basis: str = ""
@@ -1667,27 +1689,11 @@ def _construct(
     build.effective_demand_contexts.extend(effective_demand)
     build.issues.extend(demand_issues)
 
-    # --- POLICY_INPUT / CONTEXT internal handoff -----------------------------------
-    production_requirements = resolved_objects.get("Production Requirement", ())
-    _handoff_loss_rate(
-        build,
-        accepted,
-        located,
-        accepted_records,
-        handoff,
-        production_requirements,
-    )
-    safety_stock_targets = resolved_objects.get("Configured Safety Stock", ())
-    _handoff_safety_stock(
-        build,
-        accepted,
-        located,
-        accepted_records,
-        handoff,
-        safety_stock_targets,
-    )
-
     # --- G4-A BOM parent / requirement context binding ------------------------------
+    # Constructed before the ``loss_rate`` handoff, because the Requirement Calculation
+    # Context grain includes the component material identity, which may only come from an
+    # already resolved BOM Component relationship (§4.3.31 G I-2 / §4.1.13 C).
+    production_requirements = resolved_objects.get("Production Requirement", ())
     bom_resolved, bom_unresolved = _construct_bom_components(
         build,
         accepted,
@@ -1701,6 +1707,26 @@ def _construct(
         CanonicalObjectSet(
             "BOM Component", resolved=bom_resolved, unresolved=bom_unresolved
         )
+    )
+
+    # --- POLICY_INPUT / CONTEXT internal handoff -----------------------------------
+    _handoff_loss_rate(
+        build,
+        accepted,
+        located,
+        accepted_records,
+        handoff,
+        production_requirements,
+        bom_resolved,
+    )
+    safety_stock_targets = resolved_objects.get("Configured Safety Stock", ())
+    _handoff_safety_stock(
+        build,
+        accepted,
+        located,
+        accepted_records,
+        handoff,
+        safety_stock_targets,
     )
 
     # --- G5-A allocation relationship objects (read-only context) -------------------
@@ -2408,13 +2434,21 @@ def _handoff_loss_rate(
     accepted_records: Mapping[str, JsonObject],
     handoff: PhaseAHandoff,
     production_requirements: tuple[CanonicalObject, ...],
+    bom_components: tuple[CanonicalObject, ...],
 ) -> None:
     """Resolve ``loss_rate`` + Requirement Calculation Context (injection I-2).
 
     ``loss_rate`` is never assigned by the ``Production Requirement`` record itself
     (``§4.2.18`` role 2).  A value is carried only when **all** of the following hold:
 
-    * the requirement grain matches a resolved ``Production Requirement`` context;
+    * the handoff states the **complete** Requirement Calculation Context grain
+      registered by ``§4.3.31`` G I-2 / ``§4.1.12``: ``plant_id`` ＋ parent /
+      requirement ``material_code`` ＋ ``required_date`` ＋ **component
+      ``material_code``**;
+    * that grain matches an actually resolved ``BOM Component`` relationship whose
+      resolved ``Production Requirement`` context is the very context the handoff names
+      -- so the component identity comes from the already resolved relationship rather
+      than from the handoff alone;
     * the handoff cites exactly one applicable ``loss_rate`` record inside the **same**
       ``AcceptedPackage``, and that record registers a ``_meta.provenance_associations``
       entry for the ``loss_rate`` observation -- an unverifiable citation, or one
@@ -2422,35 +2456,66 @@ def _handoff_loss_rate(
     * the resolution basis is the ``mapping_basis`` the accepted record itself registers;
       a caller-supplied free string is not an approved mapping basis.
 
-    More than one applicable reference stays unresolved: values are never deduplicated,
-    never aggregated and never chosen by precedence (``§4.4.102`` C Stage A).  The
-    Entity / Dataset / Source Field ownership of ``loss_rate`` is **not** decided here
-    (``§4.4.15``).
+    When the component part of the grain is omitted, or no resolved BOM Component
+    relationship matches the complete grain, or more than one does, the value stays
+    unresolved: Material-level or Production-Requirement-level reuse would silently
+    apply another component's ``loss_rate``.  More than one applicable value reference
+    also stays unresolved -- values are never deduplicated, never aggregated and never
+    chosen by precedence (``§4.4.102`` C Stage A).  The Entity / Dataset / Source Field
+    ownership of ``loss_rate`` is **not** decided here (``§4.4.15``).
     """
 
     for index, entry in enumerate(handoff.loss_rate):
         check_name = f"{CANONICALIZATION_HANDOFF_EVIDENCE}:loss_rate[{index}]"
+
+        if entry.component_material_code is ABSENT:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                "the Requirement Calculation Context grain is incomplete: the handoff "
+                "does not state the component material_code, so the applicable loss_rate "
+                "cannot be distinguished per BOM component; the value is not carried and "
+                "no Material-level fallback is applied (§4.3.31 G I-2)",
+            )
+            continue
+
+        context = _match_requirement_calculation_context(
+            entry=entry,
+            production_requirements=production_requirements,
+            bom_components=bom_components,
+        )
+        if context is None:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                "no resolved BOM Component relationship matches the complete "
+                "Requirement Calculation Context grain "
+                f"(plant_id={entry.plant_id!r}, parent material_code="
+                f"{entry.parent_material_code!r}, required_date={entry.required_date!r}, "
+                f"component material_code={entry.component_material_code!r}); the value "
+                "is not carried and cross-component reuse is refused (§4.3.31 G I-2 / "
+                "§4.1.13 C)",
+            )
+            continue
+        if context is _AMBIGUOUS_CONTEXT:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                "more than one resolved BOM Component relationship matches the "
+                "Requirement Calculation Context grain "
+                f"(plant_id={entry.plant_id!r}, parent material_code="
+                f"{entry.parent_material_code!r}, required_date={entry.required_date!r}, "
+                f"component material_code={entry.component_material_code!r}); the context "
+                "stays unresolved and no precedence is applied (§4.4.102 C Stage A)",
+            )
+            continue
+
         grain = (
             CanonicalProperty("plant_id", entry.plant_id),
             CanonicalProperty("material_code", entry.parent_material_code),
             CanonicalProperty("required_date", entry.required_date),
+            CanonicalProperty("component_material_code", entry.component_material_code),
         )
-
-        matched = any(
-            obj.value_of("plant_id", ABSENT) == entry.plant_id
-            and obj.value_of("material_code", ABSENT) == entry.parent_material_code
-            and obj.value_of("required_date", ABSENT) == entry.required_date
-            for obj in production_requirements
-        )
-        if not matched:
-            build.check(
-                check_name,
-                EVALUATION_NOT_EVALUABLE,
-                "no resolved Production Requirement context matches the Requirement "
-                "Calculation Context grain of this loss_rate handoff; the value is not "
-                "carried (§4.1.13 E)",
-            )
-            continue
 
         gate = _verify_handoff_evidence(
             accepted=accepted,
@@ -2533,8 +2598,11 @@ def _handoff_loss_rate(
         build.check(
             check_name,
             EVALUATION_PASSED,
-            "loss_rate carried as an in-process logical handoff, supported by accepted "
-            f"record {value_gate.record_path} with registered provenance and basis "
+            "loss_rate carried as an in-process logical handoff for the exact "
+            "Requirement Calculation Context "
+            f"[{_grain_label(grain)}], bound to resolved BOM Component relationship "
+            f"{context.record_reference}, supported by accepted record "
+            f"{value_gate.record_path} with registered provenance and basis "
             f"{accepted_basis!r}; Entity / Dataset / Source Field ownership is not "
             "decided here (§4.4.15)",
         )
@@ -2548,6 +2616,55 @@ def _handoff_loss_rate(
                 ),
             )
         )
+
+
+class _AmbiguousContext:
+    """Sentinel: more than one resolved relationship matches the context grain."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return "<ambiguous-context>"
+
+
+_AMBIGUOUS_CONTEXT = _AmbiguousContext()
+
+
+def _match_requirement_calculation_context(
+    *,
+    entry: LossRateHandoff,
+    production_requirements: tuple[CanonicalObject, ...],
+    bom_components: tuple[CanonicalObject, ...],
+) -> CanonicalObject | None | _AmbiguousContext:
+    """Match the Requirement Calculation Context against resolved canonical objects.
+
+    The component part of the grain is only accepted when an actually resolved
+    ``BOM Component`` relationship states it **and** that relationship's resolved
+    ``Production Requirement`` context is the context the handoff names.  ``None`` means
+    no resolved match (so the value stays unresolved); ``_AMBIGUOUS_CONTEXT`` means more
+    than one resolved relationship matches (so no precedence may be applied).
+    """
+
+    context_references = {
+        obj.record_reference
+        for obj in production_requirements
+        if obj.value_of("plant_id", ABSENT) == entry.plant_id
+        and obj.value_of("material_code", ABSENT) == entry.parent_material_code
+        and obj.value_of("required_date", ABSENT) == entry.required_date
+    }
+
+    matches = [
+        obj
+        for obj in bom_components
+        if obj.context_reference in context_references
+        and obj.value_of("material_code", ABSENT) == entry.component_material_code
+    ]
+
+    if not matches:
+        return None
+    if len(matches) > 1:
+        return _AMBIGUOUS_CONTEXT
+    return matches[0]
 
 
 def _handoff_safety_stock(
