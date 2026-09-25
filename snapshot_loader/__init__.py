@@ -79,6 +79,11 @@ from .constants import (
     V02_CANONICAL_RECORD_PROPERTIES,
 )
 from .issues import Check, Issue
+from .exact_quantity import (
+    ExactQuantity,
+    parse_exact_quantity,
+    parse_non_negative_quantity,
+)
 from .inbound_calculation import (
     EFFECTIVE_INBOUND_DATA_INCOMPLETE,
     ELIGIBLE_INBOUND_STATUSES,
@@ -88,12 +93,20 @@ from .inbound_calculation import (
     EffectiveInboundEvaluation,
     EffectiveInboundResult,
     EffectiveInboundTarget,
-    ExactQuantity,
     UpstreamRequirementTrace,
     compute_effective_inbound,
-    parse_exact_quantity,
-    parse_non_negative_quantity,
     remaining_inbound_qty,
+)
+from .inventory_calculation import (
+    ELIGIBLE_INVENTORY_STATUSES,
+    INELIGIBLE_INVENTORY_STATUSES,
+    INVENTORY_DATA_INCOMPLETE,
+    INVENTORY_RULE_ID,
+    REGISTERED_INVENTORY_STATUSES,
+    InventoryCalculationResult,
+    InventoryEvaluation,
+    InventoryTarget,
+    compute_opening_usable_inventory,
 )
 from .layer2 import (
     LAYER2_PRESENT_VALUE_RULES,
@@ -138,6 +151,7 @@ __all__ = [
     "DISPOSITION_UNUSABLE",
     "EFFECTIVE_INBOUND_DATA_INCOMPLETE",
     "ELIGIBLE_INBOUND_STATUSES",
+    "ELIGIBLE_INVENTORY_STATUSES",
     "EffectiveDemandContextReference",
     "EffectiveDemandRelationHandoff",
     "EffectiveInboundEvaluation",
@@ -148,6 +162,9 @@ __all__ = [
     "HandoffEvidence",
     "INBOUND_RULE_ID",
     "INELIGIBLE_INBOUND_STATUSES",
+    "INELIGIBLE_INVENTORY_STATUSES",
+    "INVENTORY_DATA_INCOMPLETE",
+    "INVENTORY_RULE_ID",
     "INVENTORY_SCOPE_BASIS_BY_LITERAL",
     "INVENTORY_SCOPE_BASIS_REGISTRY",
     "INVENTORY_SCOPE_IN",
@@ -158,6 +175,9 @@ __all__ = [
     "InventoryScopeBasis",
     "InventoryScopeContext",
     "InventoryScopeHandoff",
+    "InventoryCalculationResult",
+    "InventoryEvaluation",
+    "InventoryTarget",
     "Issue",
     "LAYER2_PRESENT_VALUE_RULES",
     "LAYER2_REGISTRY",
@@ -183,6 +203,7 @@ __all__ = [
     "V02_CANONICAL_RECORD_PROPERTIES",
     "build_effective_demand_contexts",
     "compute_effective_inbound",
+    "compute_opening_usable_inventory",
     "compute_requirement_calculation",
     "construct_canonical_objects",
     "load_package",
