@@ -63,6 +63,7 @@ import re
 
 from .constants import (
     CATEGORY_IDENTITY_RESOLUTION,
+    CATEGORY_SCOPE_COVERAGE,
     CATEGORY_SEMANTIC_RESOLUTION,
     DECIMAL_STRING_PATTERN,
     EVALUATION_FAILED,
@@ -71,6 +72,7 @@ from .constants import (
     LAYER_2,
     REASON_SEMANTIC_UNRESOLVED,
     REASON_UNRESOLVED_IDENTITY,
+    REASON_UNRESOLVED_SCOPE,
     V02_CANONICAL_RECORD_PROPERTY_SET,
 )
 from .issues import Issue
@@ -89,6 +91,11 @@ ROLE_BOM_COMPONENT: str = "BOM Component"
 ROLE_SUBSTITUTE_ALLOCATION: str = "Substitute Allocation"
 ROLE_SUBSTITUTE_RELATIONSHIP: str = "Substitute Relationship"
 ROLE_CONFIGURED_SAFETY_STOCK: str = "Configured Safety Stock"
+ROLE_INVENTORY_SNAPSHOT: str = "Inventory Snapshot"
+
+#: Canonical target literal of the retained same-grain Inventory observations
+#: (``§4.1.4 D``).  The canonical grain itself is unchanged and stays Plant-level.
+TARGET_INVENTORY_SNAPSHOT: str = "Inventory Snapshot"
 
 # --- Phase A construction check names --------------------------------------------
 #
@@ -103,6 +110,7 @@ CANONICALIZATION_INBOUND_IDENTITY = "canonicalization.inbound_record_identity"
 CANONICALIZATION_BOM_PARENT = "canonicalization.bom_parent_context"
 CANONICALIZATION_EFFECTIVE_DEMAND = "canonicalization.effective_demand_relation"
 CANONICALIZATION_HANDOFF_EVIDENCE = "canonicalization.handoff_evidence"
+CANONICALIZATION_INVENTORY_SCOPE = "canonicalization.inventory_scope"
 CANONICALIZATION_ANALYSIS_RUN = "canonicalization.analysis_run_context"
 
 #: ``MG-2`` binding gate: the Layer-2 result a construction relies on must belong to
@@ -537,6 +545,62 @@ class EffectiveDemandContextReference:
 
 
 @dataclass(frozen=True, slots=True)
+class InventoryScopeContext:
+    """Read-only runtime result of the inventory ownership / scope resolution (I-9).
+
+    ``plant_id`` is the accepted canonical evidence's own value -- it is never supplied
+    by the caller.  ``scope_resolved`` is ``False`` whenever ownership or scope
+    membership could not be reliably established; ``in_scope`` is then ``None`` and is
+    **never** defaulted to included or excluded.  ``in_scope`` is a *derived runtime
+    result*: it has no caller-facing input channel.
+
+    ``source_shape`` (``"A"`` / ``"B"``), ``scope_observation`` and ``mapping_basis``
+    are trace only, and ``provenance`` is the exact package-scoped
+    :class:`EvidenceReference` (Snapshot Package Identity ＋ Logical Dataset Role ＋
+    Stable Source Evidence Locator ＋ Mapping ／ Resolution Basis) that back the
+    resolution.  This is not a canonical field, not a persisted entity and not a wire
+    carrier.
+    """
+
+    inventory_reference: str
+    plant_id: Any
+    material_code: Any
+    inventory_snapshot_time: Any
+    scope_resolved: bool
+    in_scope: bool | None = None
+    source_shape: str | None = None
+    scope_membership: str | None = None
+    scope_observation: str | None = None
+    mapping_basis: str | None = None
+    ownership_resolved: bool = False
+    provenance: EvidenceReference | None = None
+    notes: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "semantic": "InventoryScopeContext",
+            "inventory_reference": self.inventory_reference,
+            "plant_id": self.plant_id,
+            "material_code": self.material_code,
+            "inventory_snapshot_time": self.inventory_snapshot_time,
+            "ownership_resolved": self.ownership_resolved,
+            "scope_resolved": self.scope_resolved,
+            "in_scope": self.in_scope,
+            "scope_membership": self.scope_membership,
+            "source_shape": self.source_shape,
+            "scope_observation": self.scope_observation,
+            "mapping_basis": self.mapping_basis,
+            "provenance": (
+                None if self.provenance is None else _provenance_to_dict(self.provenance)
+            ),
+            "record_path": (
+                None if self.provenance is None else self.provenance.record_path
+            ),
+            "notes": list(self.notes),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisRunContext:
     """Analysis Run identity + exactly-one AcceptedPackage linkage (``§4.3.31`` E/I-1).
 
@@ -717,6 +781,130 @@ class EffectiveDemandRelationHandoff:
     mapping_basis: str
 
 
+#: The two source evidence shapes registered by ``§4.5.12``.  They share one runtime
+#: contract (``§4.3.31`` G I-9); only the evidence the association cites differs.
+INVENTORY_SCOPE_SHAPE_WAREHOUSE: str = "A"
+INVENTORY_SCOPE_SHAPE_PLANT_AGGREGATE: str = "B"
+
+#: The registered runtime scope-membership outcome literals.  They are **runtime
+#: outcome values of the inventory scope registry**, deliberately *not* a canonical
+#: property, not a wire property, not a ``"_meta"`` member and not a status
+#: vocabulary (``§4.4.80`` / ``§4.4.81`` are untouched).
+INVENTORY_SCOPE_IN: str = "IN_SCOPE"
+INVENTORY_SCOPE_OUT: str = "OUT_OF_SCOPE"
+
+
+@dataclass(frozen=True, slots=True)
+class InventoryScopeBasis:
+    """One registered ``basis literal -> exact semantic`` inventory scope mapping rule.
+
+    The literal is the exact ``mapping_basis`` an accepted ``Inventory Snapshot``
+    record must itself register on the association named by
+    :attr:`InventoryScopeHandoff.scope_observation`; the semantic is the deterministic
+    scope outcome that literal denotes (``§4.3.31`` G I-9).  A caller may therefore
+    only *cite* a basis -- it can never mint one, and merely registering a
+    ``mapping_basis`` is never by itself proof of scope membership.
+
+    The registered contract is four-dimensional and fully data-driven, so no rule is
+    scattered through the resolution code:
+
+    * :attr:`allowed_observations` -- the canonical observation(s) the approved basis
+      may be registered on.  A basis attached to any other observation is **not** an
+      approved resolution and stays unresolved;
+    * :attr:`ownership_observation` -- when set, the accepted Plant ownership is only
+      *proven* for this basis when the exact association is the one anchored on that
+      observation.  This is what closes the Shape A gap: a warehouse-level basis that is
+      not registered on the ``plant_id`` association proves neither
+      ``source warehouse context -> canonical plant_id`` nor the scope membership, even
+      though the record may happen to carry a ``plant_id`` value.
+    """
+
+    basis: str
+    source_shape: str
+    membership: str
+    allowed_observations: tuple[str, ...]
+    ownership_observation: str | None
+    design_reference: str
+
+    @property
+    def in_scope(self) -> bool:
+        return self.membership == INVENTORY_SCOPE_IN
+
+
+#: The approved SIMULATED inventory scope basis registry.  ``exact literal ->
+#: exact semantic`` is authoritative here, in the canonical authority documents
+#: (``§4.5.12``) and in the tests -- never hidden inside a code path.
+INVENTORY_SCOPE_BASIS_REGISTRY: tuple[InventoryScopeBasis, ...] = (
+    InventoryScopeBasis(
+        basis="SIMULATED-INV-SCOPE-A-IN",
+        source_shape=INVENTORY_SCOPE_SHAPE_WAREHOUSE,
+        membership=INVENTORY_SCOPE_IN,
+        allowed_observations=("plant_id",),
+        ownership_observation="plant_id",
+        design_reference="§4.5.12 Shape A / §4.3.31 G I-9",
+    ),
+    InventoryScopeBasis(
+        basis="SIMULATED-INV-SCOPE-A-OUT",
+        source_shape=INVENTORY_SCOPE_SHAPE_WAREHOUSE,
+        membership=INVENTORY_SCOPE_OUT,
+        allowed_observations=("plant_id",),
+        ownership_observation="plant_id",
+        design_reference="§4.5.12 Shape A / §4.3.31 G I-9",
+    ),
+    InventoryScopeBasis(
+        basis="SIMULATED-INV-SCOPE-B-IN",
+        source_shape=INVENTORY_SCOPE_SHAPE_PLANT_AGGREGATE,
+        membership=INVENTORY_SCOPE_IN,
+        allowed_observations=("plant_id", "on_hand_qty"),
+        ownership_observation=None,
+        design_reference="§4.5.12 Shape B / §4.3.31 G I-9",
+    ),
+    InventoryScopeBasis(
+        basis="SIMULATED-INV-SCOPE-B-OUT",
+        source_shape=INVENTORY_SCOPE_SHAPE_PLANT_AGGREGATE,
+        membership=INVENTORY_SCOPE_OUT,
+        allowed_observations=("plant_id", "on_hand_qty"),
+        ownership_observation=None,
+        design_reference="§4.5.12 Shape B / §4.3.31 G I-9",
+    ),
+)
+
+INVENTORY_SCOPE_BASIS_BY_LITERAL: Mapping[str, InventoryScopeBasis] = {
+    entry.basis: entry for entry in INVENTORY_SCOPE_BASIS_REGISTRY
+}
+
+
+@dataclass(frozen=True, slots=True)
+class InventoryScopeHandoff:
+    """Inventory ownership / POC Inventory Scope resolution handoff (injection I-9).
+
+    The entry carries **evidence identity only** -- never the resolved outcome, so a
+    caller cannot state ``in_scope`` / membership / a Plant ownership value / a
+    ``warehouse_id`` by hand (``§4.3.31`` E ／ G I-9):
+
+    * :attr:`inventory_evidence` cites the exact accepted ``Inventory Snapshot`` record
+      (same ``AcceptedPackage`` identity, logical dataset role, artifact + ordinal, and
+      optionally one exact registered Stable Source Evidence Locator);
+    * :attr:`scope_observation` names one **existing** canonical property of that very
+      record, which the record must also register as the ``"observation"`` of the
+      provenance association the resolution uses;
+    * :attr:`scope_resolution_basis` must be *exactly* the ``mapping_basis`` registered
+      on that same association.  The deterministic outcome is then derived from
+      :data:`INVENTORY_SCOPE_BASIS_REGISTRY`; an unregistered literal -- or a
+      ``mapping_basis`` on a different association -- stays unresolved.
+
+    The resolved Plant ownership always comes from the accepted canonical evidence
+    (the record's own ``plant_id``), never from the caller.  Cardinality is exactly one
+    applicable resolution per Inventory evidence, or unresolved: two entries naming the
+    same record are never reconciled by first / last wins or same-value deduplication.
+    """
+
+    inventory_evidence: HandoffEvidence
+    scope_observation: str
+    scope_resolution_basis: str
+    resolution_note: str = ""
+
+
 @dataclass(frozen=True, slots=True)
 class PhaseAHandoff:
     """The complete in-process logical handoff for one Phase A construction.
@@ -734,6 +922,7 @@ class PhaseAHandoff:
     safety_stock: tuple[SafetyStockHandoff, ...] = ()
     bom_parent_context: tuple[BomParentContextHandoff, ...] = ()
     effective_demand: tuple[EffectiveDemandRelationHandoff, ...] = ()
+    inventory_scope: tuple[InventoryScopeHandoff, ...] = ()
 
 
 # --- result ------------------------------------------------------------------------
@@ -754,10 +943,16 @@ class CanonicalConstructionReport:
 
     ``checks`` reuses the existing ``passed`` / ``failed`` / ``not_evaluable`` state
     vocabulary only.  ``issues`` uses only the inherited taxonomy and may only ever
-    contain ``IDENTITY_RESOLUTION`` / ``UNRESOLVED_IDENTITY`` and
-    ``CONSISTENCY`` / ``CONSISTENCY_CONFLICT`` (``§4.4.102``); no other category,
-    reason, severity or error code is created.  ``checks`` and ``issues`` are not
-    aggregated into any new report-level status.
+    contain ``IDENTITY_RESOLUTION`` / ``UNRESOLVED_IDENTITY``,
+    ``SCOPE_COVERAGE`` / ``UNRESOLVED_SCOPE`` and ``CONSISTENCY`` /
+    ``CONSISTENCY_CONFLICT`` (``§4.4.102``); no other category, reason, severity or
+    error code is created.  ``checks`` and ``issues`` are not aggregated into any new
+    report-level status.
+
+    ``inventory_scope_contexts`` carries the read-only I-9 ownership / POC Inventory
+    Scope resolution result, one entry per accepted ``Inventory Snapshot`` record, so a
+    downstream deterministic rule can look up ``exact Inventory record -> exact
+    scope-resolution context`` without re-reading a raw artifact.
     """
 
     package_id: str
@@ -774,6 +969,7 @@ class CanonicalConstructionReport:
     checks: tuple[tuple[str, str, str | None], ...]
     issues: tuple[Issue, ...]
     layer2_note: str = ""
+    inventory_scope_contexts: tuple[InventoryScopeContext, ...] = ()
 
     def objects_for(self, canonical_target: str) -> tuple[CanonicalObject, ...]:
         for entry in self.object_sets:
@@ -786,6 +982,14 @@ class CanonicalConstructionReport:
             if entry.canonical_target == canonical_target:
                 return entry.unresolved
         return ()
+
+    def inventory_scope_for(self, inventory_reference: str) -> InventoryScopeContext | None:
+        """Deterministic ``exact Inventory record -> exact scope context`` lookup (I-9)."""
+
+        for context in self.inventory_scope_contexts:
+            if context.inventory_reference == inventory_reference:
+                return context
+        return None
 
     def check_states(self) -> dict[str, str]:
         return {name: state for name, state, _ in self.checks}
@@ -834,6 +1038,9 @@ class CanonicalConstructionReport:
                 for name, state, note in self.checks
             ],
             "issues": [issue.to_dict() for issue in self.issues],
+            "inventory_scope_contexts": [
+                item.to_dict() for item in self.inventory_scope_contexts
+            ],
             "layer2_note": self.layer2_note,
         }
 
@@ -922,6 +1129,7 @@ class _Construction:
         self.loss_rate_contexts: list[ContextValueReference] = []
         self.safety_stock_contexts: list[ContextValueReference] = []
         self.effective_demand_contexts: list[EffectiveDemandContextReference] = []
+        self.inventory_scope_contexts: list[InventoryScopeContext] = []
 
     def check(self, name: str, state: str, note: str | None = None) -> None:
         self.checks.append((name, state, note))
@@ -1008,6 +1216,45 @@ class _Construction:
                 consequence_context=(
                     "evidence stays unresolved; no value is invented and the package "
                     "disposition is unchanged"
+                ),
+            )
+        )
+
+    def unresolved_scope(
+        self,
+        *,
+        location: str,
+        detail: str,
+        affected_evidence: str,
+        design_reference: str,
+    ) -> None:
+        """Registered ``SCOPE_COVERAGE`` / ``UNRESOLVED_SCOPE`` finding (``§4.4.80`` #5).
+
+        Used when Plant ownership is established but the current POC Inventory Scope
+        membership cannot be reliably determined, or when the scope resolution itself is
+        unusable.  The membership is never defaulted to included or excluded; the
+        affected Inventory evidence simply contributes no resolved scope context and can
+        therefore never be silently counted as usable inventory.  This is the
+        **existing** taxonomy ``§4.5.12`` prescribes -- no new category, reason, severity
+        or error code is introduced, and the package disposition is untouched.
+        """
+
+        self.issues.append(
+            Issue(
+                location=location,
+                detail=detail,
+                category=CATEGORY_SCOPE_COVERAGE,
+                reason=REASON_UNRESOLVED_SCOPE,
+                layer=LAYER_2,
+                affected_evidence=affected_evidence,
+                blast_radius=(
+                    "affected Inventory evidence / canonical grain only (no package "
+                    "rejection)"
+                ),
+                design_reference=design_reference,
+                consequence_context=(
+                    "scope membership stays unresolved; the evidence is neither included "
+                    "nor excluded by default and the package disposition is unchanged"
                 ),
             )
         )
@@ -1733,6 +1980,34 @@ def _construct(
     # --- G3-A Inbound Supply technical record reference ----------------------------
     inbound_records = _construct_inbound(build, accepted, records)
 
+    # --- I-9 Inventory ownership / POC Inventory Scope resolution ------------------
+    # ``exact accepted record path`` per constructed object, so a citation can only ever
+    # name a real record of this very package.
+    reference_paths = {
+        _record_reference(
+            package=accepted, role=role, artifact=artifact, ordinal=ordinal
+        ).reference: (artifact, ordinal)
+        for role, artifact, ordinal, _record in records
+    }
+    inventory_unresolved = next(
+        (
+            entry.unresolved
+            for entry in object_sets
+            if entry.canonical_target == TARGET_INVENTORY_SNAPSHOT
+        ),
+        (),
+    )
+    _handoff_inventory_scope(
+        build,
+        accepted,
+        located,
+        accepted_records,
+        handoff,
+        resolved_objects.get(TARGET_INVENTORY_SNAPSHOT, ()),
+        inventory_unresolved,
+        reference_paths,
+    )
+
     # --- G5-A effective demand context references (read-only) ----------------------
     effective_demand, demand_issues = _effective_demand_references(
         accepted, handoff, located, accepted_records
@@ -1796,6 +2071,12 @@ def _construct(
         checks=_sorted_checks(build.checks),
         issues=tuple(sorted(build.issues, key=Issue.sort_key)),
         layer2_note=layer2_report.note,
+        inventory_scope_contexts=tuple(
+            sorted(
+                build.inventory_scope_contexts,
+                key=lambda item: item.inventory_reference,
+            )
+        ),
     )
 
 
@@ -1839,6 +2120,14 @@ def _resolve_grain_keyed(
     **Stage A** (``§4.4.102`` C): exactly one applicable evidence resolves the grain;
     more than one applicable evidence stays unresolved and is never reconciled by a
     value comparison, a first/last-wins rule or any other unapproved precedence.
+
+    **Registered exception -- ``Inventory Snapshot``** (``§4.4.12`` ／ ``§4.4.50`` ／
+    ``§4.1.4 D``): several source observations may legally share one Plant-level
+    canonical grain, because ``BR-INVENTORY-001`` aggregates the *eligible, in-scope*
+    subset later.  Every such record with a valid grain is therefore **retained as a
+    resolved Inventory observation**.  Canonicalization still performs no aggregation of
+    any kind: no quantity is summed, no record is selected, no same-value
+    deduplication and no averaging happens here.
     """
 
     buckets: dict[str, dict[tuple[Any, ...], list[CanonicalObject]]] = {
@@ -1943,6 +2232,22 @@ def _resolve_grain_keyed(
                     f"{CANONICALIZATION_GRAIN_RESOLUTION}:{target}",
                     EVALUATION_PASSED,
                     f"exactly one applicable evidence for grain [{label}]",
+                )
+                continue
+
+            if target == TARGET_INVENTORY_SNAPSHOT:
+                # Registered same-grain exception (``§4.4.12`` ／ ``§4.4.50``): multiple
+                # Inventory observations may legally share one Plant-level grain.  All of
+                # them are retained; nothing is summed, selected or deduplicated here.
+                resolved.extend(candidates)
+                build.check(
+                    f"{CANONICALIZATION_GRAIN_RESOLUTION}:{target}",
+                    EVALUATION_PASSED,
+                    f"{len(candidates)} applicable Inventory observations share the same "
+                    f"Plant-level grain [{label}]; all are retained for the downstream "
+                    "BR-INVENTORY-001 aggregation and no canonicalization-time sum, "
+                    "selection or same-value deduplication is applied "
+                    "(§4.4.12 / §4.4.50 / §4.1.4 D)",
                 )
                 continue
 
@@ -2987,6 +3292,437 @@ def _handoff_safety_stock(
                 value=value_gate.value,
                 provenance=_resolved_evidence_reference(
                     accepted=accepted, verification=value_gate
+                ),
+            )
+        )
+
+
+def _inventory_property(obj: CanonicalObject, name: str) -> Any:
+    """The retained canonical property value, or ``None`` when it is not assigned."""
+
+    value = obj.value_of(name, ABSENT)
+    return None if value is ABSENT else value
+
+
+def _handoff_inventory_scope(
+    build: _Construction,
+    accepted: AcceptedPackage,
+    located: Mapping[str, tuple[str, int]],
+    accepted_records: Mapping[str, JsonObject],
+    handoff: PhaseAHandoff,
+    inventory_resolved: tuple[CanonicalObject, ...],
+    inventory_unresolved: tuple[CanonicalObject, ...],
+    reference_paths: Mapping[str, tuple[str, int]],
+) -> None:
+    """Resolve Plant ownership + POC Inventory Scope membership (injection I-9, A′).
+
+    For **every** accepted ``Inventory Snapshot`` record this produces one read-only
+    :class:`InventoryScopeContext`, so a later deterministic rule can look up
+    ``exact Inventory record -> exact scope context`` without touching a raw artifact.
+
+    The seam is same-package, evidence-only, association-specific and basis-gated:
+
+    * Plant ownership is read from the **accepted canonical evidence** (the record's own
+      ``plant_id``) and is never taken from the caller, never defaulted to the current
+      Plant, and never inferred from a Warehouse name / description;
+    * POC Inventory Scope membership is derived **only** from the exact
+      ``mapping_basis`` registered on the exact provenance association the entry names
+      (exact ``observation`` ＋ exact locator), resolved through the approved
+      :data:`INVENTORY_SCOPE_BASIS_REGISTRY`.  A ``mapping_basis`` on another
+      association is never borrowed, a caller-supplied basis never wins, and a merely
+      present ``mapping_basis`` is never by itself proof of membership;
+    * anything unverifiable, unregistered or not exactly one applicable resolution stays
+      ``UNRESOLVED_SCOPE`` -- never defaulted to included or excluded.  A resolved
+      ``OUT_OF_SCOPE`` is a legal exclusion, not a data-quality defect.
+    """
+
+    # --- index the offered citations by the exact accepted record path they name -----
+    applicable_entries: dict[str, list[tuple[int, InventoryScopeHandoff]]] = {}
+    for index, entry in enumerate(handoff.inventory_scope):
+        check_name = f"{CANONICALIZATION_HANDOFF_EVIDENCE}:InventoryScope[{index}]"
+        citation = entry.inventory_evidence
+        if citation.snapshot_package_identity != accepted.package_id:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                "the Inventory scope citation names a different Snapshot Package "
+                "Identity; an external caller value may not supply this semantic and no "
+                "scope is resolved from it (§4.3.31 E / I-9)",
+            )
+            continue
+        if citation.logical_dataset_role != ROLE_INVENTORY_SNAPSHOT:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                "the Inventory scope citation declares logical dataset role "
+                f"{citation.logical_dataset_role!r}; only {ROLE_INVENTORY_SNAPSHOT!r} "
+                "evidence may resolve Inventory ownership / scope (§4.3.31 G I-9)",
+            )
+            continue
+        path = f"{citation.artifact}#{citation.record_ordinal}"
+        found = located.get(path)
+        if found is None:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                f"the cited accepted record path {path!r} does not resolve to a record of "
+                "this package; no Inventory scope resolution is derived from it "
+                "(§4.3.31 E / I-9)",
+            )
+            continue
+        role, _ordinal = found
+        if role != ROLE_INVENTORY_SNAPSHOT:
+            build.check(
+                check_name,
+                EVALUATION_NOT_EVALUABLE,
+                f"the cited record {path!r} belongs to logical dataset role {role!r}, not "
+                f"{ROLE_INVENTORY_SNAPSHOT!r}; the citation is inconsistent and is not "
+                "used (§4.3.31 G I-9)",
+            )
+            continue
+        applicable_entries.setdefault(path, []).append((index, entry))
+
+    def record_unresolved(
+        obj: CanonicalObject,
+        *,
+        ownership_resolved: bool,
+        note: str,
+    ) -> None:
+        notes = [note]
+        if obj.grain is None:
+            # Three independent prerequisites: canonical Inventory grain readiness,
+            # Plant ownership resolution and POC Inventory Scope resolution.  A missing
+            # grain component makes the *observation* unusable downstream; it says
+            # nothing about ownership or scope membership (``§4.4.50`` / I-9).
+            notes.append(
+                "the canonical Inventory grain stays unresolved (a grain component is "
+                "missing), so this observation remains unresolved for downstream "
+                "Inventory calculation independently of ownership / scope resolution "
+                "(§4.4.26 / §4.5.12 / §4.3.31 G I-9)"
+            )
+        build.inventory_scope_contexts.append(
+            InventoryScopeContext(
+                inventory_reference=obj.record_reference,
+                plant_id=_inventory_property(obj, "plant_id"),
+                material_code=_inventory_property(obj, "material_code"),
+                inventory_snapshot_time=_inventory_property(obj, "inventory_snapshot_time"),
+                scope_resolved=False,
+                in_scope=None,
+                ownership_resolved=ownership_resolved,
+                provenance=obj.provenance,
+                notes=tuple(notes),
+            )
+        )
+
+    for obj in inventory_resolved + inventory_unresolved:
+        artifact_and_ordinal = reference_paths.get(obj.record_reference)
+        if artifact_and_ordinal is None:  # pragma: no cover - every object has a path
+            continue
+        artifact, ordinal = artifact_and_ordinal
+        location = f"{artifact}[{ordinal}]"
+        plant_id = _inventory_property(obj, "plant_id")
+
+        # Plant ownership is judged **only** by the accepted canonical evidence: a usable
+        # ``plant_id`` resolves ownership even when another grain component is missing,
+        # and ``obj.grain is None`` is never used as a proxy for it.
+        ownership_value_usable = isinstance(plant_id, str) and plant_id != ""
+        if not ownership_value_usable:
+            build.unresolved_identity(
+                location=location,
+                detail=(
+                    "Plant ownership cannot be reliably established: the accepted "
+                    "Inventory evidence carries no usable canonical plant_id.  It is "
+                    "never taken from the caller, never defaulted to the current Plant "
+                    "and never inferred from a Warehouse name / description "
+                    "(§4.5.12 / §4.4.80 #4 / §4.3.31 G I-9)"
+                ),
+                affected_evidence=artifact,
+                design_reference="§4.5.12 Example C / §4.4.80 #4 / §4.3.31 G I-9",
+            )
+            record_unresolved(
+                obj,
+                ownership_resolved=False,
+                note=(
+                    "Plant ownership unresolved, so POC Inventory Scope membership is "
+                    "not decidable and is never defaulted (§4.5.12)"
+                ),
+            )
+            continue
+
+        applicable = applicable_entries.get(f"{artifact}#{ordinal}", [])
+        if not applicable:
+            build.unresolved_scope(
+                location=location,
+                detail=(
+                    "no I-9 Inventory scope resolution is offered for this retained "
+                    "Inventory evidence; POC Inventory Scope membership is never "
+                    "defaulted to included or excluded (§4.5.12 / §4.3.31 G I-9)"
+                ),
+                affected_evidence=artifact,
+                design_reference="§4.5.12 Example D / §4.4.80 #5 / §4.3.31 G I-9",
+            )
+            record_unresolved(
+                obj,
+                ownership_resolved=True,
+                note=(
+                    "ownership resolved from the accepted canonical evidence; scope "
+                    "membership stays unresolved (no applicable resolution)"
+                ),
+            )
+            continue
+        if len(applicable) > 1:
+            build.unresolved_scope(
+                location=location,
+                detail=(
+                    f"{len(applicable)} applicable I-9 resolution entries name this "
+                    "Inventory evidence; exactly one applicable resolution is required "
+                    "and they are never reconciled by first / last wins or same-value "
+                    "deduplication (§4.4.102 C Stage A / §4.3.31 G I-9)"
+                ),
+                affected_evidence=artifact,
+                design_reference="§4.4.102 C / §4.4.80 #5 / §4.3.31 G I-9",
+            )
+            record_unresolved(
+                obj,
+                ownership_resolved=True,
+                note=(
+                    "ownership resolved from the accepted canonical evidence; scope "
+                    "membership stays unresolved (more than one applicable resolution)"
+                ),
+            )
+            continue
+
+        index, entry = applicable[0]
+        check_name = f"{CANONICALIZATION_HANDOFF_EVIDENCE}:InventoryScope[{index}]"
+
+        def refuse(
+            *,
+            check_note: str,
+            detail: str,
+            note: str,
+            design_reference: str = (
+                "§4.5.12 / §4.4.80 #5 / §4.3.31 G I-9"
+            ),
+            ownership_resolved: bool = True,
+        ) -> None:
+            """Report one unusable resolution: never default included or excluded."""
+
+            build.check(check_name, EVALUATION_NOT_EVALUABLE, check_note)
+            build.unresolved_scope(
+                location=location,
+                detail=detail,
+                affected_evidence=artifact,
+                design_reference=design_reference,
+            )
+            record_unresolved(obj, ownership_resolved=ownership_resolved, note=note)
+
+        if entry.scope_observation not in APPLICABILITY_BY_ROLE[
+            ROLE_INVENTORY_SNAPSHOT
+        ].assignable:
+            refuse(
+                check_note=(
+                    f"scope_observation {entry.scope_observation!r} is not a canonical "
+                    "property assignable for the Inventory Snapshot role; no canonical "
+                    "property is created or reinterpreted by this seam "
+                    "(§4.3.30 B.1 / §4.3.31 G I-9)"
+                ),
+                detail=(
+                    "the I-9 scope observation does not name an existing canonical "
+                    "property of the Inventory Snapshot evidence, so scope membership "
+                    "stays unresolved and is never defaulted to included or excluded "
+                    "(§4.5.12 / §4.4.80 #5 / §4.3.31 G I-9)"
+                ),
+                note="scope membership stays unresolved (unusable scope observation)",
+            )
+            continue
+
+        gate = _verify_handoff_evidence(
+            accepted=accepted,
+            evidence=entry.inventory_evidence,
+            located=located,
+            records=accepted_records,
+            expected_roles=(ROLE_INVENTORY_SNAPSHOT,),
+            observation=entry.scope_observation,
+        )
+        if not gate.verified:
+            refuse(
+                check_note=(
+                    gate.problem
+                    or "the Inventory scope resolution is not verifiable in this package"
+                ),
+                detail=(
+                    "the offered I-9 resolution could not be verified against the same "
+                    "AcceptedPackage evidence (record path / role / registered locator / "
+                    "exact association), so scope membership stays unresolved "
+                    "(§4.3.31 E / §4.4.80 #5 / §4.3.31 G I-9)"
+                ),
+                note="scope membership stays unresolved (unverifiable association)",
+            )
+            continue
+
+        association = gate.association
+        registered_basis = (
+            association.mapping_basis if association is not None else None
+        )
+        if not registered_basis:
+            refuse(
+                check_note=(
+                    "the exact association named by scope_observation registers no "
+                    "mapping_basis, so the resolution basis cannot be tied to approved "
+                    "package evidence; a mapping_basis existing on another association is "
+                    "never borrowed and is not by itself proof of scope membership "
+                    "(§4.3.28 E / §4.5.12 / §4.3.31 G I-9)"
+                ),
+                detail=(
+                    "the exact association carries no registered mapping_basis, so no "
+                    "approved inventory-scope mapping rule applies and scope membership "
+                    "stays unresolved (§4.5.12 / §4.4.80 #5 / §4.3.31 G I-9)"
+                ),
+                note="scope membership stays unresolved (no registered mapping_basis)",
+            )
+            continue
+        if entry.scope_resolution_basis != registered_basis:
+            refuse(
+                check_note=(
+                    "the handed-in scope resolution basis does not equal the mapping_basis "
+                    "registered on the exact association named by scope_observation; a "
+                    "caller free string is not an approved mapping basis and another "
+                    "association's basis is never borrowed (§4.3.28 E / §4.3.31 G I-9)"
+                ),
+                detail=(
+                    "the handed-in scope resolution basis does not equal the "
+                    "mapping_basis registered on the exact association named by the exact "
+                    "scope observation, so scope membership stays unresolved "
+                    "(§4.5.12 / §4.4.80 #5 / §4.3.31 G I-9)"
+                ),
+                note="scope membership stays unresolved (resolution basis mismatch)",
+            )
+            continue
+
+        rule = INVENTORY_SCOPE_BASIS_BY_LITERAL.get(registered_basis)
+        if rule is None:
+            refuse(
+                check_note=(
+                    "the exact association registers mapping_basis "
+                    f"{registered_basis!r}, which is not in the approved inventory-scope "
+                    "basis registry; scope membership stays unresolved and is never "
+                    "assumed included or excluded (§4.5.12 / §4.3.31 G I-9)"
+                ),
+                detail=(
+                    f"the registered mapping_basis {registered_basis!r} is not an "
+                    "approved inventory-scope mapping rule, so no deterministic scope "
+                    "outcome exists and membership stays unresolved "
+                    "(§4.5.12 / §4.4.80 #5 / §4.3.31 G I-9)"
+                ),
+                note=(
+                    "scope membership stays unresolved (basis is not in the approved "
+                    "inventory-scope registry)"
+                ),
+            )
+            continue
+
+        # The approved basis registers its own observation semantics.  A basis anchored on
+        # any other observation is not an approved resolution: for the warehouse-level
+        # (Shape A) family this is exactly the Plant-ownership provenance gap, because the
+        # approved warehouse-level basis must be the one registered on the ``plant_id``
+        # association -- that association is what proves
+        # ``source warehouse context -> canonical plant_id``.  A ``plant_id`` value that
+        # merely happens to exist on the record is never accepted as proven ownership.
+        if entry.scope_observation not in rule.allowed_observations:
+            ownership_proven = (
+                rule.ownership_observation is None
+                or entry.scope_observation == rule.ownership_observation
+            )
+            if not ownership_proven:
+                build.unresolved_identity(
+                    location=location,
+                    detail=(
+                        "Plant ownership cannot be reliably established for this "
+                        f"warehouse-level resolution: the approved Shape A basis "
+                        f"{registered_basis!r} is registered on the "
+                        f"{entry.scope_observation!r} association, not on the "
+                        f"{rule.ownership_observation!r} association, so "
+                        "source warehouse context -> canonical plant_id is not proven.  A "
+                        "plant_id value carried by the record is never accepted as proven "
+                        "ownership in that case (§4.5.12 / §4.4.80 #4 / §4.3.31 G I-9)"
+                    ),
+                    affected_evidence=artifact,
+                    design_reference=(
+                        "§4.5.12 Shape A / §4.4.80 #4 / §4.3.31 G I-9"
+                    ),
+                )
+            refuse(
+                check_note=(
+                    f"the approved basis {registered_basis!r} registers observation "
+                    f"semantics {list(rule.allowed_observations)} and the handed-in "
+                    f"scope_observation {entry.scope_observation!r} is not one of them; "
+                    "the association is not the one the approved mapping rule applies to, "
+                    "so neither the scope membership"
+                    + (
+                        " nor the Plant ownership is proven"
+                        if not ownership_proven
+                        else " is resolved"
+                    )
+                    + " (§4.5.12 / §4.3.31 G I-9)"
+                ),
+                detail=(
+                    "the exact association carries an approved inventory-scope basis, but "
+                    f"that basis applies to observation {list(rule.allowed_observations)} "
+                    f"and not to {entry.scope_observation!r}; scope membership stays "
+                    "unresolved and is never defaulted to included or excluded "
+                    "(§4.5.12 / §4.4.80 #5 / §4.3.31 G I-9)"
+                ),
+                note=(
+                    "scope membership stays unresolved (the approved basis does not apply "
+                    "to this observation)"
+                ),
+                ownership_resolved=ownership_proven,
+            )
+            continue
+
+        build.check(
+            check_name,
+            EVALUATION_PASSED,
+            "Inventory ownership resolved from the accepted canonical evidence "
+            f"(plant_id={plant_id!r})"
+            + (
+                f" and proven by the approved warehouse-level basis registered on the "
+                f"{rule.ownership_observation!r} association"
+                if rule.ownership_observation is not None
+                else ""
+            )
+            + " and POC Inventory Scope membership resolved as "
+            f"{rule.membership} (shape {rule.source_shape}) from the approved basis "
+            f"{registered_basis!r} registered on the exact association for observation "
+            f"{entry.scope_observation!r} of record {gate.record_path}; no caller-supplied "
+            "outcome and no default inclusion / exclusion is used (§4.5.12 / §4.3.31 G I-9)",
+        )
+        build.inventory_scope_contexts.append(
+            InventoryScopeContext(
+                inventory_reference=obj.record_reference,
+                plant_id=plant_id,
+                material_code=_inventory_property(obj, "material_code"),
+                inventory_snapshot_time=_inventory_property(obj, "inventory_snapshot_time"),
+                scope_resolved=True,
+                in_scope=rule.in_scope,
+                source_shape=rule.source_shape,
+                scope_membership=rule.membership,
+                scope_observation=entry.scope_observation,
+                mapping_basis=registered_basis,
+                ownership_resolved=True,
+                provenance=_resolved_evidence_reference(
+                    accepted=accepted, verification=gate
+                ),
+                notes=(
+                    ()
+                    if obj.grain is not None
+                    else (
+                        "ownership and POC Inventory Scope are resolved independently of "
+                        "the canonical Inventory grain: the canonical Inventory grain "
+                        "stays unresolved (a grain component is missing), so this "
+                        "observation still blocks downstream Inventory calculation "
+                        "(§4.4.50 / §4.3.31 G I-9)",
+                    )
                 ),
             )
         )

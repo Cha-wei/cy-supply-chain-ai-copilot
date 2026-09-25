@@ -128,6 +128,15 @@
 - 必须能区分 `AVAILABLE` / `INSPECTION` / `FROZEN`。
   **不得设计数据库 enum implementation。**
 - **约束：** 状态未知或非法时**不得猜测**，**不得静默归类为 `AVAILABLE`**。
+- **Multiple observations at one grain（Issue #136 Human Decision A′）：**
+  `plant_id` ＋ `material_code` ＋ `inventory_snapshot_time` 仍是 **Plant-level canonical
+  grain**；多个 source observations **可以**共享该 grain，并参与同一个下游
+  `OpeningUsableInventory` aggregate。
+  **不得**把 grain 改成
+  `plant_id + warehouse + material_code + inventory_snapshot_time`，
+  **不得**创建 Warehouse canonical entity，也**不得**新增 Warehouse ／ scope canonical field。
+  Warehouse 仍为 source ／ mapping ／ scope context（`§4.5.12`）；其 ownership ／ POC Inventory
+  Scope membership 的 runtime 判定见 `§4.3.31` G `I-9`（非 canonical field）。
 
 **E. Inbound Supply**
 

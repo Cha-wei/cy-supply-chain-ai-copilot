@@ -2579,6 +2579,122 @@ Warehouse Role Resolution     = DESIGN RESOLVED
 
 `Master Data Mapping` overall **现为 `DESIGN RESOLVED`**。
 
+**A′ —— Inventory ownership ／ POC Inventory Scope Runtime Seam（Issue #136 Human Decision）**
+
+**Registration Status：`REGISTERED`** —— 依据 **Issue #136 Human Decision**（**Inventory Runtime
+Seam Decision `A′` = `APPROVED`**，2026-09-25；`Architecture Decision required = NO`、
+`External runtime evidence = NO`）。
+
+本节**只**登记既有 Warehouse role resolution（Option 2）在 runtime 上的落地契约，
+**不**改变 `§2.2.1` 的 canonical calculation grain，**不**创建 Warehouse 实体／字段，
+**不**重开本节的 Option Review。
+
+```text
+Warehouse remains source / mapping / scope context.
+Shape A 与 Shape B 共用一个 runtime contract（§4.3.31 G I-9）。
+```
+
+**运行时判定链（caller 不可声明 outcome）：**
+
+```text
+exact association（exact canonical observation + exact Stable Source Evidence Locator）
++ exact registered mapping_basis on that association
++ approved inventory-scope mapping rule
+  → deterministic scope outcome
+```
+
+**Shape A —— Warehouse-level Inventory evidence**
+
+```text
+Warehouse-level Inventory evidence
+→ exact existing association
+→ source warehouse context resolves canonical plant_id
+→ approved basis also resolves POC Inventory Scope membership
+```
+
+**不得**：
+
+```text
+plant_id resolved → automatically in scope
+warehouse name → scope
+warehouse description → scope
+```
+
+**Shape B —— already Plant-scoped aggregate evidence**
+
+```text
+already Plant-scoped aggregate evidence
+→ exact existing association
+→ approved basis must explicitly establish that
+  this aggregate was formed under current POC Inventory Scope
+```
+
+**不得**：
+
+```text
+Plant-level aggregate → automatically in scope
+```
+
+**已登记的 SIMULATED scope basis registry（exact literal → exact semantic）**
+
+| exact `mapping_basis` literal | source shape | scope membership | required observation semantics |
+| --- | --- | --- | --- |
+| `SIMULATED-INV-SCOPE-A-IN` | A（warehouse-level） | `IN_SCOPE` | 必须登记在 `plant_id` association 上 |
+| `SIMULATED-INV-SCOPE-A-OUT` | A（warehouse-level） | `OUT_OF_SCOPE` | 必须登记在 `plant_id` association 上 |
+| `SIMULATED-INV-SCOPE-B-IN` | B（already Plant-scoped aggregate） | `IN_SCOPE` | `plant_id` 或 `on_hand_qty` association |
+| `SIMULATED-INV-SCOPE-B-OUT` | B（already Plant-scoped aggregate） | `OUT_OF_SCOPE` | `plant_id` 或 `on_hand_qty` association |
+
+这些 literal 是 **SIMULATED POC 的 technical mapping identifiers**（`§4.5.22` Layer 4
+Mapping ／ Resolution Basis 的一个 approved family）；它们**不是** canonical property、
+**不是** wire property、**不是** status vocabulary，也**不**定义任何真实 ERP field naming。
+
+**Shape A 的 ownership provenance（重要）**
+
+warehouse-level 家族的 basis **必须**登记在 `plant_id` association 上：只有该 association 才证明
+
+```text
+source warehouse context → canonical plant_id
+```
+
+若 A 系 basis 登记在 `on_hand_qty` ／ `inventory_status` ／ `inventory_snapshot_time` ／
+`material_code` 等其它 association 上，则：
+
+```text
+Plant ownership 未被证明 → IDENTITY_RESOLUTION / UNRESOLVED_IDENTITY
+scope membership 保持 unresolved → SCOPE_COVERAGE / UNRESOLVED_SCOPE
+```
+
+**不得**因为 record 上恰好存在 `plant_id` value 就把它当作已证明 ownership。
+Shape B 不得因此退化：Plant-scoped aggregate 仍由其 approved aggregate ／ Plant association
+＋ basis 证明「该 aggregate 已按当前 POC Inventory Scope 形成」。
+
+**三类 prerequisite 相互独立**
+
+```text
+canonical Inventory grain readiness
+  !=  Plant ownership resolution
+  !=  POC Inventory Scope resolution
+```
+
+missing `inventory_snapshot_time` 或 missing `material_code` 只令 canonical Inventory grain
+readiness 不成立；Plant ownership 仍按 accepted canonical evidence 中可用的 `plant_id` 独立判断，
+scope resolution 亦独立执行。三者由后续 deterministic rule 分别检查。
+
+**Runtime 行为（不得默认 included ／ excluded）：**
+
+```text
+resolved IN_SCOPE        → scope context resolved / in_scope = true
+resolved OUT_OF_SCOPE    → scope context resolved / in_scope = false（合法 exclusion，
+                           不是 DATA_INCOMPLETE、不是 Data Quality defect；contribution = 0）
+no handoff ／ unverifiable association ／ unknown basis ／ cardinality != 1
+                         → SCOPE_COVERAGE / UNRESOLVED_SCOPE
+ownership 无法可靠建立    → IDENTITY_RESOLUTION / UNRESOLVED_IDENTITY
+```
+
+同一条 record 上存在多个 association 时，**必须**使用 `exact observation` ＋ `exact locator`
+命中的 association；**不得**从 association A 借 `mapping_basis` 给 association B 使用。
+只有 scope resolution 完成后，Inventory evidence 才能进入正常 numeric inventory calculation。
+
 #### 4.5.13 Cross-System Identifier Boundary
 
 当前 POC **可以**存在 source-specific identifier 与 canonical identifier **不同**的情况。

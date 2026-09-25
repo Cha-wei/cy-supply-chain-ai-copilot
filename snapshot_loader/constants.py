@@ -249,6 +249,14 @@ REASON_UNRESOLVED_IDENTITY: str = "UNRESOLVED_IDENTITY"
 CATEGORY_SEMANTIC_RESOLUTION: str = "SEMANTIC_RESOLUTION"
 REASON_SEMANTIC_UNRESOLVED: str = "SEMANTIC_UNRESOLVED"
 
+#: ``§4.4.80`` #5 / ``§4.4.81`` #8 -- the **existing** registered coverage category /
+#: reason.  It is the vocabulary ``§4.5.12`` prescribes for "Plant is resolved but POC
+#: Inventory Scope membership cannot be reliably determined", so the inventory scope
+#: runtime seam (``§4.3.31`` G I-9) reuses it verbatim.  No new category, reason,
+#: severity or error code is introduced.
+CATEGORY_SCOPE_COVERAGE: str = "SCOPE_COVERAGE"
+REASON_UNRESOLVED_SCOPE: str = "UNRESOLVED_SCOPE"
+
 # --- Layer-2 reporting surface: no new status vocabulary ------------------------
 #
 # Current canonical authority registers exactly these status vocabularies, and Layer 2

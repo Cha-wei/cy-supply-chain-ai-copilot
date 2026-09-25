@@ -716,6 +716,14 @@ Master Data Mapping overall   = 仍 DESIGN PENDING
 > **Warehouse 的 canonical role 已由 §4.5.12 解析** 为 source / mapping / scope context ——
 > 它**不是** canonical field，因此本表**不新增** Warehouse field（见 §4.2.16）。
 
+> **多笔同 grain Inventory evidence（Issue #136 Human Decision A′）：**
+> `plant_id` ＋ `material_code` ＋ `inventory_snapshot_time` 这一 Plant-level canonical grain
+> 上**可以**存在 multiple `Inventory Snapshot` evidence records；它们**可以**参与同一个下游
+> `OpeningUsableInventory` aggregate（`BR-INVENTORY-001`，`§2.2.2` ／ `§2.2.4`）。
+> 这**不**改变本表字段集合：**不新增** Warehouse ／ scope canonical field，也**不**把
+> scope membership 变成 canonical property（它是 runtime resolution 结果，见 `§4.3.31` G
+> `I-9` ／ `§4.4.50`）。
+
 #### 4.2.6 Inbound Fields
 
 | Field | Logical Type | Requiredness | Class | Business Semantic | Valid / Invalid Boundary | Missing Behavior | Rule(s) |
