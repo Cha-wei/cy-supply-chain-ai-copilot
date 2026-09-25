@@ -2136,6 +2136,180 @@ class GrainResolutionTests(CanonicalObjectsTestCase):
         self.assertIn("UNRESOLVED_IDENTITY", {issue.reason for issue in report.issues})
 
 
+class NonHashableGrainTests(CanonicalObjectsTestCase):
+    """A grain value that is legal JSON but unusable as a grouping key must not crash.
+
+    The canonical value is carried unchanged (nothing is retyped, stringified or wrapped to
+    obtain hashability); the affected canonical target simply stays unresolved and Layer 2
+    keeps owning the field-level ``FIELD_VALUE`` / ``INVALID_TYPE`` defect (Issue #140).
+    """
+
+    def grain_state(self, report, target: str) -> list[str]:
+        return [
+            state
+            for name, state in self.states(report).items()
+            if name.startswith(f"{CANONICALIZATION_GRAIN_RESOLUTION}:{target}:")
+        ]
+
+    def test_single_component_target_with_unhashable_value(self) -> None:
+        """A: ``Supplier`` + ``supplier_id = []`` never raises and stays unresolved."""
+
+        record = {"supplier_id": []}
+        report = self.construct([("Supplier identity", [record])], name="supplier-list")
+        self.assertEqual(report.objects_for("Supplier"), ())
+        unresolved = report.unresolved_for("Supplier")
+        self.assertEqual(len(unresolved), 1)
+        # The canonical value is carried unchanged: no retyping, no stringification.
+        self.assertEqual(unresolved[0].value_of("supplier_id"), [])
+        self.assertTrue(unresolved[0].grain is not None)
+        self.assertIn(EVALUATION_NOT_EVALUABLE, self.grain_state(report, "Supplier"))
+        self.assertEqual(
+            {issue.reason for issue in report.issues}, {"UNRESOLVED_IDENTITY"}
+        )
+
+    def test_compound_grain_with_unhashable_component(self) -> None:
+        """B: ``material_code = {}`` leaves the whole compound object unresolved."""
+
+        for role, record, target in (
+            (
+                "Production Requirement",
+                {
+                    "plant_id": PLANT,
+                    "material_code": {},
+                    "required_date": REQUIRED_DATE,
+                    "ProductionQty": "10",
+                },
+                "Production Requirement",
+            ),
+            (
+                "Inventory Snapshot",
+                {
+                    "plant_id": PLANT,
+                    "material_code": {},
+                    "inventory_snapshot_time": SNAPSHOT_TIME,
+                    "inventory_status": "AVAILABLE",
+                    "on_hand_qty": "100",
+                },
+                "Inventory Snapshot",
+            ),
+        ):
+            with self.subTest(role=role):
+                report = self.construct([(role, [record])], name=f"compound-{target}")
+                self.assertEqual(report.objects_for(target), ())
+                self.assertEqual(len(report.unresolved_for(target)), 1)
+                self.assertIn(EVALUATION_NOT_EVALUABLE, self.grain_state(report, target))
+                reasons = {issue.reason for issue in report.issues}
+                self.assertIn("UNRESOLVED_IDENTITY", reasons)
+                self.assertNotIn("INVALID_TYPE", reasons)
+                self.assertNotIn("MISSING", reasons)
+
+    def test_identity_context_components_are_judged_independently(self) -> None:
+        """C: a broken Plant grain must not take the Material identity down with it."""
+
+        report = self.construct(
+            [("Plant / Material identity context", [{"plant_id": [], "material_code": MATERIAL}])],
+            name="identity-plant-list",
+        )
+        self.assertEqual(report.objects_for("Plant"), ())
+        self.assertEqual(len(report.unresolved_for("Plant")), 1)
+        self.assertEqual(len(report.objects_for("Material")), 1)
+        self.assertEqual(report.objects_for("Material")[0].value_of("material_code"), MATERIAL)
+
+        mirrored = self.construct(
+            [("Plant / Material identity context", [{"plant_id": PLANT, "material_code": {}}])],
+            name="identity-material-object",
+        )
+        self.assertEqual(len(mirrored.objects_for("Plant")), 1)
+        self.assertEqual(mirrored.objects_for("Material"), ())
+        self.assertEqual(len(mirrored.unresolved_for("Material")), 1)
+
+    def test_multiple_unhashable_records_remain_distinct_evidence(self) -> None:
+        """D: two distinct unhashable records stay distinct -- no dedup, no first/last wins."""
+
+        report = self.construct(
+            [
+                (
+                    "Supplier identity",
+                    [{"supplier_id": []}, {"supplier_id": {}}],
+                )
+            ],
+            name="two-unhashable",
+        )
+        self.assertEqual(report.objects_for("Supplier"), ())
+        unresolved = report.unresolved_for("Supplier")
+        self.assertEqual(len(unresolved), 2)
+        self.assertEqual(len({item.record_reference for item in unresolved}), 2)
+        self.assertEqual(
+            [item.value_of("supplier_id") for item in unresolved], [[], {}]
+        )
+
+    def test_hashable_grain_behavior_is_unchanged(self) -> None:
+        """E / F: normal identifiers and the Inventory same-grain exception still work."""
+
+        single = self.construct(
+            [("Supplier identity", [{"supplier_id": "S1"}])], name="supplier-normal"
+        )
+        self.assertEqual(len(single.objects_for("Supplier")), 1)
+
+        duplicate = self.construct(
+            [("Supplier identity", [{"supplier_id": "S1"}, {"supplier_id": "S1"}])],
+            name="supplier-duplicate",
+        )
+        self.assertEqual(duplicate.objects_for("Supplier"), ())
+        self.assertEqual(len(duplicate.unresolved_for("Supplier")), 2)
+
+        inventory = {
+            "plant_id": PLANT,
+            "material_code": MATERIAL,
+            "inventory_snapshot_time": SNAPSHOT_TIME,
+            "inventory_status": "AVAILABLE",
+            "on_hand_qty": "100",
+        }
+        same_grain = self.construct(
+            [("Inventory Snapshot", [dict(inventory), dict(inventory)])],
+            name="inventory-same-grain",
+        )
+        self.assertEqual(len(same_grain.objects_for("Inventory Snapshot")), 2)
+        self.assertEqual(same_grain.unresolved_for("Inventory Snapshot"), ())
+
+    def test_json_null_missingness_is_not_redefined(self) -> None:
+        """G: this cleanup introduces no new canonical missingness policy."""
+
+        report = self.construct(
+            [("Supplier identity", [{"supplier_id": None}])], name="supplier-null"
+        )
+        # JSON null is still carried as-is and grouped exactly like before: canonicalization
+        # owns neither the missingness decision nor the field-level defect.
+        self.assertEqual(len(report.objects_for("Supplier")), 1)
+        self.assertIsNone(report.objects_for("Supplier")[0].value_of("supplier_id"))
+        self.assertEqual(report.issues, ())
+
+    def test_layer2_keeps_owning_the_field_level_defect(self) -> None:
+        """H: the non-hashable representation is reported by Layer 2, not duplicated here."""
+
+        _, accepted = self.accepted(
+            [("Supplier identity", [{"supplier_id": []}])], name="supplier-layer2"
+        )
+        layer2 = validate_layer2(accepted)
+        self.assertIn(
+            ("FIELD_VALUE", "INVALID_TYPE"),
+            {(issue.category, issue.reason) for issue in layer2.issues},
+        )
+
+        report = construct_canonical_objects(
+            accepted, PhaseAHandoff(analysis_run_id="RUN-1", analysis_date="2026-02-01")
+        )
+        canonical_reasons = {issue.reason for issue in report.issues}
+        self.assertNotIn("INVALID_TYPE", canonical_reasons)
+        self.assertNotIn("MISSING", canonical_reasons)
+        self.assertEqual(
+            {issue.category for issue in report.issues}, {"IDENTITY_RESOLUTION"}
+        )
+        # The construction survives and the target stays unresolved.
+        self.assertEqual(report.objects_for("Supplier"), ())
+        self.assertEqual(len(report.unresolved_for("Supplier")), 1)
+
+
 class BoundaryAndRegressionTests(CanonicalObjectsTestCase):
     def test_no_new_check_state_category_or_reason_is_introduced(self) -> None:
         report = self.construct(
