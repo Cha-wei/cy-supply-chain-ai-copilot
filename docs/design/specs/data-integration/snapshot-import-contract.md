@@ -6724,6 +6724,91 @@ basis literal → semantic（`IN_SCOPE` ／ `OUT_OF_SCOPE`）；`OUT_OF_SCOPE` �
 **本登记不修改 D-10，不新增 wire property ／ `"_meta"` member ／ canonical business field ／
 canonical entity，也不新增 Validation Category ／ Reason ／ status ／ enum。**
 
+**I-8 —— G5-A effective demand context realization（`A′` ＋ `CB-1′`）**
+
+**Registration Status：`REGISTERED`** —— 依据 **Human Decision `Option A′` ＋ `CB-1′`**（2026-09-25）。
+
+本小节**只**登记 `I-8` 的 context-binding 与 cardinality，**不新增** mapping layer、**不新增**
+Validation Reason、**不扩张** I-8 的 evidence role。
+
+**A. Context citation（`CB-1′` 第 1 ／ 2 ／ 3 ／ 4 ／ 5 条）**
+
+```text
+每条 G5-A relation handoff 必须引用一个 exact resolved Demand Context。
+
+Target Applicability       → same AcceptedPackage 内已 resolved 的
+                             Target Production Requirement context：
+                             plant_id + target_material_code + required_date
+Source Reservation Overlap → same AcceptedPackage 内已 resolved 的
+                             Source-Material Production Requirement context：
+                             plant_id + substitute material_code + required_date
+
+caller 只能提供**待验证的 context citation**；不得提供可信 DemandContextReference、
+outcome 或 Boolean。
+runtime 必须验证该 citation 确实对应 same AcceptedPackage 内**已经 resolved** 的
+Production Requirement context；验证成功后才形成 read-only context reference ＋ provenance。
+```
+
+Context citation **不是**新的 mapping-basis evidence role（`CB-1′` 第 6 条）：I-8 的 outcome basis
+evidence 继续留在 Substitute evidence boundary（**不采用 CB-2**）。
+
+**B. 职责分离（`CB-1′` 第 7 ／ 8 条）**
+
+```text
+context citation      → outcome 针对哪个 demand context
+registered mapping_basis → 该 context 下的 conceptual outcome
+二者不得互相替代；也禁止从 required_date ／ 日期 proximity ／ material equality ／
+AllocatedSubstituteQty ／ approval_status 推导 outcome。
+```
+
+**C. Cardinality（`CB-1′` 第 10 ／ 11 ／ 12 条）**
+
+```text
+binding key = allocation record ＋ relation ＋ exact resolved Demand Context
+              （relation-scoped；Target Demand Context 与 Source Demand Context
+               不得强制组成 joint pair，不得形成 R×S Cartesian product）
+cardinality = for each allocation + relation + exact resolved Demand Context:
+              exactly one deterministic relation outcome reference or unresolved
+              （**取代**原 "exactly one pair or unresolved"）
+同一 allocation 可以针对多个不同 demand contexts 分别产生 outcome reference。
+RelationOutcomeReference 必须独立承载其自己的 resolved context reference。
+```
+
+**C.1 G5-A mapping evidence 的 Stable Source Evidence Locator 要求**
+
+```text
+G5-A mapping evidence 必须携带 non-null Stable Source Evidence Locator；
+handoff 的 evidence_locator 必须与 selected association 的 evidence[] 中至少一个 locator
+exact 相等；
+缺 locator ／ locator 不匹配 ⇒ SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED；
+不得仅凭 observation + mapping_basis 选择 association。
+```
+
+本项为 **Issue #146 已批准 authority 的 consistency sync**，**不是**新的 Human Decision，也**不扩张**
+`HandoffEvidence.evidence_locator` 在其他 seam 上的通用 optional contract（该契约未变，只在 G5-A path
+fail closed）。
+
+**D. 严格限定（保持）**
+
+```text
+not a new external evidence source
+not a transport carrier
+not a second Snapshot Package
+not a canonical field
+not a canonical entity
+not a new calculation grain
+not a new identity component
+not a new Validation Category / Reason / status / enum
+```
+
+`§4.1.4 G` 的 grain 与 attributes **未改变**；**未**新增 `requirement_id` ／ `demand_window_id` ／
+`allocation_period` ／ `valid_from` ／ `valid_to`。unresolved 行为仍为
+`SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`；conflict 行为仍为 Stage A（`§4.4.60` path B）；
+`§4.5.9` 登记 relation basis literal → conceptual outcome（两 relation 各自独立）。
+
+**本小节不修改 `BR-*` ／ Data Dictionary 的 Class ／ Requiredness ／ vocabulary，不修改
+`adr-001-deterministic-core.md`。**
+
 **H. Registration Boundary ／ status**
 
 - 本小节**不**新增 wire property ／ `"_meta"` member ／ canonical business field ／ canonical entity；

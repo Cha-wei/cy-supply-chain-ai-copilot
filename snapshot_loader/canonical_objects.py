@@ -515,6 +515,27 @@ class ContextValueReference:
 
 
 @dataclass(frozen=True, slots=True)
+class DemandContextReference:
+    """One resolved Demand Context, cited read-only by a G5-A relation (``CB-1′``).
+
+    ``semantic`` names which demand context the citation resolved to --
+    ``"Target Demand Context"`` for ``Target Applicability`` and ``"Source Demand
+    Context"`` for ``Source Reservation Overlap``.  ``grain`` is the **existing**
+    ``Production Requirement`` canonical grain (``plant_id`` ＋ ``material_code`` ＋
+    ``required_date``, ``§4.1.4`` C): no canonical field, entity or identity component is
+    created, and this reference is never persisted.  ``record_reference`` names the
+    already resolved ``Production Requirement`` context the runtime verified the caller's
+    citation against, and ``provenance`` is that context's **own** package-scoped
+    provenance -- never anything the caller supplied (``§4.5.9`` / ``§4.3.31`` G I-8).
+    """
+
+    semantic: str
+    grain: tuple[CanonicalProperty, ...]
+    record_reference: str
+    provenance: EvidenceReference
+
+
+@dataclass(frozen=True, slots=True)
 class RelationOutcomeReference:
     """One G5-A effective-demand relation outcome, read-only.
 
@@ -522,10 +543,16 @@ class RelationOutcomeReference:
     relation outcomes and are never collapsed into one Boolean (``§4.1.13`` D).  The
     outcome is carried by the approved mapping evidence and its basis; a caller cannot
     set it directly.
+
+    ``context`` is the **single** resolved Demand Context this outcome was formed for
+    (``CB-1′`` clause 11): one outcome reference always belongs to exactly one demand
+    context, so the two relations can never be combined into a Target × Source
+    product.
     """
 
     relation: str
     outcome: Any
+    context: DemandContextReference
     provenance: EvidenceReference
     mapping_basis: str
 
@@ -535,12 +562,15 @@ class EffectiveDemandContextReference:
     """G5-A read-only in-memory effective demand context reference.
 
     Not a canonical field, not a persisted entity, not a single Boolean, and no new
-    identity component.  It carries the two independent relation outcomes separately.
+    identity component.  One instance carries **one** relation outcome together with the
+    **one** resolved Demand Context it was formed for, so a single allocation can carry a
+    different outcome for each demand context (``CB-1′`` clauses 10 / 11 / 12) without any
+    Target × Source combination.
     """
 
     source_substitute_material: Any
     target_material: Any
-    relations: tuple[RelationOutcomeReference, ...]
+    relation_outcome: RelationOutcomeReference
     record_reference: str
 
 
@@ -754,24 +784,38 @@ G5_RELATIONS: tuple[str, ...] = (
     RELATION_SOURCE_RESERVATION_OVERLAP,
 )
 
+#: The conceptual outcome literal a registered basis uses to declare that the relation
+#: cannot be reliably determined for the cited demand context.  It is **not** a resolved
+#: outcome: no relation outcome reference is formed for it (``§4.5.9`` decision 5 /
+#: ``§4.4.60`` path B).
+RELATION_OUTCOME_UNRESOLVED: str = "unresolved"
+
 
 @dataclass(frozen=True, slots=True)
 class EffectiveDemandRelationHandoff:
     """G5-A effective demand relation evidence (injection I-8, Phase A).
 
-    A handoff entry carries **evidence only** -- never the relation outcome, so a caller
-    cannot state "applicable" / "overlaps" by hand (``§4.1.13`` D).  ``relation`` is one
-    of :data:`G5_RELATIONS`; ``mapping_basis`` names the mapping the entry attributes the
-    evidence to.
+    A handoff entry carries **evidence ＋ a context citation** -- never the relation
+    outcome, so a caller cannot state "applicable" / "overlaps" by hand (``§4.1.13`` D).
+    ``relation`` is one of :data:`G5_RELATIONS`; ``mapping_basis`` names the mapping the
+    entry attributes the evidence to.
+
+    ``context_citation`` is a **claim to be verified**, not a trusted reference
+    (``CB-1′`` clauses 4 / 5): the runtime must confirm that it resolves to an already
+    resolved ``Production Requirement`` context inside the same ``AcceptedPackage``
+    before any read-only :class:`DemandContextReference` is formed.  The citation only
+    says *which* demand context the outcome is about; it never determines the outcome,
+    and it is not a mapping-basis evidence role.
 
     Phase A does **not** derive a conceptual outcome from the cited evidence: the
     approved outcomes are ``applicable`` / ``not applicable`` / ``unresolved`` and
     ``overlaps`` / ``does not overlap`` / ``unresolved``, and the concrete source value
     -> conceptual outcome mapping is ``SOURCE-SPECIFIC`` / Adapter-defined
-    (``§4.5.9`` / ``§4.5.26``) with no approved mapping available to Phase A.  Registered
-    canonical values such as ``approval_status`` or ``AllocatedSubstituteQty`` are
-    therefore **not** relation outcomes, and every relation is reported ``unresolved``
-    rather than relabelled or invented.
+    (``§4.5.9`` / ``§4.5.26``) and is available only through the closed SIMULATED
+    relation-basis registry (``§4.5.9``).  Registered canonical values such as
+    ``approval_status`` or ``AllocatedSubstituteQty`` are therefore **not** relation
+    outcomes, and any entry whose basis or citation is not approved stays unresolved
+    rather than being relabelled or invented.
     """
 
     source_substitute_material: Any
@@ -779,6 +823,112 @@ class EffectiveDemandRelationHandoff:
     relation: str
     evidence: HandoffEvidence
     mapping_basis: str
+    context_citation: HandoffEvidence | None = None
+
+
+#: The two G5-A demand-context semantics a relation may cite (``CB-1′`` clauses 2 / 3).
+DEMAND_CONTEXT_TARGET: str = "Target Demand Context"
+DEMAND_CONTEXT_SOURCE: str = "Source Demand Context"
+
+
+@dataclass(frozen=True, slots=True)
+class EffectiveDemandRelationBasis:
+    """One registered G5-A ``mapping_basis`` literal -> deterministic relation outcome.
+
+    The literal is the exact ``mapping_basis`` an accepted record must itself register on
+    the association named by :attr:`allowed_observations`; merely registering a
+    ``mapping_basis`` is never by itself an outcome, and a literal is never borrowed from
+    another association or another relation.  ``citation_side`` says which resolved
+    ``Production Requirement`` context side the relation's citation must name.
+
+    A literal is deliberately **not** context-encoding (``CB-1′``): the same literal
+    serves every resolved demand context, and the per-context conclusion is the pair
+    ``(context citation ＋ registered basis)``.
+    """
+
+    relation: str
+    basis: str
+    outcome: str
+    allowed_observations: tuple[str, ...]
+    citation_side: str
+    design_reference: str
+
+
+#: The approved SIMULATED G5-A relation-basis registry.  ``exact literal -> exact
+#: semantic`` is authoritative here, in the canonical authority documents (``§4.5.9``)
+#: and in the tests -- never hidden inside a code path.  The two relations are separate
+#: families with disjoint literals and disjoint outcome vocabularies (``§4.1.13`` D).
+EFFECTIVE_DEMAND_BASIS_REGISTRY: tuple[EffectiveDemandRelationBasis, ...] = (
+    EffectiveDemandRelationBasis(
+        relation=RELATION_TARGET_APPLICABILITY,
+        basis="SIMULATED-G5A-TA-APPLICABLE",
+        outcome="applicable",
+        allowed_observations=("target_material_code",),
+        citation_side=DEMAND_CONTEXT_TARGET,
+        design_reference="§4.5.9 Target Applicability / §4.3.31 G I-8",
+    ),
+    EffectiveDemandRelationBasis(
+        relation=RELATION_TARGET_APPLICABILITY,
+        basis="SIMULATED-G5A-TA-NOT-APPLICABLE",
+        outcome="not applicable",
+        allowed_observations=("target_material_code",),
+        citation_side=DEMAND_CONTEXT_TARGET,
+        design_reference="§4.5.9 Target Applicability / §4.4.89",
+    ),
+    EffectiveDemandRelationBasis(
+        relation=RELATION_TARGET_APPLICABILITY,
+        basis="SIMULATED-G5A-TA-UNRESOLVED",
+        outcome="unresolved",
+        allowed_observations=("target_material_code",),
+        citation_side=DEMAND_CONTEXT_TARGET,
+        design_reference="§4.5.9 Target Applicability / §4.3.31 G I-8",
+    ),
+    EffectiveDemandRelationBasis(
+        relation=RELATION_SOURCE_RESERVATION_OVERLAP,
+        basis="SIMULATED-G5A-SRO-OVERLAPS",
+        outcome="overlaps",
+        allowed_observations=("substitute_material_code",),
+        citation_side=DEMAND_CONTEXT_SOURCE,
+        design_reference="§4.5.9 Source Reservation Overlap / §4.3.31 G I-8",
+    ),
+    EffectiveDemandRelationBasis(
+        relation=RELATION_SOURCE_RESERVATION_OVERLAP,
+        basis="SIMULATED-G5A-SRO-NO-OVERLAP",
+        outcome="does not overlap",
+        allowed_observations=("substitute_material_code",),
+        citation_side=DEMAND_CONTEXT_SOURCE,
+        design_reference="§4.5.9 Source Reservation Overlap / §4.4.89",
+    ),
+    EffectiveDemandRelationBasis(
+        relation=RELATION_SOURCE_RESERVATION_OVERLAP,
+        basis="SIMULATED-G5A-SRO-UNRESOLVED",
+        outcome="unresolved",
+        allowed_observations=("substitute_material_code",),
+        citation_side=DEMAND_CONTEXT_SOURCE,
+        design_reference="§4.5.9 Source Reservation Overlap / §4.4.60 path B",
+    ),
+)
+
+#: ``(relation, exact literal) -> registered basis``.  Closed and relation-scoped: a
+#: literal registered for one relation is never honoured on the other.
+EFFECTIVE_DEMAND_BASIS_BY_KEY: Mapping[tuple[str, str], EffectiveDemandRelationBasis] = {
+    (rule.relation, rule.basis): rule for rule in EFFECTIVE_DEMAND_BASIS_REGISTRY
+}
+
+#: ``relation -> the single association observation its basis must be registered on``.
+#: Derived from the registry, so verification can never be steered by a caller string.
+EFFECTIVE_DEMAND_OBSERVATION_BY_RELATION: Mapping[str, str] = {
+    rule.relation: rule.allowed_observations[0]
+    for rule in EFFECTIVE_DEMAND_BASIS_REGISTRY
+}
+
+#: The resolved ``Production Requirement`` context grain a citation must match
+#: (``§4.1.4`` C -- the existing canonical identity, unchanged).
+DEMAND_CONTEXT_GRAIN_PROPERTIES: tuple[str, ...] = (
+    "plant_id",
+    "material_code",
+    "required_date",
+)
 
 
 #: The two source evidence shapes registered by ``§4.5.12``.  They share one runtime
@@ -1082,19 +1232,22 @@ def _provenance_to_dict(item: EvidenceReference) -> dict[str, object]:
 
 
 def _effective_demand_to_dict(item: EffectiveDemandContextReference) -> dict[str, object]:
+    relation = item.relation_outcome
+    context = relation.context
     return {
         "source_substitute_material": item.source_substitute_material,
         "target_material": item.target_material,
         "record_reference": item.record_reference,
-        "relations": [
-            {
-                "relation": relation.relation,
-                "outcome": relation.outcome,
-                "mapping_basis": relation.mapping_basis,
-                "provenance": _provenance_to_dict(relation.provenance),
-            }
-            for relation in item.relations
-        ],
+        "relation": relation.relation,
+        "outcome": relation.outcome,
+        "mapping_basis": relation.mapping_basis,
+        "provenance": _provenance_to_dict(relation.provenance),
+        "context": {
+            "semantic": context.semantic,
+            "grain": [{"name": prop.name, "value": prop.value} for prop in context.grain],
+            "record_reference": context.record_reference,
+            "provenance": _provenance_to_dict(context.provenance),
+        },
     }
 
 
@@ -2031,8 +2184,11 @@ def _construct(
     )
 
     # --- G5-A effective demand context references (read-only) ----------------------
-    effective_demand, demand_issues = _effective_demand_references(
-        accepted, handoff, located, accepted_records
+    effective_demand, demand_issues = _effective_demand_contexts_for_construction(
+        accepted,
+        handoff,
+        located=located,
+        production_requirements=_resolve_for_construction(resolved_objects),
     )
     build.effective_demand_contexts.extend(effective_demand)
     build.issues.extend(demand_issues)
@@ -3912,31 +4068,208 @@ def _report_safety_stock_grain_conflicts(
 
 # --- G5-A effective demand relation outcomes ---------------------------------------
 
+#: Resolved ``Production Requirement`` contexts per accepted content view.  Re-resolving
+#: the same immutable accepted view is pure, so the cache only avoids duplicate work; it
+#: is keyed by package identity **and** accepted content-view digest because the resolved
+#: set is only meaningful for one immutable view (``§4.3.28`` C.2).  No canonical object
+#: identity is created by this cache.
+_RESOLVED_DEMAND_CONTEXT_CACHE: dict[tuple[str, str], tuple[CanonicalObject, ...]] = {}
+
+
+def _resolved_demand_contexts(accepted: AcceptedPackage) -> tuple[CanonicalObject, ...]:
+    """Return the resolved ``Production Requirement`` contexts of an accepted package.
+
+    A citation may only resolve against a demand context that is **already resolved** in
+    this very package (``CB-1′`` clause 5).  The resolution rule is the existing one: the
+    same grain-keyed ``exactly one applicable evidence or unresolved`` grouping the
+    canonicalization already performs for ``Production Requirement`` (``§4.1.4`` C /
+    ``§4.4.102`` C Stage A) -- no second, weaker grain rule is introduced here.
+
+    This is the only way a demand context enters the seam, and it is a **private** helper:
+    the public entry point derives the contexts here rather than accepting them, so no
+    caller can inject a trusted resolved context (``CB-1′`` clause 4).
+    """
+
+    key = (accepted.package_id, accepted.content_view_digest)
+    cached = _RESOLVED_DEMAND_CONTEXT_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    located, _blocked = _targets_by_artifact(accepted)
+    record_index = _accepted_record_index(accepted)
+    records: list[tuple[str, str, int, JsonObject]] = []
+    for path in sorted(located):
+        role, ordinal = located[path]
+        if role != ROLE_PRODUCTION_REQUIREMENT:
+            continue
+        record = record_index.get(path)
+        if record is None:
+            continue
+        artifact, _sep, _ordinal_text = path.rpartition("#")
+        records.append((role, artifact, ordinal, record))
+
+    # The resolution rule is the existing grain-keyed one; the accumulator only exists
+    # because that helper reports its checks into one.  Its checks and issues describe a
+    # resolution that this fallback performs for its own verification only -- the
+    # construction path resolves the same objects once and passes them in.
+    scratch = _Construction(
+        package=accepted, analysis_run_id="", analysis_date=None
+    )
+    _object_sets, resolved = _resolve_grain_keyed(scratch, accepted, records)
+    contexts = tuple(resolved.get(ROLE_PRODUCTION_REQUIREMENT, ()))
+    _RESOLVED_DEMAND_CONTEXT_CACHE.clear()
+    _RESOLVED_DEMAND_CONTEXT_CACHE[key] = contexts
+    return contexts
+
+
+def _resolve_for_construction(
+    resolved_objects: Mapping[str, tuple[CanonicalObject, ...]],
+) -> tuple[CanonicalObject, ...]:
+    """Internal adapter for the construction path only.
+
+    ``_construct`` has already resolved every canonical object for this package, so the
+    G5-A seam reuses those objects instead of resolving them twice.  This is deliberately
+    **not** a public parameter: it is called with values the construction itself produced,
+    so it can never become a caller trust channel (``CB-1′`` clause 4).
+    """
+
+    return tuple(resolved_objects.get(ROLE_PRODUCTION_REQUIREMENT, ()))
+
 
 def build_effective_demand_contexts(
     accepted: AcceptedPackage,
     handoff: PhaseAHandoff,
-    *,
-    located: Mapping[str, tuple[str, int]] | None = None,
 ) -> tuple[tuple[EffectiveDemandContextReference, ...], tuple[Issue, ...]]:
     """Return the G5-A read-only effective demand context references.
 
-    Each reference keeps ``Target Applicability`` and ``Source Reservation Overlap`` as
-    **two independent** relation outcomes, each with its own provenance and mapping
-    basis.  A caller can never state an outcome.
+    Every reference carries **one** relation outcome together with the **one** resolved
+    Demand Context it was formed for, so ``Target Applicability`` and ``Source
+    Reservation Overlap`` stay independent, are never collapsed into one Boolean, and are
+    never combined into a Target × Source product (``§4.1.13`` D / ``CB-1′``).
 
-    Phase A currently emits **no** context: the concrete source value -> approved
-    conceptual outcome mapping is ``SOURCE-SPECIFIC`` / Adapter-defined and no approved
-    mapping is available, so every relation is reported ``unresolved``
-    (``SEMANTIC_RESOLUTION`` / ``SEMANTIC_UNRESOLVED``) instead of being relabelled,
-    guessed or replaced by a supplied Boolean.
+    The caller supplies *claims only*: context citations to be verified, plus the
+    substitute evidence, its exact locator and its ``mapping_basis``.  Everything the
+    runtime trusts is derived here from the ``AcceptedPackage`` itself -- both the
+    accepted record index (which decides each record's real logical dataset role) and the
+    already resolved ``Production Requirement`` contexts.  There is therefore **no**
+    caller-facing parameter that could supply a trusted record-path -> role mapping or a
+    trusted ``CanonicalObject`` (``CB-1′`` clauses 4 ／ 5).
     """
 
-    if located is None:
-        located, _ = _targets_by_artifact(accepted)
+    located, _blocked = _targets_by_artifact(accepted)
     return _effective_demand_references(
-        accepted, handoff, located, _accepted_record_index(accepted)
+        accepted,
+        handoff,
+        located,
+        _accepted_record_index(accepted),
+        _resolved_demand_contexts(accepted),
     )
+
+
+def _effective_demand_contexts_for_construction(
+    accepted: AcceptedPackage,
+    handoff: PhaseAHandoff,
+    *,
+    located: Mapping[str, tuple[str, int]],
+    production_requirements: tuple[CanonicalObject, ...],
+) -> tuple[tuple[EffectiveDemandContextReference, ...], tuple[Issue, ...]]:
+    """Internal seam used by ``_construct`` only.
+
+    ``_construct`` has already read the accepted record index and resolved every canonical
+    object for this package, so it reuses those values instead of resolving them twice.
+    This is deliberately **private**: it is called with values the construction itself
+    produced, so it can never become a caller trust channel (``CB-1′`` clause 4).
+    """
+
+    return _effective_demand_references(
+        accepted,
+        handoff,
+        located,
+        _accepted_record_index(accepted),
+        production_requirements,
+    )
+
+
+def _selected_relation_association(
+    *,
+    accepted: AcceptedPackage,
+    evidence: HandoffEvidence,
+    located: Mapping[str, tuple[str, int]],
+    records: Mapping[str, JsonObject],
+    observation: str | None,
+    basis: str,
+) -> tuple[ProvenanceAssociation | None, str]:
+    """Select the exact association of the cited record that supports one relation.
+
+    ``§4.3.28`` E registers ``provenance_associations`` as an **array**: one source
+    evidence may produce several canonical outputs, the same evidence locator may appear
+    across associations, and **each association carries its own ``mapping_basis``**.  A
+    single accepted record may therefore state several registrations, and a relation
+    entry selects one of them by its exact ``mapping_basis``.
+
+    Selection is exact-match only and never a precedence rule:
+
+    * the association must state exactly the observation the **relation** allows -- the
+      caller's string cannot steer selection onto another relation's association;
+    * the association must be the one the cited evidence locator is registered on;
+    * the association's ``mapping_basis`` must equal the entry's literal **exactly**
+      (no trim ／ case-fold ／ normalization), because the basis is a registered rule
+      identity, not free text;
+    * if no association qualifies, or several qualify with the *same* literal, nothing is
+      chosen: the entry stays unresolved.  No first ／ last wins, no merging and no
+      same-value deduplication.
+    """
+
+    if observation is None:  # pragma: no cover - registry is closed
+        return None, (
+            f"relation {evidence.logical_dataset_role!r} has no registered association "
+            "observation, so no basis can be resolved"
+        )
+
+    if evidence.evidence_locator is None:
+        # Issue #146 requires the association's ``evidence[]`` to contain a locator exact
+        # equal to the handoff's own locator.  Selecting an association by observation and
+        # basis alone would silently widen that: the relation therefore fails closed.
+        return None, (
+            "the entry names no evidence locator, so the accepted record's association "
+            "cannot be tied to this claim; G5-A mapping evidence requires an exact "
+            "locator and the relation stays unresolved (§4.3.28 E / Issue #146)"
+        )
+
+    path = f"{evidence.artifact}#{evidence.record_ordinal}"
+    record = records.get(path)
+    if record is None:
+        return None, (
+            f"the cited accepted record {path!r} could not be read, so no association "
+            "can back the relation and the pair stays unresolved (§4.3.28 E)"
+        )
+
+    candidates = [
+        association
+        for association in read_provenance_associations(record)
+        if association.observation == observation
+        and association.mapping_basis == basis
+        and (
+            evidence.evidence_locator is None
+            or evidence.evidence_locator in association.evidence
+        )
+    ]
+    if not candidates:
+        return None, (
+            f"the accepted record {path!r} registers no association with observation "
+            f"{observation!r} and mapping_basis {basis!r} for the cited evidence; a "
+            "basis is never borrowed from another association, another observation or "
+            "another relation, and merely present evidence is not an approved "
+            "registration, so the outcome stays unresolved (§4.3.28 E / §4.5.9)"
+        )
+    if len(candidates) > 1:
+        return None, (
+            f"the accepted record {path!r} registers {len(candidates)} associations for "
+            f"observation {observation!r} with the same mapping_basis {basis!r}; exactly "
+            "one registration is required for a deterministic outcome and they are never "
+            "merged or chosen by first/last wins (§4.3.28 E / §4.4.102 C Stage A)"
+        )
+    return candidates[0], ""
 
 
 def _effective_demand_references(
@@ -3944,38 +4277,46 @@ def _effective_demand_references(
     handoff: PhaseAHandoff,
     located: Mapping[str, tuple[str, int]],
     accepted_records: Mapping[str, JsonObject],
+    production_requirements: tuple[CanonicalObject, ...],
 ) -> tuple[tuple[EffectiveDemandContextReference, ...], tuple[Issue, ...]]:
-    """Report the G5-A relation evidence status and the unresolved boundary.
+    """Form one relation outcome per allocation ＋ relation ＋ resolved demand context.
 
-    Per ``§4.3.31`` G I-8 the cardinality is *exactly one pair or unresolved*.  Phase A
-    emits no pair at all: the concrete source value -> approved conceptual outcome
-    mapping is ``SOURCE-SPECIFIC`` / Adapter-defined and is not registered in the
-    current authority, so the conceptual outcome of every relation stays
-    ``unresolved``.  Incoming entries are still checked against the accepted content
-    view, so the report distinguishes "evidence not verifiable in this package" from
-    "evidence verified, but the outcome cannot be formed without the deferred mapping".
-    Nothing is relabelled from a registered canonical value and nothing is taken from
-    the caller.
+    ``§4.3.31`` G I-8 cardinality (as corrected by ``CB-1′`` clause 12): *for each
+    allocation ＋ relation ＋ exact resolved Demand Context, exactly one deterministic
+    relation outcome reference or unresolved*.  Consequently:
+
+    * the outcome comes **only** from the closed, relation-scoped, basis-gated registry
+      (``§4.5.9``); a registered canonical value such as ``approval_status`` or
+      ``AllocatedSubstituteQty`` is never relabelled into an outcome;
+    * the citation only decides *which* demand context the outcome is about, and it must
+      resolve to an already resolved ``Production Requirement`` context of the **same**
+      accepted package with the **same** material identity on the relation's own side --
+      so a ``Target Applicability`` entry can never borrow a source-side context, and the
+      two relations can never be cross-combined;
+    * anything unverified, unregistered, mismatched, missing or ambiguous stays
+      unresolved and emits **no** reference; ``unresolved`` is therefore expressed as
+      "no reference ＋ ``SEMANTIC_RESOLUTION`` / ``SEMANTIC_UNRESOLVED``", which is the
+      inherited way this injection already reported it.
     """
 
     issues: list[Issue] = []
-    seen_pairs: dict[tuple[Any, Any], set[str]] = {}
 
-    #: Appended to a per-entry finding when the caller-supplied pair cannot serve as a
-    #: deterministic bookkeeping key.  The pair values are never converted, stringified or
-    #: invented, and the entry is never skipped because of it.
-    ungroupable_pair_note = (
-        " The exact substitute/target pair bookkeeping could not be established because the "
-        "supplied runtime pair representation is not usable as a deterministic key; the pair "
-        "values are never converted, stringified or invented and the pair is not registered "
-        "in the completeness bookkeeping (§4.1.13 D / §4.3.31 G I-8)."
+    #: Appended to a per-entry finding when the accepted allocation record cannot supply
+    #: the deterministic binding key.  Nothing is converted, stringified or invented to
+    #: obtain a key, and the entry is never skipped because of it.
+    allocation_key_note = (
+        " The exact allocation binding key could not be established because the accepted "
+        "Substitute Allocation record does not state every identity component this "
+        "relation needs; no caller-supplied value is converted, stringified or invented "
+        "to substitute for it, and no outcome reference is formed "
+        "(§4.1.13 D / §4.3.31 G I-8 / CB-1′ clause 12)."
     )
 
-    def _unresolved(*, role: str, detail: str, ungroupable_pair: bool = False) -> None:
+    def _unresolved(*, role: str, detail: str, allocation_key_missing: bool = False) -> None:
         issues.append(
             Issue(
                 location="effective_demand_context",
-                detail=detail + (ungroupable_pair_note if ungroupable_pair else ""),
+                detail=detail + (allocation_key_note if allocation_key_missing else ""),
                 category="SEMANTIC_RESOLUTION",
                 reason="SEMANTIC_UNRESOLVED",
                 layer=LAYER_2,
@@ -3983,33 +4324,169 @@ def _effective_demand_references(
                 blast_radius="affected effective demand context only",
                 design_reference="§4.1.13 D (G5-A) / §4.3.31 G I-8",
                 consequence_context=(
-                    "the relation pair stays unresolved; a caller may not set the "
-                    "outcome directly and no Boolean is synthesised"
+                    "the relation stays unresolved for that demand context; a caller may "
+                    "not set the outcome directly and no Boolean is synthesised"
                 ),
             )
         )
 
-    for entry in handoff.effective_demand:
-        pair = (entry.source_substitute_material, entry.target_material)
-        # A pair that cannot be used as a deterministic bookkeeping key is never registered
-        # and never keyed by a fabricated value -- but the entry itself is **not** skipped:
-        # it still runs its relation validation, evidence verification and mapping boundary
-        # below, and its finding carries the bookkeeping note.
-        bookkeepable = _grouping_key(pair) is not None
-        if bookkeepable:
-            seen_pairs.setdefault(pair, set()).add(entry.relation)
+    def _accepted_allocation_identity(
+        record_path: str,
+    ) -> tuple[tuple[Any, Any, Any], str]:
+        """Read the authoritative allocation identity from the accepted role 8 record.
 
+        The caller's material pair is a *claim*; the allocation identity is only ever what
+        the accepted ``Substitute Allocation`` record states (``§4.1.4`` G).  Every
+        component must be present and usable as a deterministic key -- nothing is defaulted
+        or converted to obtain one.
+        """
+
+        record = accepted_records.get(record_path)
+        if record is None:
+            return (ABSENT, ABSENT, ABSENT), (
+                "the accepted Substitute Allocation record could not be read, so the "
+                "allocation identity cannot be established"
+            )
+        absent = [
+            name
+            for name in ("plant_id", "target_material_code", "substitute_material_code")
+            if name not in record
+        ]
+        if absent:
+            return (ABSENT, ABSENT, ABSENT), (
+                "the accepted Substitute Allocation record does not state "
+                f"{absent}; the allocation identity is incomplete and the relation stays "
+                "unresolved instead of receiving a default or a caller-supplied value"
+            )
+        identity = (
+            record["plant_id"],
+            record["target_material_code"],
+            record["substitute_material_code"],
+        )
+        if _grouping_key(identity) is None:
+            return (ABSENT, ABSENT, ABSENT), (
+                "the accepted Substitute Allocation record's identity components are not "
+                "usable as a deterministic key; the values are never converted, "
+                "stringified or invented and the relation stays unresolved"
+            )
+        return identity, ""
+
+    def _entry_context(
+        entry: EffectiveDemandRelationHandoff,
+        *,
+        side: str,
+        expected_material: Any,
+        expected_plant: Any,
+    ) -> tuple[CanonicalObject | None, str]:
+        """Return the resolved demand context the entry cites, or ``(None, problem)``.
+
+        ``expected_material`` / ``expected_plant`` are the **accepted** allocation
+        identity values for the relation's own side, so a caller-declared pair can never
+        authorise binding to another material or another Plant (``§4.5.9`` / ``§4.1.4`` G).
+        """
+
+        citation = entry.context_citation
+        if citation is None:
+            return None, (
+                "the entry carries no demand-context citation, so the outcome cannot be "
+                "bound to any demand context and stays unresolved (§4.5.9 / CB-1′)"
+            )
+        verification = _verify_handoff_evidence(
+            accepted=accepted,
+            evidence=citation,
+            located=located,
+            records=accepted_records,
+            expected_roles=(ROLE_PRODUCTION_REQUIREMENT,),
+        )
+        if not verification.verified:
+            return None, (
+                "the demand-context citation does not resolve to an already resolved "
+                "Production Requirement context of this accepted package"
+                + (
+                    f" ({verification.problem})"
+                    if verification.problem
+                    else ""
+                )
+                + "; the outcome stays unresolved and no context reference is formed "
+                "(§4.5.9 / CB-1′ clause 5)"
+            )
+        side_label = "target" if side == DEMAND_CONTEXT_TARGET else "source"
+        obj = resolved_demand_contexts.get(verification.record_path)
+        if obj is None:
+            return None, (
+                "no already resolved Production Requirement context of this package "
+                "matches the cited demand context, so the outcome cannot be bound to a "
+                "context and stays unresolved (§4.5.9 / CB-1′ clause 5)"
+            )
+        grain = obj.grain
+        if grain is None:
+            return None, (
+                "the cited Production Requirement context is not resolved: its canonical "
+                "identity components are incomplete, so it cannot serve as a demand "
+                "context (§4.4.26 / CB-1′ clause 5)"
+            )
+        material = obj.value_of("material_code", ABSENT)
+        if material != expected_material:
+            return None, (
+                f"the cited demand context is for material {material!r}, not for the "
+                f"allocation's own {side_label} material {expected_material!r}; a context "
+                "is never borrowed from the other side of the allocation or from the "
+                "caller's declaration (§4.5.9 / CB-1′ clauses 2 / 3 / 9)"
+            )
+        plant = obj.value_of("plant_id", ABSENT)
+        if plant != expected_plant:
+            return None, (
+                f"the cited demand context belongs to plant {plant!r}, not to the "
+                f"allocation's own plant {expected_plant!r}; an allocation is never bound "
+                "to another Plant's demand context, and no cross-Plant borrowing is "
+                "performed (§2.3.9 / §4.5.9 / CB-1′ clauses 2 / 3)"
+            )
+        return obj, ""
+
+    #: ``accepted record path -> resolved Production Requirement context``.  Built from
+    #: the same located index the grain resolution used, so the reference form matches
+    #: exactly and no second reference scheme is invented.
+    resolved_demand_contexts: dict[str, CanonicalObject] = {}
+    for obj in production_requirements:
+        for path, (role, ordinal) in located.items():
+            if role != ROLE_PRODUCTION_REQUIREMENT:
+                continue
+            reference = _record_reference(
+                package=accepted,
+                role=role,
+                artifact=path.rpartition("#")[0],
+                ordinal=ordinal,
+            )
+            if reference.reference == obj.record_reference:
+                resolved_demand_contexts[path] = obj
+                break
+
+    #: ``context reference -> (relation -> outcome reference)``, per allocation.  Keyed by
+    #: the cited context, never by a Target × Source combination, so no Cartesian product
+    #: can arise.
+    by_allocation: dict[tuple[Any, Any, str], dict[str, RelationOutcomeReference]] = {}
+    #: ``(allocation, relation, context reference) -> claim count`` for Stage A cardinality.
+    claims: dict[tuple[tuple[Any, Any, str], str, str], int] = {}
+
+    for entry in handoff.effective_demand:
         if entry.relation not in G5_RELATIONS:
             _unresolved(
                 role=entry.evidence.logical_dataset_role,
                 detail=(
                     f"relation {entry.relation!r} is not one of the registered G5-A "
-                    f"relations {list(G5_RELATIONS)}; the pair stays unresolved"
+                    f"relations {list(G5_RELATIONS)}; the relation stays unresolved"
                 ),
-                ungroupable_pair=not bookkeepable,
             )
             continue
 
+        # The mapping-basis host is restricted to the Substitute Allocation role: a
+        # Substitute Relationship is a relationship context, never a G5-A outcome basis.
+        relation_observation = EFFECTIVE_DEMAND_OBSERVATION_BY_RELATION.get(entry.relation)
+
+        # Evidence verification runs **before** every gate, because an entry's relation
+        # validation and evidence verification must always execute: a foreign package, an
+        # unresolved citation or a wrong role stays visible instead of being masked by a
+        # later finding (Issue #144 regression boundary).
         verification = _verify_handoff_evidence(
             accepted=accepted,
             evidence=entry.evidence,
@@ -4021,45 +4498,200 @@ def _effective_demand_references(
             _unresolved(
                 role=entry.evidence.logical_dataset_role,
                 detail=(
-                    verification.problem
-                    or "the cited mapping evidence is not verifiable in this package"
+                    f"the entry claims relation {entry.relation!r} but its cited mapping "
+                    "evidence is not verifiable in this package: "
+                    + (
+                        verification.problem
+                        or "the cited mapping evidence is not verifiable in this package"
+                    )
                 ),
-                ungroupable_pair=not bookkeepable,
             )
             continue
 
-        # Verified, in-package evidence.  The outcome is still not formed here: the
-        # approved outcomes are ``applicable`` / ``not applicable`` / ``unresolved`` and
-        # ``overlaps`` / ``does not overlap`` / ``unresolved``; the concrete source value
-        # -> conceptual outcome mapping is SOURCE-SPECIFIC / Adapter-defined
-        # (``§4.5.9`` / ``§4.5.26``) and is not registered.  A registered canonical value
-        # such as ``approval_status`` or ``AllocatedSubstituteQty`` is therefore *not*
-        # itself a relation outcome and is never relabelled as one.
-        _unresolved(
-            role=entry.evidence.logical_dataset_role,
-            detail=(
-                f"the accepted evidence {verification.record_path} supports relation "
-                f"{entry.relation!r} but no approved source-value -> "
-                "applicable / not applicable / overlaps / does not overlap mapping is "
-                "available in the current authority (SOURCE-SPECIFIC / Adapter-defined); "
-                "the conceptual outcome stays unresolved and is never taken from the "
-                "caller nor invented by canonicalization (§4.1.13 D)"
-            ),
-            ungroupable_pair=not bookkeepable,
+        # The mapping-basis host is restricted to the Substitute Allocation role: a
+        # Substitute Relationship is relationship context, never a G5-A outcome basis.
+        if entry.evidence.logical_dataset_role != ROLE_SUBSTITUTE_ALLOCATION:
+            _unresolved(
+                role=entry.evidence.logical_dataset_role,
+                detail=(
+                    f"the entry claims relation {entry.relation!r} but cites role "
+                    f"{entry.evidence.logical_dataset_role!r} as its mapping evidence; a "
+                    "G5-A outcome basis may only come from "
+                    f"{ROLE_SUBSTITUTE_ALLOCATION!r}, so the relation stays unresolved and "
+                    "the basis is never borrowed from another role (§4.2.18 / §4.5.9)"
+                ),
+            )
+            continue
+
+        # The authoritative allocation identity is only ever what the accepted role 8
+        # record states; the caller's material pair is a claim that must agree with it.
+        allocation_identity, identity_problem = _accepted_allocation_identity(
+            verification.record_path
+        )
+        allocation_key_established = identity_problem == ""
+        if not allocation_key_established:
+            _unresolved(
+                role=entry.evidence.logical_dataset_role,
+                detail=identity_problem,
+                allocation_key_missing=True,
+            )
+            continue
+        accepted_plant, accepted_target, accepted_source = allocation_identity
+        if (
+            entry.target_material != accepted_target
+            or entry.source_substitute_material != accepted_source
+        ):
+            _unresolved(
+                role=entry.evidence.logical_dataset_role,
+                detail=(
+                    "the caller-declared substitute/target pair "
+                    f"({entry.source_substitute_material!r}, {entry.target_material!r}) "
+                    "does not equal the accepted Substitute Allocation record's own "
+                    f"identities ({accepted_source!r}, {accepted_target!r}); a caller "
+                    "declaration is never the allocation identity and is never converted "
+                    "or invented to match, so the relation stays unresolved "
+                    "(§4.1.4 G / §4.5.9)"
+                ),
+            )
+            continue
+
+        # Verified, in-package evidence: select the exact association this relation may
+        # use.  A record may legitimately carry several associations; the entry's basis
+        # literal only *selects* the registration the accepted record already states, and
+        # the outcome then comes from the closed registry.  Nothing is merged, borrowed
+        # from another association, or chosen by first ／ last wins.
+        association, problem = _selected_relation_association(
+            accepted=accepted,
+            evidence=entry.evidence,
+            located=located,
+            records=accepted_records,
+            observation=relation_observation,
+            basis=entry.mapping_basis,
+        )
+        if association is None:
+            _unresolved(
+                role=entry.evidence.logical_dataset_role,
+                detail=problem,
+            )
+            continue
+
+        rule = EFFECTIVE_DEMAND_BASIS_BY_KEY.get(
+            (entry.relation, association.mapping_basis)
+        )
+        if rule is None:
+            _unresolved(
+                role=entry.evidence.logical_dataset_role,
+                detail=(
+                    f"the accepted evidence {verification.record_path} supports relation "
+                    f"{entry.relation!r} but its registered mapping_basis "
+                    f"{association.mapping_basis!r} is not an approved one for that "
+                    "relation, so no approved source-value -> applicable / not applicable "
+                    "/ overlaps / does not overlap mapping is available; the conceptual "
+                    "outcome stays unresolved and is never taken from the caller nor "
+                    "invented by canonicalization (§4.1.13 D / §4.5.9)"
+                ),
+            )
+            continue
+
+        registered_basis = association.mapping_basis
+        # Outcome provenance is the exact verified citation **plus** the registration the
+        # selected association states: the locator, the observation and the basis all come
+        # from the accepted record, never from the caller (§4.3.28 E).
+        assert verification.role is not None
+        assert verification.artifact is not None
+        assert verification.ordinal is not None
+        evidence_provenance = EvidenceReference(
+            snapshot_package_identity=accepted.package_id,
+            logical_dataset_role=verification.role,
+            artifact=verification.artifact,
+            record_ordinal=verification.ordinal,
+            logical_observation=association.observation,
+            stable_source_evidence_locators=association.evidence,
+            mapping_resolution_basis=association.mapping_basis,
         )
 
-    for key in sorted(seen_pairs, key=lambda item: repr(item)):
-        seen = seen_pairs[key]
-        missing = [name for name in G5_RELATIONS if name not in seen]
-        if not missing:
+        if rule.outcome == RELATION_OUTCOME_UNRESOLVED:
+            # The registered basis itself declares that no reliable determination
+            # exists for this demand context.  That is the inherited "unresolved"
+            # behaviour, so no relation outcome reference is formed -- the finding
+            # carries the reason.
+            _unresolved(
+                role=entry.evidence.logical_dataset_role,
+                detail=(
+                    f"the accepted evidence {verification.record_path} registers "
+                    f"basis {registered_basis!r} for relation {entry.relation!r}, "
+                    "which states that the relation cannot be reliably determined for "
+                    "the cited demand context; no outcome reference is formed and the "
+                    "relation stays unresolved for that context (§4.5.9 / §4.4.60 "
+                    "path B / CB-1′ clause 12)"
+                ),
+            )
             continue
+
+        context, problem = _entry_context(
+            entry,
+            side=rule.citation_side,
+            expected_material=(
+                accepted_target
+                if rule.citation_side == DEMAND_CONTEXT_TARGET
+                else accepted_source
+            ),
+            expected_plant=accepted_plant,
+        )
+        if context is None:
+            _unresolved(
+                role=entry.evidence.logical_dataset_role,
+                detail=problem,
+            )
+            continue
+
+        # The binding key is the accepted allocation record's identity, never the caller's
+        # material representation: it is always hashable, so a JSON array ／ object supplied
+        # as the caller pair can no longer raise ``TypeError`` on the normal path.
+        allocation_key = (
+            accepted_plant,
+            accepted_target,
+            accepted_source,
+            verification.record_path,
+        )
+        context_grain = context.grain
+        assert context_grain is not None  # guarded by ``_entry_context``
+        outcome_reference = RelationOutcomeReference(
+            relation=entry.relation,
+            outcome=rule.outcome,
+            context=DemandContextReference(
+                semantic=rule.citation_side,
+                grain=context_grain,
+                record_reference=context.record_reference,
+                provenance=context.provenance,
+            ),
+            provenance=evidence_provenance,
+            mapping_basis=registered_basis,
+        )
+
+        claim_key = (allocation_key, entry.relation, context.record_reference)
+        claims[claim_key] = claims.get(claim_key, 0) + 1
+        by_allocation.setdefault(allocation_key, {})[
+            f"{entry.relation}|{context.record_reference}"
+        ] = outcome_reference
+
+    # Stage A cardinality (``§4.4.102`` C): more than one claim for the same
+    # allocation ＋ relation ＋ demand context is never reconciled by precedence, so it
+    # stays unresolved and emits no reference.
+    for claim_key in sorted(claims, key=lambda item: repr(item)):
+        if claims[claim_key] <= 1:
+            continue
+        allocation_key, relation, context_reference = claim_key
+        by_allocation.get(allocation_key, {}).pop(f"{relation}|{context_reference}", None)
         issues.append(
             Issue(
                 location="effective_demand_context",
                 detail=(
-                    f"relation(s) {missing} carry no mapping evidence for substitute/"
-                    f"target pair {key!r}; the pair stays unresolved (exactly one pair or "
-                    "unresolved, §4.3.31 G I-8)"
+                    f"{claims[claim_key]} mapping-evidence claims carry relation "
+                    f"{relation!r} for the same allocation and demand context "
+                    f"{context_reference!r}; exactly one deterministic outcome is required "
+                    "and they are never merged, deduplicated or resolved by precedence "
+                    "(§4.4.102 C Stage A / CB-1′ clause 12)"
                 ),
                 category="SEMANTIC_RESOLUTION",
                 reason="SEMANTIC_UNRESOLVED",
@@ -4068,16 +4700,27 @@ def _effective_demand_references(
                 blast_radius="affected effective demand context only",
                 design_reference="§4.1.13 D (G5-A) / §4.3.31 G I-8",
                 consequence_context=(
-                    "the relation pair stays unresolved; Target Applicability and Source "
-                    "Reservation Overlap are never collapsed into one Boolean"
+                    "the relation stays unresolved for that demand context; no outcome is "
+                    "chosen by first/last wins"
                 ),
             )
         )
 
-    # ``§4.1.13`` D / ``§4.3.31`` G I-8: no effective demand context is produced in
-    # Phase A while the source-specific mapping is unavailable.
-    return (), tuple(issues)
+    references: list[EffectiveDemandContextReference] = []
+    for allocation_key in sorted(by_allocation, key=lambda item: repr(item)):
+        _plant, target_material, source_material, record_reference = allocation_key
+        by_relation = by_allocation[allocation_key]
+        for composite in sorted(by_relation):
+            references.append(
+                EffectiveDemandContextReference(
+                    source_substitute_material=source_material,
+                    target_material=target_material,
+                    relation_outcome=by_relation[composite],
+                    record_reference=record_reference,
+                )
+            )
 
+    return tuple(references), tuple(issues)
 
 __all__ = [
     "ABSENT",
@@ -4101,7 +4744,14 @@ __all__ = [
     "CanonicalProperty",
     "CanonicalizationRole",
     "ContextValueReference",
+    "DEMAND_CONTEXT_GRAIN_PROPERTIES",
+    "DEMAND_CONTEXT_SOURCE",
+    "DEMAND_CONTEXT_TARGET",
+    "DemandContextReference",
+    "EFFECTIVE_DEMAND_BASIS_BY_KEY",
+    "EFFECTIVE_DEMAND_BASIS_REGISTRY",
     "EffectiveDemandContextReference",
+    "EffectiveDemandRelationBasis",
     "EffectiveDemandRelationHandoff",
     "EvidenceReference",
     "G5_RELATIONS",

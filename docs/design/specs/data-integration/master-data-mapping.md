@@ -1540,6 +1540,110 @@ Other Source-Semantic Mapping    = 仍 DESIGN PENDING
 Master Data Mapping overall      = 仍 DESIGN PENDING
 ```
 
+**Allocation Demand-Window Mapping —— G5-A Relation Outcome 实现登记（Human Decision `Option A′` ＋ `CB-1′`）**
+
+**Registration Status：`REGISTERED`** —— 依据 **Human Decision `Option A′` ＋ `CB-1′`**。
+
+本登记**只**把已经 `DESIGN RESOLVED` 的 allocation applicability mapping contract 落实到
+first deterministic tranche 的 runtime realization；它**不新增** canonical field ／ entity ／
+identity component，**不修改**本小节前述结论，**不修改** `§4.1.4 G` 的 grain 与 attributes。
+
+**A. Demand Context citation（`CB-1′` 第 1 ／ 2 ／ 3 ／ 4 ／ 5 条）**
+
+```text
+Target Applicability       → same AcceptedPackage 内已 resolved 的 Target Production Requirement
+                             context（plant_id ＋ target_material_code ＋ required_date）
+Source Reservation Overlap → same AcceptedPackage 内已 resolved 的 Source-Material
+                             Production Requirement context
+                             （plant_id ＋ substitute material_code ＋ required_date）
+```
+
+每条 G5-A relation handoff **必须**引用一个 exact resolved Demand Context；caller 只能提供
+**待验证的 citation**，**不得**提供可信 `DemandContextReference` ／ outcome ／ Boolean。
+
+**B. 已登记的 SIMULATED relation basis registry（exact literal → exact outcome）**
+
+`Target Applicability`（**必须**引用 Target Demand Context）：
+
+| exact `mapping_basis` literal | exact outcome | required observation semantics |
+| --- | --- | --- |
+| `SIMULATED-G5A-TA-APPLICABLE` | `applicable` | 必须登记在 `Substitute Allocation` record 的 `target_material_code` association 上 |
+| `SIMULATED-G5A-TA-NOT-APPLICABLE` | `not applicable` | 同上；**合法 deterministic 结果**，**不是** DQ Issue、**不是** `DATA_INCOMPLETE` |
+| `SIMULATED-G5A-TA-UNRESOLVED` | `unresolved` | 同上；source 侧**显式声明**无法可靠判断 |
+
+`Source Reservation Overlap`（**必须**引用 Source-Material Demand Context）：
+
+| exact `mapping_basis` literal | exact outcome | required observation semantics |
+| --- | --- | --- |
+| `SIMULATED-G5A-SRO-OVERLAPS` | `overlaps` | 必须登记在 `Substitute Allocation` record 的 `substitute_material_code` association 上 |
+| `SIMULATED-G5A-SRO-NO-OVERLAP` | `does not overlap` | 同上；**合法 deterministic 结果**；**不得**解释为 reservation 永久失效 ／ 已 release ／ 已消耗 |
+| `SIMULATED-G5A-SRO-UNRESOLVED` | `unresolved` | 同上；**不得**为保守或乐观自动选边 |
+
+这些 literal 是 **SIMULATED POC 的 technical mapping identifiers**（`§4.5.22` Layer 4 的一个
+approved family）：**不是** canonical property、**不是** wire property、**不是** status vocabulary、
+**不是** enum，也**不**定义任何真实 ERP field naming。
+
+**C. 上下文中立性（不得编码 context）**
+
+```text
+一个字面 literal **不得**编码 context identity（例如 ...-TA-APPLICABLE-R1）：
+同一 literal 必须可服务任意多个已 resolved demand contexts；
+per-context 结论只由「citation ＋ basis」组合决定。
+```
+
+**D. 严格边界**
+
+```text
+basis ≠ outcome；context citation ≠ outcome；三者职责分离（CB-1′ 第 7 条）
+literal 与 citation 一律 exact 比较：无 trim ／ case conversion ／ Unicode normalization ／
+numeric coercion
+basis 只绑定 same-AcceptedPackage 的 exact association（§4.3.28 E）；跨 package citation ⇒ 不解析
+Target Applicability 与 Source Reservation Overlap 完全独立；不得组成 joint pair；
+不得形成 R×S Cartesian product（CB-1′ 第 9 ／ 10 条）
+cardinality：for each allocation ＋ relation ＋ exact resolved Demand Context
+             exactly one deterministic outcome reference or unresolved（CB-1′ 第 12 条）
+runtime 唯一 outcome 推导路径：exact association ＋ exact registered mapping_basis
+                              ＋ 已验证的 exact Demand Context citation
+```
+
+**D.1 G5-A mapping evidence 的 Stable Source Evidence Locator 要求（已批准 authority 的 consistency sync）**
+
+```text
+G5-A mapping evidence **必须**携带 non-null Stable Source Evidence Locator；
+handoff 的 evidence_locator **必须**与 selected association 的 evidence[] 中至少一个 locator
+**exact 相等**（无 trim ／ case conversion ／ Unicode normalization ／ numeric coercion）；
+缺 locator 或 locator 不匹配 ⇒ SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED；
+**不得**仅凭 observation ＋ mapping_basis 选择 association。
+```
+
+本项是 **Issue #146 已批准 authority 的 consistency sync**（`CB-1′` 第 6 条：context citation 不是新的
+mapping-basis evidence role），**不是**新的 Human Decision。它**不扩张** `HandoffEvidence.evidence_locator`
+在其他 seam 上的通用 optional contract —— 该通用契约保持不变；本条只在 **G5-A path** 上 fail closed。
+
+**E. 本条不采用**
+
+```text
+plant_id association 作为 outcome basis                     ← 不采用（Q2 CLOSED）
+Substitute Relationship（role 7）record 作为 basis host       ← 收敛为 role 8（Q3 ／ Q4 CLOSED）
+由 required_date ／ 日期 proximity ／ material equality ／
+AllocatedSubstituteQty ／ approval_status 推导 outcome        ← 禁止
+新增 canonical field ／ entity ／ identity component          ← 未新增
+```
+
+**执行状态（本登记时点）**
+
+```text
+Human Decision                     = RECORDED（Option A′ ＋ CB-1′）
+CB-1′                              = IMPLEMENTED（authority sync ＋ runtime seam）
+G5-A relation outcome realization  = DESIGN RESOLVED（Phase A runtime realization registered）
+BR-SUBSTITUTE-001                  = NOT STARTED（未授权，本登记不改变）
+canonical field / grain / entity    = 未新增 / 未修改
+ADR-001                            = 未修改
+```
+
+> `DESIGN RESOLVED` 与 runtime realization 均**不表示** `BR-SUBSTITUTE-001` 已实现，也**不表示**
+> `CumulativeApprovedSubstituteSupply` 已可计算。
+
 #### 4.5.10 Supplier-Material Relationship
 
 **必须明确：**
