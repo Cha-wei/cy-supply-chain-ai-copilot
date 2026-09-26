@@ -209,6 +209,26 @@
 - **Human-authorized Design Change（PR #36 ／ Option B）：**
   本节仅**澄清** `effective demand context` 的 conceptual meaning ——
   **grain 与 attributes 均未改变**，也**未新增**任何 canonical field。
+- **Human Decision ``Option A'-R``（Issue #148 登记）：same-grain multiplicity 例外**
+
+  ```
+  grain 不变（source substitute material ＋ target material ＋ effective demand context）
+  multiple explicit allocation evidence records may coexist at the grain
+  records remain distinct contributions（各自 record_reference ／ provenance ／ AllocatedSubstituteQty）
+  downstream rule owns aggregation（BR-SUBSTITUTE-001 在 G5-A ／ B1-A ／ B2-A′ 约束下求和）
+  no new identity component
+  ```
+
+  即：同一 grain 上出现多笔 accepted `Substitute Allocation` evidence **本身不是** semantic
+  conflict，每笔都**独立保留为 resolved allocation evidence**，并保留各自的 `record_reference` ／
+  provenance ／ `AllocatedSubstituteQty`，使 downstream G5-A reference 可以按 **exact
+  `record_reference`** 分别绑定。
+
+  **canonicalization 阶段禁止**：`sum` ／ `first` ／ `last wins` ／ `same-value dedup` ／
+  `average` ／ `precedence` ／ 合并 records。聚合只属于已注册的 downstream rule。
+
+  该例外**只**登记给 `Substitute Allocation`（role 8）；`Substitute Relationship`（role 7）
+  **不在其内**，其 same-grain 重复仍然 unresolved。
 
 **H. Supplier**
 

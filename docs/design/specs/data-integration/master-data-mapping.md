@@ -1644,6 +1644,82 @@ ADR-001                            = 未修改
 > `DESIGN RESOLVED` 与 runtime realization 均**不表示** `BR-SUBSTITUTE-001` 已实现，也**不表示**
 > `CumulativeApprovedSubstituteSupply` 已可计算。
 
+**F. Downstream consumption consistency sync（Issue #148 ／ B2-A′ ＋ Option A′-R）**
+
+本子项只为 `BR-SUBSTITUTE-001` 的 **conservation 消费**与 **allocation 绑定**提供最小一致性说明。
+`§4.5.9` 前述 Target Applicability ／ Source Reservation Overlap 的定义、registry、cardinality 与
+locator 要求**均未改变**。
+
+```text
+exact Source Demand Context reference 可作为 downstream conservation 的 grouping boundary
+different exact Source Demand Contexts 不形成 automatic overlap relation
+不得新增 reservation_group ／ demand_window_id ／ allocation_period ／ validity interval
+不得修改 G5-A cardinality ／ I-8 handoff contract
+
+retained allocation records 继续以 exact record_reference 独立绑定 G5-A relations
+context mapping 不合并 allocation records
+downstream BR-SUBSTITUTE-001 才执行 authorized sum ／ conservation
+
+已注册 "unresolved" basis ⇒ 该 demand context 的 reference 仍然形成，但不携带 outcome 值
+                            （不新增 canonical field ／ entity ／ identity component）
+未注册 ／ 无法验证 ／ 不匹配 ／ 有歧义的 basis ⇒ 仍然不产生 reference
+```
+
+**F.1 已注册 "unresolved" basis 的 reference 形成（`§2.3.11 B` 可达性）**
+
+`§2.3.11` B 要求**存在**替代关系但数据无法可靠取得时返回 `DATA_INCOMPLETE`，**不得**默认成 0。
+该判断必须落在**该 allocation 自己那个 demand context 的 grain** 上，所以当 accepted record 注册的是
+已批准的 "unresolved" basis 时，reference 仍然形成并携带已解析的 Demand Context，只是
+**不携带 outcome 值**。这不是新的 outcome 推导路径：basis 仍然只从 accepted record 的 association
+按 exact locator ＋ exact `mapping_basis` 选出，caller 仍然不能设置 outcome，也没有任何 Boolean 被合成。
+它只是让 `BR-SUBSTITUTE-001` 能够对该 grain 报告 `DATA_INCOMPLETE`，而不是把它当作 `0` 或整个丢弃。
+
+**F.2 relationship resolved 判断按 exact join grain**
+
+"业务明确没有 approved substitute"（`§2.3.11` A）只能在**该 exact join grain 自己的状态**下成立。
+一个 grain 上的 resolved relationship **不得**让另一个 grain 变成合法 `0`，反之亦然：
+
+```
+exact grain 恰有 1 条 resolved relationship        → 使用之
+exact grain 有 unresolved relationship candidate   → DATA_INCOMPLETE
+exact grain 无任何 candidate 且 dataset present     → 合法 0
+dataset absent                                     → DATA_INCOMPLETE（role 为 REQUIRED）
+```
+
+**不得** first ／ last wins，**不得** same-value dedup，**不得**用 role 级全局状态代替 exact-grain
+判断；另一个 grain 的状态**不得**影响本 grain（failure isolation）。
+
+**F.3 cross-context conservation fail-safe**
+
+`EligibleSubstituteSupply` 是**一个** exact `plant_id` + `source_material_code` 的 baseline。若同一
+Plant ＋ Source Material 下存在**多个 distinct exact Source Demand Context**，且其中多个 context
+各自带有实际的 `SRO = overlaps` reservation contribution，则 current authority **无法判断**这些
+reservation windows 是否互相 overlap。此时**不得**让每个 context 各自独立消费同一份
+`EligibleSubstituteSupply`（那等于隐式假设它们**不** overlap，并把一份 supply 当成多个 supply
+pools）：每个 context 仍然是它自己的 group（**不得** merge），但受影响的 conservation 结果
+`SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED` → `DATA_INCOMPLETE`，且**不产生**可靠的 numeric
+`RemainingUnallocatedSourceSupply`。没有自身 reservation contribution 的 context 仍是合法 `0`。
+
+**F.4 cumulative `<= t` 的唯一性依据**
+
+`CumulativeApprovedSubstituteSupply(<= t)` 按 `plant_id` + `target_material_code` 对
+`required_date <= t` 的每个 target demand context 求和；同一 allocation record 若在多个 context 都
+applicable，仍然只是**一份** supply，唯一性依据是 **exact allocation record identity**，
+**不得**按 context 数量重复累计，**不得** same-value dedup。
+
+**exact allocation identity 只在该 allocation 第一次可靠 eligible ／ applicable participation 时进入
+cumulative uniqueness set**，所以：
+
+```
+A1 = 60 ; R1 = not applicable ; R2 = applicable      ⇒ R1 = 0,  R2 = 60
+A1 = 60 ; R1 = applicable    ; R2 = not applicable   ⇒ R1 = 60, R2 = 60
+```
+
+合法 `not applicable` 是 `0`、**不是** `DATA_INCOMPLETE`，但它**不得** claim ／ reserve 该 allocation
+identity，**不得**阻止后续 context 中同一 allocation 的 `applicable` contribution；反之，后续 context
+的 `not applicable` **不得**抹掉更早已可靠发生的 contribution。uniqueness 依据始终是 exact
+allocation record identity，**不得**使用 quantity value。
+
 #### 4.5.10 Supplier-Material Relationship
 
 **必须明确：**

@@ -2578,6 +2578,29 @@ AllocatedSubstituteQty >= 0
 
 > 关于 `AVAILABLE` / `INSPECTION` / `FROZEN` 的判定口径，见 **`BR-INVENTORY-001` / §2.2**，本规则**不重新定义**。
 
+**B1-A（Human Decision，已批准）：`EligibleSubstituteSupply` 的消费边界**
+
+```
+BR-SUBSTITUTE-001 只消费 BR-INVENTORY-001 的 OpeningUsableInventory
+（不得重新实现 Inventory eligibility，不得读 raw Inventory 绕过 BR-INVENTORY-001）
+
+exact plant_id + source_material_code
+exactly 1 个可可靠消费的 InventoryTarget  → 使用其 OpeningUsableInventory
+0 个                                      → DATA_INCOMPLETE
+多于 1 个不同 inventory_snapshot_time     → DATA_INCOMPLETE
+
+禁止：earliest wins ／ latest wins ／ 跨 snapshot sum ／ average ／
+      把 inventory_snapshot_time 自动等同 AnalysisDate
+
+不修改 BR-INVENTORY-001 的 grain。
+```
+
+**"可可靠消费"只由 `OpeningUsableInventory` 自身决定**：`BR-INVENTORY-001` 在该 target 的
+**inventory 侧**不可靠时给出 `None`，而 `InventoryTarget.outcome` 在**仅 SafetyStock 侧**未解析时也会是
+`DATA_INCOMPLETE`。`SafetyStock` 对 `BR-SUBSTITUTE-001` 而言只是一个 classification threshold，**不是**
+可用供给的输入，所以 SafetyStock 缺失本身既不移除一个可用的 target，也不阻断该消费
+（§2.2.7 ／ §2.3.8）；**不得**从 `OpeningUsableInventory` 扣减 SafetyStock。
+
 #### 2.3.9 Same Plant Boundary
 
 Target Material 与 Substitute Supply **默认必须属于同一 `plant_id`**。
@@ -2690,6 +2713,48 @@ RemainingUnallocatedSourceSupply >= 0
 > - shortage prioritization
 > - auto scheduling
 
+**B2-A′（Human Decision，已批准）：conservation 的 grouping boundary**
+
+```
+conservation group = exact resolved Source Demand Context reference
+
+同一 exact context 下 SRO = overlaps 的 allocations → 一起求和（同一 conservation group）
+does not overlap → 不进入该 context 的 sum
+unresolved       → capability 需要该 conservation 时 DATA_INCOMPLETE
+
+over-allocation  → CONSISTENCY ／ CONSISTENCY_CONFLICT ＋ DATA_INCOMPLETE
+Σ AllocatedSubstituteQty <= EligibleSubstituteSupply
+RemainingUnallocatedSourceSupply = EligibleSubstituteSupply - Σ AllocatedSubstituteQty >= 0
+
+不同 exact Source Demand Context：不自动 overlap ／ 不自动 non-overlap ／ 不得 proximity 推导 ／
+                                不得跨 context 自动合并；
+                                无法可靠判断跨 context conservation → SEMANTIC_UNRESOLVED → DATA_INCOMPLETE
+
+不新增 reservation_group ／ demand_window_id ／ allocation_period ／ valid_from ／ valid_to ／
+      新 canonical entity ／ identity component ／ 时间 overlap 算法（暂不采用 B2-B）。
+```
+
+**EligibleSubstituteSupply 只有一份，不得被多个 context 各自消费**
+
+`EligibleSubstituteSupply` 是**一个** exact `plant_id` + `source_material_code` 的 baseline。若该
+Plant ＋ Source Material 下存在**多个 distinct exact Source Demand Context**，且其中多个 context
+各自带有实际的 `SRO = overlaps` reservation contribution，则 current authority **无法判断**这些
+reservation windows 是否互相 overlap。
+
+此时**不得**让每个 context 各自独立、正常地消费同一份 `EligibleSubstituteSupply`（那等于隐式假设
+它们**不** overlap，并把一份 supply 当成多个独立 supply pools）：
+
+```
+每个 context 仍然是它自己的 conservation group（**不得** merge）
+但受影响的 conservation 结果 = SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED → DATA_INCOMPLETE
+并且**不产生**可靠的 numeric RemainingUnallocatedSourceSupply
+```
+
+**没有**自身 reservation contribution 的 context 仍然是合法 `0`，**不得**被牵连。
+
+`ExactQuantity` 的减法保持既有 exact 语义（与 §2.3.12 一致）：只有在
+`Σ <= EligibleSubstituteSupply` 时才产生 `RemainingUnallocatedSourceSupply`，否则**不产生**任何数值。
+
 #### 2.3.11 Zero vs Missing
 
 必须区分两种**语义完全不同**的情况：
@@ -2723,6 +2788,28 @@ ApprovedSubstituteSupply = 0
 
 **不得默认成 0。**
 
+**B 必须作用于该 allocation 自己那个 demand context 的 grain。** 因此 G5-A 的 effective-demand
+reference 在**已注册**的 "unresolved" basis 下仍然要形成：它携带已解析的 Demand Context（因此
+`plant_id` ＋ material ＋ `required_date` 仍可达），但**不携带任何 outcome 值**。这不是新增
+canonical field ／ entity ／ identity component，也不改变 G5-A cardinality ／ I-8 handoff contract；
+它只是让 `BR-SUBSTITUTE-001` 能够按本节的 B 对该 grain 报告 `DATA_INCOMPLETE`，而不是把它默默当作
+`0` 或整个丢弃。**未注册** ／ 无法验证 ／ 不匹配 ／ 有歧义的 basis 仍然**不产生** reference。
+
+**relationship 的 resolved 判断必须按 exact join grain（clarification）**
+
+"业务明确没有 approved substitute"（本节 A）只能在**该 exact join grain 自己的状态**下成立。
+一个 grain 上的 resolved relationship **不得**让另一个 grain 变成合法 `0`，反之亦然：
+
+```
+exact grain 恰有 1 条 resolved relationship        → 使用之
+exact grain 有 unresolved relationship candidate   → DATA_INCOMPLETE
+exact grain 无任何 candidate 且 dataset present     → 合法 0（本节 A）
+dataset absent                                     → DATA_INCOMPLETE（role 为 REQUIRED）
+```
+
+**不得** first ／ last wins，**不得** same-value dedup，**不得**用 role 级全局状态代替 exact-grain
+判断。另一个 grain 的 resolved ／ unresolved 状态**不得**影响本 grain（failure isolation）。
+
 #### 2.3.12 Deterministic Formula
 
 对于**每一个有效 allocation** `i`：
@@ -2754,6 +2841,45 @@ CumulativeApprovedSubstituteSupply(<= t)
 **处理：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**
 
 > allocation 与需求窗口的关联机制属 **canonical business meaning 之后的 source mapping**，进入后续 **Data Dictionary / Adapter Design**。
+
+**`CumulativeApprovedSubstituteSupply(<= t)` 的确定性口径（clarification）**
+
+```
+按 plant_id + target_material_code 聚合，对 required_date <= t 的**每一个** target demand
+context 求 EquivalentTargetQty 之和；晚于 t 的 context 不计入。
+
+同一 allocation record 若在多个 Target Demand Context 都 applicable，
+它仍然只是**一份** supply：唯一性依据是 exact allocation record identity，
+**不得**按 context 数量重复累计，**不得** same-value dedup，**不得**按数量去重。
+```
+
+因此 `R1: A1 = 60` 与 `R2: A2 = 40` ⇒ `R1 = 60`、`R2 = 100`；而同一 `A1 = 60` 同时
+applicable 于 `R1` 与 `R2` ⇒ `R1 = 60`、`R2 = 60`（**不是** `120`）。
+
+**exact allocation identity 只在该 allocation 第一次可靠 eligible ／ applicable participation 时
+进入 cumulative uniqueness set。** 因此：
+
+```
+A1 = 60
+R1 = not applicable（合法 0，不是 DATA_INCOMPLETE）  ⇒ R1 = 0
+R2 = applicable                                     ⇒ R2 = 60
+```
+
+`not applicable` **不得** claim ／ reserve 该 allocation identity，**不得**阻止后续 context 中同一
+allocation 的 `applicable` contribution；反过来，后续 context 的 `not applicable` **不得**抹掉更早
+已经可靠发生的 contribution：
+
+```
+A1 = 60
+R1 = applicable      ⇒ R1 = 60
+R2 = not applicable  ⇒ R2 = 60（不新增 contribution，但 cumulative <= R2 保留 R1 的有效 contribution）
+```
+
+uniqueness 依据始终是 **exact allocation record identity**，**不得**使用 quantity value。
+
+若某个 `required_date <= t` 的 context 无法可靠评估，则该 grain 的 cumulative **不产生数值**
+（`DATA_INCOMPLETE`），**不得**以部分和冒充结果；其他 Plant ／ Target Material 的 grain 不受影响
+（failure isolation）。
 
 #### 2.3.13 Acceptance Examples
 
