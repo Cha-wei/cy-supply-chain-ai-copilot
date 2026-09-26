@@ -53,6 +53,9 @@ from snapshot_loader.canonical_objects import (
     CANONICALIZATION_ROLES,
     CANONICALIZATION_ROLE_BY_LITERAL,
     CANONICALIZATION_ROLE_RECOGNITION,
+    DEMAND_CONTEXT_SOURCE,
+    DEMAND_CONTEXT_TARGET,
+    EFFECTIVE_DEMAND_BASIS_REGISTRY,
     LAYER2_REPORT_BINDING,
     PHASE_A_ROLE_LITERALS,
     RELATION_SOURCE_RESERVATION_OVERLAP,
@@ -1150,10 +1153,11 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
         self.assertEqual(contexts, ())
         self.assert_unresolved_only(issues)
         self.assertEqual(len(issues), 1)
-        # The verified-evidence branch really ran: the finding reports the accepted record
-        # path and the missing approved source-value -> outcome mapping.
-        self.assertIn("supports relation", issues[0].detail)
-        self.assertIn("no approved source-value", issues[0].detail)
+        # The verified-evidence branch really ran: the finding reports that the accepted
+        # record carries no registration for the observation and basis this relation
+        # allows, rather than being masked or skipped by the bookkeeping failure.
+        self.assertIn("registers no association with observation", issues[0].detail)
+        self.assertIn("mapping_basis", issues[0].detail)
         self.assertIn("1.json#0", issues[0].detail)
         self.assertIn(self.NOTE_MARKER, issues[0].detail)
 
@@ -1238,13 +1242,12 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
         self.assertFalse(
             any(self.COMPLETENESS_MARKER in issue.detail for issue in issues)
         )
-        self.assertEqual(
-            {
-                RELATION_TARGET_APPLICABILITY if "Target Applicability" in i.detail else RELATION_SOURCE_RESERVATION_OVERLAP
-                for i in issues
-            },
-            {RELATION_TARGET_APPLICABILITY, RELATION_SOURCE_RESERVATION_OVERLAP},
-        )
+        # Both relations stayed unresolved for their own registered evidence: the
+        # per-relation observation requirement is what distinguishes them, so the two
+        # findings name the two different associations the entries cite.
+        combined = " ".join(issue.detail for issue in issues)
+        self.assertIn("observation 'target_material_code'", combined)
+        self.assertIn("observation 'substitute_material_code'", combined)
 
     def test_repeated_relation_evidence_is_not_deduplicated(self) -> None:
         """I: repeats are reported, never collapsed by same-value dedup or first/last wins."""
@@ -1300,7 +1303,12 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
         self.assertEqual(first_report["effective_demand_contexts"], [])
 
     def test_no_caller_outcome_channel_is_introduced(self) -> None:
-        """The handoff still carries evidence bookkeeping only."""
+        """The handoff carries evidence bookkeeping plus a citation to be verified.
+
+        The exact field set is asserted so that no caller-facing outcome channel can be
+        added silently: ``context_citation`` (CB-1′ clause 4) is a **claim to verify**,
+        never a trusted outcome or a trusted demand-context reference.
+        """
 
         fields = set(EffectiveDemandRelationHandoff.__dataclass_fields__)
         self.assertEqual(
@@ -1311,8 +1319,19 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
                 "relation",
                 "evidence",
                 "mapping_basis",
+                "context_citation",
             },
         )
+        for forbidden in (
+            "outcome",
+            "applicable",
+            "not_applicable",
+            "overlaps",
+            "does_not_overlap",
+            "is_applicable",
+            "is_overlapping",
+        ):
+            self.assertNotIn(forbidden, fields)
         for forbidden in ("outcome", "applicable", "overlaps", "result", "boolean"):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, fields)
@@ -3115,6 +3134,748 @@ class I7BindingContractTests(CanonicalObjectsTestCase):
         self.assertEqual(report.objects_for("BOM Component"), ())
         self.assertEqual(len(report.unresolved_for("BOM Component")), 1)
         self.assertIn("UNRESOLVED_IDENTITY", {issue.reason for issue in report.issues})
+
+
+class G5ADemandContextSpecificityTests(CanonicalObjectsTestCase):
+    """G5-A / I-8 context specificity (Human Decision ``CB-1′``).
+
+    The registered relation basis decides the conceptual outcome **for the exact demand
+    context the entry cited**, so the same allocation can be ``applicable`` to one target
+    demand context and ``not applicable`` to another, and ``overlaps`` one source demand
+    context while ``does not overlap`` another.  The two relations stay independent and no
+    Target × Source combination is ever produced.
+
+    Fixture (the registered Work Order scenario, SIMULATED):
+
+    ```
+    Allocation A: MAT-B -> MAT-A
+      Target: R1 = M1 / 2026-10-10   R2 = M1 / 2026-10-20
+      Source: S1 = M3 / 2026-10-12   S2 = M3 / 2026-11-01
+    ```
+    """
+
+    SOURCE_MATERIAL = "M3"
+    R1 = "2026-10-10"
+    R2 = "2026-10-20"
+    S1 = "2026-10-12"
+    S2 = "2026-11-01"
+
+    EVIDENCE_TA = "SIMULATED-SRC-TA-1"
+    EVIDENCE_SRO = "SIMULATED-SRC-SRO-1"
+
+    #: One claim-carrying allocation per claim: ``(ordinal, observation, locator, basis)``.
+    #: A record registers one ``mapping_basis`` per association (§4.3.28 E), so the four
+    #: Work Order claims arrive as four allocation records at the same canonical grain.
+    _ALLOCATION_CLAIMS = (
+        (0, "target_material_code", "SIMULATED-SRC-TA-1", "SIMULATED-G5A-TA-APPLICABLE"),
+        (
+            1,
+            "target_material_code",
+            "SIMULATED-SRC-TA-1",
+            "SIMULATED-G5A-TA-NOT-APPLICABLE",
+        ),
+        (
+            2,
+            "substitute_material_code",
+            "SIMULATED-SRC-SRO-1",
+            "SIMULATED-G5A-SRO-OVERLAPS",
+        ),
+        (
+            3,
+            "substitute_material_code",
+            "SIMULATED-SRC-SRO-1",
+            "SIMULATED-G5A-SRO-NO-OVERLAP",
+        ),
+    )
+
+    BASIS_TA_APPLICABLE = "SIMULATED-G5A-TA-APPLICABLE"
+    BASIS_TA_NOT_APPLICABLE = "SIMULATED-G5A-TA-NOT-APPLICABLE"
+    BASIS_TA_UNRESOLVED = "SIMULATED-G5A-TA-UNRESOLVED"
+    BASIS_SRO_OVERLAPS = "SIMULATED-G5A-SRO-OVERLAPS"
+    BASIS_SRO_NO_OVERLAP = "SIMULATED-G5A-SRO-NO-OVERLAP"
+
+    def _datasets(self):
+        """Substitute evidence plus the four resolved demand contexts.
+
+        The allocation record itself registers the two relation ``mapping_basis``
+        literals on the exact associations this seam may use
+        (``§4.3.28`` E: the basis is colocated with the association it belongs to).
+        """
+
+        allocation = with_provenance(
+            {
+                "plant_id": PLANT,
+                "target_material_code": MATERIAL,
+                "substitute_material_code": self.SOURCE_MATERIAL,
+                "AllocatedSubstituteQty": "60",
+            },
+            [
+                (
+                    "target_material_code",
+                    [self.EVIDENCE_TA],
+                    self.BASIS_TA_APPLICABLE,
+                ),
+                (
+                    "substitute_material_code",
+                    [self.EVIDENCE_SRO],
+                    self.BASIS_SRO_OVERLAPS,
+                ),
+            ],
+        )
+        relationship = with_provenance(
+            {
+                "plant_id": PLANT,
+                "target_material_code": MATERIAL,
+                "substitute_material_code": self.SOURCE_MATERIAL,
+                "substitution_ratio": "1.0",
+                "approval_status": "APPROVED",
+            },
+            [("approval_status", [EVIDENCE_RELATIONSHIP], None)],
+        )
+        return [
+            ("Substitute Allocation", [allocation]),
+            ("Substitute Relationship", [relationship]),
+            ("Production Requirement", [
+                PRODUCTION_REQUIREMENT(required_date=self.R1),
+                PRODUCTION_REQUIREMENT(required_date=self.R2),
+                PRODUCTION_REQUIREMENT(
+                    material_code=self.SOURCE_MATERIAL, required_date=self.S1
+                ),
+                PRODUCTION_REQUIREMENT(
+                    material_code=self.SOURCE_MATERIAL, required_date=self.S2
+                ),
+            ]),
+        ]
+
+    def _allocation(self, *, ordinal: int, observation: str, locator: str, basis: str):
+        """One accepted ``Substitute Allocation`` record and the claim it carries.
+
+        A record registers **one** ``mapping_basis`` per association (``§4.3.28`` E), so a
+        claim is carried by its own allocation record.  This mirrors how the evidence
+        really arrives: one row of allocation evidence states one relation outcome for one
+        demand context.
+        """
+
+        return with_provenance(
+            {
+                "plant_id": PLANT,
+                "target_material_code": MATERIAL,
+                "substitute_material_code": self.SOURCE_MATERIAL,
+                "AllocatedSubstituteQty": "60",
+            },
+            [(observation, [locator], basis)],
+        )
+
+    def _datasets(self, allocations=None):
+        """Substitute evidence, the claim-carrying allocations, and the four contexts."""
+
+        claims = self._ALLOCATION_CLAIMS if allocations is None else allocations
+        relationship = with_provenance(
+            {
+                "plant_id": PLANT,
+                "target_material_code": MATERIAL,
+                "substitute_material_code": self.SOURCE_MATERIAL,
+                "substitution_ratio": "1.0",
+                "approval_status": "APPROVED",
+            },
+            [("approval_status", [EVIDENCE_RELATIONSHIP], None)],
+        )
+        return [
+            (
+                "Substitute Allocation",
+                [
+                    self._allocation(
+                        ordinal=ordinal,
+                        observation=observation,
+                        locator=locator,
+                        basis=basis,
+                    )
+                    for ordinal, observation, locator, basis in claims
+                ],
+            ),
+            ("Substitute Relationship", [relationship]),
+            ("Production Requirement", [
+                PRODUCTION_REQUIREMENT(required_date=self.R1),
+                PRODUCTION_REQUIREMENT(required_date=self.R2),
+                PRODUCTION_REQUIREMENT(
+                    material_code=self.SOURCE_MATERIAL, required_date=self.S1
+                ),
+                PRODUCTION_REQUIREMENT(
+                    material_code=self.SOURCE_MATERIAL, required_date=self.S2
+                ),
+            ]),
+        ]
+
+    def _citation(self, accepted, *, role, artifact, locator, ordinal=0):
+        return self.citation(
+            accepted, role=role, artifact=artifact, ordinal=ordinal, locator=locator
+        )
+
+    def _entry(
+        self,
+        accepted,
+        *,
+        relation,
+        basis,
+        context_ordinal,
+        allocation_ordinal,
+    ):
+        return EffectiveDemandRelationHandoff(
+            source_substitute_material=self.SOURCE_MATERIAL,
+            target_material=MATERIAL,
+            relation=relation,
+            evidence=self._citation(
+                accepted,
+                role="Substitute Allocation",
+                artifact="0.json",
+                ordinal=allocation_ordinal,
+                locator=(
+                    self.EVIDENCE_TA
+                    if relation == RELATION_TARGET_APPLICABILITY
+                    else self.EVIDENCE_SRO
+                ),
+            ),
+            mapping_basis=basis,
+            context_citation=self._citation(
+                accepted,
+                role="Production Requirement",
+                artifact="2.json",
+                ordinal=context_ordinal,
+                locator=EVIDENCE_REQUIREMENT,
+            ),
+        )
+
+    def _scenario(self, *, claims, name, entries):
+        datasets = self._datasets(claims)
+        _, accepted = self.accepted(datasets, name=name)
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-10-01",
+            effective_demand=tuple(
+                self._entry(
+                    accepted,
+                    relation=relation,
+                    basis=basis,
+                    context_ordinal=context_ordinal,
+                    allocation_ordinal=allocation_ordinal,
+                )
+                for relation, basis, context_ordinal, allocation_ordinal in entries
+            ),
+        )
+        contexts, issues = build_effective_demand_contexts(accepted, handoff)
+        return contexts, issues
+
+    def _outcomes(self, contexts):
+        return sorted(
+            (
+                item.relation_outcome.relation,
+                item.relation_outcome.outcome,
+                item.relation_outcome.context.record_reference,
+                tuple(
+                    (prop.name, prop.value)
+                    for prop in item.relation_outcome.context.grain
+                ),
+            )
+            for item in contexts
+        )
+
+    def _work_order(self, name="g5a-context-specificity"):
+        """The registered Work Order scenario, one claim-carrying allocation per claim."""
+
+        return self._scenario(
+            name=name,
+            claims=self._ALLOCATION_CLAIMS,
+            entries=(
+                (RELATION_TARGET_APPLICABILITY, self.BASIS_TA_APPLICABLE, 0, 0),
+                (RELATION_TARGET_APPLICABILITY, self.BASIS_TA_NOT_APPLICABLE, 1, 1),
+                (RELATION_SOURCE_RESERVATION_OVERLAP, self.BASIS_SRO_OVERLAPS, 2, 2),
+                (RELATION_SOURCE_RESERVATION_OVERLAP, self.BASIS_SRO_NO_OVERLAP, 3, 3),
+            ),
+        )
+
+    def _legacy_scenario(self, *, name, target_entries, source_entries, datasets=None):
+        """Adapter for tests that describe claims as (basis, context ordinal) pairs.
+
+        Each described claim gets its own allocation record at the same ordinal, which is
+        how one relation outcome for one demand context really arrives.
+        """
+
+        claims = []
+        entries = []
+        ordinal = 0
+        for relation, described in (
+            (RELATION_TARGET_APPLICABILITY, target_entries),
+            (RELATION_SOURCE_RESERVATION_OVERLAP, source_entries),
+        ):
+            observation = (
+                "target_material_code"
+                if relation == RELATION_TARGET_APPLICABILITY
+                else "substitute_material_code"
+            )
+            locator = (
+                self.EVIDENCE_TA
+                if relation == RELATION_TARGET_APPLICABILITY
+                else self.EVIDENCE_SRO
+            )
+            for basis, context_ordinal, _date in described:
+                claims.append((ordinal, observation, locator, basis))
+                entries.append((relation, basis, context_ordinal, ordinal))
+                ordinal += 1
+        if datasets is None:
+            return self._scenario(name=name, claims=claims, entries=entries)
+        _, accepted = self.accepted(datasets, name=name)
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-10-01",
+            effective_demand=tuple(
+                self._entry(
+                    accepted,
+                    relation=relation,
+                    basis=basis,
+                    context_ordinal=context_ordinal,
+                    allocation_ordinal=allocation_ordinal,
+                )
+                for relation, basis, context_ordinal, allocation_ordinal in entries
+            ),
+        )
+        return build_effective_demand_contexts(accepted, handoff)
+
+    def test_a_to_r1_is_applicable(self) -> None:
+        contexts, _issues = self._work_order("g5a-p0-r1")
+        applicable = [
+            item
+            for item in contexts
+            if item.relation_outcome.relation == RELATION_TARGET_APPLICABILITY
+            and item.relation_outcome.outcome == "applicable"
+        ]
+        self.assertEqual(len(applicable), 1)
+        grain = {prop.name: prop.value for prop in applicable[0].relation_outcome.context.grain}
+        self.assertEqual(grain["plant_id"], PLANT)
+        self.assertEqual(grain["material_code"], MATERIAL)
+        self.assertEqual(grain["required_date"], self.R1)
+
+    def test_a_to_r2_is_not_applicable(self) -> None:
+        contexts, issues = self._work_order("g5a-p0-r2")
+        not_applicable = [
+            item
+            for item in contexts
+            if item.relation_outcome.relation == RELATION_TARGET_APPLICABILITY
+            and item.relation_outcome.outcome == "not applicable"
+        ]
+        self.assertEqual(len(not_applicable), 1)
+        grain = {
+            prop.name: prop.value
+            for prop in not_applicable[0].relation_outcome.context.grain
+        }
+        self.assertEqual(grain["required_date"], self.R2)
+        # A reliable explicit ``not applicable`` is a legal deterministic result, not a
+        # data-quality defect and not DATA_INCOMPLETE (§4.5.9 decision 5 / §4.4.89).
+        self.assertEqual(issues, ())
+
+    def test_a_overlaps_s1(self) -> None:
+        contexts, _issues = self._work_order("g5a-p0-s1")
+        overlaps = [
+            item
+            for item in contexts
+            if item.relation_outcome.relation == RELATION_SOURCE_RESERVATION_OVERLAP
+            and item.relation_outcome.outcome == "overlaps"
+        ]
+        self.assertEqual(len(overlaps), 1)
+        grain = {prop.name: prop.value for prop in overlaps[0].relation_outcome.context.grain}
+        self.assertEqual(grain["material_code"], self.SOURCE_MATERIAL)
+        self.assertEqual(grain["required_date"], self.S1)
+
+    def test_a_does_not_overlap_s2(self) -> None:
+        contexts, issues = self._work_order("g5a-p0-s2")
+        no_overlap = [
+            item
+            for item in contexts
+            if item.relation_outcome.relation == RELATION_SOURCE_RESERVATION_OVERLAP
+            and item.relation_outcome.outcome == "does not overlap"
+        ]
+        self.assertEqual(len(no_overlap), 1)
+        grain = {
+            prop.name: prop.value
+            for prop in no_overlap[0].relation_outcome.context.grain
+        }
+        self.assertEqual(grain["required_date"], self.S2)
+        self.assertEqual(issues, ())
+
+    def test_four_required_outcomes_are_independent(self) -> None:
+        contexts, issues = self._work_order("g5a-p0-independent")
+        self.assertEqual(issues, ())
+        self.assertEqual(len(contexts), 4)
+        dates = {
+            item.relation_outcome.relation: []
+            for item in contexts
+        }
+        for item in contexts:
+            dates[item.relation_outcome.relation].append(
+                {
+                    prop.name: prop.value
+                    for prop in item.relation_outcome.context.grain
+                }["required_date"]
+            )
+        # Both target demand contexts are represented even though they share one material
+        # and one plant: the citation is what distinguishes them.
+        self.assertEqual(sorted(dates[RELATION_TARGET_APPLICABILITY]), [self.R1, self.R2])
+        self.assertEqual(
+            sorted(dates[RELATION_SOURCE_RESERVATION_OVERLAP]), [self.S1, self.S2]
+        )
+        self.assertEqual(
+            sorted(
+                (item.relation_outcome.outcome for item in contexts)
+            ),
+            ["applicable", "does not overlap", "not applicable", "overlaps"],
+        )
+
+    def test_no_target_source_combination_is_produced(self) -> None:
+        contexts, _issues = self._work_order("g5a-p0-no-cartesian")
+        # 2 target + 2 source outcomes -- never 4 x 2 combinations.
+        self.assertEqual(len(contexts), 4)
+        for item in contexts:
+            relation = item.relation_outcome.relation
+            material = {
+                prop.name: prop.value for prop in item.relation_outcome.context.grain
+            }["material_code"]
+            if relation == RELATION_TARGET_APPLICABILITY:
+                self.assertEqual(material, MATERIAL)
+            else:
+                self.assertEqual(material, self.SOURCE_MATERIAL)
+        # One context per outcome reference: a single reference can never carry both sides.
+        for item in contexts:
+            # Exactly the three existing Production Requirement grain properties; no new
+            # identity component was appended to carry the demand context.
+            self.assertEqual(
+                tuple(prop.name for prop in item.relation_outcome.context.grain),
+                ("plant_id", "material_code", "required_date"),
+            )
+
+    def test_one_side_does_not_change_the_other_side_count(self) -> None:
+        two_each, _ = self._work_order("g5a-p0-two-each")
+        target_only, _ = self._scenario(
+            name="g5a-p0-target-only",
+            claims=self._ALLOCATION_CLAIMS[:2],
+            entries=(
+                (RELATION_TARGET_APPLICABILITY, self.BASIS_TA_APPLICABLE, 0, 0),
+                (RELATION_TARGET_APPLICABILITY, self.BASIS_TA_NOT_APPLICABLE, 1, 1),
+            ),
+        )
+        self.assertEqual(len(target_only), 2)
+        self.assertEqual(
+            len(
+                [
+                    item
+                    for item in two_each
+                    if item.relation_outcome.relation == RELATION_TARGET_APPLICABILITY
+                ]
+            ),
+            2,
+        )
+        self.assertEqual(
+            len(
+                [
+                    item
+                    for item in two_each
+                    if item.relation_outcome.relation
+                    == RELATION_SOURCE_RESERVATION_OVERLAP
+                ]
+            ),
+            2,
+        )
+
+    def test_basis_is_never_borrowed_across_relations(self) -> None:
+        # The record carries the source-reservation literal on the **target**-material
+        # association (a deliberately mismatched registration the seam may not repair);
+        # presenting it as Target Applicability stays unresolved, because the association
+        # this relation may use registers no approved target basis and nothing is borrowed.
+        contexts, issues = self._scenario(
+            name="g5a-p0-cross-relation-basis",
+            claims=((0, "target_material_code", self.EVIDENCE_TA, self.BASIS_SRO_OVERLAPS),),
+            entries=(
+                (RELATION_TARGET_APPLICABILITY, self.BASIS_SRO_OVERLAPS, 0, 0),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+        self.assertTrue(all(issue.reason == "SEMANTIC_UNRESOLVED" for issue in issues))
+
+    def test_context_citation_side_is_enforced(self) -> None:
+        # Target Applicability citing a **source**-material demand context resolves to
+        # nothing: the context is never borrowed from the other side.
+        contexts, issues = self._scenario(
+            name="g5a-p0-wrong-side",
+            claims=(
+                (0, "target_material_code", self.EVIDENCE_TA, self.BASIS_TA_APPLICABLE),
+            ),
+            entries=((RELATION_TARGET_APPLICABILITY, self.BASIS_TA_APPLICABLE, 2, 0),),
+        )
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+
+    def test_absent_context_citation_stays_unresolved(self) -> None:
+        _, accepted = self.accepted(self._datasets(), name="g5a-p0-no-citation")
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-10-01",
+            effective_demand=(
+                EffectiveDemandRelationHandoff(
+                    source_substitute_material=self.SOURCE_MATERIAL,
+                    target_material=MATERIAL,
+                    relation=RELATION_TARGET_APPLICABILITY,
+                    evidence=self._citation(
+                        accepted,
+                        role="Substitute Allocation",
+                        artifact="0.json",
+                        locator=self.EVIDENCE_TA,
+                    ),
+                    mapping_basis=self.BASIS_TA_APPLICABLE,
+                ),
+            ),
+        )
+        contexts, issues = build_effective_demand_contexts(accepted, handoff)
+        self.assertEqual(contexts, ())
+        self.assertTrue(
+            any("demand context" in issue.detail for issue in issues)
+        )
+
+    def test_two_claims_for_one_context_are_not_resolved_by_precedence(self) -> None:
+        # Two identical claims for the same allocation ＋ relation ＋ demand context: the
+        # cardinality requires exactly one, and they are never deduplicated or resolved by
+        # first/last wins (§4.4.102 C Stage A / CB-1′ clause 12).
+        contexts, issues = self._scenario(
+            name="g5a-p0-two-claims",
+            claims=(
+                (0, "target_material_code", self.EVIDENCE_TA, self.BASIS_TA_APPLICABLE),
+            ),
+            entries=(
+                (RELATION_TARGET_APPLICABILITY, self.BASIS_TA_APPLICABLE, 0, 0),
+                (RELATION_TARGET_APPLICABILITY, self.BASIS_TA_APPLICABLE, 0, 0),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+        self.assertTrue(
+            any("exactly one deterministic outcome" in issue.detail for issue in issues)
+        )
+        self.assertTrue(all(issue.reason == "SEMANTIC_UNRESOLVED" for issue in issues))
+
+    def test_explicit_unresolved_basis_emits_no_reference(self) -> None:
+        contexts, issues = self._scenario(
+            name="g5a-p0-explicit-unresolved",
+            claims=(
+                (
+                    0,
+                    "target_material_code",
+                    self.EVIDENCE_TA,
+                    self.BASIS_TA_UNRESOLVED,
+                ),
+            ),
+            entries=(
+                (RELATION_TARGET_APPLICABILITY, self.BASIS_TA_UNRESOLVED, 0, 0),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+        self.assertTrue(
+            any("cannot be reliably determined" in issue.detail for issue in issues)
+        )
+
+    def test_basis_says_unresolved_but_another_claim_resolves(self) -> None:
+        # An explicitly ``unresolved`` claim on one allocation record never suppresses the
+        # outcome another allocation record does resolve: unresolved is per claim, not a
+        # global verdict.
+        contexts, issues = self._scenario(
+            name="g5a-p0-mixed-unresolved",
+            claims=(
+                (0, "target_material_code", self.EVIDENCE_TA, self.BASIS_TA_APPLICABLE),
+                (
+                    1,
+                    "target_material_code",
+                    self.EVIDENCE_TA,
+                    self.BASIS_TA_UNRESOLVED,
+                ),
+            ),
+            entries=(
+                (RELATION_TARGET_APPLICABILITY, self.BASIS_TA_APPLICABLE, 0, 0),
+                (RELATION_TARGET_APPLICABILITY, self.BASIS_TA_UNRESOLVED, 1, 1),
+            ),
+        )
+        self.assertEqual(len(contexts), 1)
+        self.assertEqual(contexts[0].relation_outcome.outcome, "applicable")
+        self.assertTrue(issues)
+        self.assertTrue(all(issue.reason == "SEMANTIC_UNRESOLVED" for issue in issues))
+
+    def test_basis_literal_is_not_context_encoding(self) -> None:
+        # The same literal serves several resolved demand contexts; the per-context
+        # conclusion is the pair (citation, basis) -- never a context-specific literal.
+        contexts, _issues = self._scenario(
+            name="g5a-p0-same-literal-twice",
+            claims=(
+                (0, "target_material_code", self.EVIDENCE_TA, self.BASIS_TA_APPLICABLE),
+                (1, "target_material_code", self.EVIDENCE_TA, self.BASIS_TA_APPLICABLE),
+            ),
+            entries=(
+                (RELATION_TARGET_APPLICABILITY, self.BASIS_TA_APPLICABLE, 0, 0),
+                (RELATION_TARGET_APPLICABILITY, self.BASIS_TA_APPLICABLE, 1, 1),
+            ),
+        )
+        self.assertEqual(len(contexts), 2)
+        self.assertEqual(
+            {item.relation_outcome.outcome for item in contexts}, {"applicable"}
+        )
+        self.assertEqual(
+            {item.relation_outcome.mapping_basis for item in contexts},
+            {self.BASIS_TA_APPLICABLE},
+        )
+        self.assertEqual(
+            {
+                {
+                    prop.name: prop.value
+                    for prop in item.relation_outcome.context.grain
+                }["required_date"]
+                for item in contexts
+            },
+            {self.R1, self.R2},
+        )
+
+    def test_duplicate_grain_citation_never_binds_an_unresolved_context(self) -> None:
+        # Several Production Requirement records share one grain, so no context of that
+        # grain is reliably resolved; the citation therefore binds to nothing and this
+        # seam never chooses one by first/last wins.
+        duplicated = self._datasets()
+        duplicated[2] = (
+            "Production Requirement",
+            [
+                PRODUCTION_REQUIREMENT(required_date=self.R1),
+                PRODUCTION_REQUIREMENT(required_date=self.R1),
+                PRODUCTION_REQUIREMENT(
+                    material_code=self.SOURCE_MATERIAL, required_date=self.S1
+                ),
+            ],
+        )
+        _, accepted = self.accepted(duplicated, name="g5a-p0-duplicate-grain")
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-10-01",
+            effective_demand=(
+                self._entry(
+                    accepted,
+                    relation=RELATION_TARGET_APPLICABILITY,
+                    basis=self.BASIS_TA_APPLICABLE,
+                    context_ordinal=0,
+                    allocation_ordinal=0,
+                ),
+            ),
+        )
+        contexts, issues = build_effective_demand_contexts(accepted, handoff)
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+        self.assertTrue(all(issue.reason == "SEMANTIC_UNRESOLVED" for issue in issues))
+
+    def test_citation_is_not_a_mapping_basis_evidence_role(self) -> None:
+        # The citation target is a Production Requirement context, never a substitute
+        # evidence role: citing the substitution evidence as a context cannot resolve.
+        _, accepted = self.accepted(self._datasets(), name="g5a-p0-citation-role")
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-10-01",
+            effective_demand=(
+                EffectiveDemandRelationHandoff(
+                    source_substitute_material=self.SOURCE_MATERIAL,
+                    target_material=MATERIAL,
+                    relation=RELATION_TARGET_APPLICABILITY,
+                    evidence=self._citation(
+                        accepted,
+                        role="Substitute Allocation",
+                        artifact="0.json",
+                        locator=self.EVIDENCE_TA,
+                    ),
+                    mapping_basis=self.BASIS_TA_APPLICABLE,
+                    context_citation=self._citation(
+                        accepted,
+                        role="Substitute Allocation",
+                        artifact="0.json",
+                        locator=self.EVIDENCE_TA,
+                    ),
+                ),
+            ),
+        )
+        contexts, issues = build_effective_demand_contexts(accepted, handoff)
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+
+    def test_context_provenance_comes_from_the_resolved_context(self) -> None:
+        contexts, _issues = self._work_order("g5a-p0-context-provenance")
+        self.assertTrue(contexts)
+        for item in contexts:
+            context = item.relation_outcome.context
+            relation = item.relation_outcome
+            # The demand context carries its **own** package-scoped provenance (the
+            # resolved Production Requirement record), not anything the caller supplied.
+            self.assertEqual(
+                context.provenance.logical_dataset_role, "Production Requirement"
+            )
+            self.assertEqual(
+                context.provenance.snapshot_package_identity,
+                relation.provenance.snapshot_package_identity,
+            )
+            self.assertIn(
+                context.semantic, {DEMAND_CONTEXT_TARGET, DEMAND_CONTEXT_SOURCE}
+            )
+            # The G5-A outcome provenance is the substitute evidence that supports it.
+            self.assertEqual(
+                relation.provenance.logical_dataset_role, "Substitute Allocation"
+            )
+            self.assertIn(
+                relation.provenance.stable_source_evidence_locators,
+                {
+                    (self.EVIDENCE_TA,),
+                    (self.EVIDENCE_SRO,),
+                },
+            )
+
+    def test_repeatability_of_context_cited_outcomes(self) -> None:
+        first_contexts, first_issues = self._work_order("g5a-p0-repeat-a")
+        second_contexts, second_issues = self._work_order("g5a-p0-repeat-b")
+        self.assertEqual(self._outcomes(first_contexts), self._outcomes(second_contexts))
+        self.assertEqual(
+            [issue.to_dict() for issue in first_issues],
+            [issue.to_dict() for issue in second_issues],
+        )
+
+    def test_report_serialisation_carries_one_relation_and_one_context(self) -> None:
+        _, accepted = self.accepted(self._datasets(), name="g5a-p0-serialise")
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-10-01",
+            effective_demand=(
+                self._entry(
+                    accepted,
+                    relation=RELATION_TARGET_APPLICABILITY,
+                    basis=self.BASIS_TA_APPLICABLE,
+                    context_ordinal=0,
+                    allocation_ordinal=0,
+                ),
+            ),
+        )
+        report = construct_canonical_objects(accepted, handoff)
+        payload = report.to_dict()["effective_demand_contexts"]
+        self.assertEqual(len(payload), 1)
+        entry = payload[0]
+        self.assertEqual(entry["relation"], RELATION_TARGET_APPLICABILITY)
+        self.assertEqual(entry["outcome"], "applicable")
+        self.assertEqual(entry["context"]["semantic"], DEMAND_CONTEXT_TARGET)
+        self.assertEqual(
+            {item["name"]: item["value"] for item in entry["context"]["grain"]},
+            {
+                "plant_id": PLANT,
+                "material_code": MATERIAL,
+                "required_date": self.R1,
+            },
+        )
+        self.assertNotIn("requirement_id", str(payload))
+        self.assertNotIn("demand_window_id", str(payload))
 
 
 if __name__ == "__main__":
