@@ -55,8 +55,6 @@ from .canonical_objects import (
     CanonicalObject,
     CanonicalProperty,
     ContextValueReference,
-    EffectiveDemandContextReference,
-    EffectiveDemandRelationHandoff,
     DEMAND_CONTEXT_SOURCE,
     DEMAND_CONTEXT_TARGET,
     EFFECTIVE_DEMAND_BASIS_BY_KEY,

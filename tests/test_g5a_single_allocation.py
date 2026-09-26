@@ -450,6 +450,291 @@ class SingleAllocationRecordTests(CanonicalObjectsTestCase):
         ):
             self.assertIn((relation, basis), registered)
 
+    # --- blocker 1: role 8 (Substitute Allocation) is the only basis host -------------
+
+    def test_role_7_registered_basis_is_never_a_g5a_outcome_basis(self) -> None:
+        """A ``Substitute Relationship`` that registers a valid G5-A literal stays unresolved."""
+
+        datasets = single_allocation_datasets()
+        # A Substitute Relationship record that legitimately registers a G5-A literal and a
+        # valid evidence locator -- and must still never serve as the outcome basis.
+        relationship = with_provenance(
+            {
+                "plant_id": PLANT,
+                "target_material_code": MATERIAL,
+                "substitute_material_code": SOURCE_MATERIAL,
+                "substitution_ratio": "1.0",
+                "approval_status": "APPROVED",
+            },
+            [
+                ("target_material_code", [EVIDENCE_TA], BASIS_TA_APPLICABLE),
+                ("approval_status", [EVIDENCE_RELATIONSHIP], None),
+            ],
+        )
+        datasets[1] = ("Substitute Relationship", [relationship])
+        _built, accepted = self.accepted(datasets, name="g5a-role7-basis-host")
+
+        entry = EffectiveDemandRelationHandoff(
+            source_substitute_material=SOURCE_MATERIAL,
+            target_material=MATERIAL,
+            relation=RELATION_TARGET_APPLICABILITY,
+            evidence=self.citation(
+                accepted,
+                role="Substitute Relationship",
+                artifact="1.json",
+                ordinal=0,
+                locator=EVIDENCE_TA,
+            ),
+            mapping_basis=BASIS_TA_APPLICABLE,
+            context_citation=self.citation(
+                accepted,
+                role="Production Requirement",
+                artifact="2.json",
+                ordinal=0,
+                locator="SIMULATED-SRC-REQ-1",
+            ),
+        )
+        contexts, issues = build_effective_demand_contexts(
+            accepted,
+            PhaseAHandoff(
+                analysis_run_id="RUN-1",
+                analysis_date="2026-10-01",
+                effective_demand=(entry,),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+        self.assertTrue(all(issue.reason == "SEMANTIC_UNRESOLVED" for issue in issues))
+        self.assertTrue(
+            any("Substitute Allocation" in issue.detail for issue in issues),
+            msg="the finding must name the role 8 host requirement",
+        )
+
+    # --- blocker 2: the accepted allocation record is the only identity ---------------
+
+    def _mismatch_case(self, *, source, target, name):
+        accepted = self._accepted(name)
+        entry = EffectiveDemandRelationHandoff(
+            source_substitute_material=source,
+            target_material=target,
+            relation=RELATION_TARGET_APPLICABILITY,
+            evidence=self.citation(
+                accepted,
+                role="Substitute Allocation",
+                artifact="0.json",
+                ordinal=0,
+                locator=EVIDENCE_TA,
+            ),
+            mapping_basis=BASIS_TA_APPLICABLE,
+            context_citation=self.citation(
+                accepted,
+                role="Production Requirement",
+                artifact="2.json",
+                ordinal=0,
+                locator="SIMULATED-SRC-REQ-1",
+            ),
+        )
+        return build_effective_demand_contexts(
+            accepted,
+            PhaseAHandoff(
+                analysis_run_id="RUN-1",
+                analysis_date="2026-10-01",
+                effective_demand=(entry,),
+            ),
+        )
+
+    def test_caller_source_material_mismatch_is_unresolved(self) -> None:
+        contexts, issues = self._mismatch_case(
+            source="M9", target=MATERIAL, name="g5a-caller-source-mismatch"
+        )
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+        self.assertTrue(
+            any(
+                "does not equal the accepted Substitute Allocation record" in issue.detail
+                for issue in issues
+            )
+        )
+
+    def test_caller_target_material_mismatch_is_unresolved(self) -> None:
+        contexts, issues = self._mismatch_case(
+            source=SOURCE_MATERIAL, target="M9", name="g5a-caller-target-mismatch"
+        )
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+        self.assertTrue(
+            any(
+                "does not equal the accepted Substitute Allocation record" in issue.detail
+                for issue in issues
+            )
+        )
+
+    def test_non_hashable_caller_material_never_crashes_on_the_normal_path(self) -> None:
+        """Blocker 6: a non-hashable caller pair with a valid registered claim.
+
+        ``CB-1′``'s binding key is ``allocation record ＋ relation ＋ resolved demand
+        context``, so the caller's representation never becomes a key.  The claim cannot be
+        exact-bound to the accepted record here, so the relation fails safe instead of
+        raising ``TypeError``, and the caller object is left untouched.
+        """
+
+        source: list[object] = []
+        target: dict[str, object] = {}
+        contexts, issues = self._mismatch_case(
+            source=source, target=target, name="g5a-non-hashable-normal-path"
+        )
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+        self.assertTrue(
+            any(
+                "does not equal the accepted Substitute Allocation record" in issue.detail
+                for issue in issues
+            )
+        )
+        # Never converted, stringified or widened, and never used as a key.
+        self.assertEqual(source, [])
+        self.assertEqual(target, {})
+
+    def test_non_hashable_source_with_valid_registration_and_citation(self) -> None:
+        """Blocker 6 (Issue #146 R-3): ``source_substitute_material = []`` only."""
+
+        source: list[object] = []
+        contexts, issues = self._mismatch_case(
+            source=source, target=MATERIAL, name="g5a-non-hashable-source"
+        )
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+        # evidence ／ basis ／ citation validation all ran before the identity gate: the
+        # finding is the claim-vs-record mismatch, which is only reachable after
+        # verification, the role gate and the basis gate all succeeded.
+        self.assertTrue(
+            any(
+                "does not equal the accepted Substitute Allocation record" in issue.detail
+                for issue in issues
+            )
+        )
+        self.assertEqual(source, [])
+
+    def test_plant_a_allocation_is_never_bound_to_a_plant_b_context(self) -> None:
+        """Blocker 2: the citation's Plant must equal the accepted allocation's Plant."""
+
+        datasets = single_allocation_datasets()
+        datasets[2] = (
+            "Production Requirement",
+            [
+                PRODUCTION_REQUIREMENT(plant_id="P2", required_date=R1),
+                PRODUCTION_REQUIREMENT(required_date=R2),
+                PRODUCTION_REQUIREMENT(
+                    material_code=SOURCE_MATERIAL, required_date=S1
+                ),
+                PRODUCTION_REQUIREMENT(
+                    material_code=SOURCE_MATERIAL, required_date=S2
+                ),
+            ],
+        )
+        _built, accepted = self.accepted(datasets, name="g5a-cross-plant")
+        entry = EffectiveDemandRelationHandoff(
+            source_substitute_material=SOURCE_MATERIAL,
+            target_material=MATERIAL,
+            relation=RELATION_TARGET_APPLICABILITY,
+            evidence=self.citation(
+                accepted,
+                role="Substitute Allocation",
+                artifact="0.json",
+                ordinal=0,
+                locator=EVIDENCE_TA,
+            ),
+            mapping_basis=BASIS_TA_APPLICABLE,
+            context_citation=self.citation(
+                accepted,
+                role="Production Requirement",
+                artifact="2.json",
+                ordinal=0,
+                locator="SIMULATED-SRC-REQ-1",
+            ),
+        )
+        contexts, issues = build_effective_demand_contexts(
+            accepted,
+            PhaseAHandoff(
+                analysis_run_id="RUN-1",
+                analysis_date="2026-10-01",
+                effective_demand=(entry,),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+        self.assertTrue(
+            any(
+                "plant" in issue.detail and "P2" in issue.detail for issue in issues
+            ),
+            msg="the finding must name the cross-Plant mismatch",
+        )
+
+    # --- blocker 3: G5-A mapping evidence requires an exact locator -------------------
+
+    def test_missing_evidence_locator_is_unresolved_even_with_a_valid_registration(self) -> None:
+        accepted = self._accepted("g5a-missing-locator")
+        entry = EffectiveDemandRelationHandoff(
+            source_substitute_material=SOURCE_MATERIAL,
+            target_material=MATERIAL,
+            relation=RELATION_TARGET_APPLICABILITY,
+            evidence=self.citation(
+                accepted,
+                role="Substitute Allocation",
+                artifact="0.json",
+                ordinal=0,
+                locator=None,
+            ),
+            mapping_basis=BASIS_TA_APPLICABLE,
+            context_citation=self.citation(
+                accepted,
+                role="Production Requirement",
+                artifact="2.json",
+                ordinal=0,
+                locator="SIMULATED-SRC-REQ-1",
+            ),
+        )
+        contexts, issues = build_effective_demand_contexts(
+            accepted,
+            PhaseAHandoff(
+                analysis_run_id="RUN-1",
+                analysis_date="2026-10-01",
+                effective_demand=(entry,),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+        self.assertTrue(
+            any("evidence locator" in issue.detail for issue in issues),
+            msg="the finding must name the required exact locator",
+        )
+
+    # --- blocker 4: no public trusted demand-context injection ------------------------
+
+    def test_public_api_exposes_no_trusted_demand_context_parameter(self) -> None:
+        """The caller cannot hand in resolved contexts; the seam derives them itself."""
+
+        import inspect
+
+        signature = inspect.signature(build_effective_demand_contexts)
+        self.assertEqual(
+            set(signature.parameters),
+            {"accepted", "handoff", "located"},
+            msg=(
+                "the public entry point may only accept claims; resolved demand contexts "
+                "must be derived from the AcceptedPackage"
+            ),
+        )
+        for forbidden in (
+            "production_requirements",
+            "demand_contexts",
+            "resolved_contexts",
+            "contexts",
+        ):
+            self.assertNotIn(forbidden, signature.parameters)
+        with self.assertRaises(TypeError):
+            build_effective_demand_contexts(None, None, production_requirements=())  # type: ignore[arg-type]
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2189,7 +2189,7 @@ def _construct(
         handoff,
         located,
         accepted_records,
-        resolved_objects.get(ROLE_PRODUCTION_REQUIREMENT, ()),
+        _resolve_for_construction(resolved_objects),
     )
     build.effective_demand_contexts.extend(effective_demand)
     build.issues.extend(demand_issues)
@@ -4085,6 +4085,10 @@ def _resolved_demand_contexts(accepted: AcceptedPackage) -> tuple[CanonicalObjec
     same grain-keyed ``exactly one applicable evidence or unresolved`` grouping the
     canonicalization already performs for ``Production Requirement`` (``§4.1.4`` C /
     ``§4.4.102`` C Stage A) -- no second, weaker grain rule is introduced here.
+
+    This is the only way a demand context enters the seam, and it is a **private** helper:
+    the public entry point derives the contexts here rather than accepting them, so no
+    caller can inject a trusted resolved context (``CB-1′`` clause 4).
     """
 
     key = (accepted.package_id, accepted.content_view_digest)
@@ -4119,12 +4123,25 @@ def _resolved_demand_contexts(accepted: AcceptedPackage) -> tuple[CanonicalObjec
     return contexts
 
 
+def _resolve_for_construction(
+    resolved_objects: Mapping[str, tuple[CanonicalObject, ...]],
+) -> tuple[CanonicalObject, ...]:
+    """Internal adapter for the construction path only.
+
+    ``_construct`` has already resolved every canonical object for this package, so the
+    G5-A seam reuses those objects instead of resolving them twice.  This is deliberately
+    **not** a public parameter: it is called with values the construction itself produced,
+    so it can never become a caller trust channel (``CB-1′`` clause 4).
+    """
+
+    return tuple(resolved_objects.get(ROLE_PRODUCTION_REQUIREMENT, ()))
+
+
 def build_effective_demand_contexts(
     accepted: AcceptedPackage,
     handoff: PhaseAHandoff,
     *,
     located: Mapping[str, tuple[str, int]] | None = None,
-    production_requirements: tuple[CanonicalObject, ...] | None = None,
 ) -> tuple[tuple[EffectiveDemandContextReference, ...], tuple[Issue, ...]]:
     """Return the G5-A read-only effective demand context references.
 
@@ -4133,22 +4150,21 @@ def build_effective_demand_contexts(
     Reservation Overlap`` stay independent, are never collapsed into one Boolean, and are
     never combined into a Target × Source product (``§4.1.13`` D / ``CB-1′``).
 
-    The caller supplies a *claim*: a context citation to be verified, plus the evidence
-    and its ``mapping_basis``.  The outcome itself is only ever the registered basis's
-    outcome, and the outcome exists only for the demand context the citation actually
-    resolved to.
+    The caller supplies *claims only*: context citations to be verified, plus the
+    substitute evidence, its exact locator and its ``mapping_basis``.  In particular the
+    caller can never hand in resolved demand contexts -- the already resolved
+    ``Production Requirement`` contexts are always derived from the ``AcceptedPackage``
+    itself (``CB-1′`` clauses 4 ／ 5), so no trusted ``CanonicalObject`` channel exists.
     """
 
     if located is None:
         located, _ = _targets_by_artifact(accepted)
-    if production_requirements is None:
-        production_requirements = _resolved_demand_contexts(accepted)
     return _effective_demand_references(
         accepted,
         handoff,
         located,
         _accepted_record_index(accepted),
-        production_requirements,
+        _resolved_demand_contexts(accepted),
     )
 
 
@@ -4186,6 +4202,16 @@ def _selected_relation_association(
         return None, (
             f"relation {evidence.logical_dataset_role!r} has no registered association "
             "observation, so no basis can be resolved"
+        )
+
+    if evidence.evidence_locator is None:
+        # Issue #146 requires the association's ``evidence[]`` to contain a locator exact
+        # equal to the handoff's own locator.  Selecting an association by observation and
+        # basis alone would silently widen that: the relation therefore fails closed.
+        return None, (
+            "the entry names no evidence locator, so the accepted record's association "
+            "cannot be tied to this claim; G5-A mapping evidence requires an exact "
+            "locator and the relation stays unresolved (§4.3.28 E / Issue #146)"
         )
 
     path = f"{evidence.artifact}#{evidence.record_ordinal}"
@@ -4252,23 +4278,23 @@ def _effective_demand_references(
     """
 
     issues: list[Issue] = []
-    seen_pairs: dict[tuple[Any, Any], set[str]] = {}
 
-    #: Appended to a per-entry finding when the caller-supplied pair cannot serve as a
-    #: deterministic bookkeeping key.  The pair values are never converted, stringified or
-    #: invented, and the entry is never skipped because of it.
-    ungroupable_pair_note = (
-        " The exact substitute/target pair bookkeeping could not be established because the "
-        "supplied runtime pair representation is not usable as a deterministic key; the pair "
-        "values are never converted, stringified or invented and the pair is not registered "
-        "in the completeness bookkeeping (§4.1.13 D / §4.3.31 G I-8)."
+    #: Appended to a per-entry finding when the accepted allocation record cannot supply
+    #: the deterministic binding key.  Nothing is converted, stringified or invented to
+    #: obtain a key, and the entry is never skipped because of it.
+    allocation_key_note = (
+        " The exact allocation binding key could not be established because the accepted "
+        "Substitute Allocation record does not state every identity component this "
+        "relation needs; no caller-supplied value is converted, stringified or invented "
+        "to substitute for it, and no outcome reference is formed "
+        "(§4.1.13 D / §4.3.31 G I-8 / CB-1′ clause 12)."
     )
 
-    def _unresolved(*, role: str, detail: str, ungroupable_pair: bool = False) -> None:
+    def _unresolved(*, role: str, detail: str, allocation_key_missing: bool = False) -> None:
         issues.append(
             Issue(
                 location="effective_demand_context",
-                detail=detail + (ungroupable_pair_note if ungroupable_pair else ""),
+                detail=detail + (allocation_key_note if allocation_key_missing else ""),
                 category="SEMANTIC_RESOLUTION",
                 reason="SEMANTIC_UNRESOLVED",
                 layer=LAYER_2,
@@ -4276,16 +4302,66 @@ def _effective_demand_references(
                 blast_radius="affected effective demand context only",
                 design_reference="§4.1.13 D (G5-A) / §4.3.31 G I-8",
                 consequence_context=(
-                    "the relation pair stays unresolved; a caller may not set the "
-                    "outcome directly and no Boolean is synthesised"
+                    "the relation stays unresolved for that demand context; a caller may "
+                    "not set the outcome directly and no Boolean is synthesised"
                 ),
             )
         )
 
+    def _accepted_allocation_identity(
+        record_path: str,
+    ) -> tuple[tuple[Any, Any, Any], str]:
+        """Read the authoritative allocation identity from the accepted role 8 record.
+
+        The caller's material pair is a *claim*; the allocation identity is only ever what
+        the accepted ``Substitute Allocation`` record states (``§4.1.4`` G).  Every
+        component must be present and usable as a deterministic key -- nothing is defaulted
+        or converted to obtain one.
+        """
+
+        record = accepted_records.get(record_path)
+        if record is None:
+            return (ABSENT, ABSENT, ABSENT), (
+                "the accepted Substitute Allocation record could not be read, so the "
+                "allocation identity cannot be established"
+            )
+        absent = [
+            name
+            for name in ("plant_id", "target_material_code", "substitute_material_code")
+            if name not in record
+        ]
+        if absent:
+            return (ABSENT, ABSENT, ABSENT), (
+                "the accepted Substitute Allocation record does not state "
+                f"{absent}; the allocation identity is incomplete and the relation stays "
+                "unresolved instead of receiving a default or a caller-supplied value"
+            )
+        identity = (
+            record["plant_id"],
+            record["target_material_code"],
+            record["substitute_material_code"],
+        )
+        if _grouping_key(identity) is None:
+            return (ABSENT, ABSENT, ABSENT), (
+                "the accepted Substitute Allocation record's identity components are not "
+                "usable as a deterministic key; the values are never converted, "
+                "stringified or invented and the relation stays unresolved"
+            )
+        return identity, ""
+
     def _entry_context(
-        entry: EffectiveDemandRelationHandoff, *, side: str
+        entry: EffectiveDemandRelationHandoff,
+        *,
+        side: str,
+        expected_material: Any,
+        expected_plant: Any,
     ) -> tuple[CanonicalObject | None, str]:
-        """Return the resolved demand context the entry cites, or ``(None, problem)``."""
+        """Return the resolved demand context the entry cites, or ``(None, problem)``.
+
+        ``expected_material`` / ``expected_plant`` are the **accepted** allocation
+        identity values for the relation's own side, so a caller-declared pair can never
+        authorise binding to another material or another Plant (``§4.5.9`` / ``§4.1.4`` G).
+        """
 
         citation = entry.context_citation
         if citation is None:
@@ -4312,11 +4388,6 @@ def _effective_demand_references(
                 + "; the outcome stays unresolved and no context reference is formed "
                 "(§4.5.9 / CB-1′ clause 5)"
             )
-        expected_material = (
-            entry.target_material
-            if side == DEMAND_CONTEXT_TARGET
-            else entry.source_substitute_material
-        )
         side_label = "target" if side == DEMAND_CONTEXT_TARGET else "source"
         obj = resolved_demand_contexts.get(verification.record_path)
         if obj is None:
@@ -4336,9 +4407,17 @@ def _effective_demand_references(
         if material != expected_material:
             return None, (
                 f"the cited demand context is for material {material!r}, not for the "
-                f"relation's own {side_label} material {expected_material!r}; a context "
-                "is never borrowed from the other side of the allocation "
-                "(§4.5.9 / CB-1′ clauses 2 / 3 / 9)"
+                f"allocation's own {side_label} material {expected_material!r}; a context "
+                "is never borrowed from the other side of the allocation or from the "
+                "caller's declaration (§4.5.9 / CB-1′ clauses 2 / 3 / 9)"
+            )
+        plant = obj.value_of("plant_id", ABSENT)
+        if plant != expected_plant:
+            return None, (
+                f"the cited demand context belongs to plant {plant!r}, not to the "
+                f"allocation's own plant {expected_plant!r}; an allocation is never bound "
+                "to another Plant's demand context, and no cross-Plant borrowing is "
+                "performed (§2.3.9 / §4.5.9 / CB-1′ clauses 2 / 3)"
             )
         return obj, ""
 
@@ -4368,36 +4447,24 @@ def _effective_demand_references(
     claims: dict[tuple[tuple[Any, Any, str], str, str], int] = {}
 
     for entry in handoff.effective_demand:
-        pair = (entry.source_substitute_material, entry.target_material)
-        # A pair that cannot be used as a deterministic bookkeeping key is never registered
-        # and never keyed by a fabricated value -- but the entry itself is **not** skipped:
-        # it still runs its relation validation, evidence verification and mapping boundary
-        # inside the block below, and its finding carries the bookkeeping note.
-        bookkeepable = _grouping_key(pair) is not None
-        if bookkeepable:
-            seen_pairs.setdefault(pair, set()).add(entry.relation)
-
         if entry.relation not in G5_RELATIONS:
             _unresolved(
                 role=entry.evidence.logical_dataset_role,
                 detail=(
                     f"relation {entry.relation!r} is not one of the registered G5-A "
-                    f"relations {list(G5_RELATIONS)}; the pair stays unresolved"
+                    f"relations {list(G5_RELATIONS)}; the relation stays unresolved"
                 ),
-                ungroupable_pair=not bookkeepable,
             )
             continue
 
-        # The association observation a relation's basis must be registered on is fixed by
-        # the relation itself, never by the caller's string, so verification cannot be
-        # steered onto another relation's association.
+        # The mapping-basis host is restricted to the Substitute Allocation role: a
+        # Substitute Relationship is a relationship context, never a G5-A outcome basis.
         relation_observation = EFFECTIVE_DEMAND_OBSERVATION_BY_RELATION.get(entry.relation)
 
-        # Evidence verification runs **before** the basis gate, because an entry's
-        # relation validation and evidence verification must always execute: a foreign
-        # package, an unresolved citation or a wrong role stays visible instead of being
-        # masked by an unrelated (unregistered) basis literal (Issue #144 regression
-        # boundary).
+        # Evidence verification runs **before** every gate, because an entry's relation
+        # validation and evidence verification must always execute: a foreign package, an
+        # unresolved citation or a wrong role stays visible instead of being masked by a
+        # later finding (Issue #144 regression boundary).
         verification = _verify_handoff_evidence(
             accepted=accepted,
             evidence=entry.evidence,
@@ -4416,7 +4483,53 @@ def _effective_demand_references(
                         or "the cited mapping evidence is not verifiable in this package"
                     )
                 ),
-                ungroupable_pair=not bookkeepable,
+            )
+            continue
+
+        # The mapping-basis host is restricted to the Substitute Allocation role: a
+        # Substitute Relationship is relationship context, never a G5-A outcome basis.
+        if entry.evidence.logical_dataset_role != ROLE_SUBSTITUTE_ALLOCATION:
+            _unresolved(
+                role=entry.evidence.logical_dataset_role,
+                detail=(
+                    f"the entry claims relation {entry.relation!r} but cites role "
+                    f"{entry.evidence.logical_dataset_role!r} as its mapping evidence; a "
+                    "G5-A outcome basis may only come from "
+                    f"{ROLE_SUBSTITUTE_ALLOCATION!r}, so the relation stays unresolved and "
+                    "the basis is never borrowed from another role (§4.2.18 / §4.5.9)"
+                ),
+            )
+            continue
+
+        # The authoritative allocation identity is only ever what the accepted role 8
+        # record states; the caller's material pair is a claim that must agree with it.
+        allocation_identity, identity_problem = _accepted_allocation_identity(
+            verification.record_path
+        )
+        allocation_key_established = identity_problem == ""
+        if not allocation_key_established:
+            _unresolved(
+                role=entry.evidence.logical_dataset_role,
+                detail=identity_problem,
+                allocation_key_missing=True,
+            )
+            continue
+        accepted_plant, accepted_target, accepted_source = allocation_identity
+        if (
+            entry.target_material != accepted_target
+            or entry.source_substitute_material != accepted_source
+        ):
+            _unresolved(
+                role=entry.evidence.logical_dataset_role,
+                detail=(
+                    "the caller-declared substitute/target pair "
+                    f"({entry.source_substitute_material!r}, {entry.target_material!r}) "
+                    "does not equal the accepted Substitute Allocation record's own "
+                    f"identities ({accepted_source!r}, {accepted_target!r}); a caller "
+                    "declaration is never the allocation identity and is never converted "
+                    "or invented to match, so the relation stays unresolved "
+                    "(§4.1.4 G / §4.5.9)"
+                ),
             )
             continue
 
@@ -4437,7 +4550,6 @@ def _effective_demand_references(
             _unresolved(
                 role=entry.evidence.logical_dataset_role,
                 detail=problem,
-                ungroupable_pair=not bookkeepable,
             )
             continue
 
@@ -4456,7 +4568,6 @@ def _effective_demand_references(
                     "outcome stays unresolved and is never taken from the caller nor "
                     "invented by canonicalization (§4.1.13 D / §4.5.9)"
                 ),
-                ungroupable_pair=not bookkeepable,
             )
             continue
 
@@ -4492,22 +4603,33 @@ def _effective_demand_references(
                     "relation stays unresolved for that context (§4.5.9 / §4.4.60 "
                     "path B / CB-1′ clause 12)"
                 ),
-                ungroupable_pair=not bookkeepable,
             )
             continue
 
-        context, problem = _entry_context(entry, side=rule.citation_side)
+        context, problem = _entry_context(
+            entry,
+            side=rule.citation_side,
+            expected_material=(
+                accepted_target
+                if rule.citation_side == DEMAND_CONTEXT_TARGET
+                else accepted_source
+            ),
+            expected_plant=accepted_plant,
+        )
         if context is None:
             _unresolved(
                 role=entry.evidence.logical_dataset_role,
                 detail=problem,
-                ungroupable_pair=not bookkeepable,
             )
             continue
 
+        # The binding key is the accepted allocation record's identity, never the caller's
+        # material representation: it is always hashable, so a JSON array ／ object supplied
+        # as the caller pair can no longer raise ``TypeError`` on the normal path.
         allocation_key = (
-            entry.source_substitute_material,
-            entry.target_material,
+            accepted_plant,
+            accepted_target,
+            accepted_source,
             verification.record_path,
         )
         context_grain = context.grain
@@ -4530,32 +4652,6 @@ def _effective_demand_references(
         by_allocation.setdefault(allocation_key, {})[
             f"{entry.relation}|{context.record_reference}"
         ] = outcome_reference
-
-    for key in sorted(seen_pairs, key=lambda item: repr(item)):
-        seen = seen_pairs[key]
-        missing = [name for name in G5_RELATIONS if name not in seen]
-        if not missing:
-            continue
-        issues.append(
-            Issue(
-                location="effective_demand_context",
-                detail=(
-                    f"relation(s) {missing} carry no mapping evidence for substitute/"
-                    f"target pair {key!r}; the pair stays unresolved (exactly one pair or "
-                    "unresolved, §4.3.31 G I-8)"
-                ),
-                category="SEMANTIC_RESOLUTION",
-                reason="SEMANTIC_UNRESOLVED",
-                layer=LAYER_2,
-                affected_evidence="Substitute Allocation",
-                blast_radius="affected effective demand context only",
-                design_reference="§4.1.13 D (G5-A) / §4.3.31 G I-8",
-                consequence_context=(
-                    "the relation pair stays unresolved; Target Applicability and Source "
-                    "Reservation Overlap are never collapsed into one Boolean"
-                ),
-            )
-        )
 
     # Stage A cardinality (``§4.4.102`` C): more than one claim for the same
     # allocation ＋ relation ＋ demand context is never reconciled by precedence, so it
@@ -4590,7 +4686,7 @@ def _effective_demand_references(
 
     references: list[EffectiveDemandContextReference] = []
     for allocation_key in sorted(by_allocation, key=lambda item: repr(item)):
-        source_material, target_material, record_reference = allocation_key
+        _plant, target_material, source_material, record_reference = allocation_key
         by_relation = by_allocation[allocation_key]
         for composite in sorted(by_relation):
             references.append(

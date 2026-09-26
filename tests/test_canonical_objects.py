@@ -956,15 +956,16 @@ class EffectiveDemandTests(CanonicalObjectsTestCase):
         )
         contexts, issues = build_effective_demand_contexts(accepted, handoff)
         self.assertEqual(contexts, ())
-        # One issue for the unverifiable citation and one for the pair whose other
-        # registered relation carries no evidence at all.
-        self.assertEqual(len(issues), 2)
+        # One finding for the unverifiable citation.  ``CB-1′`` removed the pair
+        # completeness cardinality, so no second "the sibling relation carries no evidence"
+        # finding is manufactured any more.
+        self.assertEqual(len(issues), 1)
         self.assertTrue(
             all(issue.reason == "SEMANTIC_UNRESOLVED" for issue in issues)
         )
-        self.assertTrue(
-            any("OTHER-PACKAGE" not in issue.detail for issue in issues)
-        )
+        self.assertIn("Snapshot Package Identity", issues[0].detail)
+        self.assertNotIn("carry no mapping evidence", issues[0].detail)
+        self.assertNotIn("exactly one pair", issues[0].detail)
 
     def test_effective_demand_context_is_not_a_canonical_field(self) -> None:
         _, accepted = self.accepted(self._datasets(), name="demand-not-field")
@@ -992,13 +993,16 @@ class EffectiveDemandTests(CanonicalObjectsTestCase):
 class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
     """G5-A / I-8: a non-hashable caller pair is never a Python ``TypeError`` (Issue #144).
 
-    The pair values are runtime bookkeeping, not business identity: they are never converted,
-    stringified or invented, the entry is never skipped because of it, and no conceptual
-    outcome is derived from them.  Phase A still emits no effective-demand context.
+    The caller pair is a *claim*: it is never converted, stringified or invented to obtain
+    a key, and the authoritative allocation identity is read from the accepted
+    ``Substitute Allocation`` record.  When the claim cannot be exact-bound to it the
+    relation stays unresolved -- but relation validation, evidence verification and basis ／
+    citation validation all still run, so a foreign package, a wrong role or an invalid
+    relation literal stays visible.  ``CB-1′`` also removed the pair-completeness
+    cardinality, so a relation no longer needs its sibling relation to be able to resolve.
     """
 
-    NOTE_MARKER = "pair bookkeeping could not be established"
-    COMPLETENESS_MARKER = "carry no mapping evidence"
+    BASIS_TARGET_APPLICABILITY = "SIMULATED-G5A-TA-APPLICABLE"
 
     def datasets(self):
         return [
@@ -1013,32 +1017,25 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
                         "_meta": {
                             "provenance_associations": [
                                 {
-                                    "observation": "AllocatedSubstituteQty",
+                                    "observation": "target_material_code",
                                     "evidence": [EVIDENCE_ALLOCATION],
-                                }
+                                    "mapping_basis": self.BASIS_TARGET_APPLICABILITY,
+                                },
+                                {
+                                    "observation": "substitute_material_code",
+                                    "evidence": [EVIDENCE_ALLOCATION],
+                                    "mapping_basis": "SIMULATED-G5A-SRO-OVERLAPS",
+                                },
                             ]
                         },
                     }
                 ],
             ),
             (
-                "Substitute Relationship",
+                "Production Requirement",
                 [
-                    {
-                        "plant_id": PLANT,
-                        "target_material_code": MATERIAL,
-                        "substitute_material_code": "M3",
-                        "substitution_ratio": "0.5",
-                        "approval_status": "APPROVED",
-                        "_meta": {
-                            "provenance_associations": [
-                                {
-                                    "observation": "approval_status",
-                                    "evidence": [EVIDENCE_RELATIONSHIP],
-                                }
-                            ]
-                        },
-                    }
+                    PRODUCTION_REQUIREMENT(),
+                    PRODUCTION_REQUIREMENT(material_code="M3"),
                 ],
             ),
         ]
@@ -1050,11 +1047,12 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
         source: object,
         target: object,
         relation: str = RELATION_TARGET_APPLICABILITY,
-        role: str = "Substitute Relationship",
-        artifact: str = "1.json",
-        locator: str | None = EVIDENCE_RELATIONSHIP,
+        role: str = "Substitute Allocation",
+        artifact: str = "0.json",
+        locator: str | None = EVIDENCE_ALLOCATION,
         package_id: str | None = None,
         ordinal: int = 0,
+        basis: str | None = None,
     ) -> EffectiveDemandRelationHandoff:
         return EffectiveDemandRelationHandoff(
             source_substitute_material=source,
@@ -1068,7 +1066,25 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
                 locator=locator,
                 package_id=package_id,
             ),
-            mapping_basis="SIMULATED approved applicability mapping",
+            mapping_basis=(
+                basis
+                if basis is not None
+                else (
+                    "SIMULATED-G5A-SRO-OVERLAPS"
+                    if relation == RELATION_SOURCE_RESERVATION_OVERLAP
+                    else self.BASIS_TARGET_APPLICABILITY
+                )
+            ),
+            context_citation=self.citation(
+                accepted,
+                role="Production Requirement",
+                artifact="1.json",
+                ordinal=(
+                    1
+                    if relation == RELATION_SOURCE_RESERVATION_OVERLAP
+                    else 0
+                ),
+            ),
         )
 
     def run_entries(self, *, name: str, entries):
@@ -1100,10 +1116,11 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
         self.assertEqual(contexts, ())
         self.assert_unresolved_only(issues)
         self.assertEqual(len(issues), 1)
-        self.assertIn(self.NOTE_MARKER, issues[0].detail)
-        # No fabricated pair key: the completeness pass never saw this pair.
-        self.assertNotIn(self.COMPLETENESS_MARKER, issues[0].detail)
-        # The caller's value is untouched -- not converted, stringified or widened.
+        # Evidence verification and the exact-identity gate both ran: the finding is the
+        # claim-vs-record mismatch, not a crash and not a silent skip.
+        self.assertIn("does not equal the accepted Substitute Allocation record", issues[0].detail)
+        # The caller's value is untouched -- not converted, stringified or widened, and no
+        # key was fabricated from it.
         self.assertEqual(source, [])
 
     def test_dict_target_material_does_not_crash(self) -> None:
@@ -1119,7 +1136,7 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
         self.assertEqual(contexts, ())
         self.assert_unresolved_only(issues)
         self.assertEqual(len(issues), 1)
-        self.assertIn(self.NOTE_MARKER, issues[0].detail)
+        self.assertIn("does not equal the accepted Substitute Allocation record", issues[0].detail)
         self.assertEqual(target, {})
 
     def test_both_values_non_hashable(self) -> None:
@@ -1134,7 +1151,7 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
         self.assertEqual(contexts, ())
         self.assert_unresolved_only(issues)
         self.assertEqual(len(issues), 1)
-        self.assertIn(self.NOTE_MARKER, issues[0].detail)
+        self.assertIn("does not equal the accepted Substitute Allocation record", issues[0].detail)
 
     def test_verified_evidence_is_still_verified_for_a_non_hashable_pair(self) -> None:
         """D: the entry still runs evidence verification -- it is never skipped."""
@@ -1153,16 +1170,13 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
         self.assertEqual(contexts, ())
         self.assert_unresolved_only(issues)
         self.assertEqual(len(issues), 1)
-        # The verified-evidence branch really ran: the finding reports that the accepted
-        # record carries no registration for the observation and basis this relation
-        # allows, rather than being masked or skipped by the bookkeeping failure.
-        self.assertIn("registers no association with observation", issues[0].detail)
-        self.assertIn("mapping_basis", issues[0].detail)
-        self.assertIn("1.json#0", issues[0].detail)
-        self.assertIn(self.NOTE_MARKER, issues[0].detail)
+        # Evidence verification and the basis ／ citation gates really ran: the finding is
+        # the claim-vs-record mismatch on a record whose registration is valid.
+        self.assertIn("does not equal the accepted Substitute Allocation record", issues[0].detail)
+        self.assertIn("M3", issues[0].detail)
 
     def test_invalid_relation_literal_is_not_masked(self) -> None:
-        """E: the invalid relation literal stays visible next to the bookkeeping note."""
+        """E: the invalid relation literal stays visible."""
 
         _, (contexts, issues) = self.run_entries(
             name="g5a-invalid-relation",
@@ -1174,7 +1188,6 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
         self.assert_unresolved_only(issues)
         self.assertEqual(len(issues), 1)
         self.assertIn("is not one of the registered G5-A relations", issues[0].detail)
-        self.assertIn(self.NOTE_MARKER, issues[0].detail)
 
     def test_foreign_evidence_failure_is_not_masked(self) -> None:
         """F: an unverifiable citation stays visible for a non-hashable pair."""
@@ -1194,12 +1207,17 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
         self.assert_unresolved_only(issues)
         self.assertEqual(len(issues), 1)
         self.assertIn("Snapshot Package Identity", issues[0].detail)
-        self.assertIn(self.NOTE_MARKER, issues[0].detail)
-        # The unverified citation never becomes a fabricated bookkeeping pair either.
-        self.assertNotIn(self.COMPLETENESS_MARKER, issues[0].detail)
+        # The foreign citation is reported before any identity or basis gate, so the
+        # verification failure is never masked by a later finding.
+        self.assertNotIn("does not equal the accepted", issues[0].detail)
 
-    def test_hashable_pair_with_one_relation_keeps_the_completeness_finding(self) -> None:
-        """G: existing hashable-pair behaviour is unchanged."""
+    def test_hashable_pair_with_one_relation_is_fully_independent(self) -> None:
+        """G: one relation no longer needs its sibling relation to be able to resolve.
+
+        ``CB-1′`` removed the pair-completeness cardinality, so a relation that has its own
+        valid claim now resolves on its own and no "carry no mapping evidence" finding is
+        produced for the absent sibling relation.
+        """
 
         _, (contexts, issues) = self.run_entries(
             name="g5a-one-relation",
@@ -1207,16 +1225,15 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
                 self.entry(accepted, source="M3", target=MATERIAL),
             ),
         )
-        self.assertEqual(contexts, ())
-        self.assert_unresolved_only(issues)
-        # One finding for the entry plus the registered missing-relation completeness finding.
-        self.assertEqual(len(issues), 2)
-        completeness = [
-            issue for issue in issues if self.COMPLETENESS_MARKER in issue.detail
-        ]
-        self.assertEqual(len(completeness), 1)
-        self.assertIn(RELATION_SOURCE_RESERVATION_OVERLAP, completeness[0].detail)
-        self.assertNotIn(self.NOTE_MARKER, "".join(issue.detail for issue in issues))
+        self.assertEqual(issues, ())
+        self.assertEqual(len(contexts), 1)
+        outcome = contexts[0].relation_outcome
+        self.assertEqual(outcome.relation, RELATION_TARGET_APPLICABILITY)
+        self.assertEqual(outcome.outcome, "applicable")
+        self.assertEqual(outcome.mapping_basis, self.BASIS_TARGET_APPLICABILITY)
+        # The sibling relation is simply absent; nothing is fabricated about it.
+        self.assertNotIn("carry no mapping evidence", str(issues))
+        self.assertNotIn("exactly one pair", str(issues))
 
     def test_hashable_pair_with_both_relations_has_no_false_missing_finding(self) -> None:
         """H / J: both relations stay independently unresolved and no context is emitted."""
@@ -1224,10 +1241,10 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
         _, (contexts, issues) = self.run_entries(
             name="g5a-both-relations",
             entries=lambda accepted: (
-                self.entry(accepted, source="M3", target=MATERIAL),
+                self.entry(accepted, source="M9", target=MATERIAL),
                 self.entry(
                     accepted,
-                    source="M3",
+                    source="M9",
                     target=MATERIAL,
                     relation=RELATION_SOURCE_RESERVATION_OVERLAP,
                     role="Substitute Allocation",
@@ -1239,15 +1256,14 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
         self.assertEqual(contexts, ())
         self.assert_unresolved_only(issues)
         self.assertEqual(len(issues), 2)
-        self.assertFalse(
-            any(self.COMPLETENESS_MARKER in issue.detail for issue in issues)
-        )
-        # Both relations stayed unresolved for their own registered evidence: the
-        # per-relation observation requirement is what distinguishes them, so the two
-        # findings name the two different associations the entries cite.
+        # No fabricated completeness finding may be added on top of the two real findings.
         combined = " ".join(issue.detail for issue in issues)
-        self.assertIn("observation 'target_material_code'", combined)
-        self.assertIn("observation 'substitute_material_code'", combined)
+        self.assertNotIn("carry no mapping evidence", combined)
+        self.assertNotIn("exactly one pair", combined)
+        for issue in issues:
+            self.assertIn(
+                "does not equal the accepted Substitute Allocation record", issue.detail
+            )
 
     def test_repeated_relation_evidence_is_not_deduplicated(self) -> None:
         """I: repeats are reported, never collapsed by same-value dedup or first/last wins."""
@@ -1265,12 +1281,32 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
                     artifact="0.json",
                     locator=EVIDENCE_ALLOCATION,
                 ),
-                self.entry(accepted, source="M3", target=MATERIAL),
+                EffectiveDemandRelationHandoff(
+                    source_substitute_material="M3",
+                    target_material=MATERIAL,
+                    relation=RELATION_TARGET_APPLICABILITY,
+                    evidence=self.citation(
+                        accepted,
+                        role="Substitute Allocation",
+                        artifact="0.json",
+                        locator=EVIDENCE_ALLOCATION,
+                    ),
+                    mapping_basis=self.BASIS_TARGET_APPLICABILITY,
+                    context_citation=self.citation(
+                        accepted, role="Production Requirement", artifact="1.json"
+                    ),
+                ),
             ),
         )
-        self.assertEqual(contexts, ())
+        self.assertEqual(len(contexts), 1)
+        self.assertEqual(contexts[0].relation_outcome.relation, RELATION_SOURCE_RESERVATION_OVERLAP)
+        self.assertEqual(contexts[0].relation_outcome.outcome, "overlaps")
         self.assert_unresolved_only(issues)
-        self.assertEqual(len(issues), 3)
+        # The duplicate claim on the same allocation ＋ relation ＋ demand context is
+        # reported once as a Stage A cardinality conflict: it is never deduplicated, never
+        # collapsed by first/last wins, and no outcome reference is emitted for it.
+        self.assertEqual(len(issues), 1)
+        self.assertIn("exactly one deterministic outcome", issues[0].detail)
 
     def test_repeated_non_hashable_entries_are_not_deduplicated(self) -> None:
         _, (contexts, issues) = self.run_entries(
@@ -1300,6 +1336,7 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
         first_report = construct_canonical_objects(accepted, handoff).to_dict()
         second_report = construct_canonical_objects(accepted, handoff).to_dict()
         self.assertEqual(first_report, second_report)
+        # The non-hashable caller values never become a key and never yield an outcome.
         self.assertEqual(first_report["effective_demand_contexts"], [])
 
     def test_no_caller_outcome_channel_is_introduced(self) -> None:
