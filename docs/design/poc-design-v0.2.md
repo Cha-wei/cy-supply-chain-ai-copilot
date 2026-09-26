@@ -2578,6 +2578,29 @@ AllocatedSubstituteQty >= 0
 
 > 关于 `AVAILABLE` / `INSPECTION` / `FROZEN` 的判定口径，见 **`BR-INVENTORY-001` / §2.2**，本规则**不重新定义**。
 
+**B1-A（Human Decision，已批准）：`EligibleSubstituteSupply` 的消费边界**
+
+```
+BR-SUBSTITUTE-001 只消费 BR-INVENTORY-001 的 OpeningUsableInventory
+（不得重新实现 Inventory eligibility，不得读 raw Inventory 绕过 BR-INVENTORY-001）
+
+exact plant_id + source_material_code
+exactly 1 个可可靠消费的 InventoryTarget  → 使用其 OpeningUsableInventory
+0 个                                      → DATA_INCOMPLETE
+多于 1 个不同 inventory_snapshot_time     → DATA_INCOMPLETE
+
+禁止：earliest wins ／ latest wins ／ 跨 snapshot sum ／ average ／
+      把 inventory_snapshot_time 自动等同 AnalysisDate
+
+不修改 BR-INVENTORY-001 的 grain。
+```
+
+**"可可靠消费"只由 `OpeningUsableInventory` 自身决定**：`BR-INVENTORY-001` 在该 target 的
+**inventory 侧**不可靠时给出 `None`，而 `InventoryTarget.outcome` 在**仅 SafetyStock 侧**未解析时也会是
+`DATA_INCOMPLETE`。`SafetyStock` 对 `BR-SUBSTITUTE-001` 而言只是一个 classification threshold，**不是**
+可用供给的输入，所以 SafetyStock 缺失本身既不移除一个可用的 target，也不阻断该消费
+（§2.2.7 ／ §2.3.8）；**不得**从 `OpeningUsableInventory` 扣减 SafetyStock。
+
 #### 2.3.9 Same Plant Boundary
 
 Target Material 与 Substitute Supply **默认必须属于同一 `plant_id`**。
@@ -2690,6 +2713,30 @@ RemainingUnallocatedSourceSupply >= 0
 > - shortage prioritization
 > - auto scheduling
 
+**B2-A′（Human Decision，已批准）：conservation 的 grouping boundary**
+
+```
+conservation group = exact resolved Source Demand Context reference
+
+同一 exact context 下 SRO = overlaps 的 allocations → 一起求和（同一 conservation group）
+does not overlap → 不进入该 context 的 sum
+unresolved       → capability 需要该 conservation 时 DATA_INCOMPLETE
+
+over-allocation  → CONSISTENCY ／ CONSISTENCY_CONFLICT ＋ DATA_INCOMPLETE
+Σ AllocatedSubstituteQty <= EligibleSubstituteSupply
+RemainingUnallocatedSourceSupply = EligibleSubstituteSupply - Σ AllocatedSubstituteQty >= 0
+
+不同 exact Source Demand Context：不自动 overlap ／ 不自动 non-overlap ／ 不得 proximity 推导 ／
+                                不得跨 context 自动合并；
+                                无法可靠判断跨 context conservation → SEMANTIC_UNRESOLVED → DATA_INCOMPLETE
+
+不新增 reservation_group ／ demand_window_id ／ allocation_period ／ valid_from ／ valid_to ／
+      新 canonical entity ／ identity component ／ 时间 overlap 算法（暂不采用 B2-B）。
+```
+
+`ExactQuantity` 的减法保持既有 exact 语义（与 §2.3.12 一致）：只有在
+`Σ <= EligibleSubstituteSupply` 时才产生 `RemainingUnallocatedSourceSupply`，否则**不产生**任何数值。
+
 #### 2.3.11 Zero vs Missing
 
 必须区分两种**语义完全不同**的情况：
@@ -2722,6 +2769,13 @@ ApprovedSubstituteSupply = 0
 **`DATA_INCOMPLETE`**
 
 **不得默认成 0。**
+
+**B 必须作用于该 allocation 自己那个 demand context 的 grain。** 因此 G5-A 的 effective-demand
+reference 在**已注册**的 "unresolved" basis 下仍然要形成：它携带已解析的 Demand Context（因此
+`plant_id` ＋ material ＋ `required_date` 仍可达），但**不携带任何 outcome 值**。这不是新增
+canonical field ／ entity ／ identity component，也不改变 G5-A cardinality ／ I-8 handoff contract；
+它只是让 `BR-SUBSTITUTE-001` 能够按本节的 B 对该 grain 报告 `DATA_INCOMPLETE`，而不是把它默默当作
+`0` 或整个丢弃。**未注册** ／ 无法验证 ／ 不匹配 ／ 有歧义的 basis 仍然**不产生** reference。
 
 #### 2.3.12 Deterministic Formula
 

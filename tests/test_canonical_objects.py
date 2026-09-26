@@ -62,6 +62,11 @@ from snapshot_loader.canonical_objects import (
     RELATION_TARGET_APPLICABILITY,
     ROLE_FOR_TARGET,
     ROLE_INBOUND_SUPPLY,
+    ROLE_SUBSTITUTE_ALLOCATION,
+    ROLE_SUBSTITUTE_RELATIONSHIP,
+    SAME_GRAIN_MULTIPLICITY_REFERENCE,
+    SAME_GRAIN_MULTIPLICITY_TARGETS,
+    TARGET_INVENTORY_SNAPSHOT,
     BomParentContextHandoff,
     EffectiveDemandRelationHandoff,
     HandoffEvidence,
@@ -2524,6 +2529,176 @@ class GrainResolutionTests(CanonicalObjectsTestCase):
         self.assertIn("UNRESOLVED_IDENTITY", {issue.reason for issue in report.issues})
 
 
+class SubstituteAllocationMultiplicityTests(CanonicalObjectsTestCase):
+    """``Option A'-R`` -- the registered Stage-A multiplicity exception (role 8 only).
+
+    Human Decision ``Option A'-R`` registers ``Substitute Allocation`` as a second
+    same-grain multiplicity exception: several accepted role 8 records may legally share
+    one canonical grain, each is retained as its own **resolved** evidence with its own
+    ``record_reference`` / provenance / ``AllocatedSubstituteQty``, and the aggregation
+    belongs to the downstream registered rule.  Nothing is summed, selected, merged,
+    averaged, deduplicated by same value or resolved by precedence at canonicalization
+    time, and the grain and identity components are unchanged.  ``Substitute Relationship``
+    is deliberately **not** exempt.
+    """
+
+    SOURCE_MATERIAL = "M3"
+
+    def _allocation(self, quantity: str, locator: str) -> dict[str, object]:
+        return with_provenance(
+            {
+                "plant_id": PLANT,
+                "target_material_code": MATERIAL,
+                "substitute_material_code": self.SOURCE_MATERIAL,
+                "AllocatedSubstituteQty": quantity,
+            },
+            [("AllocatedSubstituteQty", [locator], None)],
+        )
+
+    def _relationship(self, ratio: str, locator: str) -> dict[str, object]:
+        return with_provenance(
+            {
+                "plant_id": PLANT,
+                "target_material_code": MATERIAL,
+                "substitute_material_code": self.SOURCE_MATERIAL,
+                "substitution_ratio": ratio,
+                "approval_status": "APPROVED",
+            },
+            [("substitution_ratio", [locator], None)],
+        )
+
+    def test_registered_exception_covers_substitute_allocation_and_inventory_only(self) -> None:
+        """AC-44: the registered exception is exactly ``Inventory Snapshot`` ＋ role 8."""
+
+        self.assertEqual(
+            SAME_GRAIN_MULTIPLICITY_TARGETS,
+            frozenset({TARGET_INVENTORY_SNAPSHOT, ROLE_SUBSTITUTE_ALLOCATION}),
+        )
+        self.assertNotIn(ROLE_SUBSTITUTE_RELATIONSHIP, SAME_GRAIN_MULTIPLICITY_TARGETS)
+        self.assertEqual(
+            set(SAME_GRAIN_MULTIPLICITY_TARGETS), set(SAME_GRAIN_MULTIPLICITY_REFERENCE)
+        )
+        self.assertIn(
+            "Option A", SAME_GRAIN_MULTIPLICITY_REFERENCE[ROLE_SUBSTITUTE_ALLOCATION]
+        )
+
+    def test_two_same_grain_allocations_are_both_retained_independently(self) -> None:
+        """AC-43 / AC-51: multiplicity itself is neither a conflict nor ``unresolved``."""
+
+        report = self.construct(
+            [
+                (
+                    ROLE_SUBSTITUTE_ALLOCATION,
+                    [
+                        self._allocation("60", "SIMULATED-SRC-ALLOC-A"),
+                        self._allocation("50", "SIMULATED-SRC-ALLOC-B"),
+                    ],
+                )
+            ],
+            name="option-a-prime-r-two",
+        )
+        resolved = report.objects_for(ROLE_SUBSTITUTE_ALLOCATION)
+        self.assertEqual(len(resolved), 2)
+        self.assertEqual(report.unresolved_for(ROLE_SUBSTITUTE_ALLOCATION), ())
+        self.assertEqual(
+            sorted(obj.value_of("AllocatedSubstituteQty", None) for obj in resolved),
+            ["50", "60"],
+        )
+        references = {obj.record_reference for obj in resolved}
+        self.assertEqual(len(references), 2)
+        # Each retained record keeps its own provenance, so a downstream G5-A reference can
+        # bind to exactly one of them by its exact record reference.
+        self.assertEqual(
+            len({obj.provenance for obj in resolved}), 2
+        )
+        self.assertEqual(
+            len({obj.grain for obj in resolved}), 1
+        )
+        self.assertFalse(
+            any(
+                issue.category == "CONSISTENCY"
+                for issue in report.issues
+            ),
+            msg="same-grain multiplicity is registered, so it is never a Stage B conflict",
+        )
+
+    def test_identical_quantities_are_never_deduplicated(self) -> None:
+        """AC-52: two identical ``60`` records stay two resolved records."""
+
+        report = self.construct(
+            [
+                (
+                    ROLE_SUBSTITUTE_ALLOCATION,
+                    [
+                        self._allocation("60", "SIMULATED-SRC-ALLOC-A"),
+                        self._allocation("60", "SIMULATED-SRC-ALLOC-B"),
+                    ],
+                )
+            ],
+            name="option-a-prime-r-identical",
+        )
+        resolved = report.objects_for(ROLE_SUBSTITUTE_ALLOCATION)
+        self.assertEqual(len(resolved), 2)
+        self.assertEqual(
+            [obj.value_of("AllocatedSubstituteQty", None) for obj in resolved],
+            ["60", "60"],
+        )
+        self.assertEqual(len({obj.record_reference for obj in resolved}), 2)
+
+    def test_duplicate_relationship_grain_stays_unresolved(self) -> None:
+        """AC-55: the exception never widens to role 7.
+
+        ``Option A'-R`` supersedes only the allocation boundary.  Two ``Substitute
+        Relationship`` records on one grain stay unresolved, because no registered
+        downstream aggregation owns a relationship multiplicity.
+        """
+
+        report = self.construct(
+            [
+                (
+                    ROLE_SUBSTITUTE_RELATIONSHIP,
+                    [
+                        self._relationship("1.0", "SIMULATED-SRC-REL-A"),
+                        self._relationship("0.5", "SIMULATED-SRC-REL-B"),
+                    ],
+                )
+            ],
+            name="option-a-prime-r-relationship",
+        )
+        self.assertEqual(report.objects_for(ROLE_SUBSTITUTE_RELATIONSHIP), ())
+        self.assertEqual(len(report.unresolved_for(ROLE_SUBSTITUTE_RELATIONSHIP)), 2)
+        states = {
+            name: state
+            for name, state in self.states(report).items()
+            if name.startswith(
+                f"{CANONICALIZATION_GRAIN_RESOLUTION}:{ROLE_SUBSTITUTE_RELATIONSHIP}"
+            )
+        }
+        self.assertEqual(set(states.values()), {EVALUATION_NOT_EVALUABLE})
+
+    def test_allocation_grain_and_identity_components_are_unchanged(self) -> None:
+        """The exception adds no field, no entity and no identity component."""
+
+        report = self.construct(
+            [
+                (
+                    ROLE_SUBSTITUTE_ALLOCATION,
+                    [self._allocation("60", "SIMULATED-SRC-ALLOC-A")],
+                )
+            ],
+            name="option-a-prime-r-grain",
+        )
+        resolved = report.objects_for(ROLE_SUBSTITUTE_ALLOCATION)
+        self.assertEqual(len(resolved), 1)
+        self.assertEqual(
+            tuple(prop.name for prop in resolved[0].grain),
+            ("plant_id", "target_material_code", "substitute_material_code"),
+        )
+        payload = str(report.to_dict())
+        for literal in ("reservation_group", "demand_window_id", "allocation_id"):
+            self.assertNotIn(literal, payload)
+
+
 class NonHashableGrainTests(CanonicalObjectsTestCase):
     """A grain value that is legal JSON but unusable as a grouping key must not crash.
 
@@ -3697,7 +3872,12 @@ class G5ADemandContextSpecificityTests(CanonicalObjectsTestCase):
         )
         self.assertTrue(all(issue.reason == "SEMANTIC_UNRESOLVED" for issue in issues))
 
-    def test_explicit_unresolved_basis_emits_no_reference(self) -> None:
+    def test_explicit_unresolved_basis_still_emits_its_demand_context(self) -> None:
+        # A registered ``unresolved`` basis is a resolved *conclusion* about the relation, so
+        # the reference is still formed -- with no outcome value -- and the finding carries
+        # the reason.  The demand context and its grain must stay reachable, because
+        # ``§2.3.11`` B requires the downstream rule to report ``DATA_INCOMPLETE`` for that
+        # grain instead of defaulting it to 0.
         contexts, issues = self._scenario(
             name="g5a-p0-explicit-unresolved",
             claims=(
@@ -3712,16 +3892,22 @@ class G5ADemandContextSpecificityTests(CanonicalObjectsTestCase):
                 (RELATION_TARGET_APPLICABILITY, self.BASIS_TA_UNRESOLVED, 0, 0),
             ),
         )
-        self.assertEqual(contexts, ())
+        self.assertEqual(len(contexts), 1)
+        outcome = contexts[0].relation_outcome
+        self.assertIsNone(outcome.outcome)
+        self.assertEqual(outcome.mapping_basis, self.BASIS_TA_UNRESOLVED)
+        self.assertIsNotNone(outcome.context.grain)
         self.assertTrue(issues)
         self.assertTrue(
             any("cannot be reliably determined" in issue.detail for issue in issues)
         )
+        self.assertTrue(all(issue.reason == "SEMANTIC_UNRESOLVED" for issue in issues))
 
     def test_basis_says_unresolved_but_another_claim_resolves(self) -> None:
         # An explicitly ``unresolved`` claim on one allocation record never suppresses the
         # outcome another allocation record does resolve: unresolved is per claim, not a
-        # global verdict.
+        # global verdict.  The unresolved claim keeps its own context with no outcome value,
+        # so nothing is merged and neither claim borrows the other's basis.
         contexts, issues = self._scenario(
             name="g5a-p0-mixed-unresolved",
             claims=(
@@ -3738,8 +3924,31 @@ class G5ADemandContextSpecificityTests(CanonicalObjectsTestCase):
                 (RELATION_TARGET_APPLICABILITY, self.BASIS_TA_UNRESOLVED, 1, 1),
             ),
         )
-        self.assertEqual(len(contexts), 1)
-        self.assertEqual(contexts[0].relation_outcome.outcome, "applicable")
+        self.assertEqual(len(contexts), 2)
+        self.assertEqual(
+            sorted(
+                str(item.relation_outcome.outcome) for item in contexts
+            ),
+            ["None", "applicable"],
+        )
+        resolved = [
+            item for item in contexts if item.relation_outcome.outcome == "applicable"
+        ]
+        unresolved = [
+            item for item in contexts if item.relation_outcome.outcome is None
+        ]
+        self.assertEqual(len(resolved), 1)
+        self.assertEqual(len(unresolved), 1)
+        self.assertEqual(
+            resolved[0].relation_outcome.mapping_basis, self.BASIS_TA_APPLICABLE
+        )
+        self.assertEqual(
+            unresolved[0].relation_outcome.mapping_basis, self.BASIS_TA_UNRESOLVED
+        )
+        self.assertNotEqual(
+            resolved[0].relation_outcome.context.record_reference,
+            unresolved[0].relation_outcome.context.record_reference,
+        )
         self.assertTrue(issues)
         self.assertTrue(all(issue.reason == "SEMANTIC_UNRESOLVED" for issue in issues))
 

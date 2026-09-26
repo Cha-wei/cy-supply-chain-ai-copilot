@@ -457,6 +457,29 @@ quantities ／ first ／ last wins ／ same-value dedup ／ average。**但**只
 完成后，这些 evidence 才能进入正常 numeric inventory calculation（见 `§4.4.50` / `§4.3.31`
 G `I-9`）。
 
+**注册澄清（Human Decision ``Option A'-R``，Issue #148）：**
+
+```text
+Substitute Allocation = registered Stage-A multiplicity exception
+
+record multiplicity alone != semantic conflict
+
+只有真正的 field ／ mapping ／ context ／ conservation defect
+才 unresolved ／ conflict。
+```
+
+即：多条 accepted `Substitute Allocation` evidence records 可以合法共享同一个 canonical grain
+（source substitute material ＋ target material ＋ effective demand context，`§4.1.4 G` **未改变**）。
+每条都**独立保留为 resolved allocation evidence**，各自保留 `record_reference` ／ provenance ／
+`AllocatedSubstituteQty`；canonicalization 阶段**不得** sum ／ first ／ last wins ／ same-value dedup ／
+average ／ precedence ／ 合并 records。多个已保留 records 的事实**本身**既**不**产生
+`SEMANTIC_UNRESOLVED`，也**不**产生 `CONSISTENCY_CONFLICT`；聚合只属于已注册的 downstream
+`BR-SUBSTITUTE-001`（在其 G5-A ／ B1-A ／ B2-A′ 约束下）。
+
+该 exception **只**登记给 `Substitute Allocation`；**不得**把它泛化到其他 canonical targets。
+`Substitute Relationship`（role 7）**明确不在其内**：其 same-grain 重复仍然
+`SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`。
+
 但：如果多个记录在 canonical grain 上产生**无法解释的 conflicting values**，
 **且当前 Design 没有 aggregation / precedence rule**，**不得**：
 
@@ -2854,6 +2877,11 @@ exactly 1 applicable evidence                                       ⇒ resolved
       （loss_rate §4.4.15 ／ ApplicableMOQ §4.4.67）
       ⇒ SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED
 ```
+
+**Stage A 的已登记 multiplicity exception**（见 §4.4.12）：`Inventory Snapshot` 与
+`Substitute Allocation` 在各自 canonical grain 上允许多条 evidence 合法共存，由已注册的 downstream
+rule 聚合。除这些已登记例外之外，`>1 applicable evidence` 一律保持 unresolved；`Substitute
+Relationship` **不在**例外之内。
 
 **Stage B —— approved consistency invariant violation**
 

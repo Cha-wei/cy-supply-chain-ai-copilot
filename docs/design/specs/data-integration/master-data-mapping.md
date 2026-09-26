@@ -1644,6 +1644,36 @@ ADR-001                            = 未修改
 > `DESIGN RESOLVED` 与 runtime realization 均**不表示** `BR-SUBSTITUTE-001` 已实现，也**不表示**
 > `CumulativeApprovedSubstituteSupply` 已可计算。
 
+**F. Downstream consumption consistency sync（Issue #148 ／ B2-A′ ＋ Option A′-R）**
+
+本子项只为 `BR-SUBSTITUTE-001` 的 **conservation 消费**与 **allocation 绑定**提供最小一致性说明。
+`§4.5.9` 前述 Target Applicability ／ Source Reservation Overlap 的定义、registry、cardinality 与
+locator 要求**均未改变**。
+
+```text
+exact Source Demand Context reference 可作为 downstream conservation 的 grouping boundary
+different exact Source Demand Contexts 不形成 automatic overlap relation
+不得新增 reservation_group ／ demand_window_id ／ allocation_period ／ validity interval
+不得修改 G5-A cardinality ／ I-8 handoff contract
+
+retained allocation records 继续以 exact record_reference 独立绑定 G5-A relations
+context mapping 不合并 allocation records
+downstream BR-SUBSTITUTE-001 才执行 authorized sum ／ conservation
+
+已注册 "unresolved" basis ⇒ 该 demand context 的 reference 仍然形成，但不携带 outcome 值
+                            （不新增 canonical field ／ entity ／ identity component）
+未注册 ／ 无法验证 ／ 不匹配 ／ 有歧义的 basis ⇒ 仍然不产生 reference
+```
+
+**F.1 已注册 "unresolved" basis 的 reference 形成（`§2.3.11 B` 可达性）**
+
+`§2.3.11` B 要求**存在**替代关系但数据无法可靠取得时返回 `DATA_INCOMPLETE`，**不得**默认成 0。
+该判断必须落在**该 allocation 自己那个 demand context 的 grain** 上，所以当 accepted record 注册的是
+已批准的 "unresolved" basis 时，reference 仍然形成并携带已解析的 Demand Context，只是
+**不携带 outcome 值**。这不是新的 outcome 推导路径：basis 仍然只从 accepted record 的 association
+按 exact locator ＋ exact `mapping_basis` 选出，caller 仍然不能设置 outcome，也没有任何 Boolean 被合成。
+它只是让 `BR-SUBSTITUTE-001` 能够对该 grain 报告 `DATA_INCOMPLETE`，而不是把它当作 `0` 或整个丢弃。
+
 #### 4.5.10 Supplier-Material Relationship
 
 **必须明确：**

@@ -542,7 +542,11 @@ class RelationOutcomeReference:
     ``target_applicability`` and ``source_reservation_overlap`` are **independent**
     relation outcomes and are never collapsed into one Boolean (``§4.1.13`` D).  The
     outcome is carried by the approved mapping evidence and its basis; a caller cannot
-    set it directly.
+    set it directly.  ``outcome`` is ``None`` when the accepted record registered an
+    approved basis that itself states the relation cannot be reliably determined for
+    this demand context: the reference is still formed -- so the demand context and its
+    grain stay reachable and the downstream rule can report ``DATA_INCOMPLETE``
+    (``§2.3.11`` B) -- but no outcome value is invented.
 
     ``context`` is the **single** resolved Demand Context this outcome was formed for
     (``CB-1′`` clause 11): one outcome reference always belongs to exactly one demand
@@ -1103,6 +1107,21 @@ class CanonicalConstructionReport:
     Scope resolution result, one entry per accepted ``Inventory Snapshot`` record, so a
     downstream deterministic rule can look up ``exact Inventory record -> exact
     scope-resolution context`` without re-reading a raw artifact.
+
+    ``present_roles`` names the recognized canonical targets whose logical dataset the
+    accepted package actually carried, in declared order and without duplicates.  A
+    registered role is therefore distinguishable from an absent one even when its dataset
+    contained **no** record -- a distinction a downstream rule needs (for example "the
+    package states there is no approved substitute" versus "the role was never supplied"),
+    and one that ``object_sets`` alone cannot express because every registered target
+    always yields an object set.  It carries no value and no identity component of its own.
+
+    ``unresolved_roles`` names the recognized canonical targets that were **supplied** and
+    yielded canonical objects, but whose every candidate stayed unresolved (for example
+    several records on one grain with no registered multiplicity exception).  It is the
+    "supplied but nothing resolved" state, deliberately distinct from "supplied empty" and
+    from "never supplied", so a downstream rule can fail closed on the first while treating
+    the second as a stated absence.  It carries no value and no identity component either.
     """
 
     package_id: str
@@ -1120,6 +1139,8 @@ class CanonicalConstructionReport:
     issues: tuple[Issue, ...]
     layer2_note: str = ""
     inventory_scope_contexts: tuple[InventoryScopeContext, ...] = ()
+    present_roles: tuple[str, ...] = ()
+    unresolved_roles: tuple[str, ...] = ()
 
     def objects_for(self, canonical_target: str) -> tuple[CanonicalObject, ...]:
         for entry in self.object_sets:
@@ -1183,6 +1204,8 @@ class CanonicalConstructionReport:
                 _context_value_to_dict(item) for item in self.safety_stock_contexts
             ],
             "unrecognized_roles": list(self.unrecognized_roles),
+            "present_roles": list(self.present_roles),
+            "unresolved_roles": list(self.unresolved_roles),
             "checks": [
                 {"name": name, "state": state, "note": note}
                 for name, state, note in self.checks
@@ -1614,6 +1637,28 @@ GRAIN_KEYED_TARGET_ORDER: tuple[str, ...] = (
     "Supplier-Material Relationship",
     "Supplier Performance",
 )
+
+#: The canonical targets with a **registered same-grain multiplicity exception**
+#: (``§4.1.4 D`` ／ ``§4.1.4 G``).  Several accepted records may legally share one canonical
+#: grain for these targets, because the matching downstream deterministic rule owns the
+#: aggregation; canonicalization retains every record as independent resolved evidence and
+#: never sums, selects, merges, averages or same-value deduplicates them.
+#:
+#: ``Substitute Allocation`` is covered by Human Decision ``Option A'-R`` (``§4.1.4 G`` ／
+#: ``§4.5.9``): multiple accepted allocation records may share one allocation grain and each
+#: record is one independent explicit allocation contribution.  ``Substitute Relationship``
+#: is deliberately **not** listed: multiple relationships on one join grain stay unresolved,
+#: and no other canonical target is exempted either.
+SAME_GRAIN_MULTIPLICITY_TARGETS: frozenset[str] = frozenset(
+    {TARGET_INVENTORY_SNAPSHOT, "Substitute Allocation"}
+)
+
+#: The registered design reference of each same-grain multiplicity exception, used in the
+#: construction checks so the boundary stays auditable.
+SAME_GRAIN_MULTIPLICITY_REFERENCE: Mapping[str, str] = {
+    TARGET_INVENTORY_SNAPSHOT: "§4.4.12 / §4.4.50 / §4.1.4 D",
+    "Substitute Allocation": "§4.1.4 G / §4.5.9 / Option A′-R",
+}
 
 ROLE_FOR_TARGET: Mapping[str, str] = {
     "Plant": "Plant / Material identity context",
@@ -2234,6 +2279,28 @@ def _construct(
     )
 
     # --- G5-A allocation relationship objects (read-only context) -------------------
+    present_roles: list[str] = []
+    for role, _artifact in accepted.datasets():
+        canonicalization_role = CANONICALIZATION_ROLE_BY_LITERAL.get(role)
+        if canonicalization_role is None:
+            continue
+        if canonicalization_role.phase != "A":
+            continue
+        target = canonicalization_role.target
+        if target not in present_roles:
+            present_roles.append(target)
+
+    # "supplied but nothing resolved": the role was declared, records reached canonicalization
+    # and every candidate stayed unresolved, so no legal "states none" conclusion follows.
+    unresolved_roles: list[str] = []
+    for entry in object_sets:
+        if not entry.unresolved:
+            continue
+        if entry.resolved:
+            continue
+        if entry.canonical_target not in unresolved_roles:
+            unresolved_roles.append(entry.canonical_target)
+
     return CanonicalConstructionReport(
         package_id=accepted.package_id,
         accepted_content_view_digest=accepted.content_view_digest,
@@ -2255,6 +2322,8 @@ def _construct(
                 key=lambda item: item.inventory_reference,
             )
         ),
+        present_roles=tuple(present_roles),
+        unresolved_roles=tuple(unresolved_roles),
     )
 
 
@@ -2299,13 +2368,29 @@ def _resolve_grain_keyed(
     more than one applicable evidence stays unresolved and is never reconciled by a
     value comparison, a first/last-wins rule or any other unapproved precedence.
 
-    **Registered exception -- ``Inventory Snapshot``** (``§4.4.12`` ／ ``§4.4.50`` ／
-    ``§4.1.4 D``): several source observations may legally share one Plant-level
-    canonical grain, because ``BR-INVENTORY-001`` aggregates the *eligible, in-scope*
-    subset later.  Every such record with a valid grain is therefore **retained as a
-    resolved Inventory observation**.  Canonicalization still performs no aggregation of
-    any kind: no quantity is summed, no record is selected, no same-value
-    deduplication and no averaging happens here.
+    **Registered exceptions ``§4.1.4 D`` ／ ``§4.1.4 G``:** two canonical targets have a
+    registered same-grain multiplicity exception, because a downstream deterministic rule
+    aggregates the *eligible* subset later:
+
+    * ``Inventory Snapshot`` (``§4.4.12`` ／ ``§4.4.50`` ／ ``§4.1.4 D``) -- several source
+      observations may legally share one Plant-level canonical grain, and
+      ``BR-INVENTORY-001`` owns the aggregation;
+    * ``Substitute Allocation`` (``§4.1.4 G`` ／ ``§4.5.9`` / Human Decision ``Option A'-R``)
+      -- several accepted ``Substitute Allocation`` evidence records may legally share one
+      allocation grain (``source substitute material`` ／ ``target material`` ／
+      ``effective demand context``).  Each record is **one independent explicit allocation
+      contribution**: every such record with a valid grain is retained as its own resolved
+      allocation evidence with its own ``record_reference``, provenance and
+      ``AllocatedSubstituteQty``, and ``BR-SUBSTITUTE-001`` owns the aggregation under the
+      G5-A ／ B1-A ／ B2-A' constraints.
+
+    In both cases canonicalization performs **no** aggregation of any kind: no quantity is
+    summed, no record is selected, no record is merged, no same-value deduplication and no
+    averaging happens here, and the multiplicity itself is never a semantic conflict.
+
+    ``Substitute Relationship`` is **not** covered by this exception: several relationships
+    on one ``plant_id`` + ``target_material_code`` + ``substitute_material_code`` grain stay
+    unresolved, and no other canonical target is exempted either.
     """
 
     buckets: dict[str, dict[tuple[Any, ...], list[CanonicalObject]]] = {
@@ -2440,19 +2525,23 @@ def _resolve_grain_keyed(
                 )
                 continue
 
-            if target == TARGET_INVENTORY_SNAPSHOT:
-                # Registered same-grain exception (``§4.4.12`` ／ ``§4.4.50``): multiple
-                # Inventory observations may legally share one Plant-level grain.  All of
-                # them are retained; nothing is summed, selected or deduplicated here.
+            if target in SAME_GRAIN_MULTIPLICITY_TARGETS:
+                # Registered same-grain multiplicity exception.  For ``Inventory Snapshot``
+                # (``§4.4.12`` ／ ``§4.4.50``) and for ``Substitute Allocation``
+                # (``§4.1.4 G`` / Human Decision ``Option A'-R``) several accepted records may
+                # legally share one canonical grain, and the matching downstream rule owns the
+                # aggregation.  All of them are retained as independent resolved evidence;
+                # nothing is summed, selected, merged or deduplicated here, and the
+                # multiplicity itself is not a conflict.
                 resolved.extend(candidates)
                 build.check(
                     f"{CANONICALIZATION_GRAIN_RESOLUTION}:{target}",
                     EVALUATION_PASSED,
-                    f"{len(candidates)} applicable Inventory observations share the same "
-                    f"Plant-level grain [{label}]; all are retained for the downstream "
-                    "BR-INVENTORY-001 aggregation and no canonicalization-time sum, "
-                    "selection or same-value deduplication is applied "
-                    "(§4.4.12 / §4.4.50 / §4.1.4 D)",
+                    f"{len(candidates)} applicable {target} evidence records share the same "
+                    f"grain [{label}]; all are retained as independent resolved evidence for "
+                    "the downstream registered aggregation and no canonicalization-time sum, "
+                    "selection, merge, average or same-value deduplication is applied "
+                    f"({SAME_GRAIN_MULTIPLICITY_REFERENCE[target]})",
                 )
                 continue
 
@@ -4296,7 +4385,14 @@ def _effective_demand_references(
     * anything unverified, unregistered, mismatched, missing or ambiguous stays
       unresolved and emits **no** reference; ``unresolved`` is therefore expressed as
       "no reference ＋ ``SEMANTIC_RESOLUTION`` / ``SEMANTIC_UNRESOLVED``", which is the
-      inherited way this injection already reported it.
+      inherited way this injection already reported it;
+    * the one exception is a **registered** basis whose own outcome is
+      ``RELATION_OUTCOME_UNRESOLVED``: there the accepted record *did* register an
+      approved conclusion ("cannot be reliably determined") for that exact demand
+      context, so the reference is still formed with ``outcome = None`` and the same
+      finding.  ``§2.3.11`` B requires the downstream rule to report ``DATA_INCOMPLETE``
+      rather than a default ``0`` for such a grain, and the grain is only reachable
+      through the reference.  No outcome value is invented and no Boolean is synthesised.
     """
 
     issues: list[Issue] = []
@@ -4611,22 +4707,31 @@ def _effective_demand_references(
         )
 
         if rule.outcome == RELATION_OUTCOME_UNRESOLVED:
-            # The registered basis itself declares that no reliable determination
-            # exists for this demand context.  That is the inherited "unresolved"
-            # behaviour, so no relation outcome reference is formed -- the finding
-            # carries the reason.
+            # The registered basis itself declares that no reliable determination exists for
+            # this demand context.  That conclusion **is** the resolved outcome of the
+            # relation: the accepted record registered an approved literal for it, so a
+            # reference is still formed -- with no outcome value -- because ``§2.3.11`` B
+            # requires the downstream rule to report ``DATA_INCOMPLETE`` for that grain
+            # instead of defaulting it to 0, and it can only do so if the demand context and
+            # its grain reach it.  Every *other* unresolved path (unverified, unregistered,
+            # mismatched, missing, ambiguous) still emits no reference: there the relation
+            # has no registered conclusion at all.  No outcome is invented, no Boolean is
+            # synthesised and the caller still cannot set it.
+            outcome_value: Any = None
             _unresolved(
                 role=entry.evidence.logical_dataset_role,
                 detail=(
                     f"the accepted evidence {verification.record_path} registers "
                     f"basis {registered_basis!r} for relation {entry.relation!r}, "
                     "which states that the relation cannot be reliably determined for "
-                    "the cited demand context; no outcome reference is formed and the "
-                    "relation stays unresolved for that context (§4.5.9 / §4.4.60 "
-                    "path B / CB-1′ clause 12)"
+                    "the cited demand context; the reference carries no outcome value "
+                    "instead of an invented Boolean and the relation stays unresolved "
+                    "for that context (§4.5.9 / §4.4.60 path B / §2.3.11 B / CB-1′ "
+                    "clause 12)"
                 ),
             )
-            continue
+        else:
+            outcome_value = rule.outcome
 
         context, problem = _entry_context(
             entry,
@@ -4658,7 +4763,7 @@ def _effective_demand_references(
         assert context_grain is not None  # guarded by ``_entry_context``
         outcome_reference = RelationOutcomeReference(
             relation=entry.relation,
-            outcome=rule.outcome,
+            outcome=outcome_value,
             context=DemandContextReference(
                 semantic=rule.citation_side,
                 grain=context_grain,
@@ -4769,6 +4874,8 @@ __all__ = [
     "ROLE_PRODUCTION_REQUIREMENT",
     "ROLE_SUBSTITUTE_ALLOCATION",
     "ROLE_SUBSTITUTE_RELATIONSHIP",
+    "SAME_GRAIN_MULTIPLICITY_REFERENCE",
+    "SAME_GRAIN_MULTIPLICITY_TARGETS",
     "RecordReference",
     "RelationOutcomeReference",
     "RoleApplicability",
