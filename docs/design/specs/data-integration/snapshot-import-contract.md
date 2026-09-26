@@ -6774,6 +6774,20 @@ cardinality = for each allocation + relation + exact resolved Demand Context:
 RelationOutcomeReference 必须独立承载其自己的 resolved context reference。
 ```
 
+**C.1 G5-A mapping evidence 的 Stable Source Evidence Locator 要求**
+
+```text
+G5-A mapping evidence 必须携带 non-null Stable Source Evidence Locator；
+handoff 的 evidence_locator 必须与 selected association 的 evidence[] 中至少一个 locator
+exact 相等；
+缺 locator ／ locator 不匹配 ⇒ SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED；
+不得仅凭 observation + mapping_basis 选择 association。
+```
+
+本项为 **Issue #146 已批准 authority 的 consistency sync**，**不是**新的 Human Decision，也**不扩张**
+`HandoffEvidence.evidence_locator` 在其他 seam 上的通用 optional contract（该契约未变，只在 G5-A path
+fail closed）。
+
 **D. 严格限定（保持）**
 
 ```text

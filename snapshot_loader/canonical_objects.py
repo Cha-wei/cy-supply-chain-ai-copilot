@@ -2184,12 +2184,11 @@ def _construct(
     )
 
     # --- G5-A effective demand context references (read-only) ----------------------
-    effective_demand, demand_issues = _effective_demand_references(
+    effective_demand, demand_issues = _effective_demand_contexts_for_construction(
         accepted,
         handoff,
-        located,
-        accepted_records,
-        _resolve_for_construction(resolved_objects),
+        located=located,
+        production_requirements=_resolve_for_construction(resolved_objects),
     )
     build.effective_demand_contexts.extend(effective_demand)
     build.issues.extend(demand_issues)
@@ -4140,8 +4139,6 @@ def _resolve_for_construction(
 def build_effective_demand_contexts(
     accepted: AcceptedPackage,
     handoff: PhaseAHandoff,
-    *,
-    located: Mapping[str, tuple[str, int]] | None = None,
 ) -> tuple[tuple[EffectiveDemandContextReference, ...], tuple[Issue, ...]]:
     """Return the G5-A read-only effective demand context references.
 
@@ -4151,20 +4148,45 @@ def build_effective_demand_contexts(
     never combined into a Target × Source product (``§4.1.13`` D / ``CB-1′``).
 
     The caller supplies *claims only*: context citations to be verified, plus the
-    substitute evidence, its exact locator and its ``mapping_basis``.  In particular the
-    caller can never hand in resolved demand contexts -- the already resolved
-    ``Production Requirement`` contexts are always derived from the ``AcceptedPackage``
-    itself (``CB-1′`` clauses 4 ／ 5), so no trusted ``CanonicalObject`` channel exists.
+    substitute evidence, its exact locator and its ``mapping_basis``.  Everything the
+    runtime trusts is derived here from the ``AcceptedPackage`` itself -- both the
+    accepted record index (which decides each record's real logical dataset role) and the
+    already resolved ``Production Requirement`` contexts.  There is therefore **no**
+    caller-facing parameter that could supply a trusted record-path -> role mapping or a
+    trusted ``CanonicalObject`` (``CB-1′`` clauses 4 ／ 5).
     """
 
-    if located is None:
-        located, _ = _targets_by_artifact(accepted)
+    located, _blocked = _targets_by_artifact(accepted)
     return _effective_demand_references(
         accepted,
         handoff,
         located,
         _accepted_record_index(accepted),
         _resolved_demand_contexts(accepted),
+    )
+
+
+def _effective_demand_contexts_for_construction(
+    accepted: AcceptedPackage,
+    handoff: PhaseAHandoff,
+    *,
+    located: Mapping[str, tuple[str, int]],
+    production_requirements: tuple[CanonicalObject, ...],
+) -> tuple[tuple[EffectiveDemandContextReference, ...], tuple[Issue, ...]]:
+    """Internal seam used by ``_construct`` only.
+
+    ``_construct`` has already read the accepted record index and resolved every canonical
+    object for this package, so it reuses those values instead of resolving them twice.
+    This is deliberately **private**: it is called with values the construction itself
+    produced, so it can never become a caller trust channel (``CB-1′`` clause 4).
+    """
+
+    return _effective_demand_references(
+        accepted,
+        handoff,
+        located,
+        _accepted_record_index(accepted),
+        production_requirements,
     )
 
 

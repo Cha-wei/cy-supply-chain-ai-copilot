@@ -1606,6 +1606,20 @@ runtime 唯一 outcome 推导路径：exact association ＋ exact registered map
                               ＋ 已验证的 exact Demand Context citation
 ```
 
+**D.1 G5-A mapping evidence 的 Stable Source Evidence Locator 要求（已批准 authority 的 consistency sync）**
+
+```text
+G5-A mapping evidence **必须**携带 non-null Stable Source Evidence Locator；
+handoff 的 evidence_locator **必须**与 selected association 的 evidence[] 中至少一个 locator
+**exact 相等**（无 trim ／ case conversion ／ Unicode normalization ／ numeric coercion）；
+缺 locator 或 locator 不匹配 ⇒ SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED；
+**不得**仅凭 observation ＋ mapping_basis 选择 association。
+```
+
+本项是 **Issue #146 已批准 authority 的 consistency sync**（`CB-1′` 第 6 条：context citation 不是新的
+mapping-basis evidence role），**不是**新的 Human Decision。它**不扩张** `HandoffEvidence.evidence_locator`
+在其他 seam 上的通用 optional contract —— 该通用契约保持不变；本条只在 **G5-A path** 上 fail closed。
+
 **E. 本条不采用**
 
 ```text

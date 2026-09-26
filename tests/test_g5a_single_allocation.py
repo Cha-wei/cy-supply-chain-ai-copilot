@@ -604,9 +604,11 @@ class SingleAllocationRecordTests(CanonicalObjectsTestCase):
         )
         self.assertEqual(contexts, ())
         self.assertTrue(issues)
-        # evidence ／ basis ／ citation validation all ran before the identity gate: the
-        # finding is the claim-vs-record mismatch, which is only reachable after
-        # verification, the role gate and the basis gate all succeeded.
+        # Actual order: relation validation -> evidence verification -> role-8 host gate ->
+        # allocation identity gate -> basis/association selection -> context citation gate.
+        # The claim-vs-record mismatch finding is produced by the identity gate, i.e. after
+        # relation validation, evidence verification and the role gate have all succeeded --
+        # and before any association selection or citation resolution is attempted.
         self.assertTrue(
             any(
                 "does not equal the accepted Substitute Allocation record" in issue.detail
@@ -719,21 +721,101 @@ class SingleAllocationRecordTests(CanonicalObjectsTestCase):
         signature = inspect.signature(build_effective_demand_contexts)
         self.assertEqual(
             set(signature.parameters),
-            {"accepted", "handoff", "located"},
+            {"accepted", "handoff"},
             msg=(
-                "the public entry point may only accept claims; resolved demand contexts "
-                "must be derived from the AcceptedPackage"
+                "the public entry point may only accept the accepted package and the "
+                "handoff; every trusted value must be derived from the AcceptedPackage"
             ),
         )
         for forbidden in (
+            "located",
             "production_requirements",
             "demand_contexts",
             "resolved_contexts",
             "contexts",
         ):
             self.assertNotIn(forbidden, signature.parameters)
+        # Neither the old trusted-context channel nor the record-path -> role mapping
+        # channel may be accepted.
         with self.assertRaises(TypeError):
             build_effective_demand_contexts(None, None, production_requirements=())  # type: ignore[arg-type]
+        with self.assertRaises(TypeError):
+            build_effective_demand_contexts(None, None, located={})  # type: ignore[arg-type]
+
+    def test_forged_role_mapping_cannot_promote_a_role_7_record(self) -> None:
+        """A record-path -> role mapping is no longer a caller input at all.
+
+        Historically the public API accepted a caller-supplied ``located`` mapping that the
+        runtime trusted for evidence role verification, which would in principle let a
+        ``Substitute Relationship`` record be presented as a ``Substitute Allocation`` and
+        bypass the role-8 basis-host boundary.  That parameter is gone; independently, the
+        role boundary itself holds, so a role 7 record that registers a valid G5-A literal
+        on the relation's observation still yields no outcome.
+        """
+
+        import inspect
+
+        self.assertNotIn(
+            "located", inspect.signature(build_effective_demand_contexts).parameters
+        )
+
+        datasets = single_allocation_datasets()
+        # A Substitute Relationship record that legitimately registers a G5-A literal on the
+        # very observation the relation uses, and carries the same material pair.
+        datasets[1] = (
+            "Substitute Relationship",
+            [
+                with_provenance(
+                    {
+                        "plant_id": PLANT,
+                        "target_material_code": MATERIAL,
+                        "substitute_material_code": SOURCE_MATERIAL,
+                        "substitution_ratio": "1.0",
+                        "approval_status": "APPROVED",
+                    },
+                    [("target_material_code", [EVIDENCE_TA], BASIS_TA_APPLICABLE)],
+                )
+            ],
+        )
+        _built, accepted = self.accepted(datasets, name="g5a-forged-role-mapping")
+
+        entry = EffectiveDemandRelationHandoff(
+            source_substitute_material=SOURCE_MATERIAL,
+            target_material=MATERIAL,
+            relation=RELATION_TARGET_APPLICABILITY,
+            evidence=self.citation(
+                accepted,
+                role="Substitute Allocation",
+                artifact="1.json",
+                ordinal=0,
+                locator=EVIDENCE_TA,
+            ),
+            mapping_basis=BASIS_TA_APPLICABLE,
+            context_citation=self.citation(
+                accepted,
+                role="Production Requirement",
+                artifact="2.json",
+                ordinal=0,
+                locator="SIMULATED-SRC-REQ-1",
+            ),
+        )
+        contexts, issues = build_effective_demand_contexts(
+            accepted,
+            PhaseAHandoff(
+                analysis_run_id="RUN-1",
+                analysis_date="2026-10-01",
+                effective_demand=(entry,),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assertTrue(issues)
+        self.assertTrue(all(issue.reason == "SEMANTIC_UNRESOLVED" for issue in issues))
+        # The real role of ``1.json#0`` is read from the accepted package, so the forged
+        # declaration is rejected on the role, never silently believed.
+        self.assertTrue(
+            any("Substitute Relationship" in issue.detail for issue in issues),
+            msg="the finding must name the record's real accepted role",
+        )
 
 
 if __name__ == "__main__":
