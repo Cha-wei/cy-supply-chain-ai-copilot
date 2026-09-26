@@ -753,6 +753,34 @@ Target Applicability  ≠  Source Reservation Overlap（不得压成一个 Boole
 `§4.1.4 G` 的 grain 与 attributes **未改变**；**未**新增 `requirement_id` ／ `demand_window_id` ／
 `allocation_period` ／ `valid_from` ／ `valid_to`。
 
+**D.1 Grain-scoped unresolved effective demand reference（Human Decision `Option A′`，新增登记）**
+
+当 **exact Demand Context 已通过现有 authority 可靠解析**，但 relation outcome 因既有
+semantic-resolution failure **无法形成正常 `EffectiveDemandContextReference`** 时（例如 unregistered
+mapping basis、mapping basis ／ association ambiguity、已验证 mapping evidence 但 relation outcome 无法
+可靠确定），runtime **额外**产出一个 read-only **grain-scoped unresolved reference**：
+
+```
+携带（全部为既有 authority）：
+  existing relation
+  existing resolved DemandContextReference（已 resolved 的 Production Requirement context grain）
+  existing unresolved meaning：SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED
+  （可选）现有 provenance ／ reason trace，仅用于审计
+
+不是：canonical field ／ canonical entity ／ identity component ／ 新 grain
+不是：business enum ／ status ／ wire field ／ persisted state
+不是：caller-supplied identity ／ 新的 mapping inference
+```
+
+**边界（不得 fabricate attribution）**：Demand Context 本身无法可靠解析时（invalid ／ unverifiable
+citation、material mismatch、plant mismatch、unresolved Production Requirement context、allocation
+identity 不可读），**不**产生该 reference，既有 unresolved 行为保持不变；**不得**借 allocation grain 推
+`required_date`，**不得**解析 finding 的 free text 取得 identity。
+
+该 reference 的**唯一**消费边界是 `BR-SUBSTITUTE-001` 的 `S3-A` completion：exact unresolved
+`Target Applicability` grain ⇒ `CumulativeApprovedSubstituteSupply = DATA_INCOMPLETE`（`§2.3.11` B），
+且 failure isolation 保持到该 exact grain。`ADR-001` 未改变。
+
 **E. `POLICY_INPUT` ／ `CONTEXT` context**
 
 `loss_rate` ／ `SafetyStock` ／ `ApplicableMOQ` ／ `AnalysisDate` ／ `RecommendationNeedDate` 以

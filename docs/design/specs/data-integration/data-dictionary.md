@@ -1003,6 +1003,13 @@ result boundary 完成**：substitute rule 对全部已解析 shortage demand gr
 applicability 都使该 grain 为 `DATA_INCOMPLETE`。`BR-SHORTAGE-001` **只消费**该已完成结果：不补全
 grain universe、不推断 `0`、也不重算 `BR-SUBSTITUTE-001`。
 
+同一 boundary 还消费 **grain-scoped unresolved G5-A reference**（Human Decision `Option A′`）：当 exact
+Demand Context 已可靠解析、而 relation outcome 无法形成正常 reference 时，该 exact grain 的
+`CumulativeApprovedSubstituteSupply` 为 `DATA_INCOMPLETE`。该 reference 是 read-only derived runtime
+surface（carrying existing relation ＋ resolved `DemandContextReference` ＋
+`SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`）：**不是** canonical field ／ entity ／ grain，**不是**
+business enum，**不是** persisted state，也**不是** wire schema；`ADR-001` 未改变。
+
 **本澄清不新增任何 canonical field / entity / identity component / grain**：涉及的
 `ProjectedAvailable` ／ `Classification` ／ `ShortageQty` ／ `BufferGap` /
 `FirstShortageDate` 行本身**未修改**，只是明确其 inventory-side 输入的消费边界与 exact 数值语义。

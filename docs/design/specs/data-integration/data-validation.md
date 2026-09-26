@@ -2911,6 +2911,14 @@ resolved upstream result 的消费边界是 rule-specific 的，
   到更晚 grain（更晚 grain 自身无新增 contribution **不等于** `DATA_INCOMPLETE`）；任何影响 `<= t`
   累计的 unresolved applicability 使该 grain `DATA_INCOMPLETE`；valid zero 只能来自 upstream 的显式
   结论。upstream `DATA_INCOMPLETE` 在 affected grain 上原样传播。
+- **grain-scoped unresolved effective demand reference（`Option A′`）**：G5-A 对「exact Demand Context
+  已可靠解析、但 relation outcome 无法形成正常 reference」的 entry 产出一个 read-only grain-scoped
+  unresolved reference（carrying existing relation ＋ resolved DemandContextReference ＋
+  `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`）。`BR-SUBSTITUTE-001` **只**用它把该 exact
+  `Target Applicability` grain 的 `CumulativeApprovedSubstituteSupply` 判为 `DATA_INCOMPLETE`，failure
+  isolation 到该 grain；**不得** role-level ／ material-level ／ allocation-level 推定。Demand Context
+  本身无法可靠解析时**不**产出该 reference，既有 unresolved 行为保持不变，且**不得**由 allocation
+  grain 推 `required_date` 或解析 finding free text。
 - **exact rational 不是 unresolved**：upstream 的 exact `Fraction`（例如 `GrossRequirement = 4000/19`）
   是可靠 quantity；**不得**因该值没有有限十进制表示而将其降级为 `DATA_INCOMPLETE`，也**不得**
   `round` ／ `truncate` ／ `quantize`（`§2.4.8` / `ADR-001`）。derived result **只**以仓库既有的 exact

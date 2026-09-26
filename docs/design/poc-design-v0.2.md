@@ -2092,6 +2092,10 @@ component `material_code` + `required_date`）补全其 answer surface，使每�
   该 valid zero **只能**来自 substitute rule 的显式结论，**不得**由 dataset 缺失 ／ 证据未解析推断；
 - 该 grain 被引用为 exact Source Demand Context 且 substitute rule 未给出任何 Target Demand Context ⇒
   显式 0（`§4.4.88` valid zero），不是被省略的目标；
+- 该 grain 存在 **grain-scoped unresolved G5-A reference**（Human Decision `Option A′`：exact Demand
+  Context 已可靠解析，但 Target Applicability relation outcome 无法形成正常 reference）⇒ 该 grain
+  `DATA_INCOMPLETE`，**不得**读成 `0`，**不得** carry forward 更早值；判定**只**作用于该 exact grain，
+  更早 grain 保持可靠（`§4.4.10` failure isolation）；
 - completed result 对该 grain 既不表达数值也不表达 `DATA_INCOMPLETE` ⇒ `BR-SHORTAGE-001`
   fail closed 为 `DATA_INCOMPLETE`（**不得**自行推断 `0`）。
 

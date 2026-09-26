@@ -40,6 +40,7 @@ from snapshot_loader import (
     SafetyStockHandoff,
     TrustedInputBoundary,
     build_effective_demand_contexts,
+    build_effective_demand_results,
     construct_canonical_objects,
     load_package,
     validate_layer2,
@@ -53,6 +54,7 @@ from snapshot_loader.canonical_objects import (
     CANONICALIZATION_ROLES,
     CANONICALIZATION_ROLE_BY_LITERAL,
     CANONICALIZATION_ROLE_RECOGNITION,
+    DEMAND_CONTEXT_GRAIN_PROPERTIES,
     DEMAND_CONTEXT_SOURCE,
     DEMAND_CONTEXT_TARGET,
     EFFECTIVE_DEMAND_BASIS_REGISTRY,
@@ -1377,6 +1379,397 @@ class NonHashableEffectiveDemandPairTests(CanonicalObjectsTestCase):
         for forbidden in ("outcome", "applicable", "overlaps", "result", "boolean"):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, fields)
+
+
+class GrainScopedUnresolvedEffectiveDemandTests(CanonicalObjectsTestCase):
+    """G5-A / I-8 ／ ``§4.4.102``: the Human-approved ``Option A′`` surface.
+
+    A handoff whose exact Demand Context **was** reliably resolved while the relation
+    outcome could not be established (an unregistered ／ ambiguous mapping association, or a
+    registered basis that is not approved for that relation) publishes one read-only
+    grain-scoped unresolved reference, so the exact demand context -- and its canonical
+    grain -- stays reachable.  Every other no-reference path keeps its existing behaviour
+    and fabricates nothing: when the demand context itself cannot be reliably resolved, no
+    grain is inferred from an allocation, no date is borrowed and no identity is read out
+    of a finding's free text.
+    """
+
+    BASIS_TARGET_APPLICABILITY = "SIMULATED-G5A-TA-APPLICABLE"
+    BASIS_SOURCE_RESERVATION = "SIMULATED-G5A-SRO-OVERLAPS"
+    BASIS_UNREGISTERED = "SIMULATED-G5A-TA-UNREGISTERED"
+    BASIS_SOURCE_UNREGISTERED = "SIMULATED-G5A-SRO-UNREGISTERED"
+
+    def datasets(self, *, target_basis: str | None = None):
+        return [
+            (
+                "Substitute Allocation",
+                [
+                    with_provenance(
+                        {
+                            "plant_id": PLANT,
+                            "target_material_code": MATERIAL,
+                            "substitute_material_code": "M3",
+                            "AllocatedSubstituteQty": "4",
+                        },
+                        [
+                            (
+                                "target_material_code",
+                                [EVIDENCE_ALLOCATION],
+                                target_basis or self.BASIS_TARGET_APPLICABILITY,
+                            ),
+                            (
+                                "substitute_material_code",
+                                [EVIDENCE_ALLOCATION],
+                                self.BASIS_SOURCE_RESERVATION,
+                            ),
+                        ],
+                    )
+                ],
+            ),
+            (
+                "Production Requirement",
+                [
+                    PRODUCTION_REQUIREMENT(),
+                    PRODUCTION_REQUIREMENT(material_code="M3"),
+                ],
+            ),
+        ]
+
+    def entry(
+        self,
+        accepted,
+        *,
+        relation: str = RELATION_TARGET_APPLICABILITY,
+        basis: str | None = None,
+        context_ordinal: int | None = None,
+        context_role: str = "Production Requirement",
+        context_artifact: str = "1.json",
+        context_package_id: str | None = None,
+        evidence_role: str = "Substitute Allocation",
+        evidence_artifact: str = "0.json",
+        evidence_locator: str | None = EVIDENCE_ALLOCATION,
+        evidence_package_id: str | None = None,
+    ) -> EffectiveDemandRelationHandoff:
+        source_side = relation == RELATION_SOURCE_RESERVATION_OVERLAP
+        return EffectiveDemandRelationHandoff(
+            source_substitute_material="M3",
+            target_material=MATERIAL,
+            relation=relation,
+            evidence=self.citation(
+                accepted,
+                role=evidence_role,
+                artifact=evidence_artifact,
+                locator=evidence_locator,
+                package_id=evidence_package_id,
+            ),
+            mapping_basis=(
+                basis
+                if basis is not None
+                else (
+                    self.BASIS_SOURCE_RESERVATION
+                    if source_side
+                    else self.BASIS_TARGET_APPLICABILITY
+                )
+            ),
+            context_citation=self.citation(
+                accepted,
+                role=context_role,
+                artifact=context_artifact,
+                ordinal=(
+                    context_ordinal
+                    if context_ordinal is not None
+                    else (1 if source_side else 0)
+                ),
+                package_id=context_package_id,
+            ),
+        )
+
+    def results(self, *, name: str, entries, target_basis: str | None = None):
+        _, accepted = self.accepted(
+            self.datasets(target_basis=target_basis), name=name
+        )
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-02-01",
+            effective_demand=tuple(entries(accepted)),
+        )
+        return accepted, build_effective_demand_results(accepted, handoff)
+
+    def test_an_unregistered_basis_keeps_the_exact_grain_reachable(self) -> None:
+        _, (contexts, unresolved, issues) = self.results(
+            name="option-a-unregistered-basis",
+            entries=lambda accepted: (
+                self.entry(accepted, basis=self.BASIS_UNREGISTERED),
+            ),
+        )
+        # No relation outcome reference is formed: the accepted record registers no such
+        # association, and the basis is never borrowed.
+        self.assertEqual(contexts, ())
+        # The exact demand context stays reachable, on the existing relation.
+        self.assertEqual(len(unresolved), 1)
+        reference = unresolved[0]
+        self.assertEqual(reference.relation, RELATION_TARGET_APPLICABILITY)
+        self.assertEqual(reference.context.semantic, DEMAND_CONTEXT_TARGET)
+        self.assertEqual(
+            [(prop.name, prop.value) for prop in reference.grain],
+            [
+                ("plant_id", PLANT),
+                ("material_code", MATERIAL),
+                ("required_date", REQUIRED_DATE),
+            ],
+        )
+        # The unresolved meaning is the inherited one, carried as-is.
+        self.assertEqual(reference.category, "SEMANTIC_RESOLUTION")
+        self.assertEqual(reference.reason, "SEMANTIC_UNRESOLVED")
+        # The inherited finding is unchanged.
+        self.assertTrue(issues)
+        self.assertTrue(
+            all(
+                issue.category == "SEMANTIC_RESOLUTION"
+                and issue.reason == "SEMANTIC_UNRESOLVED"
+                for issue in issues
+            )
+        )
+        self.assertIn(self.BASIS_UNREGISTERED, issues[0].detail)
+
+    def test_the_citation_is_resolved_through_the_existing_authority(self) -> None:
+        _, (contexts, unresolved, _issues) = self.results(
+            name="option-a-existing-authority",
+            entries=lambda accepted: (
+                self.entry(accepted, basis=self.BASIS_UNREGISTERED),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        reference = unresolved[0]
+        # The grain, record reference and provenance are the **resolved Production
+        # Requirement context's own** values, never anything the caller supplied.
+        declared = self.datasets()[1][1][0]
+        self.assertEqual(reference.context.grain[0].value, declared["plant_id"])
+        self.assertEqual(reference.context.grain[1].value, declared["material_code"])
+        self.assertEqual(reference.context.grain[2].value, declared["required_date"])
+        self.assertEqual(reference.context.provenance.logical_dataset_role, "Production Requirement")
+        self.assertEqual(
+            [prop.name for prop in reference.grain],
+            list(DEMAND_CONTEXT_GRAIN_PROPERTIES),
+        )
+        # The claimed basis is trace only: it is reported, never treated as registered.
+        self.assertEqual(reference.claimed_mapping_basis, self.BASIS_UNREGISTERED)
+        self.assertTrue(reference.note)
+
+    def test_no_new_identity_component_or_field_is_introduced(self) -> None:
+        from snapshot_loader.canonical_objects import (
+            UnresolvedEffectiveDemandContextReference,
+        )
+
+        self.assertEqual(
+            set(UnresolvedEffectiveDemandContextReference.__dataclass_fields__),
+            {"relation", "context", "provenance", "claimed_mapping_basis", "note"},
+        )
+        _, (contexts, unresolved, _issues) = self.results(
+            name="option-a-no-new-field",
+            entries=lambda accepted: (
+                self.entry(accepted, basis=self.BASIS_UNREGISTERED),
+            ),
+        )
+        payload = unresolved[0].to_dict()
+        self.assertEqual(
+            set(payload),
+            {
+                "semantic",
+                "relation",
+                "category",
+                "reason",
+                "claimed_mapping_basis",
+                "note",
+                "provenance",
+                "context",
+            },
+        )
+        self.assertEqual(payload["semantic"], "UnresolvedEffectiveDemandContextReference")
+        self.assertEqual(payload["relation"], RELATION_TARGET_APPLICABILITY)
+        self.assertEqual(payload["category"], "SEMANTIC_RESOLUTION")
+        self.assertEqual(payload["reason"], "SEMANTIC_UNRESOLVED")
+
+    def test_a_registered_unresolved_basis_is_not_duplicated(self) -> None:
+        # A *registered* basis whose own outcome is ``unresolved`` already forms a normal
+        # reference (with no outcome value), so the grain is reachable without the new
+        # surface and no second entry is created for it.
+        _, (contexts, unresolved, _issues) = self.results(
+            name="option-a-registered-unresolved",
+            target_basis="SIMULATED-G5A-TA-UNRESOLVED",
+            entries=lambda accepted: (
+                self.entry(accepted, basis="SIMULATED-G5A-TA-UNRESOLVED"),
+            ),
+        )
+        self.assertEqual(len(contexts), 1)
+        self.assertIsNone(contexts[0].relation_outcome.outcome)
+        self.assertEqual(unresolved, ())
+
+    def test_a_resolved_relation_outcome_publishes_no_unresolved_reference(self) -> None:
+        _, (contexts, unresolved, issues) = self.results(
+            name="option-a-resolved",
+            entries=lambda accepted: (self.entry(accepted),),
+        )
+        self.assertEqual(len(contexts), 1)
+        self.assertEqual(contexts[0].relation_outcome.outcome, "applicable")
+        self.assertEqual(unresolved, ())
+        self.assertEqual(issues, ())
+
+    def test_the_surface_is_relation_generic(self) -> None:
+        # ``Source Reservation Overlap`` is the same registered failure class and carries its
+        # own relation and its own (source-side) demand context semantic.
+        _, (contexts, unresolved, _issues) = self.results(
+            name="option-a-source-relation",
+            entries=lambda accepted: (
+                self.entry(
+                    accepted,
+                    relation=RELATION_SOURCE_RESERVATION_OVERLAP,
+                    basis=self.BASIS_SOURCE_UNREGISTERED,
+                ),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assertEqual(len(unresolved), 1)
+        self.assertEqual(
+            unresolved[0].relation, RELATION_SOURCE_RESERVATION_OVERLAP
+        )
+        self.assertEqual(unresolved[0].context.semantic, DEMAND_CONTEXT_SOURCE)
+        self.assertEqual(
+            [(prop.name, prop.value) for prop in unresolved[0].grain],
+            [
+                ("plant_id", PLANT),
+                ("material_code", "M3"),
+                ("required_date", REQUIRED_DATE),
+            ],
+        )
+
+    def test_a_material_mismatch_fabricates_no_grain_reference(self) -> None:
+        # The TA claim cites the *source* material's requirement row.  With a registered
+        # basis the association selects and the citation itself is what fails; with an
+        # unregistered basis the association fails first and the recorder must still refuse
+        # to attribute anything, because the demand context is what is not reliably
+        # resolved.  In both directions the allocation's own material must never be used to
+        # invent the date.
+        for label, basis in (
+            ("registered-basis", self.BASIS_TARGET_APPLICABILITY),
+            ("unregistered-basis", self.BASIS_UNREGISTERED),
+        ):
+            with self.subTest(label=label):
+                _, (contexts, unresolved, issues) = self.results(
+                    name=f"option-a-material-mismatch-{label}",
+                    entries=lambda accepted, basis=basis: (
+                        self.entry(
+                            accepted,
+                            basis=basis,
+                            context_ordinal=1,
+                        ),
+                    ),
+                )
+                self.assertEqual(contexts, ())
+                self.assertEqual(unresolved, ())
+                self.assertTrue(issues)
+        # The registered-basis direction reports the citation mismatch itself.
+        _, (_, unresolved_mismatch, issues_mismatch) = self.results(
+            name="option-a-material-mismatch-detail",
+            entries=lambda accepted: (
+                self.entry(
+                    accepted,
+                    basis=self.BASIS_TARGET_APPLICABILITY,
+                    context_ordinal=1,
+                ),
+            ),
+        )
+        self.assertEqual(unresolved_mismatch, ())
+        self.assertTrue(
+            any(
+                "not for the allocation's own target material" in issue.detail
+                for issue in issues_mismatch
+            )
+        )
+
+    def test_an_unverifiable_citation_fabricates_no_grain_reference(self) -> None:
+        for label, kwargs in (
+            ("foreign-package", {"context_package_id": "OTHER-PACKAGE"}),
+            ("wrong-role", {"context_role": "Substitute Relationship"}),
+            ("wrong-artifact", {"context_artifact": "9.json"}),
+        ):
+            with self.subTest(label=label):
+                _, (contexts, unresolved, issues) = self.results(
+                    name=f"option-a-unverifiable-{label}",
+                    entries=lambda accepted, kwargs=kwargs: (
+                        self.entry(
+                            accepted,
+                            basis=self.BASIS_UNREGISTERED,
+                            **kwargs,
+                        ),
+                    ),
+                )
+                self.assertEqual(contexts, ())
+                self.assertEqual(unresolved, ())
+                self.assertTrue(issues)
+
+    def test_an_unverifiable_mapping_evidence_fabricates_no_grain_reference(self) -> None:
+        # The demand context may be perfectly resolvable, but without the accepted
+        # allocation record its own identity -- and therefore the side identity the citation
+        # must match -- cannot be established, so no grain is inferred from the allocation.
+        _, (contexts, unresolved, issues) = self.results(
+            name="option-a-unverifiable-evidence",
+            entries=lambda accepted: (
+                self.entry(
+                    accepted,
+                    basis=self.BASIS_UNREGISTERED,
+                    evidence_package_id="OTHER-PACKAGE",
+                ),
+            ),
+        )
+        self.assertEqual(contexts, ())
+        self.assertEqual(unresolved, ())
+        self.assertTrue(issues)
+
+    def test_the_construction_report_publishes_the_surface_per_exact_grain(self) -> None:
+        _, accepted = self.accepted(self.datasets(), name="option-a-report")
+        handoff = PhaseAHandoff(
+            analysis_run_id="RUN-1",
+            analysis_date="2026-02-01",
+            effective_demand=(
+                self.entry(accepted, basis=self.BASIS_UNREGISTERED),
+            ),
+        )
+        report = construct_canonical_objects(accepted, handoff)
+        self.assertEqual(report.effective_demand_contexts, ())
+        self.assertEqual(len(report.unresolved_effective_demand_contexts), 1)
+        self.assertEqual(
+            report.unresolved_effective_demand_for_grain(
+                PLANT, MATERIAL, REQUIRED_DATE
+            ),
+            report.unresolved_effective_demand_contexts,
+        )
+        self.assertEqual(
+            report.unresolved_effective_demand_for_grain(
+                PLANT, MATERIAL, "2026-02-02"
+            ),
+            (),
+        )
+        self.assertEqual(
+            report.unresolved_effective_demand_for_grain(PLANT, "M3", REQUIRED_DATE),
+            (),
+        )
+        self.assertEqual(
+            report.unresolved_effective_demand_for_grain(
+                "P2", MATERIAL, REQUIRED_DATE
+            ),
+            (),
+        )
+        self.assertEqual(
+            report.unresolved_effective_demand_for_grain(
+                PLANT,
+                MATERIAL,
+                REQUIRED_DATE,
+                relation=RELATION_SOURCE_RESERVATION_OVERLAP,
+            ),
+            (),
+        )
+        self.assertIn("unresolved_effective_demand_contexts", report.to_dict())
 
 
 class ProvenanceTests(CanonicalObjectsTestCase):

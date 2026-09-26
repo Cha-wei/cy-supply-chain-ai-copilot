@@ -609,7 +609,12 @@ def compute_substitute_supply(
       ``DATA_INCOMPLETE`` -- it is never read as ``0``;
     * a reliably confirmed absence of an approved ／ applicable substitute is the legal ``0`` of
       ``§2.3.11`` A ／ ``§4.4.88``;
-    * an absent ``Substitute Relationship`` dataset is never read as ``0``.
+    * an absent ``Substitute Relationship`` dataset is never read as ``0``;
+    * a **grain-scoped unresolved G5-A reference** (Human Decision ``Option A′``) makes that exact
+      grain ``DATA_INCOMPLETE``: the demand context *was* reliably resolved while the ``Target
+      Applicability`` relation outcome could not be established, so "no new contribution" is not a
+      reliable conclusion for it.  The decision is taken per exact grain, so an earlier or later
+      grain of the same Plant + Material keeps its own value (``§4.4.10``).
 
     ``construction`` is consumed only through the canonical objects the construction already
     resolved plus the one role-level fact :func:`_relationship_dataset_present` states.
@@ -650,6 +655,9 @@ def compute_substitute_supply(
         cited_grains | demand_grains,
         key=lambda item: tuple(_sort_text(part) for part in item),
     )
+    # ``Option A′`` (Human-approved): the G5-A layer states, per exact demand context, when the
+    # *relation outcome itself* could not be established.  Such a grain is **not** a reliable "no
+    # new applicable contribution": whether an approved substitute reaches it is unknown.
     grain_evaluations: dict[
         tuple[Any, Any, Any], tuple[SubstituteEvaluation, ...]
     ] = {}
@@ -666,7 +674,13 @@ def compute_substitute_supply(
             for outcome in target_contexts.get(grain, ())
         )
         grain_evaluations[grain] = evaluations
-        if any(item.data_incomplete for item in evaluations):
+        if _g5a_target_unresolved(construction, grain):
+            # A grain-scoped unresolved Target Applicability: the cumulative at this grain is not
+            # obtainable, so it is never read as ``0`` and never carries an earlier value forward
+            # (§2.3.11 B ／ S3-A).  The failure stays on **this exact grain**: an earlier or later
+            # grain of the same Plant + Material is unaffected (§4.4.10).
+            unreliable_grains.append(grain)
+        elif any(item.data_incomplete for item in evaluations):
             unreliable_grains.append(grain)
         elif grain not in cited_grains and not relationship_present:
             # No target context cites this grain and the accepted package declared no
@@ -788,6 +802,34 @@ def _cited_source_demand_contexts(
             )
         )
     return tuple(contexts)
+
+
+def _g5a_target_unresolved(
+    construction: CanonicalConstructionReport,
+    grain: tuple[Any, Any, Any],
+) -> bool:
+    """Whether G5-A states a **grain-scoped unresolved Target Applicability** for this grain.
+
+    ``Option A′`` (Human-approved).  The G5-A layer publishes one read-only reference per handoff
+    whose exact Demand Context *was* reliably resolved while the ``Target Applicability`` relation
+    outcome could not be established (an unregistered ／ ambiguous mapping association, or a
+    registered basis that is not approved for the relation).  Such a grain is **not** a reliable "no
+    new applicable contribution": whether an approved substitute reaches it is unknown, so its
+    ``CumulativeApprovedSubstituteSupply(<= t)`` is not obtainable (§2.3.11 B ／ S3-A).
+
+    The lookup is the report's own exact-grain accessor, so only the reference of **this** plant ／
+    material ／ date is consumed: no role-level, material-level or allocation-level poisoning, and no
+    identity is inferred from any finding's free text (§4.4.10 failure isolation).
+    """
+
+    return bool(
+        construction.unresolved_effective_demand_for_grain(
+            grain[0],
+            grain[1],
+            grain[2],
+            relation=RELATION_TARGET_APPLICABILITY,
+        )
+    )
 
 
 def _demand_grains(

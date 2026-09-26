@@ -579,6 +579,89 @@ class EffectiveDemandContextReference:
 
 
 @dataclass(frozen=True, slots=True)
+class UnresolvedEffectiveDemandContextReference:
+    """Grain-scoped unresolved G5-A reference (Human Decision ``Option A′``).
+
+    ``§4.1.13`` D ／ ``§4.3.31`` G I-8 register **exactly one** deterministic relation
+    outcome per ``allocation × relation × exact resolved Demand Context`` -- or
+    *unresolved*.  Before this reference existed, an unresolved relation was expressed
+    **only** as "no reference ⇒ ``SEMANTIC_RESOLUTION`` ／ ``SEMANTIC_UNRESOLVED``"
+    (``§4.4.102``), so the exact demand context -- and therefore the exact shortage demand
+    grain -- the unresolved entry was about was unreachable by any downstream rule.
+
+    This read-only runtime reference closes that gap **without** inventing an outcome,
+    **without** borrowing an identity and **without** any new mapping inference.  It is
+    formed only when:
+
+    1. the exact Demand Context **was** reliably resolved through the existing authority:
+       the same already resolved ``Production Requirement`` context, matched against the
+       **accepted allocation record's own** identity on the relation's own citation side
+       and the same Plant, exactly as the formed references do; and
+    2. the *relation outcome alone* could not be established through an existing
+       semantic-resolution path -- an unregistered ／ ambiguous mapping association, or a
+       registered basis that is not an approved one for that relation.
+
+    Every other no-reference path keeps its existing behaviour and forms **no** reference:
+    an invalid ／ unverifiable demand-context citation, a material mismatch, a Plant
+    mismatch, an unresolved ``Production Requirement`` context or an unreadable allocation
+    identity never yields a grain here -- a grain is never inferred from an allocation, and
+    no identity is ever parsed out of a finding's free text.
+
+    It carries the existing ``relation``, the existing resolved
+    :class:`DemandContextReference` and the existing unresolved meaning
+    (``SEMANTIC_RESOLUTION`` ／ ``SEMANTIC_UNRESOLVED``); ``claimed_mapping_basis``,
+    ``note`` and ``provenance`` are trace only.  It is **not** a canonical field, **not** a
+    canonical entity, adds **no** identity component and **no** grain, is **not** a business
+    enum ／ status, is **not** persisted and is **not** a wire carrier (``ADR-001``
+    unchanged).
+    """
+
+    relation: str
+    context: DemandContextReference
+    provenance: EvidenceReference
+    claimed_mapping_basis: str
+    note: str
+
+    @property
+    def category(self) -> str:
+        """The inherited finding category this reference stands for."""
+
+        return CATEGORY_SEMANTIC_RESOLUTION
+
+    @property
+    def reason(self) -> str:
+        """The inherited finding reason this reference stands for."""
+
+        return REASON_SEMANTIC_UNRESOLVED
+
+    @property
+    def grain(self) -> tuple[CanonicalProperty, ...]:
+        """The **existing** resolved Demand Context grain; no new grain is created."""
+
+        return self.context.grain
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "semantic": "UnresolvedEffectiveDemandContextReference",
+            "relation": self.relation,
+            "category": self.category,
+            "reason": self.reason,
+            "claimed_mapping_basis": self.claimed_mapping_basis,
+            "note": self.note,
+            "provenance": _provenance_to_dict(self.provenance),
+            "context": {
+                "semantic": self.context.semantic,
+                "grain": [
+                    {"name": prop.name, "value": prop.value}
+                    for prop in self.context.grain
+                ],
+                "record_reference": self.context.record_reference,
+                "provenance": _provenance_to_dict(self.context.provenance),
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class InventoryScopeContext:
     """Read-only runtime result of the inventory ownership / scope resolution (I-9).
 
@@ -935,6 +1018,24 @@ DEMAND_CONTEXT_GRAIN_PROPERTIES: tuple[str, ...] = (
 )
 
 
+def _registered_citation_side(relation: str) -> str | None:
+    """The one demand-context side **every** registered basis of ``relation`` cites.
+
+    Read from the existing closed :data:`EFFECTIVE_DEMAND_BASIS_REGISTRY`; nothing is
+    inferred.  When the registry does not state exactly one side for the relation, the
+    result is ``None`` and no grain-scoped unresolved reference is formed for it: a side is
+    never guessed, so no citation is ever verified against the wrong demand-context
+    semantic (``§4.1.13`` D ／ ``§4.5.9``).
+    """
+
+    sides = {
+        rule.citation_side
+        for rule in EFFECTIVE_DEMAND_BASIS_REGISTRY
+        if rule.relation == relation
+    }
+    return next(iter(sides)) if len(sides) == 1 else None
+
+
 #: The two source evidence shapes registered by ``§4.5.12``.  They share one runtime
 #: contract (``§4.3.31`` G I-9); only the evidence the association cites differs.
 INVENTORY_SCOPE_SHAPE_WAREHOUSE: str = "A"
@@ -1122,6 +1223,15 @@ class CanonicalConstructionReport:
     "supplied but nothing resolved" state, deliberately distinct from "supplied empty" and
     from "never supplied", so a downstream rule can fail closed on the first while treating
     the second as a stated absence.  It carries no value and no identity component either.
+
+    ``unresolved_effective_demand_contexts`` carries the grain-scoped unresolved G5-A
+    references (Human Decision ``Option A′``): one read-only entry per handoff whose exact
+    Demand Context **was** reliably resolved while the relation outcome could not be
+    established.  It is the only surface on which such an entry's demand context -- and so
+    its exact shortage demand grain -- stays reachable, because an unresolved relation is
+    otherwise expressed only as "no reference ⇒ ``SEMANTIC_RESOLUTION`` ／
+    ``SEMANTIC_UNRESOLVED``".  It is a derived runtime surface: not a canonical field, not
+    an entity, no new grain and no persisted or wire state.
     """
 
     package_id: str
@@ -1141,6 +1251,9 @@ class CanonicalConstructionReport:
     inventory_scope_contexts: tuple[InventoryScopeContext, ...] = ()
     present_roles: tuple[str, ...] = ()
     unresolved_roles: tuple[str, ...] = ()
+    unresolved_effective_demand_contexts: tuple[
+        UnresolvedEffectiveDemandContextReference, ...
+    ] = ()
 
     def objects_for(self, canonical_target: str) -> tuple[CanonicalObject, ...]:
         for entry in self.object_sets:
@@ -1161,6 +1274,38 @@ class CanonicalConstructionReport:
             if context.inventory_reference == inventory_reference:
                 return context
         return None
+
+    def unresolved_effective_demand_for_grain(
+        self,
+        plant_id: Any,
+        material_code: Any,
+        required_date: Any,
+        *,
+        relation: str | None = None,
+    ) -> tuple[UnresolvedEffectiveDemandContextReference, ...]:
+        """Every grain-scoped unresolved G5-A reference of exactly this canonical grain.
+
+        The grain is compared on the **existing** resolved Demand Context grain properties
+        (``§4.1.4`` C) by name, so a reference of another Plant, material or date is never
+        returned; an unusable ／ incomplete context grain matches nothing rather than
+        everything (``§4.4.10`` failure isolation).  ``relation`` optionally restricts the
+        result to one registered G5-A relation.
+        """
+
+        wanted = (plant_id, material_code, required_date)
+        found: list[UnresolvedEffectiveDemandContextReference] = []
+        for item in self.unresolved_effective_demand_contexts:
+            if relation is not None and item.relation != relation:
+                continue
+            by_name = {prop.name: prop.value for prop in item.context.grain}
+            values = tuple(
+                by_name.get(name, ABSENT) for name in DEMAND_CONTEXT_GRAIN_PROPERTIES
+            )
+            if ABSENT in values:
+                continue
+            if values == wanted:
+                found.append(item)
+        return tuple(found)
 
     def check_states(self) -> dict[str, str]:
         return {name: state for name, state, _ in self.checks}
@@ -1196,6 +1341,9 @@ class CanonicalConstructionReport:
             "effective_demand_contexts": [
                 _effective_demand_to_dict(item)
                 for item in self.effective_demand_contexts
+            ],
+            "unresolved_effective_demand_contexts": [
+                item.to_dict() for item in self.unresolved_effective_demand_contexts
             ],
             "loss_rate_contexts": [
                 _context_value_to_dict(item) for item in self.loss_rate_contexts
@@ -1305,6 +1453,9 @@ class _Construction:
         self.loss_rate_contexts: list[ContextValueReference] = []
         self.safety_stock_contexts: list[ContextValueReference] = []
         self.effective_demand_contexts: list[EffectiveDemandContextReference] = []
+        self.unresolved_effective_demand_contexts: list[
+            UnresolvedEffectiveDemandContextReference
+        ] = []
         self.inventory_scope_contexts: list[InventoryScopeContext] = []
 
     def check(self, name: str, state: str, note: str | None = None) -> None:
@@ -2229,13 +2380,16 @@ def _construct(
     )
 
     # --- G5-A effective demand context references (read-only) ----------------------
-    effective_demand, demand_issues = _effective_demand_contexts_for_construction(
-        accepted,
-        handoff,
-        located=located,
-        production_requirements=_resolve_for_construction(resolved_objects),
+    effective_demand, unresolved_demand, demand_issues = (
+        _effective_demand_contexts_for_construction(
+            accepted,
+            handoff,
+            located=located,
+            production_requirements=_resolve_for_construction(resolved_objects),
+        )
     )
     build.effective_demand_contexts.extend(effective_demand)
+    build.unresolved_effective_demand_contexts.extend(unresolved_demand)
     build.issues.extend(demand_issues)
 
     # --- G4-A BOM parent / requirement context binding ------------------------------
@@ -2324,6 +2478,16 @@ def _construct(
         ),
         present_roles=tuple(present_roles),
         unresolved_roles=tuple(unresolved_roles),
+        unresolved_effective_demand_contexts=tuple(
+            sorted(
+                build.unresolved_effective_demand_contexts,
+                key=lambda item: (
+                    item.relation,
+                    tuple(str(prop.value) for prop in item.context.grain),
+                    item.context.record_reference,
+                ),
+            )
+        ),
     )
 
 
@@ -2342,6 +2506,7 @@ def _empty_report(
         inbound_records=(),
         substitute_allocations=(),
         effective_demand_contexts=(),
+        unresolved_effective_demand_contexts=(),
         loss_rate_contexts=(),
         safety_stock_contexts=(),
         unrecognized_roles=(),
@@ -4225,6 +4390,39 @@ def _resolve_for_construction(
     return tuple(resolved_objects.get(ROLE_PRODUCTION_REQUIREMENT, ()))
 
 
+def build_effective_demand_results(
+    accepted: AcceptedPackage,
+    handoff: PhaseAHandoff,
+) -> tuple[
+    tuple[EffectiveDemandContextReference, ...],
+    tuple[UnresolvedEffectiveDemandContextReference, ...],
+    tuple[Issue, ...],
+]:
+    """Return the G5-A read-only results: formed outcomes, grain-scoped unresolved, findings.
+
+    The first element is exactly what :func:`build_effective_demand_contexts` returns.  The
+    second carries the ``Option A′`` grain-scoped unresolved references: one read-only entry
+    per handoff whose exact Demand Context was reliably resolved while the relation outcome
+    could not be established, so the exact demand context -- and its canonical grain -- stays
+    reachable for a downstream rule (``§4.1.13`` D ／ ``§4.3.31`` G I-8 ／ ``§4.4.102``).
+
+    The caller supplies *claims only*: context citations to be verified, plus the substitute
+    evidence, its exact locator and its ``mapping_basis``.  Everything the runtime trusts is
+    derived here from the ``AcceptedPackage`` itself.  There is therefore **no** caller-facing
+    parameter that could supply a trusted record-path -> role mapping or a trusted
+    ``CanonicalObject`` (``CB-1′`` clauses 4 ／ 5).
+    """
+
+    located, _blocked = _targets_by_artifact(accepted)
+    return _effective_demand_references(
+        accepted,
+        handoff,
+        located,
+        _accepted_record_index(accepted),
+        _resolved_demand_contexts(accepted),
+    )
+
+
 def build_effective_demand_contexts(
     accepted: AcceptedPackage,
     handoff: PhaseAHandoff,
@@ -4243,16 +4441,14 @@ def build_effective_demand_contexts(
     already resolved ``Production Requirement`` contexts.  There is therefore **no**
     caller-facing parameter that could supply a trusted record-path -> role mapping or a
     trusted ``CanonicalObject`` (``CB-1′`` clauses 4 ／ 5).
+
+    The registered two-tuple contract is unchanged; the ``Option A′`` grain-scoped
+    unresolved references are exposed through :func:`build_effective_demand_results` and
+    ``CanonicalConstructionReport.unresolved_effective_demand_contexts``.
     """
 
-    located, _blocked = _targets_by_artifact(accepted)
-    return _effective_demand_references(
-        accepted,
-        handoff,
-        located,
-        _accepted_record_index(accepted),
-        _resolved_demand_contexts(accepted),
-    )
+    contexts, _unresolved, issues = build_effective_demand_results(accepted, handoff)
+    return contexts, issues
 
 
 def _effective_demand_contexts_for_construction(
@@ -4261,7 +4457,11 @@ def _effective_demand_contexts_for_construction(
     *,
     located: Mapping[str, tuple[str, int]],
     production_requirements: tuple[CanonicalObject, ...],
-) -> tuple[tuple[EffectiveDemandContextReference, ...], tuple[Issue, ...]]:
+) -> tuple[
+    tuple[EffectiveDemandContextReference, ...],
+    tuple[UnresolvedEffectiveDemandContextReference, ...],
+    tuple[Issue, ...],
+]:
     """Internal seam used by ``_construct`` only.
 
     ``_construct`` has already read the accepted record index and resolved every canonical
@@ -4367,7 +4567,11 @@ def _effective_demand_references(
     located: Mapping[str, tuple[str, int]],
     accepted_records: Mapping[str, JsonObject],
     production_requirements: tuple[CanonicalObject, ...],
-) -> tuple[tuple[EffectiveDemandContextReference, ...], tuple[Issue, ...]]:
+) -> tuple[
+    tuple[EffectiveDemandContextReference, ...],
+    tuple[UnresolvedEffectiveDemandContextReference, ...],
+    tuple[Issue, ...],
+]:
     """Form one relation outcome per allocation ＋ relation ＋ resolved demand context.
 
     ``§4.3.31`` G I-8 cardinality (as corrected by ``CB-1′`` clause 12): *for each
@@ -4383,9 +4587,9 @@ def _effective_demand_references(
       so a ``Target Applicability`` entry can never borrow a source-side context, and the
       two relations can never be cross-combined;
     * anything unverified, unregistered, mismatched, missing or ambiguous stays
-      unresolved and emits **no** reference; ``unresolved`` is therefore expressed as
-      "no reference ＋ ``SEMANTIC_RESOLUTION`` / ``SEMANTIC_UNRESOLVED``", which is the
-      inherited way this injection already reported it;
+      unresolved and emits **no** outcome reference; ``unresolved`` is therefore expressed
+      as "no outcome reference ＋ ``SEMANTIC_RESOLUTION`` / ``SEMANTIC_UNRESOLVED``", which
+      is the inherited way this injection already reported it;
     * the one exception is a **registered** basis whose own outcome is
       ``RELATION_OUTCOME_UNRESOLVED``: there the accepted record *did* register an
       approved conclusion ("cannot be reliably determined") for that exact demand
@@ -4393,9 +4597,21 @@ def _effective_demand_references(
       finding.  ``§2.3.11`` B requires the downstream rule to report ``DATA_INCOMPLETE``
       rather than a default ``0`` for such a grain, and the grain is only reachable
       through the reference.  No outcome value is invented and no Boolean is synthesised.
+
+    **``Option A′`` grain-scoped unresolved surface.**  When the demand context itself was
+    reliably resolved and only the *relation outcome* could not be established (an
+    unregistered ／ ambiguous mapping association, or a registered basis that is not
+    approved for that relation), a read-only
+    :class:`UnresolvedEffectiveDemandContextReference` is recorded as well, so the exact
+    demand context -- and its canonical grain -- stays reachable.  No other no-reference
+    path records one: an unverifiable citation, a material ／ Plant mismatch, an unresolved
+    ``Production Requirement`` context or an unreadable allocation identity keeps the
+    existing behaviour, because there the demand context is exactly what is not reliably
+    resolved and no grain may be inferred.
     """
 
     issues: list[Issue] = []
+    unresolved: list[UnresolvedEffectiveDemandContextReference] = []
 
     #: Appended to a per-entry finding when the accepted allocation record cannot supply
     #: the deterministic binding key.  Nothing is converted, stringified or invented to
@@ -4423,6 +4639,62 @@ def _effective_demand_references(
                     "the relation stays unresolved for that demand context; a caller may "
                     "not set the outcome directly and no Boolean is synthesised"
                 ),
+            )
+        )
+
+    def _record_grain_scoped_unresolved(
+        *,
+        entry: EffectiveDemandRelationHandoff,
+        relation: str,
+        accepted_plant: Any,
+        accepted_target: Any,
+        accepted_source: Any,
+        provenance: EvidenceReference,
+        claimed_mapping_basis: str,
+        detail: str,
+    ) -> None:
+        """Record the exact demand context whose *relation outcome* could not be formed.
+
+        ``Option A′`` (Human-approved).  Called only after the accepted mapping evidence
+        has been verified inside this package, its role and accepted allocation identity
+        established, and the caller's material pair agreed with that identity -- so the
+        demand context is the only remaining unknown and it is verified here through the
+        **same** existing authority the formed references use (the same resolved
+        ``Production Requirement`` context, the same accepted Plant and the same
+        per-relation citation side).  When that verification does not hold, nothing is
+        recorded: a grain is never inferred from an allocation and no identity is ever read
+        out of a finding's free text (``§4.4.102`` / ``§4.5.9``).
+        """
+
+        side = _registered_citation_side(relation)
+        if side is None:  # pragma: no cover - the registry is relation-consistent
+            return
+        expected_material = (
+            accepted_target if side == DEMAND_CONTEXT_TARGET else accepted_source
+        )
+        context, _problem = _entry_context(
+            entry,
+            side=side,
+            expected_material=expected_material,
+            expected_plant=accepted_plant,
+        )
+        if context is None:
+            return
+        context_grain = context.grain
+        if context_grain is None:  # pragma: no cover - guarded by ``_entry_context``
+            return
+        unresolved.append(
+            UnresolvedEffectiveDemandContextReference(
+                relation=relation,
+                context=DemandContextReference(
+                    semantic=side,
+                    grain=context_grain,
+                    record_reference=context.record_reference,
+                    provenance=context.provenance,
+                ),
+                provenance=provenance,
+                claimed_mapping_basis=claimed_mapping_basis,
+                note=detail,
             )
         )
 
@@ -4669,6 +4941,25 @@ def _effective_demand_references(
                 role=entry.evidence.logical_dataset_role,
                 detail=problem,
             )
+            # ``Option A′``: the accepted evidence, its role and its allocation identity are
+            # established and the caller's pair agrees with them, so only the *association ／
+            # basis* failed.  The exact demand context therefore stays reachable.
+            _record_grain_scoped_unresolved(
+                entry=entry,
+                relation=entry.relation,
+                accepted_plant=accepted_plant,
+                accepted_target=accepted_target,
+                accepted_source=accepted_source,
+                provenance=_evidence_reference(
+                    package=accepted,
+                    role=verification.role,
+                    artifact=verification.artifact,
+                    ordinal=verification.ordinal,
+                    record=accepted_records.get(verification.record_path),
+                ),
+                claimed_mapping_basis=entry.mapping_basis,
+                detail=problem,
+            )
             continue
 
         rule = EFFECTIVE_DEMAND_BASIS_BY_KEY.get(
@@ -4685,6 +4976,29 @@ def _effective_demand_references(
                     "/ overlaps / does not overlap mapping is available; the conceptual "
                     "outcome stays unresolved and is never taken from the caller nor "
                     "invented by canonicalization (§4.1.13 D / §4.5.9)"
+                ),
+            )
+            # ``Option A′``: the association *was* selected, so the registered basis is
+            # known; only the approved relation-outcome mapping is missing.  The exact
+            # demand context stays reachable.
+            _record_grain_scoped_unresolved(
+                entry=entry,
+                relation=entry.relation,
+                accepted_plant=accepted_plant,
+                accepted_target=accepted_target,
+                accepted_source=accepted_source,
+                provenance=_evidence_reference(
+                    package=accepted,
+                    role=verification.role,
+                    artifact=verification.artifact,
+                    ordinal=verification.ordinal,
+                    record=accepted_records.get(verification.record_path),
+                ),
+                claimed_mapping_basis=association.mapping_basis,
+                detail=(
+                    f"the accepted evidence {verification.record_path} registers "
+                    f"mapping_basis {association.mapping_basis!r}, which is not an approved "
+                    f"basis for relation {entry.relation!r}"
                 ),
             )
             continue
@@ -4787,17 +5101,20 @@ def _effective_demand_references(
         if claims[claim_key] <= 1:
             continue
         allocation_key, relation, context_reference = claim_key
-        by_allocation.get(allocation_key, {}).pop(f"{relation}|{context_reference}", None)
+        by_relation = by_allocation.get(allocation_key, {})
+        composite = f"{relation}|{context_reference}"
+        dropped = by_relation.pop(composite, None)
+        detail = (
+            f"{claims[claim_key]} mapping-evidence claims carry relation "
+            f"{relation!r} for the same allocation and demand context "
+            f"{context_reference!r}; exactly one deterministic outcome is required "
+            "and they are never merged, deduplicated or resolved by precedence "
+            "(§4.4.102 C Stage A / CB-1′ clause 12)"
+        )
         issues.append(
             Issue(
                 location="effective_demand_context",
-                detail=(
-                    f"{claims[claim_key]} mapping-evidence claims carry relation "
-                    f"{relation!r} for the same allocation and demand context "
-                    f"{context_reference!r}; exactly one deterministic outcome is required "
-                    "and they are never merged, deduplicated or resolved by precedence "
-                    "(§4.4.102 C Stage A / CB-1′ clause 12)"
-                ),
+                detail=detail,
                 category="SEMANTIC_RESOLUTION",
                 reason="SEMANTIC_UNRESOLVED",
                 layer=LAYER_2,
@@ -4810,6 +5127,19 @@ def _effective_demand_references(
                 ),
             )
         )
+        if dropped is not None:
+            # ``Option A′``: the demand context **was** reliably resolved (the dropped
+            # reference carries it) and only the relation outcome is ambiguous, so the exact
+            # demand context stays reachable without borrowing any identity.
+            unresolved.append(
+                UnresolvedEffectiveDemandContextReference(
+                    relation=relation,
+                    context=dropped.context,
+                    provenance=dropped.provenance,
+                    claimed_mapping_basis=dropped.mapping_basis,
+                    note=detail,
+                )
+            )
 
     references: list[EffectiveDemandContextReference] = []
     for allocation_key in sorted(by_allocation, key=lambda item: repr(item)):
@@ -4825,7 +5155,7 @@ def _effective_demand_references(
                 )
             )
 
-    return tuple(references), tuple(issues)
+    return tuple(references), tuple(unresolved), tuple(issues)
 
 __all__ = [
     "ABSENT",
@@ -4880,6 +5210,8 @@ __all__ = [
     "RelationOutcomeReference",
     "RoleApplicability",
     "SafetyStockHandoff",
+    "UnresolvedEffectiveDemandContextReference",
     "build_effective_demand_contexts",
+    "build_effective_demand_results",
     "construct_canonical_objects",
 ]

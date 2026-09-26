@@ -56,6 +56,7 @@ from .canonical_objects import (
     CanonicalProperty,
     ContextValueReference,
     EffectiveDemandContextReference,
+    UnresolvedEffectiveDemandContextReference,
     EffectiveDemandRelationHandoff,
     EvidenceReference,
     HandoffEvidence,
@@ -67,6 +68,7 @@ from .canonical_objects import (
     RecordReference,
     SafetyStockHandoff,
     build_effective_demand_contexts,
+    build_effective_demand_results,
     construct_canonical_objects,
 )
 from .constants import (
@@ -188,6 +190,7 @@ __all__ = [
     "ELIGIBLE_INBOUND_STATUSES",
     "ELIGIBLE_INVENTORY_STATUSES",
     "EffectiveDemandContextReference",
+    "UnresolvedEffectiveDemandContextReference",
     "EffectiveDemandRelationHandoff",
     "EffectiveInboundEvaluation",
     "EffectiveInboundResult",
@@ -268,6 +271,7 @@ __all__ = [
     "UpstreamRequirementTrace",
     "V02_CANONICAL_RECORD_PROPERTIES",
     "build_effective_demand_contexts",
+    "build_effective_demand_results",
     "compute_effective_inbound",
     "compute_opening_usable_inventory",
     "compute_requirement_calculation",

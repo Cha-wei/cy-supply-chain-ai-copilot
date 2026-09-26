@@ -1492,6 +1492,109 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
         self.assertIsNone(blocked.projected_available)
         self.assert_classification(blocked, CLASSIFICATION_DATA_INCOMPLETE)
 
+    def test_ac15n_a_grain_scoped_unresolved_target_context_is_data_incomplete(self) -> None:
+        # Option A′ (Human-approved).  D2 carries a Target Applicability claim that the G5-A
+        # layer must drop (the citation binds to the quoted Substitute Allocation record, which
+        # registers no association with the requested basis), so D2's demand context is reliably
+        # resolved while the relation outcome is not: the grain-scoped unresolved surface states
+        # it, and neither 0 nor the earlier 60 may be reported for it.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "10", D1),
+                Demand(DEMAND, DEMAND, "10", D2),
+                Demand(DEMAND, DEMAND, "10", D3),
+            ),
+            inventory={DEMAND: "100", SOURCE: "100", RESERVED: "100"},
+            safety_stock={DEMAND: "5", SOURCE: "0", RESERVED: "0"},
+            conservation=(DEMAND, RESERVED, "60"),
+            targets=((DEMAND, D1, "APPROVED"), (DEMAND, D2, "UNRESOLVED")),
+            target_quantities={(DEMAND, D1): "60"},
+            name="ac15n-grain-scoped-unresolved",
+        )
+        # G5-A: no Target Applicability reference is formed for D2, the inherited finding is
+        # raised, and the exact grain stays reachable through the new read-only surface.
+        self.assertEqual(
+            [
+                [part.value for part in context.relation_outcome.context.grain]
+                for context in built.construction.effective_demand_contexts
+                if context.relation_outcome.relation == "Target Applicability"
+            ],
+            [[PLANT, DEMAND, D1]],
+        )
+        unresolved = built.construction.unresolved_effective_demand_contexts
+        self.assertEqual(len(unresolved), 1)
+        self.assertEqual(unresolved[0].relation, "Target Applicability")
+        self.assertEqual(
+            [part.value for part in unresolved[0].context.grain],
+            [PLANT, DEMAND, D2],
+        )
+        self.assertEqual(unresolved[0].category, "SEMANTIC_RESOLUTION")
+        self.assertEqual(unresolved[0].reason, "SEMANTIC_UNRESOLVED")
+        self.assertTrue(
+            any(
+                issue.reason == "SEMANTIC_UNRESOLVED"
+                for issue in built.construction.issues
+            )
+        )
+        # BR-SUBSTITUTE-001: D1 keeps its reliable 60, D2 is not obtainable, and the unresolved
+        # date poisons only the grains at or after it.
+        early = built.substitutes.for_grain(PLANT, DEMAND, D1)
+        late = built.substitutes.for_grain(PLANT, DEMAND, D2)
+        later = built.substitutes.for_grain(PLANT, DEMAND, D3)
+        assert early is not None and late is not None and later is not None
+        self.assertEqual(early.cumulative_approved_substitute_supply, 60)
+        self.assertIsNone(late.cumulative_approved_substitute_supply)
+        self.assertIsNone(later.cumulative_approved_substitute_supply)
+        # BR-SHORTAGE-001: D1 stays fully reliable; D2 has no reliable ProjectedAvailable and no
+        # business classification; D3 cannot claim a reliable cumulative either.
+        first = self.grain(built, DEMAND, D1)
+        self.assert_quantity(first, "cumulative_approved_substitute_supply", "60")
+        self.assert_quantity(first, "projected_available", "150")
+        self.assertEqual(first.classification, CLASSIFICATION_NORMAL)
+        for date in (D2, D3):
+            with self.subTest(date=date):
+                blocked = self.grain(built, DEMAND, date)
+                self.assertIsNone(
+                    blocked.cumulative_approved_substitute_supply
+                )
+                self.assertIsNone(blocked.projected_available)
+                self.assertIsNone(blocked.shortage_qty)
+                self.assertIsNone(blocked.buffer_gap)
+                self.assert_classification(blocked, CLASSIFICATION_DATA_INCOMPLETE)
+        # No reliable shortage marker was established, so the fail-safe date is not a
+        # valid absence and not a claim about D2.
+        self.assertEqual(built.shortage.first_shortage_date, SHORTAGE_DATA_INCOMPLETE)
+
+    def test_ac15o_no_grain_scoped_reference_is_fabricated_without_a_g5a_failure(self) -> None:
+        # The boundary of Option A′: with no G5-A failure at all, the surface stays empty and the
+        # completion keeps the approved carry-forward / valid-zero semantics.  A grain is never
+        # attributed an unresolved target context by role, material or allocation identity.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "10", D1),
+                Demand(DEMAND, DEMAND, "10", D2),
+            ),
+            inventory={DEMAND: "100", SOURCE: "100", RESERVED: "100"},
+            safety_stock={DEMAND: "5", SOURCE: "0", RESERVED: "0"},
+            conservation=(DEMAND, RESERVED, "60"),
+            targets=((DEMAND, D1, "APPROVED"),),
+            target_quantities={(DEMAND, D1): "60"},
+            name="ac15o-no-fabricated-attribution",
+        )
+        self.assertEqual(built.construction.unresolved_effective_demand_contexts, ())
+        self.assertEqual(
+            built.construction.unresolved_effective_demand_for_grain(
+                PLANT, DEMAND, D2
+            ),
+            (),
+        )
+        self.assert_quantity(
+            self.grain(built, DEMAND, D2),
+            "cumulative_approved_substitute_supply",
+            "60",
+        )
+        self.assertEqual(self.grain(built, DEMAND, D2).classification, CLASSIFICATION_NORMAL)
+
     def test_ac15f_the_rule_never_reads_substitute_role_presence(self) -> None:
         # §2.1.12 C: the substitute *value* semantics come only from the explicitly completed
         # BR-SUBSTITUTE-001 downstream result.  Reading CanonicalConstructionReport.present_roles
