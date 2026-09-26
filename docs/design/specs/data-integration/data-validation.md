@@ -2885,6 +2885,10 @@ Relationship` **不在**例外之内。
 
 **下游规则的已登记 consumption boundary（Human Decision `S1-A` ／ `S2-A` ／ `S3-A`，`§2.1.12`）：**
 
+> 本节位于 `§4.4.102`（First-Tranche Canonicalization Outcome & Conflict Boundary）的 Two-stage rule
+> 之内，紧接 Stage A 的已登记 multiplicity exception；它是该 boundary 的 current-state 登记，不是
+> `§4.4.12`（Grain Conflict Principle）的修改。
+
 ```text
 resolved upstream result 的消费边界是 rule-specific 的，
 不得由 downstream rule 自行放宽或"补值"。

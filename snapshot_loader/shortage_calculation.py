@@ -371,6 +371,12 @@ class ShortageGrain:
             "ProjectedAvailableDecimal": _rational_text(self.projected_available),
             "ShortageQtyDecimal": _rational_text(self.shortage_qty),
             "BufferGapDecimal": _rational_text(self.buffer_gap),
+            "CumulativeEffectiveInboundDecimal": _rational_text(
+                self.cumulative_effective_inbound
+            ),
+            "CumulativeApprovedSubstituteSupplyDecimal": _rational_text(
+                self.cumulative_approved_substitute_supply
+            ),
             "CumulativeGrossRequirementDecimal": _rational_text(
                 self.cumulative_gross_requirement
             ),
@@ -553,12 +559,13 @@ def compute_shortage(
     upstream rule is re-implemented, no reservation is recomputed and no caller may inject a
     business date, quantity or ``SafetyStock``.
 
-    ``construction`` is accepted for call-shape stability and for the inherited canonical findings
-    it carries.  The rule deliberately does **not** read the accepted package's role-presence facts
-    or any substitute canonical evidence from it: whether an ``approved substitute supply``
-    participates in a grain is consumed **only** from the explicitly completed
-    ``BR-SUBSTITUTE-001`` downstream result (S3-A), so the shortage rule never re-decides the
-    business meaning of a substitute citation.
+    ``construction`` is accepted for call-shape stability with the other rule entry points and is
+    deliberately **not read at all** here: every fact this rule needs -- including whether an
+    ``approved substitute supply`` participates in a grain -- is consumed from the four upstream
+    results.  In particular the accepted package's role-presence facts and any raw ／ canonical
+    substitute evidence are never consulted, so the shortage rule can never re-decide the business
+    meaning of a substitute citation (S3-A); the registered findings it reports are the ones the
+    consumed upstream results carry.
     """
 
     families = _families(requirements, inbounds, substitutes)
@@ -946,8 +953,12 @@ def _evaluate_family(
     inbound_table = _inbound_table(family.inbounds)
     substitute_table = _substitute_table(family.substitutes)
     source_entry = _source_entry(family, groups)
-    source_cited = bool(family.sources)
     inherited = _family_inherited(family)
+    #: ``required_date`` -> the exact Source Demand Context of **this grain** that
+    #: ``BR-SUBSTITUTE-001`` cited.  The citation is grain-scoped: ``SourceDemandContext`` carries
+    #: its own ``required_date``, so a context of a sibling date never authorises a substitute
+    #: conclusion for this grain (S3-A).
+    source_cited_dates = {context.required_date for context in family.sources}
 
     first_shortage: Any = None
     first_breach: Any = None
@@ -996,7 +1007,7 @@ def _evaluate_family(
         substitute_supply, substitute_problem, substitute_note = _substitute_supply_for(
             substitute_table,
             required_date,
-            source_cited=source_cited,
+            source_cited=required_date in source_cited_dates,
         )
         if substitute_note is not None:
             notes.append(substitute_note)
@@ -1018,12 +1029,19 @@ def _evaluate_family(
         # with the remaining unallocated source supply of the whole family and is never added on
         # top of it.  The reservation is applied once, at family level (see ``_opening_supply``),
         # so no grain ever consumes it twice.
+        #
+        # The reference and the conservation state are reported only on the grain the cited context
+        # actually names: ``SourceDemandContext.required_date`` is part of the grain, so a context
+        # of a sibling date is never presented as if it cited this one.
         source_context_reference = None
         conservation_state = None
         if source_entry is not None:
-            context, group = source_entry
-            source_context_reference = context.reference
-            conservation_state = None if group is None else group.conservation_state
+            entry_context, entry_group = source_entry
+            if entry_context.required_date == required_date:
+                source_context_reference = entry_context.reference
+                conservation_state = (
+                    None if entry_group is None else entry_group.conservation_state
+                )
 
         if opening.problem is not None:
             issues.append(
@@ -1285,23 +1303,27 @@ def _inbound_table(
 
 def _substitute_table(
     targets: Sequence[SubstituteTarget],
-) -> dict[Any, tuple[ExactQuantity | None, str | None, str | None]]:
-    """``CumulativeApprovedSubstituteSupply(<= required_date)`` per date, from the upstream result.
+) -> dict[Any, tuple[Fraction | None, str | None, str | None]]:
+    """``CumulativeApprovedSubstituteSupply(<= required_date)`` per **cited** target grain.
 
-    The value is ``BR-SUBSTITUTE-001``'s own cumulative result for this target grain, carried
-    forward to ``t`` and never recomputed from raw or canonical substitute evidence.  A target
-    whose own cumulative value is unresolved makes its dates ``DATA_INCOMPLETE``, and an omitted
-    target is **never** silently read as ``0`` (S3-A).
+    The value is ``BR-SUBSTITUTE-001``'s own cumulative result for that target grain and is read
+    as-is -- never recomputed from raw or canonical substitute evidence.  A target whose own
+    cumulative value is unresolved makes its date ``DATA_INCOMPLETE``, and a date the result does
+    not state is **never** silently read as ``0`` (S3-A).
+
+    Only dates the result actually states enter the table.  There is deliberately no
+    "fill the gaps" pass: the rule cannot tell an unstated date from a stated zero, so an unstated
+    date is left out and the caller fails that grain closed rather than inventing a value.  A later
+    stated target's own cumulative value already includes every earlier contribution
+    (``§2.3.12``), so no earlier supply is lost by not writing intermediate dates.
     """
 
     ordered = sorted(targets, key=lambda item: _sort_text(item.required_date))
     table: dict[Any, tuple[Fraction | None, str | None, str | None]] = {}
-    carried: Fraction | None = None
-    carried_problem: str | None = None
     for target in ordered:
         if target.cumulative_approved_substitute_supply is None:
-            carried = None
-            carried_problem = (
+            carried: Fraction | None = None
+            carried_problem: str | None = (
                 "the BR-SUBSTITUTE-001 target of this exact grain states no reliable "
                 "CumulativeApprovedSubstituteSupply, so the cumulative approved substitute "
                 "supply at this required date is not obtainable and is never defaulted to 0 "

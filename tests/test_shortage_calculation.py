@@ -47,6 +47,8 @@ from snapshot_loader.shortage_calculation import (
     SHORTAGE_RULE_ID,
     SUPPLY_FROM_INVENTORY_SNAPSHOT,
     SUPPLY_FROM_SOURCE_RESERVATION,
+    SUPPLY_UNRESOLVED_INVENTORY_SNAPSHOT,
+    SUPPLY_UNRESOLVED_SOURCE_RESERVATION,
 )
 from tests.helpers import DatasetSpec, PackageSpec, build_package
 
@@ -957,7 +959,7 @@ class SourceReservationTests(ShortageRuleTestCase):
         grain = self.grain(built, RESERVED, D2)
         self.assert_classification(grain, CLASSIFICATION_DATA_INCOMPLETE)
         self.assertIsNone(grain.projected_available)
-        self.assertEqual(grain.supply_source, "SOURCE_RESERVATION_UNRESOLVED")
+        self.assertEqual(grain.supply_source, SUPPLY_UNRESOLVED_SOURCE_RESERVATION)
 
 
 # --- AC-12: S2-A inventory snapshot consumption boundary ----------------------------
@@ -976,7 +978,7 @@ class InventorySnapshotBoundaryTests(ShortageRuleTestCase):
         )
         self.assertEqual(built.inventory.targets, ())
         grain = self.grain(built)
-        self.assertEqual(grain.supply_source, "INVENTORY_SNAPSHOT_UNRESOLVED")
+        self.assertEqual(grain.supply_source, SUPPLY_UNRESOLVED_INVENTORY_SNAPSHOT)
         self.assert_classification(grain, CLASSIFICATION_DATA_INCOMPLETE)
         self.assertIsNone(grain.projected_available)
         self.assertIsNone(grain.shortage_qty)
@@ -1000,7 +1002,7 @@ class InventorySnapshotBoundaryTests(ShortageRuleTestCase):
         grain = self.grain(built)
         self.assert_classification(grain, CLASSIFICATION_DATA_INCOMPLETE)
         self.assertIsNone(grain.projected_available)
-        self.assertEqual(grain.supply_source, "INVENTORY_SNAPSHOT_UNRESOLVED")
+        self.assertEqual(grain.supply_source, SUPPLY_UNRESOLVED_INVENTORY_SNAPSHOT)
 
     def test_ac12c_an_unusable_opening_inventory_fails_closed(self) -> None:
         # on_hand_qty is absent, so BR-INVENTORY-001 states no usable OpeningUsableInventory.
@@ -1012,7 +1014,7 @@ class InventorySnapshotBoundaryTests(ShortageRuleTestCase):
         )
         grain = self.grain(built)
         self.assert_classification(grain, CLASSIFICATION_DATA_INCOMPLETE)
-        self.assertEqual(grain.supply_source, "INVENTORY_SNAPSHOT_UNRESOLVED")
+        self.assertEqual(grain.supply_source, SUPPLY_UNRESOLVED_INVENTORY_SNAPSHOT)
 
     def test_ac12d_an_unresolved_safety_stock_is_never_defaulted_to_zero(self) -> None:
         built = self.build(
@@ -1050,6 +1052,26 @@ class InventorySnapshotBoundaryTests(ShortageRuleTestCase):
         self.assertEqual(
             built.shortage.first_shortage_date, SHORTAGE_DATA_INCOMPLETE
         )
+
+    def test_ac12f_a_stated_zero_opening_supply_is_still_decided(self) -> None:
+        # S2-A fail-closes on 0 InventoryTarget, not on a target whose OpeningUsableInventory is
+        # zero: a single consumable target with on_hand_qty 0 is a reliable stated value and the
+        # grain must stay decided.
+        built = self.build(
+            demand=(Demand(DEMAND, DEMAND, "10"),),
+            inventory={DEMAND: "0"},
+            safety_stock={DEMAND: "0"},
+            targets=((DEMAND, D2, "APPROVED"),),
+            name="ac12f-stated-zero",
+        )
+        self.assertEqual(
+            len(built.inventory.for_plant_material(PLANT, DEMAND)), 1
+        )
+        grain = self.grain(built)
+        self.assertEqual(grain.supply_source, SUPPLY_FROM_INVENTORY_SNAPSHOT)
+        self.assert_quantity(grain, "opening_supply", "0")
+        self.assert_quantity(grain, "projected_available", "-10")
+        self.assert_classification(grain, CLASSIFICATION_SHORTAGE)
 
 
 # --- AC-13 / AC-14 / AC-15: S3-A substitute result completeness ---------------------
@@ -1156,6 +1178,69 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
         self.assertIsNone(grain.cumulative_approved_substitute_supply)
         self.assertIsNone(grain.projected_available)
         self.assertIsNone(grain.first_shortage_date)
+
+    def test_ac15g_a_sibling_date_source_citation_never_states_this_grain(self) -> None:
+        # The cited Source Demand Context names ``P1`` + ``M3`` at ``D2`` only.  The grain
+        # ``P1`` + ``M3`` at ``D1`` is therefore *not* stated by the substitute result, even though
+        # the same material is cited on another date: the citation is grain-scoped, so the shortage
+        # rule must not widen it into a material-wide explicit 0.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "10", D2),
+                Demand(SOURCE, SOURCE, "20", D1),
+                Demand(SOURCE, SOURCE, "30", D2),
+            ),
+            conservation=(DEMAND, SOURCE, "60"),
+            targets=((DEMAND, D2, "APPROVED"), (SOURCE, D2, "APPROVED")),
+            name="ac15g-sibling-date-source",
+        )
+        # The substitute result states the sibling date, not this one.
+        self.assertEqual(
+            built.substitutes.source_demand_contexts_for_grain(PLANT, SOURCE, D1), ()
+        )
+        self.assertEqual(built.substitutes.for_grain(PLANT, SOURCE, D1), None)
+        self.assertTrue(
+            built.substitutes.source_demand_contexts_for_grain(PLANT, SOURCE, D2)
+        )
+        early = self.grain(built, SOURCE, D1)
+        self.assert_classification(early, CLASSIFICATION_DATA_INCOMPLETE)
+        self.assertIsNone(early.cumulative_approved_substitute_supply)
+        self.assertIsNone(early.projected_available)
+        self.assertIsNone(early.source_demand_context_reference)
+        # The date the result *does* state keeps its explicit zero and stays decided: the same
+        # family-level reservation still supplies the opening balance once.
+        late = self.grain(built, SOURCE, D2)
+        self.assert_quantity(late, "cumulative_approved_substitute_supply", "0")
+        self.assert_quantity(late, "opening_supply", "40")
+        self.assert_quantity(late, "cumulative_gross_requirement", "50")
+        self.assert_quantity(late, "projected_available", "-10")
+        self.assert_classification(late, CLASSIFICATION_SHORTAGE)
+        self.assertIsNotNone(late.source_demand_context_reference)
+
+    def test_ac15h_the_construction_is_never_read_at_runtime(self) -> None:
+        # Stronger than the source scan: any attribute access on the construction must be
+        # impossible.  ``compute_shortage`` therefore cannot be re-deciding substitute semantics
+        # from role presence or from any raw / canonical substitute evidence.
+        class HostileConstruction:
+            def __getattr__(self, name: str) -> Any:
+                raise AssertionError(
+                    f"compute_shortage read construction.{name}; the substitute value must come "
+                    "only from the BR-SUBSTITUTE-001 downstream result (S3-A)"
+                )
+
+        rebuilt = self.build(
+            demand=(Demand(DEMAND, DEMAND, "10"),),
+            targets=((DEMAND, D2, "APPROVED"),),
+            name="ac15h-hostile-construction",
+        )
+        result = compute_shortage(
+            HostileConstruction(),
+            rebuilt.requirements,
+            rebuilt.inbounds,
+            rebuilt.inventory,
+            rebuilt.substitutes,
+        )
+        self.assertEqual(result.to_dict(), rebuilt.shortage.to_dict())
 
     def test_ac15f_the_rule_never_reads_substitute_role_presence(self) -> None:
         # §2.1.12 C: the substitute *value* semantics come only from the explicitly completed
