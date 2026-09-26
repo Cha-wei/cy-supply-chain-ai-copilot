@@ -123,6 +123,7 @@ CONSERVATION_WITHIN_LIMIT: str = "WITHIN_ELIGIBLE_SUPPLY"
 CONSERVATION_OVER_ALLOCATED: str = "OVER_ALLOCATED"
 CONSERVATION_SOURCE_SUPPLY_UNRESOLVED: str = "SOURCE_SUPPLY_UNRESOLVED"
 CONSERVATION_OVERLAP_UNRESOLVED: str = "SOURCE_RESERVATION_OVERLAP_UNRESOLVED"
+CONSERVATION_CROSS_CONTEXT_UNRESOLVED: str = "CROSS_CONTEXT_RESERVATION_UNRESOLVED"
 
 #: The exact join key of ``Substitute Relationship`` and ``Substitute Allocation``
 #: (``§4.1.4`` F ／ G -- both entities share this canonical identity).
@@ -209,6 +210,18 @@ class SubstituteEvaluation:
         return self.outcome == SUBSTITUTE_DATA_INCOMPLETE
 
     @property
+    def grain_equivalent(self) -> Fraction | None:
+        """This grain's own contribution of the cited allocation, or ``None``.
+
+        ``None`` means the grain never produced a reliable contribution (the evaluation is
+        ``DATA_INCOMPLETE``, or the allocation is not ``applicable`` to this demand context).
+        A reliable ``not applicable`` contributes the legal ``0`` and is distinguishable from
+        ``None`` (``§2.3.11`` A ／ ``§4.4.89``).
+        """
+
+        return self.equivalent_target_qty
+
+    @property
     def contributes(self) -> bool:
         """Whether this allocation adds eligible equivalent supply to the target grain."""
 
@@ -268,6 +281,7 @@ class SubstituteTarget:
     required_date: Any
     evaluations: tuple[SubstituteEvaluation, ...]
     cumulative_approved_substitute_supply: Fraction | None
+    grain_equivalent: Fraction | None = None
     outcome: str | None = None
     notes: tuple[str, ...] = ()
     inherited_issues: tuple[Issue, ...] = ()
@@ -299,6 +313,7 @@ class SubstituteTarget:
             "CumulativeApprovedSubstituteSupply": _rational_payload(
                 self.cumulative_approved_substitute_supply
             ),
+            "grain_equivalent": _rational_payload(self.grain_equivalent),
             "outcome": self.outcome,
             "notes": list(self.notes),
             "evaluations": [item.to_dict() for item in self.evaluations],
@@ -454,8 +469,8 @@ def compute_substitute_supply(
     """
 
     allocations = _allocation_index(construction)
-    relationships = _relationship_index(construction)
-    relationship_present, relationship_resolved = _relationship_dataset_state(construction)
+    relationship_index = _relationship_index(construction)
+    relationship_present = _relationship_dataset_present(construction)
     inherited = _deduplicate_issues(construction.issues)
 
     target_contexts: dict[tuple[Any, Any, Any], list[RelationOutcomeReference]] = {}
@@ -479,22 +494,75 @@ def compute_substitute_supply(
             )
             entry[1].append(outcome)
 
-    targets: list[SubstituteTarget] = []
-    for grain in sorted(
+    # ``CumulativeApprovedSubstituteSupply(<= t)`` is a deterministic pass over every cited
+    # target context of the same ``plant_id`` + ``target_material_code`` whose ``required_date``
+    # is ``<= t`` (§2.3.12).  An allocation that is ``applicable`` to several target demand
+    # contexts is **one** supply: it is reserved to the earliest such context by its own exact
+    # allocation record identity, so a context multiplicity never multiplies the supply and no
+    # same-value deduplication is ever applied (§4.5.9 Decision 8 / AC-31).
+    grain_order = sorted(
         target_contexts, key=lambda item: tuple(_sort_text(part) for part in item)
-    ):
+    )
+    grain_evaluations: dict[
+        tuple[Any, Any, Any], tuple[SubstituteEvaluation, ...]
+    ] = {}
+    unreliable_grains: list[tuple[Any, Any, Any]] = []
+    for grain in grain_order:
         evaluations = tuple(
             _evaluate_target_outcome(
                 outcome=outcome,
                 grain=grain,
                 allocations=allocations,
-                relationships=relationships,
+                relationship_index=relationship_index,
                 relationship_present=relationship_present,
-                relationship_resolved=relationship_resolved,
             )
             for outcome in target_contexts[grain]
         )
-        targets.append(_target(grain, evaluations, inherited))
+        grain_evaluations[grain] = evaluations
+        if any(item.data_incomplete for item in evaluations):
+            unreliable_grains.append(grain)
+
+    reserved_grain: dict[str, tuple[Any, Any, Any]] = {}
+    reserved_qty: dict[str, Fraction] = {}
+    for grain in grain_order:
+        for item in grain_evaluations[grain]:
+            contribution = item.grain_equivalent
+            if contribution is None:
+                continue
+            identity = _allocation_identity(item)
+            # The earliest cited grain owns the reservation; later grains never re-add it.
+            if identity in reserved_grain:
+                continue
+            reserved_grain[identity] = grain
+            reserved_qty[identity] = contribution
+
+    targets: list[SubstituteTarget] = []
+    for grain in grain_order:
+        cumulatively_unreliable = any(
+            other[0] == grain[0]
+            and other[1] == grain[1]
+            and _sort_text(other[2]) <= _sort_text(grain[2])
+            for other in unreliable_grains
+        )
+        accumulated: Fraction | None = Fraction(0)
+        if cumulatively_unreliable:
+            accumulated = None
+        else:
+            for identity, owner in reserved_grain.items():
+                if owner[0] != grain[0] or owner[1] != grain[1]:
+                    continue
+                if _sort_text(owner[2]) <= _sort_text(grain[2]):
+                    accumulated = accumulated + reserved_qty[identity]
+        targets.append(
+            _target(
+                grain,
+                grain_evaluations[grain],
+                inherited,
+                cumulative=accumulated,
+                grain_equivalent=_grain_equivalent(grain_evaluations[grain]),
+                cumulatively_unreliable=cumulatively_unreliable,
+            )
+        )
 
     source_evaluations: list[SubstituteEvaluation] = []
     for key in sorted(source_contexts):
@@ -550,48 +618,131 @@ def _allocation_index(
     return index
 
 
-def _relationship_index(
-    construction: CanonicalConstructionReport,
-) -> dict[tuple[Any, Any, Any], tuple[CanonicalObject, ...]]:
-    """Resolved ``Substitute Relationship`` objects grouped by the exact join key.
+@dataclass(frozen=True, slots=True)
+class _RelationshipGrainIndex:
+    """``Substitute Relationship`` candidates indexed **per exact join grain**.
 
-    Every resolved relationship of a grain is retained: several records on one grain are a legal
-    input, so the join can report "not exactly one" instead of a silent representative.
+    ``resolved`` ／ ``unresolved`` are keyed by the exact ``plant_id`` +
+    ``target_material_code`` + ``substitute_material_code`` grain.  ``unkeyable`` holds
+    unresolved candidates whose own join key is incomplete: they belong to no exact grain, so
+    they can never resolve one, but they are also the one thing that can make the grain a caller
+    asks about undecidable -- an incomplete relationship record cannot be ruled out for it.
     """
 
-    grouped: dict[tuple[Any, Any, Any], list[CanonicalObject]] = {}
+    resolved: Mapping[tuple[Any, Any, Any], tuple[CanonicalObject, ...]]
+    unresolved: Mapping[tuple[Any, Any, Any], tuple[CanonicalObject, ...]]
+    unkeyable: tuple[CanonicalObject, ...] = ()
+
+
+def _relationship_index(construction: CanonicalConstructionReport) -> _RelationshipGrainIndex:
+    """Index ``Substitute Relationship`` candidates by their exact join grain.
+
+    ``Substitute Relationship`` is **not** covered by the ``Option A'-R`` multiplicity exception,
+    so canonicalization retains several same-grain relationships as **unresolved** candidates
+    rather than resolving them by first ／ last wins.  Both surfaces are indexed per **exact join
+    grain**, because the grain's own state -- not the role's global state -- decides whether a
+    grain is resolved, undecidable or a stated absence.  A resolved candidate on another grain
+    never authorises a legal zero here, and an unresolved candidate on another grain never
+    poisons this one.
+    """
+
+    resolved: dict[tuple[Any, Any, Any], list[CanonicalObject]] = {}
+    unresolved: dict[tuple[Any, Any, Any], list[CanonicalObject]] = {}
+    unkeyable: list[CanonicalObject] = []
     for obj in construction.objects_for(ROLE_SUBSTITUTE_RELATIONSHIP):
         key = tuple(obj.value_of(name, ABSENT) for name in SUBSTITUTE_JOIN_PROPERTIES)
         if any(value is ABSENT for value in key):
             continue
-        grouped.setdefault(key, []).append(obj)
-    return {key: tuple(value) for key, value in grouped.items()}
+        resolved.setdefault(key, []).append(obj)
+    for obj in construction.unresolved_for(ROLE_SUBSTITUTE_RELATIONSHIP):
+        key = tuple(obj.value_of(name, ABSENT) for name in SUBSTITUTE_JOIN_PROPERTIES)
+        if any(value is ABSENT for value in key):
+            unkeyable.append(obj)
+            continue
+        unresolved.setdefault(key, []).append(obj)
+    return _RelationshipGrainIndex(
+        resolved={key: tuple(value) for key, value in resolved.items()},
+        unresolved={key: tuple(value) for key, value in unresolved.items()},
+        unkeyable=tuple(unkeyable),
+    )
 
 
-def _relationship_dataset_state(
-    construction: CanonicalConstructionReport,
-) -> tuple[bool, bool]:
-    """Return ``(present, resolved)`` for the accepted package's ``Substitute Relationship`` role.
+def _relationship_dataset_present(construction: CanonicalConstructionReport) -> bool:
+    """Whether the accepted package actually **declared** the ``Substitute Relationship`` role.
 
-    ``present`` means the accepted package actually **declared** the ``Substitute Relationship``
-    logical dataset (``CanonicalConstructionReport.present_roles``), so a present dataset that
-    simply holds no record states "no approved substitute" while an absent role does not: the
-    role is ``REQUIRED``, so the rule fails closed instead of producing a legal ``0``
-    (``§2.3.11`` A versus the required-role boundary).
-
-    ``resolved`` distinguishes the two present states: a **present but nothing resolved** dataset
-    (for example several relationships sharing one grain, which ``Option A'-R`` does **not**
-    exempt) may not be read as "business states none", while a present dataset whose records were
-    all resolved -- including a supplied dataset that simply holds no record -- states "no
-    approved substitute" on this exact grain and is a legal zero.
+    An absent role is not "business states there is no approved substitute": the role is
+    ``REQUIRED``, so the rule fails closed instead of producing a legal ``0`` (``§2.3.11`` A
+    versus the required-role boundary).  This is a role-level fact only; the per-grain state is
+    decided by :func:`_joined_relationship`.
     """
 
-    present = ROLE_SUBSTITUTE_RELATIONSHIP in construction.present_roles
-    resolved = (
-        bool(construction.objects_for(ROLE_SUBSTITUTE_RELATIONSHIP))
-        or ROLE_SUBSTITUTE_RELATIONSHIP not in construction.unresolved_roles
-    )
-    return present, resolved
+    return ROLE_SUBSTITUTE_RELATIONSHIP in construction.present_roles
+
+
+def _joined_relationship(
+    *,
+    join_key: tuple[Any, Any, Any],
+    index: _RelationshipGrainIndex,
+    dataset_present: bool,
+) -> tuple[CanonicalObject | None, str | None]:
+    """Return the exactly-one applicable relationship **for this exact join grain**.
+
+    The decision is made per exact grain, never from the role's global state:
+
+    * exactly one resolved candidate on this exact grain -> use it;
+    * more than one resolved candidate -> the grain is undecidable (no first ／ last wins);
+    * no resolved candidate but an **unresolved** candidate cites this exact grain (for example
+      several relationships sharing one grain, which ``Option A'-R`` does **not** exempt) ->
+      ``DATA_INCOMPLETE``: "business states there is no approved substitute" cannot be concluded
+      from an unresolved record;
+    * no candidate at all on this exact grain while the dataset is present -> the dataset states
+      no relationship for this grain, which is a legal zero (``§2.3.11`` A);
+    * the dataset is absent -> ``DATA_INCOMPLETE`` (the role is ``REQUIRED``).
+
+    ``(None, None)`` therefore means a legal zero and ``(None, problem)`` means fail closed.  A
+    resolved candidate on a *different* grain never authorises a legal zero here, and an
+    unresolved candidate on a *different* grain never poisons this one (failure isolation).  An
+    unresolved candidate whose own join key is incomplete is the single role-level fact that can
+    make a grain undecidable, because it cannot be ruled out for any exact grain.
+    """
+
+    candidates = index.resolved.get(join_key, ())
+    if len(candidates) == 1:
+        return candidates[0], None
+    if len(candidates) > 1:
+        return None, (
+            f"{len(candidates)} resolved Substitute Relationship records state the join key "
+            f"{join_key!r}; exactly one applicable relationship is required and they are never "
+            "merged, deduplicated or resolved by first/last wins (§4.4.102 C Stage A)"
+        )
+
+    own_unresolved = index.unresolved.get(join_key, ())
+    if own_unresolved:
+        return None, (
+            f"{len(own_unresolved)} Substitute Relationship record(s) cite the join key "
+            f"{join_key!r} but did not resolve to exactly one applicable relationship, so "
+            "'business states there is no approved substitute' cannot be established for this "
+            "exact grain; the join key is never satisfied from an unresolved record and the "
+            "grain fails closed instead of producing a legal 0 for the whole role "
+            "(§4.4.102 C Stage A)"
+        )
+    if index.unkeyable:
+        return None, (
+            f"{len(index.unkeyable)} Substitute Relationship record(s) did not resolve and do not "
+            f"state a complete join key, so they cannot be ruled out for the join key "
+            f"{join_key!r} and 'business states there is no approved substitute' cannot be "
+            "established for it; an incomplete record is never assumed to belong to another "
+            "grain and the grain fails closed instead of producing a legal 0 "
+            "(§4.4.26 / §4.4.102 C Stage A)"
+        )
+    if not dataset_present:
+        return None, (
+            "the accepted package carries no Substitute Relationship role evidence, so "
+            "'business states there is no approved substitute' cannot be established; the "
+            "substitute calculation fails closed instead of producing a legal 0 (§2.3.11 A "
+            "versus the required-role boundary)"
+        )
+    return None, None
 
 
 def _context_grain(context: Any, expected_semantic: str) -> tuple[Any, Any, Any] | None:
@@ -619,9 +770,8 @@ def _evaluate_target_outcome(
     outcome: RelationOutcomeReference,
     grain: tuple[Any, Any, Any],
     allocations: Mapping[str, CanonicalObject],
-    relationships: Mapping[tuple[Any, Any, Any], tuple[CanonicalObject, ...]],
+    relationship_index: _RelationshipGrainIndex,
     relationship_present: bool,
-    relationship_resolved: bool,
 ) -> SubstituteEvaluation:
     """Evaluate one G5-A Target Applicability reference for its own target grain."""
 
@@ -711,15 +861,14 @@ def _evaluate_target_outcome(
         )
 
     relationship, problem = _joined_relationship(
-        join_key=(grain[0], grain[1], substitute_material),
-        relationships=relationships,
-        relationship_present=relationship_present,
-        relationship_resolved=relationship_resolved,
+        join_key=(grain[0], _join_target_material(allocation, grain), substitute_material),
+        index=relationship_index,
+        dataset_present=relationship_present,
     )
     if relationship is None:
         if problem is None:
-            # The dataset is present and states no relationship for this exact grain: business
-            # states there is no approved substitute, which is a legal zero (§2.3.11 A).
+            # This exact grain has no candidate at all while the dataset is present: the
+            # dataset states no relationship for it, which is a legal zero (§2.3.11 A).
             return _resolved(
                 **base, equivalent_target_qty=Fraction(0), eligibility_reason=None
             )
@@ -791,6 +940,23 @@ def _evaluate_target_outcome(
     )
 
 
+def _join_target_material(
+    allocation: CanonicalObject, grain: tuple[Any, Any, Any]
+) -> Any:
+    """The target-material component of the ``Substitute Relationship`` join key.
+
+    ``Substitute Relationship`` and ``Substitute Allocation`` share one canonical identity
+    ``plant_id`` + ``target_material_code`` + ``substitute_material_code`` (``§4.1.4`` F ／ G), so
+    the join is taken from the **allocation's own** accepted identity -- never from the demand
+    context, whose material names the relation's own side (the target side for ``Target
+    Applicability``, the source side for ``Source Reservation Overlap``).  The demand context
+    grain is a fallback only for a resolved allocation that states no target material.
+    """
+
+    target_material = allocation.value_of("target_material_code", ABSENT)
+    return grain[1] if target_material is ABSENT else target_material
+
+
 def _approval_state(
     *,
     approval: Any,
@@ -836,73 +1002,47 @@ def _approval_state(
     return ELIGIBLE_APPROVED
 
 
-def _joined_relationship(
-    *,
-    join_key: tuple[Any, Any, Any],
-    relationships: Mapping[tuple[Any, Any, Any], tuple[CanonicalObject, ...]],
-    relationship_present: bool,
-    relationship_resolved: bool,
-) -> tuple[CanonicalObject | None, str | None]:
-    """Return the exactly-one applicable relationship, or ``(None, problem)``.
-
-    ``(None, None)`` means "the relationship dataset is present, its records were all resolved,
-    and it states none for this exact grain" -- a legal zero (``§2.3.11`` A).  ``(None, problem)``
-    means the state is undecidable and the calculation fails closed.  ``Substitute Relationship``
-    is **not** covered by the ``Option A'-R`` multiplicity exception, so several relationships on
-    one grain stay unresolved, and a present-but-unresolved dataset is never read as "none".
-    """
-
-    candidates = relationships.get(join_key, ())
-    if not candidates:
-        if not relationship_present:
-            return None, (
-                "the accepted package carries no Substitute Relationship role evidence, so "
-                "'business states there is no approved substitute' cannot be established; the "
-                "substitute calculation fails closed instead of producing a legal 0 (§2.3.11 A "
-                "versus the required-role boundary)"
-            )
-        if not relationship_resolved:
-            return None, (
-                "the accepted package carries the Substitute Relationship role but no "
-                "Substitute Relationship record resolved, so 'business states there is no "
-                "approved substitute' cannot be established for this exact grain; the join key "
-                "is never satisfied from an unresolved record and the substitute calculation "
-                "fails closed instead of producing a legal 0 (§4.4.102 C Stage A)"
-            )
-        return None, None
-    if len(candidates) > 1:
-        return None, (
-            f"{len(candidates)} resolved Substitute Relationship records state the join key "
-            f"{join_key!r}; exactly one applicable relationship is required and they are never "
-            "merged, deduplicated or resolved by first/last wins (§4.4.102 C Stage A)"
-        )
-    return candidates[0], None
-
-
 def _target(
     grain: tuple[Any, Any, Any],
     evaluations: tuple[SubstituteEvaluation, ...],
     inherited: tuple[Issue, ...],
+    *,
+    cumulative: Fraction | None = None,
+    grain_equivalent: Fraction | None = None,
+    cumulatively_unreliable: bool = False,
 ) -> SubstituteTarget:
-    """Aggregate the eligible evaluations of one target grain (``§2.3.12``)."""
+    """Aggregate one target grain and carry its cumulative ``<= required_date`` value.
 
-    contributing = [item for item in evaluations if item.contributes]
+    ``cumulative`` is the deterministic pass over this grain's ``plant_id`` +
+    ``target_material_code`` contexts whose ``required_date`` is ``<=`` this grain's, computed by
+    the caller (``§2.3.12``).  It is ``None`` whenever the accumulation is unreliable -- either
+    this grain's own allocation set is ``DATA_INCOMPLETE``, or an earlier-or-equal context of the
+    same Plant ＋ Material could not be reliably evaluated, so no numeric cumulative is produced
+    (``§2.3.11`` B).  A later context never contributes to an earlier grain.
+    """
+
     unreliable = [item for item in evaluations if item.data_incomplete]
-    cumulative: Fraction | None = Fraction(0)
     outcome: str | None = None
     notes: list[str] = []
     if unreliable:
-        cumulative = None
         outcome = SUBSTITUTE_DATA_INCOMPLETE
         notes.append(
             f"{len(unreliable)} referenced allocation(s) cannot be reliably evaluated for this "
             "target demand context, so no numeric cumulative approved substitute supply is "
             "produced (§2.3.11 B)"
         )
-    else:
-        for item in contributing:
-            assert item.equivalent_target_qty is not None
-            cumulative = cumulative + item.equivalent_target_qty
+    if cumulatively_unreliable:
+        # An earlier-or-equal context of the same Plant + Target Material is not reliable, so the
+        # cumulative value for this grain is not producible either -- the grain is DATA_INCOMPLETE
+        # and never silently reports a partial number (§2.3.12 / §2.3.11 B).
+        outcome = SUBSTITUTE_DATA_INCOMPLETE
+        notes.append(
+            "an earlier-or-equal target demand context of the same Plant + Target Material could "
+            "not be reliably evaluated, so CumulativeApprovedSubstituteSupply(<= required_date) "
+            "is not produced for this grain (§2.3.12)"
+        )
+    elif outcome is None and cumulative is None:  # pragma: no cover - defensive
+        outcome = SUBSTITUTE_DATA_INCOMPLETE
 
     inherited_local: list[Issue] = []
     rule_findings: list[Issue] = []
@@ -915,12 +1055,49 @@ def _target(
         material_code=grain[1],
         required_date=grain[2],
         evaluations=evaluations,
-        cumulative_approved_substitute_supply=cumulative,
+        cumulative_approved_substitute_supply=(
+            None if (unreliable or cumulatively_unreliable) else cumulative
+        ),
+        grain_equivalent=grain_equivalent,
         outcome=outcome,
         notes=tuple(notes),
         inherited_issues=_deduplicate_issues(tuple(inherited) + tuple(inherited_local)),
         rule_issues=_deduplicate_issues(tuple(rule_findings)),
     )
+
+
+def _grain_equivalent(
+    evaluations: tuple[SubstituteEvaluation, ...],
+) -> Fraction | None:
+    """This grain's own reliable contribution of its cited allocations, or ``None``.
+
+    A reliable ``not applicable`` contributes the legal ``0`` (``§4.4.89``); an unreliable grain
+    contributes ``None`` so it is never silently added as ``0``.
+    """
+
+    if any(item.data_incomplete for item in evaluations):
+        return None
+    total = Fraction(0)
+    for item in evaluations:
+        contribution = item.grain_equivalent
+        if contribution is not None:
+            total = total + contribution
+    return total
+
+
+def _allocation_identity(item: SubstituteEvaluation) -> str:
+    """The exact ``Substitute Allocation`` record identity this evaluation is attributed to.
+
+    Uniqueness for the cumulative pass is the exact accepted record identity -- never the
+    quantity value and never the number of demand contexts that cite it (``§4.5.9`` Decision 8).
+    The reference is rebuilt from the evaluation's own allocation provenance, so it is the same
+    exact form the allocation index is keyed by.
+    """
+
+    provenance = item.allocation_provenance
+    if provenance is not None:
+        return _full_reference(provenance)
+    return _sort_text(item.allocation_reference)
 
 
 # --- source side ／ conservation (B2-A') --------------------------------------------
@@ -1000,25 +1177,62 @@ def _conservation_groups(
     Only the allocations whose Source Reservation Overlap is ``overlaps`` for that exact context
     enter its sum.  A different exact context is a different group: contexts are never merged,
     never auto-overlapped and never compared by date proximity.
+
+    **Cross-context fail-safe (B2-A′).**  ``EligibleSubstituteSupply`` is one baseline per exact
+    ``plant_id`` + ``source_material_code``.  When several **distinct** exact Source Demand
+    Contexts of that same Plant ＋ Source Material each carry an actual ``overlaps`` reservation
+    contribution, the current authority cannot decide whether those reservation windows overlap
+    each other.  Letting every context consume the same ``OpeningUsableInventory`` independently
+    would silently assume they do **not** overlap and would treat one supply pool as several, so
+    the affected results fail closed as ``SEMANTIC_RESOLUTION`` ／ ``SEMANTIC_UNRESOLVED`` →
+    ``DATA_INCOMPLETE`` with no reliable numeric ``RemainingUnallocatedSourceSupply``.  Nothing is
+    auto-overlapped, auto-non-overlapped or merged, and no date proximity is inferred.  A context
+    with no reservation contribution of its own stays a legal zero and is never poisoned.
     """
 
     by_context: dict[str, list[SubstituteEvaluation]] = {}
     for item in evaluations:
         by_context.setdefault(str(item.demand_context_reference), []).append(item)
+    context_evaluations: dict[str, list[SubstituteEvaluation]] = {}
+    for reservation_context in sorted(source_contexts):
+        matched = [
+            item
+            for item in by_context.get(reservation_context, [])
+            if item.substitute_material_code is not None
+        ]
+        if not matched:  # pragma: no cover - a cited context always yields an evaluation
+            continue
+        context_evaluations[reservation_context] = matched
+
+    #: ``(plant_id, source_material_code) -> distinct exact contexts that actually reserve``
+    supplied_contexts: dict[tuple[Any, Any], list[str]] = {}
+    for reservation_context, matched in context_evaluations.items():
+        if not any(item.source_reservation_overlap == "overlaps" for item in matched):
+            continue
+        sample = matched[0]
+        supplied_contexts.setdefault((sample.plant_id, sample.substitute_material_code), []).append(
+            reservation_context
+        )
+    cross_context_supply: set[tuple[Any, Any]] = {
+        key for key, contexts in supplied_contexts.items() if len(contexts) > 1
+    }
 
     groups: list[ConservationGroup] = []
     for reservation_context in sorted(source_contexts):
-        outcomes = by_context.get(reservation_context, [])
+        resolved = context_evaluations.get(reservation_context, [])
+        if not resolved:
+            continue
         _grain, citations = source_contexts[reservation_context]
         if not citations:  # pragma: no cover - a group always carries its citation
             continue
         outcome = citations[0]
-        resolved = [item for item in outcomes if item.substitute_material_code is not None]
-        if not resolved:
-            continue
         sample = resolved[0]
         plant_id = sample.plant_id
         source_material = sample.substitute_material_code
+        supply_key = (plant_id, source_material)
+        cross_context = supply_key in cross_context_supply and any(
+            item.source_reservation_overlap == "overlaps" for item in resolved
+        )
 
         supply, supply_problem, supply_provenance = _eligible_substitute_supply(
             inventory, plant_id=plant_id, material_code=source_material
@@ -1031,7 +1245,45 @@ def _conservation_groups(
         result_outcome: str | None = None
         allocating: tuple[str, ...] = ()
 
-        if supply is None:
+        if cross_context:
+            # Several distinct exact Source Demand Contexts of this same Plant ＋ Source Material
+            # each reserve from the one EligibleSubstituteSupply, and the authority cannot decide
+            # whether their reservation windows overlap.  Each context is still its own group --
+            # they are never merged -- but none of them may consume the supply independently.
+            allocated = None
+            state = CONSERVATION_CROSS_CONTEXT_UNRESOLVED
+            result_outcome = SUBSTITUTE_DATA_INCOMPLETE
+            issues.append(
+                _issue(
+                    location=(
+                        f"cross_context[{_sort_text(plant_id)}/"
+                        f"{_sort_text(source_material)}]"
+                    ),
+                    detail=(
+                        f"{len(supplied_contexts[supply_key])} distinct exact Source Demand "
+                        f"Contexts of plant {plant_id!r} + source material "
+                        f"{source_material!r} each reserve from the same single "
+                        "EligibleSubstituteSupply baseline; the current authority cannot decide "
+                        "whether those reservation windows overlap, so one supply pool is never "
+                        "consumed independently by each context and the reservation outcome "
+                        "stays unresolved (§2.3.10 / §2.3.11 B / §4.4.60 path B)"
+                    ),
+                    category=CATEGORY_SEMANTIC_RESOLUTION,
+                    reason=REASON_SEMANTIC_UNRESOLVED,
+                    affected_evidence=ROLE_SUBSTITUTE_ALLOCATION,
+                    design_reference="§2.3.10 / §4.4.60 (B2-A′)",
+                    consequence_context=(
+                        "the affected conservation results are DATA_INCOMPLETE and no reliable "
+                        "numeric RemainingUnallocatedSourceSupply is produced"
+                    ),
+                )
+            )
+            notes.append(
+                "distinct exact Source Demand Contexts of the same Plant + Source Material both "
+                "reserve from one EligibleSubstituteSupply and their windows are not decidable, "
+                "so no numeric RemainingUnallocatedSourceSupply is produced (§2.3.10)"
+            )
+        elif supply is None:
             allocated = None
             state = CONSERVATION_SOURCE_SUPPLY_UNRESOLVED
             result_outcome = SUBSTITUTE_DATA_INCOMPLETE
@@ -1060,7 +1312,7 @@ def _conservation_groups(
         else:
             reserved = ExactQuantity(0, 0)
             unreliable = False
-            for item in outcomes:
+            for item in resolved:
                 side = item.source_reservation_overlap
                 if side is None:
                     # The accepted record registered an approved basis that states this

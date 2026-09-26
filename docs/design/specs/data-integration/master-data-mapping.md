@@ -1674,6 +1674,39 @@ downstream BR-SUBSTITUTE-001 才执行 authorized sum ／ conservation
 按 exact locator ＋ exact `mapping_basis` 选出，caller 仍然不能设置 outcome，也没有任何 Boolean 被合成。
 它只是让 `BR-SUBSTITUTE-001` 能够对该 grain 报告 `DATA_INCOMPLETE`，而不是把它当作 `0` 或整个丢弃。
 
+**F.2 relationship resolved 判断按 exact join grain**
+
+"业务明确没有 approved substitute"（`§2.3.11` A）只能在**该 exact join grain 自己的状态**下成立。
+一个 grain 上的 resolved relationship **不得**让另一个 grain 变成合法 `0`，反之亦然：
+
+```
+exact grain 恰有 1 条 resolved relationship        → 使用之
+exact grain 有 unresolved relationship candidate   → DATA_INCOMPLETE
+exact grain 无任何 candidate 且 dataset present     → 合法 0
+dataset absent                                     → DATA_INCOMPLETE（role 为 REQUIRED）
+```
+
+**不得** first ／ last wins，**不得** same-value dedup，**不得**用 role 级全局状态代替 exact-grain
+判断；另一个 grain 的状态**不得**影响本 grain（failure isolation）。
+
+**F.3 cross-context conservation fail-safe**
+
+`EligibleSubstituteSupply` 是**一个** exact `plant_id` + `source_material_code` 的 baseline。若同一
+Plant ＋ Source Material 下存在**多个 distinct exact Source Demand Context**，且其中多个 context
+各自带有实际的 `SRO = overlaps` reservation contribution，则 current authority **无法判断**这些
+reservation windows 是否互相 overlap。此时**不得**让每个 context 各自独立消费同一份
+`EligibleSubstituteSupply`（那等于隐式假设它们**不** overlap，并把一份 supply 当成多个 supply
+pools）：每个 context 仍然是它自己的 group（**不得** merge），但受影响的 conservation 结果
+`SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED` → `DATA_INCOMPLETE`，且**不产生**可靠的 numeric
+`RemainingUnallocatedSourceSupply`。没有自身 reservation contribution 的 context 仍是合法 `0`。
+
+**F.4 cumulative `<= t` 的唯一性依据**
+
+`CumulativeApprovedSubstituteSupply(<= t)` 按 `plant_id` + `target_material_code` 对
+`required_date <= t` 的每个 target demand context 求和；同一 allocation record 若在多个 context 都
+applicable，仍然只是**一份** supply，唯一性依据是 **exact allocation record identity**，
+**不得**按 context 数量重复累计，**不得** same-value dedup。
+
 #### 4.5.10 Supplier-Material Relationship
 
 **必须明确：**

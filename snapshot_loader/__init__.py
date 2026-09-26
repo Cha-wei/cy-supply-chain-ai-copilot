@@ -128,6 +128,7 @@ from .requirement_calculation import (
 from .strict_json import StrictJsonError, parse_strict_json
 from .substitute_calculation import (
     APPROVED_APPROVAL_STATUS,
+    CONSERVATION_CROSS_CONTEXT_UNRESOLVED,
     CONSERVATION_OVERLAP_UNRESOLVED,
     CONSERVATION_OVER_ALLOCATED,
     CONSERVATION_SOURCE_SUPPLY_UNRESOLVED,
@@ -213,6 +214,7 @@ __all__ = [
     "RequirementCalculation",
     "RequirementCalculationResult",
     "APPROVED_APPROVAL_STATUS",
+    "CONSERVATION_CROSS_CONTEXT_UNRESOLVED",
     "CONSERVATION_OVERLAP_UNRESOLVED",
     "CONSERVATION_OVER_ALLOCATED",
     "CONSERVATION_SOURCE_SUPPLY_UNRESOLVED",

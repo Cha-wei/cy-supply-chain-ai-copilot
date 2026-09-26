@@ -2734,6 +2734,24 @@ RemainingUnallocatedSourceSupply = EligibleSubstituteSupply - Σ AllocatedSubsti
       新 canonical entity ／ identity component ／ 时间 overlap 算法（暂不采用 B2-B）。
 ```
 
+**EligibleSubstituteSupply 只有一份，不得被多个 context 各自消费**
+
+`EligibleSubstituteSupply` 是**一个** exact `plant_id` + `source_material_code` 的 baseline。若该
+Plant ＋ Source Material 下存在**多个 distinct exact Source Demand Context**，且其中多个 context
+各自带有实际的 `SRO = overlaps` reservation contribution，则 current authority **无法判断**这些
+reservation windows 是否互相 overlap。
+
+此时**不得**让每个 context 各自独立、正常地消费同一份 `EligibleSubstituteSupply`（那等于隐式假设
+它们**不** overlap，并把一份 supply 当成多个独立 supply pools）：
+
+```
+每个 context 仍然是它自己的 conservation group（**不得** merge）
+但受影响的 conservation 结果 = SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED → DATA_INCOMPLETE
+并且**不产生**可靠的 numeric RemainingUnallocatedSourceSupply
+```
+
+**没有**自身 reservation contribution 的 context 仍然是合法 `0`，**不得**被牵连。
+
 `ExactQuantity` 的减法保持既有 exact 语义（与 §2.3.12 一致）：只有在
 `Σ <= EligibleSubstituteSupply` 时才产生 `RemainingUnallocatedSourceSupply`，否则**不产生**任何数值。
 
@@ -2777,6 +2795,21 @@ canonical field ／ entity ／ identity component，也不改变 G5-A cardinalit
 它只是让 `BR-SUBSTITUTE-001` 能够按本节的 B 对该 grain 报告 `DATA_INCOMPLETE`，而不是把它默默当作
 `0` 或整个丢弃。**未注册** ／ 无法验证 ／ 不匹配 ／ 有歧义的 basis 仍然**不产生** reference。
 
+**relationship 的 resolved 判断必须按 exact join grain（clarification）**
+
+"业务明确没有 approved substitute"（本节 A）只能在**该 exact join grain 自己的状态**下成立。
+一个 grain 上的 resolved relationship **不得**让另一个 grain 变成合法 `0`，反之亦然：
+
+```
+exact grain 恰有 1 条 resolved relationship        → 使用之
+exact grain 有 unresolved relationship candidate   → DATA_INCOMPLETE
+exact grain 无任何 candidate 且 dataset present     → 合法 0（本节 A）
+dataset absent                                     → DATA_INCOMPLETE（role 为 REQUIRED）
+```
+
+**不得** first ／ last wins，**不得** same-value dedup，**不得**用 role 级全局状态代替 exact-grain
+判断。另一个 grain 的 resolved ／ unresolved 状态**不得**影响本 grain（failure isolation）。
+
 #### 2.3.12 Deterministic Formula
 
 对于**每一个有效 allocation** `i`：
@@ -2808,6 +2841,24 @@ CumulativeApprovedSubstituteSupply(<= t)
 **处理：** `DATA_INCOMPLETE` ＋ **Data Quality Issue**
 
 > allocation 与需求窗口的关联机制属 **canonical business meaning 之后的 source mapping**，进入后续 **Data Dictionary / Adapter Design**。
+
+**`CumulativeApprovedSubstituteSupply(<= t)` 的确定性口径（clarification）**
+
+```
+按 plant_id + target_material_code 聚合，对 required_date <= t 的**每一个** target demand
+context 求 EquivalentTargetQty 之和；晚于 t 的 context 不计入。
+
+同一 allocation record 若在多个 Target Demand Context 都 applicable，
+它仍然只是**一份** supply：唯一性依据是 exact allocation record identity，
+**不得**按 context 数量重复累计，**不得** same-value dedup，**不得**按数量去重。
+```
+
+因此 `R1: A1 = 60` 与 `R2: A2 = 40` ⇒ `R1 = 60`、`R2 = 100`；而同一 `A1 = 60` 同时
+applicable 于 `R1` 与 `R2` ⇒ `R1 = 60`、`R2 = 60`（**不是** `120`）。
+
+若某个 `required_date <= t` 的 context 无法可靠评估，则该 grain 的 cumulative **不产生数值**
+（`DATA_INCOMPLETE`），**不得**以部分和冒充结果；其他 Plant ／ Target Material 的 grain 不受影响
+（failure isolation）。
 
 #### 2.3.13 Acceptance Examples
 

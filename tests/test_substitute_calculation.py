@@ -35,6 +35,7 @@ from snapshot_loader.canonical_objects import (
 from snapshot_loader.exact_quantity import ExactQuantity
 from snapshot_loader.inventory_calculation import INVENTORY_RULE_ID
 from snapshot_loader.substitute_calculation import (
+    CONSERVATION_CROSS_CONTEXT_UNRESOLVED,
     CONSERVATION_OVER_ALLOCATED,
     CONSERVATION_OVERLAP_UNRESOLVED,
     CONSERVATION_SOURCE_SUPPLY_UNRESOLVED,
@@ -42,6 +43,7 @@ from snapshot_loader.substitute_calculation import (
     SUBSTITUTE_RULE_ID,
     _allocation_index,
     _evaluate_target_outcome,
+    _joined_relationship,
     _relationship_index,
 )
 from tests.helpers import DatasetSpec, PackageSpec, build_package
@@ -57,6 +59,12 @@ R1 = "2026-10-10"
 R2 = "2026-10-20"
 S1 = "2026-10-12"
 S2 = "2026-11-01"
+
+#: A second, independent target/source pair used by the mixed-grain join regression.
+MATERIAL_A = "M1"
+SOURCE_A = "M3"
+MATERIAL_B = "M4"
+SOURCE_B = "M5"
 
 SNAPSHOT_TIME = "2026-10-01T08:00:00Z"
 SNAPSHOT_TIME_B = "2026-10-02T08:00:00Z"
@@ -398,6 +406,70 @@ class SubstituteRuleTestCase(unittest.TestCase):
             compute_substitute_supply(construction, inventory),
         )
 
+    def target_cumulative_scenario(
+        self,
+        *,
+        pairs: tuple[tuple[Any, Any, Any], ...],
+        ratio: Any = "1.0",
+        on_hand: Any = "100",
+        name: str | None = None,
+    ):
+        """One allocation per target demand context, for the ``<= t`` cumulative pass.
+
+        ``pairs`` is ``(quantity, target_material, required_date)`` per allocation.  Each
+        allocation cites **only its own** cited Production Requirement context, so the cumulative
+        pass is exercised across several distinct target demand contexts
+        (``§2.3.12``).  ``Target Applicability`` cites the allocation's **target** side, so the
+        cited requirement must state that same target material (``§4.5.9`` ／ ``CB-1'``).
+        """
+
+        allocations = [
+            ALLOCATION(
+                target=material, quantity=quantity, target_basis=BASIS_TA_APPLICABLE
+            )
+            for quantity, material, _date in pairs
+        ]
+        datasets: list[tuple[str, list[dict[str, object]]]] = [
+            (ROLE_ALLOCATION, allocations),
+            (ROLE_INVENTORY, [INVENTORY_RECORD(on_hand=on_hand)]),
+            (ROLE_RELATIONSHIP, [RELATIONSHIP(ratio=ratio)]),
+            (
+                ROLE_REQUIREMENT,
+                [REQUIREMENT(material=material, required_date=date) for _q, material, date in pairs],
+            ),
+        ]
+        accepted = self.accepted(datasets, name=name)
+        demand = tuple(
+            self.demand_entry(
+                accepted,
+                relation=TARGET_RELATION,
+                basis=BASIS_TA_APPLICABLE,
+                allocation_artifact="0.json",
+                allocation_ordinal=index,
+                context_artifact="3.json",
+                context_ordinal=index,
+                target=pairs[index][1],
+            )
+            for index in range(len(allocations))
+        )
+        scope = self.scope_handoffs(accepted, artifact="1.json", ordinals=(0,))
+        construction = construct_canonical_objects(
+            accepted,
+            PhaseAHandoff(
+                analysis_run_id="RUN-1",
+                analysis_date="2026-10-01",
+                inventory_scope=scope,
+                effective_demand=demand,
+            ),
+        )
+        inventory = compute_opening_usable_inventory(construction)
+        return (
+            accepted,
+            construction,
+            inventory,
+            compute_substitute_supply(construction, inventory),
+        )
+
     def source_scenario(
         self,
         *,
@@ -526,6 +598,97 @@ class CalculationCorrectnessTests(SubstituteRuleTestCase):
         self.assertEqual(result.cumulative_for(PLANT, TARGET, R1), Fraction(60))
         self.assertIsNone(result.for_grain(PLANT, TARGET, R2))
         self.assertIsNone(result.cumulative_for(PLANT, TARGET, R2))
+
+    def test_ac5_cumulative_is_a_deterministic_pass_over_required_date(self) -> None:
+        """AC-5: ``CumulativeApprovedSubstituteSupply(<= t)`` sums every earlier context.
+
+        ``R1: A1 = 60`` and ``R2: A2 = 40`` must yield ``R1 = 60`` and ``R2 = 100``; a context
+        later than ``t`` never contributes.
+        """
+
+        _a, _c, _i, result = self.target_cumulative_scenario(
+            pairs=(("60", TARGET, R1), ("40", TARGET, R2)),
+            name="ac5-cumulative",
+        )
+        first = result.for_grain(PLANT, TARGET, R1)
+        second = result.for_grain(PLANT, TARGET, R2)
+        assert first is not None and second is not None
+        # Per-grain contributions stay distinct from the cumulative pass.
+        self.assertEqual(first.grain_equivalent, Fraction(60))
+        self.assertEqual(second.grain_equivalent, Fraction(40))
+        self.assertEqual(first.cumulative_approved_substitute_supply, Fraction(60))
+        self.assertEqual(second.cumulative_approved_substitute_supply, Fraction(100))
+        # The later context never leaks into the earlier one.
+        self.assertEqual(result.cumulative_for(PLANT, TARGET, R1), Fraction(60))
+
+    def test_ac5_same_allocation_in_two_contexts_is_never_counted_twice(self) -> None:
+        """AC-5 ／ AC-31: one allocation cited by two applicable contexts is one supply.
+
+        A single allocation record (``qty 60``) is ``applicable`` to both ``R1`` and ``R2``.  Its
+        exact allocation record identity is the uniqueness basis -- never a value comparison and
+        never the number of demand contexts that cite it -- so ``R1 = 60`` and ``R2 = 60``,
+        **not** ``120``.
+        """
+
+        datasets: list[tuple[str, list[dict[str, object]]]] = [
+            (ROLE_ALLOCATION, [ALLOCATION(quantity="60")]),
+            (ROLE_INVENTORY, [INVENTORY_RECORD(on_hand="100")]),
+            (ROLE_RELATIONSHIP, [RELATIONSHIP(ratio="1.0")]),
+            (
+                ROLE_REQUIREMENT,
+                [
+                    REQUIREMENT(material=TARGET, required_date=R1),
+                    REQUIREMENT(material=TARGET, required_date=R2),
+                ],
+            ),
+        ]
+        accepted = self.accepted(datasets, name="ac5-two-contexts")
+        demand = tuple(
+            self.demand_entry(
+                accepted,
+                relation=TARGET_RELATION,
+                basis=BASIS_TA_APPLICABLE,
+                allocation_artifact="0.json",
+                allocation_ordinal=0,
+                context_artifact="3.json",
+                context_ordinal=ordinal,
+            )
+            for ordinal in (0, 1)
+        )
+        _a, construction, inventory, result = self.run_package(
+            datasets, demand=demand, name="ac5-two-contexts-run"
+        )
+        self.assertEqual(len(construction.objects_for(ROLE_ALLOCATION)), 1)
+        self.assertEqual(len(construction.effective_demand_contexts), 2)
+        first = result.for_grain(PLANT, TARGET, R1)
+        second = result.for_grain(PLANT, TARGET, R2)
+        assert first is not None and second is not None
+        # The same exact allocation is cited by both grains and contributes 60 to each once.
+        self.assertEqual(first.grain_equivalent, Fraction(60))
+        self.assertEqual(second.grain_equivalent, Fraction(60))
+        self.assertEqual(first.cumulative_approved_substitute_supply, Fraction(60))
+        self.assertEqual(second.cumulative_approved_substitute_supply, Fraction(60))
+        self.assertEqual(
+            {evaluation.allocation_reference for evaluation in first.evaluations},
+            {evaluation.allocation_reference for evaluation in second.evaluations},
+        )
+
+    def test_ac5_unreliable_earlier_context_does_not_produce_a_numeric_cumulative(self) -> None:
+        """AC-5 ／ AC-48: an unreliable earlier context fails the cumulative, never silently 0."""
+
+        _a, _c, _i, result = self.target_cumulative_scenario(
+            pairs=(("bad", TARGET, R1), ("40", TARGET, R2)),
+            name="ac5-cumulative-unreliable",
+        )
+        first = result.for_grain(PLANT, TARGET, R1)
+        second = result.for_grain(PLANT, TARGET, R2)
+        assert first is not None and second is not None
+        self.assertTrue(first.data_incomplete)
+        self.assertIsNone(first.cumulative_approved_substitute_supply)
+        # The reliable later context cannot produce a numeric cumulative either, because the
+        # earlier-or-equal context of the same Plant + Material is not reliable.
+        self.assertIsNone(second.cumulative_approved_substitute_supply)
+        self.assertEqual(len(result.data_incomplete_targets), 2)
 
 
 # --- AC-6 ～ AC-9 : exact numeric semantics ------------------------------------------
@@ -697,6 +860,144 @@ class RelationshipJoinTests(SubstituteRuleTestCase):
         target = result.for_grain(PLANT, TARGET, R1)
         assert target is not None
         self.assertTrue(target.data_incomplete)
+
+    def test_ac15_mixed_relationship_grains_are_decided_per_exact_grain(self) -> None:
+        """Blocker 3: the role's global state is never exact-grain authority.
+
+        ``Substitute Relationship`` grain A carries two duplicate records (unresolved) while grain
+        B carries exactly one (resolved).  A resolved grain elsewhere may never turn grain A into
+        a legal zero, and grain A's unresolved state may never poison grain B -- so grain B's
+        allocations still resolve normally while grain A's fail closed.
+        """
+
+        allocation_a = ALLOCATION(
+            target=MATERIAL_A, source=SOURCE_A, quantity="60",
+            target_basis=None, source_basis=BASIS_SRO_OVERLAPS,
+        )
+        allocation_b = ALLOCATION(
+            target=MATERIAL_B, source=SOURCE_B, quantity="50",
+            target_basis=None, source_basis=BASIS_SRO_OVERLAPS,
+        )
+        datasets: list[tuple[str, list[dict[str, object]]]] = [
+            (ROLE_ALLOCATION, [allocation_a, allocation_b]),
+            (
+                ROLE_INVENTORY,
+                [
+                    INVENTORY_RECORD(material=SOURCE_A, on_hand="100"),
+                    INVENTORY_RECORD(material=SOURCE_B, on_hand="100"),
+                ],
+            ),
+            (
+                ROLE_RELATIONSHIP,
+                [
+                    # grain A: two records on one grain -> canonicalization leaves both unresolved
+                    RELATIONSHIP(target=MATERIAL_A, source=SOURCE_A, ratio="1.0"),
+                    RELATIONSHIP(target=MATERIAL_A, source=SOURCE_A, ratio="0.5"),
+                    # grain B: exactly one -> resolved
+                    RELATIONSHIP(target=MATERIAL_B, source=SOURCE_B, ratio="1.0"),
+                ],
+            ),
+            (
+                ROLE_REQUIREMENT,
+                [
+                    REQUIREMENT(material=SOURCE_A, required_date=S1),
+                    REQUIREMENT(material=SOURCE_A, required_date=S2),
+                    REQUIREMENT(material=SOURCE_B, required_date=S1),
+                ],
+            ),
+        ]
+        accepted = self.accepted(datasets, name="ac15-mixed-grains")
+        scope = self.scope_handoffs(accepted, artifact="1.json", ordinals=(0, 1))
+        demand = (
+            self.demand_entry(
+                accepted,
+                relation=SOURCE_RELATION,
+                basis=BASIS_SRO_OVERLAPS,
+                allocation_artifact="0.json",
+                allocation_ordinal=0,
+                context_artifact="3.json",
+                context_ordinal=0,
+                target=MATERIAL_A,
+                source=SOURCE_A,
+            ),
+            self.demand_entry(
+                accepted,
+                relation=SOURCE_RELATION,
+                basis=BASIS_SRO_OVERLAPS,
+                allocation_artifact="0.json",
+                allocation_ordinal=0,
+                context_artifact="3.json",
+                context_ordinal=1,
+                target=MATERIAL_A,
+                source=SOURCE_A,
+            ),
+            self.demand_entry(
+                accepted,
+                relation=SOURCE_RELATION,
+                basis=BASIS_SRO_OVERLAPS,
+                allocation_artifact="0.json",
+                allocation_ordinal=1,
+                context_artifact="3.json",
+                context_ordinal=2,
+                target=MATERIAL_B,
+                source=SOURCE_B,
+            ),
+        )
+        construction = construct_canonical_objects(
+            accepted,
+            PhaseAHandoff(
+                analysis_run_id="RUN-1",
+                analysis_date="2026-10-01",
+                inventory_scope=scope,
+                effective_demand=demand,
+            ),
+        )
+        relationships = _relationship_index(construction)
+        self.assertEqual(len(construction.unresolved_for(ROLE_RELATIONSHIP)), 2)
+        self.assertEqual(len(construction.objects_for(ROLE_RELATIONSHIP)), 1)
+        self.assertEqual(set(relationships.unresolved), {(PLANT, MATERIAL_A, SOURCE_A)})
+        self.assertEqual(set(relationships.resolved), {(PLANT, MATERIAL_B, SOURCE_B)})
+        self.assertEqual(relationships.unkeyable, ())
+
+        # Per exact grain: A is undecidable, B is resolved, and an unrelated grain is a legal 0.
+        relationship_a, problem_a = _joined_relationship(
+            join_key=(PLANT, MATERIAL_A, SOURCE_A),
+            index=relationships,
+            dataset_present=True,
+        )
+        self.assertIsNone(relationship_a)
+        self.assertIsNotNone(problem_a)
+        relationship_b, problem_b = _joined_relationship(
+            join_key=(PLANT, MATERIAL_B, SOURCE_B),
+            index=relationships,
+            dataset_present=True,
+        )
+        self.assertIsNotNone(relationship_b)
+        self.assertIsNone(problem_b)
+        absent, problem_absent = _joined_relationship(
+            join_key=(PLANT, "M-UNRELATED", "M-UNRELATED"),
+            index=relationships,
+            dataset_present=True,
+        )
+        self.assertIsNone(absent)
+        self.assertIsNone(problem_absent)
+
+        # Downstream proof: both source contexts cite SOURCE_A, so both groups are cross-context
+        # unresolved; the SOURCE_B context of grain B keeps a healthy numeric conservation.
+        inventory = compute_opening_usable_inventory(construction)
+        result = compute_substitute_supply(construction, inventory)
+        self.assertEqual(len(result.conservation_groups), 3)
+        by_context = {group.source_material_code: group for group in result.conservation_groups}
+        self.assertEqual(set(by_context), {SOURCE_A, SOURCE_B})
+        healthy = by_context[SOURCE_B]
+        self.assertFalse(healthy.data_incomplete)
+        self.assertEqual(healthy.allocated_substitute_qty, ExactQuantity(50, 0))
+        self.assertEqual(healthy.remaining_unallocated_source_supply, ExactQuantity(50, 0))
+        for group in result.conservation_groups:
+            if group.source_material_code != SOURCE_A:
+                continue
+            self.assertTrue(group.data_incomplete)
+            self.assertIsNone(group.remaining_unallocated_source_supply)
 
     def test_ac16_approved_relationship_is_eligible(self) -> None:
         """AC-16: only an exact ``APPROVED`` state participates."""
@@ -1028,7 +1329,15 @@ class ConservationTests(SubstituteRuleTestCase):
         )
 
     def test_ac39_different_exact_contexts_are_never_merged(self) -> None:
-        """AC-39: different exact Source Demand Contexts are separate groups, never merged."""
+        """AC-39: distinct exact Source Demand Contexts stay distinct **and** fail closed.
+
+        Two different exact contexts are two groups -- never merged, never auto-overlapped and
+        never inferred from date proximity.  But they share the one ``EligibleSubstituteSupply``
+        baseline of their Plant ＋ Source Material, and the authority cannot decide whether their
+        reservation windows overlap, so neither may independently consume that supply as its own
+        healthy pool: the affected conservation results are ``DATA_INCOMPLETE`` with no reliable
+        numeric ``RemainingUnallocatedSourceSupply`` (B2-A′).
+        """
 
         _a, _c, _i, result = self.source_scenario(
             quantities=("60", "50"),
@@ -1040,18 +1349,86 @@ class ConservationTests(SubstituteRuleTestCase):
             on_hand="100",
             name="ac39",
         )
-        # Two distinct contexts => two groups, each with one allocation: no cross-context sum
-        # and no inferred overlap.
+        # Two distinct contexts => two groups: no cross-context merge and no inferred overlap.
         self.assertEqual(len(result.conservation_groups), 2)
-        for group in result.conservation_groups:
-            self.assertFalse(group.over_allocated)
-            self.assertIsNone(group.outcome)
         self.assertEqual(
-            sorted(
-                group.allocated_substitute_qty for group in result.conservation_groups
-            ),
-            [ExactQuantity(50, 0), ExactQuantity(60, 0)],
+            len({group.reservation_context for group in result.conservation_groups}), 2
         )
+        for group in result.conservation_groups:
+            self.assertTrue(group.data_incomplete)
+            self.assertEqual(
+                group.conservation_state, CONSERVATION_CROSS_CONTEXT_UNRESOLVED
+            )
+            self.assertIsNone(group.remaining_unallocated_source_supply)
+            self.assertIsNone(group.allocated_substitute_qty)
+            self.assertEqual(group.allocating_references, ())
+            self.assertTrue(
+                any(
+                    issue.category == "SEMANTIC_RESOLUTION"
+                    and issue.reason == "SEMANTIC_UNRESOLVED"
+                    for issue in group.issues
+                )
+            )
+        self.assertTrue(
+            any(
+                issue.reason == "SEMANTIC_UNRESOLVED" for issue in result.rule_issues
+            )
+        )
+
+    def test_ac39_cross_context_reservation_is_never_two_supply_pools(self) -> None:
+        """Blocker 2 focus: two distinct contexts reserve one ``EligibleSubstituteSupply``.
+
+        ``Eligible MAT-B = 100``; ``A1 qty 60 -> S1 overlaps`` and ``A2 qty 50 -> S2 overlaps``
+        with ``S1 != S2``.  The two contexts are distinct groups and must never be merged, but
+        neither may independently consume the same 100 as its own healthy pool: the cross-context
+        reservation is unresolved, the affected conservation results are ``DATA_INCOMPLETE`` and
+        no reliable numeric ``RemainingUnallocatedSourceSupply`` is produced.
+        """
+
+        _a, _c, _i, result = self.source_scenario(
+            quantities=("60", "50"),
+            source_requirements=(
+                REQUIREMENT(material=SOURCE, required_date=S1),
+                REQUIREMENT(material=SOURCE, required_date=S2),
+            ),
+            context_ordinals=(1, 2),
+            on_hand="100",
+            name="ac39-cross-context",
+        )
+        self.assertEqual(len(result.conservation_groups), 2)
+        self.assertEqual(
+            len({group.reservation_context for group in result.conservation_groups}), 2
+        )
+        for group in result.conservation_groups:
+            self.assertTrue(group.data_incomplete)
+            self.assertEqual(
+                group.conservation_state, CONSERVATION_CROSS_CONTEXT_UNRESOLVED
+            )
+            self.assertIsNone(group.remaining_unallocated_source_supply)
+            self.assertIsNone(group.allocated_substitute_qty)
+            self.assertFalse(group.over_allocated)
+            self.assertEqual(group.allocating_references, ())
+        # No cross-context sum, no auto-overlap and no auto-non-overlap anywhere in the result.
+        self.assertEqual(result.over_allocated_groups, ())
+        self.assertFalse(
+            any(
+                "does not overlap" in note or "non-overlap" in note
+                for group in result.conservation_groups
+                for note in group.notes
+            )
+        )
+
+    def test_ac39_single_context_still_conserves_normally(self) -> None:
+        """Blocker 2 boundary: one exact context keeps its healthy conservation result."""
+
+        _a, _c, _i, result = self.source_scenario(
+            quantities=("60",), on_hand="100", name="ac39-single-context"
+        )
+        self.assertEqual(len(result.conservation_groups), 1)
+        group = result.conservation_groups[0]
+        self.assertFalse(group.data_incomplete)
+        self.assertEqual(group.conservation_state, CONSERVATION_WITHIN_LIMIT)
+        self.assertEqual(group.remaining_unallocated_source_supply, ExactQuantity(40, 0))
 
     def test_ac40_contexts_are_never_compared_by_date_proximity(self) -> None:
         """AC-40: no proximity inference -- near-date distinct contexts stay distinct."""
@@ -1070,7 +1447,10 @@ class ConservationTests(SubstituteRuleTestCase):
         self.assertEqual(len(result.conservation_groups), 2)
         for group in result.conservation_groups:
             self.assertFalse(group.over_allocated)
-            self.assertIsNone(group.outcome)
+            # Distinct, near-date contexts are neither merged nor silently treated as
+            # non-overlapping supply pools.
+            self.assertEqual(group.conservation_state, CONSERVATION_CROSS_CONTEXT_UNRESOLVED)
+            self.assertIsNone(group.remaining_unallocated_source_supply)
 
 
 # --- AC-41 ～ AC-44 and AC-51 ～ AC-55 : allocation resolution boundary --------------
@@ -1124,9 +1504,8 @@ class AllocationResolutionBoundaryTests(SubstituteRuleTestCase):
             outcome=unbound,
             grain=(PLANT, TARGET, R1),
             allocations=_allocation_index(construction),
-            relationships=_relationship_index(construction),
+            relationship_index=_relationship_index(construction),
             relationship_present=ROLE_RELATIONSHIP in construction.present_roles,
-            relationship_resolved=False,
         )
         self.assertEqual(evaluation.outcome, DATA_INCOMPLETE)
         self.assertTrue(evaluation.data_incomplete)
