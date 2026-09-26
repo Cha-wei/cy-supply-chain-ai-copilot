@@ -2053,11 +2053,13 @@ conservation unresolved / DATA_INCOMPLETE
 
 ```text
 恰 1 个可靠可消费 InventoryTarget  ⇒ 使用其 OpeningUsableInventory ／ SafetyStock
-0 个                              ⇒ 该 exact grain 无 inventory evidence（合法 0），
-                                     但「无可用 OpeningUsableInventory」的目标 ⇒ DATA_INCOMPLETE
+0 个 InventoryTarget              ⇒ DATA_INCOMPLETE
 >1 个不同 inventory_snapshot_time ⇒ DATA_INCOMPLETE
 ```
 
+- **0 个 `InventoryTarget` 是 `DATA_INCOMPLETE`**，与 `>1` 个同样 fail closed；**不得**读成合法 `0`。
+  `BR-INVENTORY-001` 对该 exact grain 能形成的每个 target 都会形成，因此「没有 target」表示该 exact
+  grain 的 inventory snapshot evidence 无法依赖，而不是 business 明确「没有库存」。
 - `OpeningUsableInventory` 与 `SafetyStock` **必须取自同一个**被消费的 `InventoryTarget`；**不得**
   跨 target 混用。
 - **禁止**：`earliest/latest wins`、跨 snapshot `sum`、`average`、自动令
@@ -2074,13 +2076,47 @@ conservation unresolved / DATA_INCOMPLETE
 
 - `BR-SHORTAGE-001` **不得**把 missing `SubstituteTarget` 猜成 `0`；
 - **不得**回读 raw ／ canonical substitute evidence 重算 `BR-SUBSTITUTE-001`；
+- **不得**由 `BR-SHORTAGE-001` 读取 accepted package 的 role-presence（`Substitute Relationship` role
+  是否存在）或任何 substitute canonical evidence 来**补解释**该 grain 的替代语义 —— 该判断只属于
+  `BR-SUBSTITUTE-001` 自己的 result；
 - 该 grain 是 `BR-SUBSTITUTE-001` 已引用的 Target Demand Context ⇒ 直接消费其
   `CumulativeApprovedSubstituteSupply(<= t)`；
 - 该 grain 只被引用为 Source Demand Context ⇒ 该 material 不存在 approved substitute supply 的
   显式 0（`§4.4.88` valid zero），不是被省略的目标；
-- 两者都未被引用（或 `Substitute Relationship` role 缺失）⇒ `DATA_INCOMPLETE`。
+- 两者都未被引用 ⇒ `DATA_INCOMPLETE`（`BR-SHORTAGE-001` **不得**自行推断 `0`）。
 
-**D. Cumulative ／ date rules**
+**D. 数值语义（exact rational，`§2.4.8` ／ `ADR-001`）**
+
+`ProjectedAvailable` ／ `ShortageQty` ／ `BufferGap` 及其消费的 cumulative values 都是 **exact
+rational derived result**：
+
+- upstream 的 exact `Fraction`（例如 `GrossRequirement = 4000/19`）是**可靠** quantity，**不是**
+  missing ／ invalid ／ unresolved ⇒ **不得**因「无法有限十进制表示」而降级为 `DATA_INCOMPLETE`；
+- 禁止 `float` ／ `round` ／ `truncate` ／ `quantize` ／ `Decimal` default context；
+- serialization：derived result 以 exact rational payload
+  `{"numerator": <int>, "denominator": <positive int>}` 表达 —— 这是仓库中**既有**的 derived-quantity
+  representation（`BaseRequirement` ／ `GrossRequirement` ／ `EquivalentTargetQty` 使用同一形式）；
+  当该 exact value **确实**存在有限十进制表示时，同时提供对应的 exact decimal text 字段。
+  该 representation 是 runtime payload，**不新增** canonical field ／ entity，也**不改变**
+  `§4.2.10` 已登记 derived field 的 business meaning。
+
+**E. `DATA_INCOMPLETE` 优先级（`§2.1.4` D ／ `§2.1.8`）**
+
+classification 所需的**全部** critical input（含 `SafetyStock`）必须在**任何** business 比较之前判定：
+
+```text
+任一 critical input 无法可靠取得           ⇒ DATA_INCOMPLETE
+（即使 ProjectedAvailable < 0 或 < SafetyStock）
+全部 critical input 可靠                  ⇒ 按 §2.1.8 决策表分类
+```
+
+- `DATA_INCOMPLETE` **优先于** `NORMAL` ／ `BUFFER_BREACH` ／ `SHORTAGE`；
+- `ProjectedAvailable < 0` 且 `SafetyStock` unresolved ⇒ `DATA_INCOMPLETE`，**不是** `SHORTAGE`；
+- 该 grain **不得**声称自己的可靠 `FirstShortageDate` ／ `FirstBufferBreachDate`；
+- `ProjectedAvailable` 本身在四个 projection input 可靠时仍是可靠 fact，可照常报告；
+  `ShortageQty` ／ `BufferGap` 由 classification 派生（`§2.1.5`），classification 未定时**不产生**。
+
+**F. Cumulative ／ date rules**
 
 - 累计顺序：`plant_id` → `material_code` → `required_date ascending`（`§2.1.2`）。
 - upstream cumulative value（`CumulativeEffectiveInbound(<= t)` ／
@@ -2091,8 +2127,7 @@ conservation unresolved / DATA_INCOMPLETE
 - failure isolation 保持到 affected grain：一个 grain 的 `DATA_INCOMPLETE` 不改写同一 ／ 其他 family
   中已可靠 grain 的 numeric result。
 
-**E. `FirstShortageDate` fail-safe（`§2.1.6`）**
-
+**G. `FirstShortageDate` fail-safe（`§2.1.6`）**
 `FirstShortageDate` ／ `FirstBufferBreachDate` 按 **`required_date` ascending** 取最早满足条件的日期：
 
 - 更早日期若 `DATA_INCOMPLETE`，**不得**把后面的 `SHORTAGE` 声称为可靠 `FirstShortageDate`；

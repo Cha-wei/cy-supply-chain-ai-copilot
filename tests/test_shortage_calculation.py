@@ -14,6 +14,7 @@ import dataclasses
 import shutil
 import unittest
 import uuid
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -119,6 +120,16 @@ def _trim(text: str) -> str:
     if "." not in text:
         return text
     return text.rstrip("0").rstrip(".")
+
+
+def _rational_value(value: Any) -> Fraction:
+    """The exact rational value of a derived ``Fraction`` or a canonical decimal quantity."""
+
+    if isinstance(value, Fraction):
+        return value
+    if isinstance(value, ExactQuantity):
+        return Fraction(value.units, 10**value.scale)
+    return Fraction(str(value))
 
 
 def _scale_of(text: Any) -> tuple[int, int]:
@@ -644,19 +655,22 @@ class ShortageRuleTestCase(unittest.TestCase):
         return item
 
     def assert_quantity(self, grain, field: str, expected: Any) -> None:
-        """Assert one exact quantity, comparing the exact value and its canonical rendering.
+        """Assert one exact numeric field against the exact rational value of ``expected``.
 
-        The rendering may carry trailing fractional zeros on either side (``0.667000`` versus
-        ``0.667``) because a canonical quantity keeps the scale it was held at; the exact value is
-        what the rule promises, so both are checked: the value must be exactly equal and the
-        rendered text must differ only in trailing zeros.
+        A derived quantity (``ProjectedAvailable`` ／ ``ShortageQty`` ／ ``BufferGap`` and the
+        consumed cumulative values) is an exact :class:`fractions.Fraction`; a consumed canonical
+        quantity (``EffectiveOpeningSupply`` ／ ``SafetyStock``) is an ``ExactQuantity``.  Both are
+        compared as exact rationals, so trailing fractional zeros and the two representations
+        never make an assertion accidentally pass or fail.
         """
 
         value = getattr(grain, field)
         self.assertIsNotNone(value, msg=f"{field} is unresolved for {grain.grain!r}")
         assert value is not None
-        self.assertEqual(value, ExactQuantity(*_scale_of(expected)))
-        self.assertEqual(_trim(value.text()), _trim(str(expected)))
+        self.assertEqual(_rational_value(value), _rational_value(expected))
+        rendered = getattr(value, "text", None)
+        if callable(rendered):
+            self.assertEqual(_trim(rendered()), _trim(str(expected)))
 
     def assert_classification(self, grain, expected: str) -> None:
         self.assertEqual(grain.classification, expected)
@@ -950,7 +964,9 @@ class SourceReservationTests(ShortageRuleTestCase):
 
 
 class InventorySnapshotBoundaryTests(ShortageRuleTestCase):
-    def test_ac12_zero_inventory_targets_are_the_legal_zero(self) -> None:
+    def test_ac12_zero_inventory_targets_fail_closed(self) -> None:
+        # Approved S2-A: for an exact plant_id + material_code, 0 InventoryTarget is
+        # DATA_INCOMPLETE, exactly like more than one.  A legal 0 is never inferred.
         built = self.build(
             demand=(Demand(DEMAND, DEMAND, "10"),),
             inventory={},
@@ -960,10 +976,12 @@ class InventorySnapshotBoundaryTests(ShortageRuleTestCase):
         )
         self.assertEqual(built.inventory.targets, ())
         grain = self.grain(built)
-        self.assertEqual(grain.supply_source, SUPPLY_FROM_INVENTORY_SNAPSHOT)
-        self.assert_quantity(grain, "opening_supply", "0")
-        self.assert_quantity(grain, "projected_available", "-10")
-        self.assert_classification(grain, CLASSIFICATION_SHORTAGE)
+        self.assertEqual(grain.supply_source, "INVENTORY_SNAPSHOT_UNRESOLVED")
+        self.assert_classification(grain, CLASSIFICATION_DATA_INCOMPLETE)
+        self.assertIsNone(grain.projected_available)
+        self.assertIsNone(grain.shortage_qty)
+        self.assertIsNone(grain.buffer_gap)
+        self.assertIsNone(grain.first_shortage_date)
 
     def test_ac12b_several_snapshot_times_are_never_merged_or_won(self) -> None:
         built = self.build(
@@ -1005,9 +1023,33 @@ class InventorySnapshotBoundaryTests(ShortageRuleTestCase):
         )
         grain = self.grain(built)
         self.assert_classification(grain, CLASSIFICATION_DATA_INCOMPLETE)
-        # The projection is still exact; only the classification threshold is undecidable.
+        # The projection is still exact; only the classification threshold is undecidable, and the
+        # projection is reported because it is a reliable fact of its own.
         self.assert_quantity(grain, "projected_available", "90")
         self.assertIsNone(grain.safety_stock)
+        self.assertIsNone(grain.shortage_qty)
+        self.assertIsNone(grain.buffer_gap)
+
+    def test_ac12e_an_unresolved_threshold_beats_a_negative_projection(self) -> None:
+        # §2.1.4 D / §2.1.8: DATA_INCOMPLETE has priority over SHORTAGE.  A negative projection with
+        # an unresolved SafetyStock is DATA_INCOMPLETE, and the grain claims no reliable
+        # FirstShortageDate of its own.
+        built = self.build(
+            demand=(Demand(DEMAND, DEMAND, "500"),),
+            skip_safety_stock=(DEMAND,),
+            targets=((DEMAND, D2, "APPROVED"),),
+            name="ac12e-incomplete-beats-shortage",
+        )
+        grain = self.grain(built)
+        self.assert_quantity(grain, "projected_available", "-400")
+        self.assert_classification(grain, CLASSIFICATION_DATA_INCOMPLETE)
+        self.assertNotEqual(grain.classification, CLASSIFICATION_SHORTAGE)
+        self.assertIsNone(grain.shortage_qty)
+        self.assertIsNone(grain.first_shortage_date)
+        self.assertIsNone(grain.first_buffer_breach_date)
+        self.assertEqual(
+            built.shortage.first_shortage_date, SHORTAGE_DATA_INCOMPLETE
+        )
 
 
 # --- AC-13 / AC-14 / AC-15: S3-A substitute result completeness ---------------------
@@ -1091,6 +1133,44 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
         self.assert_quantity(grain, "cumulative_approved_substitute_supply", "0")
         self.assertEqual(grain.classification, CLASSIFICATION_NORMAL)
 
+    def test_ac15e_an_unstated_grain_is_never_read_as_zero(self) -> None:
+        # P1 + M5 is neither a SubstituteTarget nor a cited Source Demand Context of the
+        # BR-SUBSTITUTE-001 result, so the result states no numeric value, no valid zero and no
+        # DATA_INCOMPLETE for it.  The shortage rule consumes only that result, so it fails closed
+        # instead of inferring a 0 from the absent citation.
+        built = self.build(
+            demand=(Demand(OTHER, OTHER, "10"),),
+            inventory={OTHER: "100"},
+            safety_stock={OTHER: "5"},
+            targets=((DEMAND, D2, "APPROVED"),),
+            name="ac15e-unstated-grain",
+        )
+        self.assertEqual(
+            built.substitutes.for_grain(PLANT, OTHER, D2), None
+        )
+        self.assertEqual(built.substitutes.source_demand_contexts_for_grain(
+            PLANT, OTHER, D2
+        ), ())
+        grain = self.grain(built, OTHER, D2)
+        self.assert_classification(grain, CLASSIFICATION_DATA_INCOMPLETE)
+        self.assertIsNone(grain.cumulative_approved_substitute_supply)
+        self.assertIsNone(grain.projected_available)
+        self.assertIsNone(grain.first_shortage_date)
+
+    def test_ac15f_the_rule_never_reads_substitute_role_presence(self) -> None:
+        # §2.1.12 C: the substitute *value* semantics come only from the explicitly completed
+        # BR-SUBSTITUTE-001 downstream result.  Reading CanonicalConstructionReport.present_roles
+        # (or any raw / canonical substitute evidence) to decide them is forbidden, so the module
+        # must not reference it at all.
+        import snapshot_loader.shortage_calculation as module
+
+        source = Path(module.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("present_roles", source)
+        self.assertNotIn("ROLE_SUBSTITUTE_RELATIONSHIP", source)
+        self.assertNotIn("effective_demand_contexts", source)
+        self.assertNotIn("unresolved_for", source)
+        self.assertNotIn("objects_for", source)
+
 
 # --- AC-16 / AC-17: grain isolation --------------------------------------------------
 
@@ -1169,9 +1249,17 @@ class NumericAndTraceTests(ShortageRuleTestCase):
         self.assertEqual(payload["FirstBufferBreachDate"], D2)
         grain = payload["grains"][0]
         self.assertEqual(grain["Classification"], CLASSIFICATION_SHORTAGE)
-        self.assertEqual(grain["ProjectedAvailable"], "-10")
-        self.assertEqual(grain["ShortageQty"], "10")
-        self.assertEqual(grain["BufferGap"], "15")
+        # A derived quantity is serialised as an exact rational payload, with the exact decimal
+        # text alongside it whenever the value has one.
+        self.assertEqual(grain["ProjectedAvailable"], {"numerator": -10, "denominator": 1})
+        self.assertEqual(grain["ProjectedAvailableDecimal"], "-10")
+        self.assertEqual(grain["ShortageQty"], {"numerator": 10, "denominator": 1})
+        self.assertEqual(grain["ShortageQtyDecimal"], "10")
+        self.assertEqual(grain["BufferGap"], {"numerator": 15, "denominator": 1})
+        self.assertEqual(grain["BufferGapDecimal"], "15")
+        # The consumed canonical decimals keep their exact decimal rendering.
+        self.assertEqual(grain["EffectiveOpeningSupply"], "100")
+        self.assertEqual(grain["SafetyStock"], "5")
         for field in (
             "SafetyStock",
             "EffectiveOpeningSupply",
@@ -1301,8 +1389,10 @@ class NumericAndTraceTests(ShortageRuleTestCase):
         # the already reliable first shortage date.
         self.assertEqual(built.shortage.first_shortage_date, D1)
 
-    def test_ac19g_a_requirement_with_no_finite_decimal_fails_closed(self) -> None:
-        # A non-terminating GrossRequirement is never truncated or rounded to a decimal.
+    def test_ac19g_a_non_terminating_exact_rational_stays_reliable(self) -> None:
+        # GrossRequirement = 200 / (1 - 0.05) = 4000/19 has no finite base-10 representation.  It is
+        # a reliable exact quantity under §2.4.8 / ADR-001, so the shortage calculation must stay
+        # reliable and must not degrade the grain to DATA_INCOMPLETE.
         built = self.build(
             demand=(Demand(DEMAND, DEMAND, "200", D2),),
             loss_rate="0.05",
@@ -1311,9 +1401,37 @@ class NumericAndTraceTests(ShortageRuleTestCase):
         )
         row = built.requirements.for_grain(PLANT, DEMAND, D2)
         assert row is not None
-        self.assertIsNotNone(row.gross_requirement)
-        self.assertNotEqual(row.gross_requirement.denominator, 1)
+        self.assertEqual(row.gross_requirement, Fraction(4000, 19))
         grain = self.grain(built)
-        self.assert_classification(grain, CLASSIFICATION_DATA_INCOMPLETE)
-        self.assertIsNone(grain.projected_available)
-        self.assertIsNone(grain.cumulative_gross_requirement)
+        self.assertNotEqual(grain.classification, CLASSIFICATION_DATA_INCOMPLETE)
+        self.assertEqual(grain.cumulative_gross_requirement, Fraction(4000, 19))
+        # 100 + 0 + 0 - 4000/19 = (1900 - 4000) / 19 = -2100/19, exactly.
+        self.assertEqual(grain.projected_available, Fraction(-2100, 19))
+        self.assert_classification(grain, CLASSIFICATION_SHORTAGE)
+        self.assertEqual(grain.shortage_qty, Fraction(2100, 19))
+        self.assertEqual(grain.buffer_gap, Fraction(2195, 19))
+        self.assertEqual(built.shortage.first_shortage_date, D2)
+        # The exact rational survives serialisation: it is never rounded to a decimal.
+        payload = grain.to_dict()
+        self.assertEqual(
+            payload["ProjectedAvailable"], {"numerator": -2100, "denominator": 19}
+        )
+        self.assertEqual(
+            payload["ShortageQty"], {"numerator": 2100, "denominator": 19}
+        )
+        self.assertIsNone(payload["ProjectedAvailableDecimal"])
+        self.assertIsNone(payload["ShortageQtyDecimal"])
+
+    def test_ac19h_a_non_terminating_rational_never_rounds_the_projection(self) -> None:
+        # A decimal rounding of 4000/19 would give 210.5263..., so the projection must be reported
+        # as an exact rational and never as a truncated product.
+        built = self.build(
+            demand=(Demand(DEMAND, DEMAND, "200", D2),),
+            loss_rate="0.05",
+            targets=((DEMAND, D2, "APPROVED"),),
+            name="ac19h-exact-only",
+        )
+        grain = self.grain(built)
+        assert grain.projected_available is not None
+        self.assertEqual(grain.projected_available * 19, Fraction(-2100))
+        self.assertNotEqual(grain.projected_available.denominator, 1)

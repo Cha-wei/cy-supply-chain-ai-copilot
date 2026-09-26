@@ -40,12 +40,20 @@ Human-approved consumption boundaries implemented here:
   makes the affected shortage grain ``DATA_INCOMPLETE``.
 * **S2-A -- inventory snapshot consumption boundary.**  For an exact ``plant_id`` +
   ``material_code``: exactly one reliably consumable ``InventoryTarget`` supplies both
-  ``OpeningUsableInventory`` and ``SafetyStock``; zero, or more than one distinct
+  ``OpeningUsableInventory`` and ``SafetyStock``; **zero** targets, or more than one distinct
   ``inventory_snapshot_time``, is ``DATA_INCOMPLETE``.  There is no earliest ／ latest win, no
-  cross-snapshot sum, no average and no ``inventory_snapshot_time = AnalysisDate`` equivalence.
-* **S3-A -- substitute result completeness.**  A missing ``SubstituteTarget`` is never guessed
-  as ``0``: a shortage grain is ``DATA_INCOMPLETE`` whenever the substitute result cannot state
-  a numeric cumulative substitute supply for it.
+  cross-snapshot sum, no average, no ``inventory_snapshot_time = AnalysisDate`` equivalence and no
+  legal zero inferred from an absent target.
+* **S3-A -- substitute result completeness.**  The substitute supply is consumed **only** from the
+  explicitly completed ``BR-SUBSTITUTE-001`` downstream result: a cited Target Demand Context
+  contributes its own cumulative value, a grain cited only as an exact Source Demand Context
+  contributes the explicit valid zero of ``§4.4.88``, and a grain the result does not state fails
+  closed.  A missing ``SubstituteTarget`` is never guessed as ``0``, and neither the construction's
+  role-presence facts nor any raw ／ canonical substitute evidence is read to re-decide a citation.
+
+``DATA_INCOMPLETE`` has priority over every business classification (``§2.1.4`` D): the complete
+critical-input set, ``SafetyStock`` included, is decided before any comparison, so a negative
+projection with an unresolved threshold is ``DATA_INCOMPLETE`` and not ``SHORTAGE``.
 
 Deliberately **not** implemented here: any new business enum, any canonical field ／ entity ／
 identity component, any reservation ／ demand-window field, any snapshot selection algorithm,
@@ -53,12 +61,14 @@ any persistence, any external configuration, any Adapter ／ ERP mapping, any LL
 behaviour and any rounding ／ quantization ／ float arithmetic.  ``ADR-001`` is unchanged.
 
 Numeric semantics follow the registered precedent (``BR-REQUIREMENT-001`` ／
-``BR-INBOUND-001`` ／ ``BR-INVENTORY-001`` ／ ``BR-SUBSTITUTE-001``): quantities stay exact.
-Canonical finite decimals are consumed as
-:class:`~snapshot_loader.exact_quantity.ExactQuantity`; an upstream exact rational that has no
-finite base-10 representation is **not** truncated or rounded, the affected grain fails as
-``DATA_INCOMPLETE`` instead.  No ``float``, no rounding, no quantization and no ``Decimal``
-default context is used anywhere.
+``BR-INBOUND-001`` ／ ``BR-INVENTORY-001`` ／ ``BR-SUBSTITUTE-001``): quantities stay exact.  The
+consumed canonical finite decimals are read as exact rationals, and a derived quantity
+(``ProjectedAvailable`` ／ ``ShortageQty`` ／ ``BufferGap`` and the consumed cumulative values) is
+carried as an exact :class:`fractions.Fraction`.  An upstream exact rational that has **no** finite
+base-10 representation (for example ``4000/19``) is a reliable quantity, never truncated, rounded or
+quantized and never downgraded to ``DATA_INCOMPLETE``; it is serialised through the repository's
+existing derived-quantity representation ``{"numerator": …, "denominator": …}``.  No ``float``, no
+rounding, no quantization and no ``Decimal`` default context is used anywhere.
 """
 
 from __future__ import annotations
@@ -69,7 +79,6 @@ from typing import Any, Iterable, Sequence
 
 from .canonical_objects import (
     ABSENT,
-    ROLE_SUBSTITUTE_RELATIONSHIP,
     CanonicalConstructionReport,
 )
 from .constants import (
@@ -138,24 +147,66 @@ SHORTAGE_GRAIN_PROPERTIES: tuple[str, ...] = (
     "required_date",
 )
 
-_ZERO = ExactQuantity(0, 0)
-
 
 # --- exact quantity helpers --------------------------------------------------------
 
 
-def _decimal_rational(value: Fraction | None) -> ExactQuantity | None:
-    """Convert an exact rational into an exact decimal quantity, or ``None``.
+def _exact_rational(value: Any) -> Fraction | None:
+    """Read one canonical quantity as an **exact** rational, or ``None`` when it is unusable.
 
-    A rational whose reduced denominator factors only into 2 and 5 is exactly representable as
-    a finite decimal.  Anything else (for example ``4000/19`` from a non-terminating
-    ``loss_rate``) is **not** truncated, rounded, quantized or approximated by a binary float:
-    the affected grain fails as ``DATA_INCOMPLETE`` (``§2.4.8`` ／ ``ADR-001``).
+    A canonical finite decimal (:class:`~snapshot_loader.exact_quantity.ExactQuantity` or the
+    base-10 string form it was parsed from) becomes its exact rational value with no intermediate
+    binary float and no ``Decimal`` default context.  ``None`` means the value is absent, is not a
+    registered canonical decimal, or is an exact rational whose own denormalised form cannot be
+    read -- it is **never** truncated, rounded or quantized.
+
+    This is the opposite of a lossy conversion: an exact rational such as ``4000/19`` is a
+    perfectly reliable quantity under ``§2.4.8`` ／ ``ADR-001`` and is carried as-is, so a
+    non-terminating decimal expansion never degrades a grain to ``DATA_INCOMPLETE``.
     """
 
     if value is None:
         return None
-    numerator, denominator = value.numerator, value.denominator
+    if isinstance(value, Fraction):
+        return value
+    if isinstance(value, ExactQuantity):
+        return Fraction(value.units, 10**value.scale)
+    if isinstance(value, str) and value:
+        signed = value[0] in "+-"
+        body = value[1:] if signed else value
+        whole, dot, fraction = body.partition(".")
+        if not body or (dot and not fraction):
+            return None
+        digits = f"{whole or '0'}{fraction}"
+        if not digits.isdigit():
+            return None
+        sign = -1 if value[0] == "-" else 1
+        return Fraction(sign * int(digits), 10 ** len(fraction))
+    return None
+
+
+def _quantity_text(value: ExactQuantity | None) -> str | None:
+    """Render an exact decimal quantity losslessly: plain base-10 digits, no exponent.
+
+    Used only for the fields that **are** a canonical decimal input consumed as such
+    (``EffectiveOpeningSupply`` ／ ``SafetyStock``); a derived quantity is serialised as an exact
+    rational payload instead, because it need not have a finite base-10 representation.
+    """
+
+    return None if value is None else value.text()
+
+
+def _rational_text(value: Fraction | None) -> str | None:
+    """Render one exact rational as plain base-10 text when it has a finite representation.
+
+    ``"5"`` ／ ``"0.05"`` stay decimal text; a non-terminating value returns ``None`` and is
+    serialised through :func:`_rational_payload` instead, so nothing is ever rounded to fit.
+    """
+
+    if value is None:
+        return None
+    denominator = value.denominator
+    numerator = value.numerator
     scale = 0
     while denominator % 2 == 0:
         denominator //= 2
@@ -167,13 +218,22 @@ def _decimal_rational(value: Fraction | None) -> ExactQuantity | None:
         scale += 1
     if denominator != 1:
         return None
-    return ExactQuantity(numerator, scale)
+    return ExactQuantity(numerator, scale).text()
 
 
-def _quantity_text(value: ExactQuantity | None) -> str | None:
-    """Render a canonical exact quantity losslessly: plain base-10 digits, no exponent."""
+def _rational_payload(value: Fraction | None) -> dict[str, int] | None:
+    """Lossless serialisation of an exact rational derived quantity.
 
-    return None if value is None else value.text()
+    ``{"numerator": <integer>, "denominator": <positive integer>}`` -- the same in-memory
+    representation of a derived quantity that ``BR-REQUIREMENT-001`` uses for
+    ``BaseRequirement`` ／ ``GrossRequirement`` and ``BR-SUBSTITUTE-001`` for
+    ``EquivalentTargetQty``.  It carries the exact value including a non-terminating decimal
+    expansion, so a reliable quantity is never rounded, quantized or downgraded.
+    """
+
+    if value is None:
+        return None
+    return {"numerator": value.numerator, "denominator": value.denominator}
 
 
 def _provenance_payload(value: Any) -> dict[str, object] | None:
@@ -227,28 +287,36 @@ class ShortageGrain:
     critical input could not be reliably obtained (``§2.1.4`` D).  ``ProjectedAvailable`` may
     legitimately be negative; the rule never clamps it (``§2.1.5``).  The one case where
     ``projected_available`` is present while the classification is ``DATA_INCOMPLETE`` is an
-    unresolved ``SafetyStock``, because the threshold -- not the projection -- is what cannot be
-    decided.
+    unresolved critical classification input -- most visibly an unresolved ``SafetyStock``: the
+    projection itself is exact, only the threshold (or another classification input) cannot be
+    decided, and ``DATA_INCOMPLETE`` still takes priority over every business classification
+    (``§2.1.4`` D).
+
+    Derived quantities (``projected_available`` ／ ``shortage_qty`` ／ ``buffer_gap`` and the three
+    consumed cumulative values) are **exact rationals** :class:`fractions.Fraction`, because the
+    registered upstream values are exact rationals and one of them need not have a finite base-10
+    representation (``§2.4.8`` ／ ``ADR-001``).  ``opening_supply`` ／ ``safety_stock`` keep the
+    exact decimal :class:`~snapshot_loader.exact_quantity.ExactQuantity` they were consumed as.
 
     ``first_shortage_date`` ／ ``first_buffer_breach_date`` carry the ascending-order marker of
     this grain's family.  The marker is **fail-safe**: a later reliable ``SHORTAGE`` never
-    becomes the reliable first shortage date while an earlier-or-equal grain of the same family
-    is ``DATA_INCOMPLETE``, and an already reliable earlier date is never replaced by a later
-    one (``§2.1.6``).
+    becomes the reliable first shortage date while an earlier grain is ``DATA_INCOMPLETE``, and an
+    already reliable earlier date is never replaced by a later one (``§2.1.6``).  A grain whose own
+    classification is ``DATA_INCOMPLETE`` claims **no** date of its own.
     """
 
     plant_id: Any
     material_code: Any
     required_date: Any
     classification: str
-    projected_available: ExactQuantity | None = None
-    shortage_qty: ExactQuantity | None = None
-    buffer_gap: ExactQuantity | None = None
+    projected_available: Fraction | None = None
+    shortage_qty: Fraction | None = None
+    buffer_gap: Fraction | None = None
     safety_stock: ExactQuantity | None = None
     opening_supply: ExactQuantity | None = None
-    cumulative_effective_inbound: ExactQuantity | None = None
-    cumulative_approved_substitute_supply: ExactQuantity | None = None
-    cumulative_gross_requirement: ExactQuantity | None = None
+    cumulative_effective_inbound: Fraction | None = None
+    cumulative_approved_substitute_supply: Fraction | None = None
+    cumulative_gross_requirement: Fraction | None = None
     supply_source: str = SUPPLY_UNRESOLVED_INVENTORY_SNAPSHOT
     source_demand_context_reference: Any = None
     conservation_state: str | None = None
@@ -282,19 +350,28 @@ class ShortageGrain:
             "plant_id": self.plant_id,
             "material_code": self.material_code,
             "required_date": self.required_date,
-            "ProjectedAvailable": _quantity_text(self.projected_available),
+            "ProjectedAvailable": _rational_payload(self.projected_available),
             "Classification": self.classification,
-            "ShortageQty": _quantity_text(self.shortage_qty),
-            "BufferGap": _quantity_text(self.buffer_gap),
+            "ShortageQty": _rational_payload(self.shortage_qty),
+            "BufferGap": _rational_payload(self.buffer_gap),
             "SafetyStock": _quantity_text(self.safety_stock),
             "EffectiveOpeningSupply": _quantity_text(self.opening_supply),
-            "CumulativeEffectiveInbound": _quantity_text(
+            "CumulativeEffectiveInbound": _rational_payload(
                 self.cumulative_effective_inbound
             ),
-            "CumulativeApprovedSubstituteSupply": _quantity_text(
+            "CumulativeApprovedSubstituteSupply": _rational_payload(
                 self.cumulative_approved_substitute_supply
             ),
-            "CumulativeGrossRequirement": _quantity_text(
+            "CumulativeGrossRequirement": _rational_payload(
+                self.cumulative_gross_requirement
+            ),
+            # The exact decimal text is kept alongside each rational payload whenever the value
+            # has a finite base-10 representation, so a decimal consumer is not forced to read
+            # the rational form and a non-terminating value is never rounded to fit.
+            "ProjectedAvailableDecimal": _rational_text(self.projected_available),
+            "ShortageQtyDecimal": _rational_text(self.shortage_qty),
+            "BufferGapDecimal": _rational_text(self.buffer_gap),
+            "CumulativeGrossRequirementDecimal": _rational_text(
                 self.cumulative_gross_requirement
             ),
             "opening_supply_source": self.supply_source,
@@ -356,7 +433,7 @@ class ShortageCalculationResult:
                 not item.data_incomplete
                 and item.projected_available is not None
                 and item.safety_stock is not None
-                and item.projected_available < item.safety_stock
+                and item.projected_available < _exact_rational(item.safety_stock)
             ),
         )
 
@@ -472,18 +549,21 @@ def compute_shortage(
 ) -> ShortageCalculationResult:
     """Run ``BR-SHORTAGE-001`` over one construction and its four upstream rule results.
 
-    Every input is an already computed deterministic result: no raw accepted artifact is read,
-    no upstream rule is re-implemented, no reservation is recomputed and no caller may inject a
-    business date, quantity or ``SafetyStock``.  ``construction`` is consumed only for the one
-    fact the upstream results cannot state -- whether the ``Substitute Relationship`` role is
-    present -- so that a missing substitute dataset fails closed instead of being read as
-    "there is no substitute".
+    Every input is an already computed deterministic result: no raw accepted artifact is read, no
+    upstream rule is re-implemented, no reservation is recomputed and no caller may inject a
+    business date, quantity or ``SafetyStock``.
+
+    ``construction`` is accepted for call-shape stability and for the inherited canonical findings
+    it carries.  The rule deliberately does **not** read the accepted package's role-presence facts
+    or any substitute canonical evidence from it: whether an ``approved substitute supply``
+    participates in a grain is consumed **only** from the explicitly completed
+    ``BR-SUBSTITUTE-001`` downstream result (S3-A), so the shortage rule never re-decides the
+    business meaning of a substitute citation.
     """
 
     families = _families(requirements, inbounds, substitutes)
     groups = {group.reservation_context: group for group in substitutes.conservation_groups}
     citation_attributable = not substitutes.unattributable_conservation_groups
-    substitute_role_present = ROLE_SUBSTITUTE_RELATIONSHIP in construction.present_roles
     unassigned_inventory = tuple(inventory.unassigned_inventory_references)
 
     grains: list[ShortageGrain] = []
@@ -500,7 +580,6 @@ def compute_shortage(
             family,
             opening=opening,
             groups=groups,
-            substitute_role_present=substitute_role_present,
         )
         grains.extend(family_grains)
         for item in family_grains:
@@ -758,14 +837,21 @@ def _inventory_snapshot_supply(
 
     targets = inventory.for_plant_material(family.plant_id, family.material_code)
     if not targets:
-        # BR-INVENTORY-001 produces a target for every exact Plant + Material grain it can form
-        # from the accepted observations.  No target at all therefore states that the accepted
-        # package carries no inventory evidence for this exact grain: the opening supply is the
-        # legal 0 of §4.4.88, not an unresolved value.
+        # The approved ``S2-A`` boundary: for an exact ``plant_id`` + ``material_code`` exactly one
+        # reliably consumable ``InventoryTarget`` supplies ``OpeningUsableInventory`` **and**
+        # ``SafetyStock``; **zero** targets is ``DATA_INCOMPLETE``, exactly like more than one.
+        # A legal 0 is never inferred here: BR-INVENTORY-001 forms a target for every exact grain
+        # it can state, so no target at all means the inventory snapshot evidence behind this exact
+        # grain cannot be relied on, and the affected grains fail closed.
         return _OpeningSupply(
-            quantity=_ZERO,
-            source=SUPPLY_FROM_INVENTORY_SNAPSHOT,
-            safety_stock=_ZERO,
+            quantity=None,
+            source=SUPPLY_UNRESOLVED_INVENTORY_SNAPSHOT,
+            problem=(
+                "BR-INVENTORY-001 produced no InventoryTarget for this exact plant_id + "
+                "material_code, so EffectiveOpeningSupply and the SafetyStock classification "
+                "threshold cannot be established; zero targets is DATA_INCOMPLETE and the "
+                "inventory side is never read as a legal 0 (§2.1.2 / §2.1.4 D / §2.1.12 B / S2-A)"
+            ),
         )
 
     consumable = [item for item in targets if item.opening_usable_inventory is not None]
@@ -844,7 +930,6 @@ def _evaluate_family(
     *,
     opening: _OpeningSupply,
     groups: dict[str, ConservationGroup],
-    substitute_role_present: bool,
 ) -> list[ShortageGrain]:
     """Evaluate the whole ascending horizon of one family in a single deterministic pass.
 
@@ -912,7 +997,6 @@ def _evaluate_family(
             substitute_table,
             required_date,
             source_cited=source_cited,
-            role_present=substitute_role_present,
         )
         if substitute_note is not None:
             notes.append(substitute_note)
@@ -953,16 +1037,52 @@ def _evaluate_family(
                 )
             )
 
-        effective_opening = opening.quantity
-        incomplete = any(
-            part is None for part in (gross, inbound, substitute_supply, effective_opening)
-        )
-        safety_stock = None if incomplete else opening.safety_stock
+        effective_opening = _exact_rational(opening.quantity)
+        safety_stock = opening.safety_stock
+        if safety_stock is None:
+            issues.append(
+                _issue(
+                    location=location,
+                    detail=(
+                        "the consumable inventory target of this exact plant_id + material_code "
+                        "states no reliable SafetyStock, so the classification threshold cannot be "
+                        "established; DATA_INCOMPLETE takes priority over NORMAL / BUFFER_BREACH / "
+                        "SHORTAGE and SafetyStock is never defaulted to 0 (§2.1.4 D / §2.2.7 / "
+                        "S2-A)"
+                    ),
+                    design_reference="§2.1.4 D / §2.2.7 / S2-A",
+                    consequence_context=(
+                        "the grain stays DATA_INCOMPLETE and no classification is produced"
+                    ),
+                )
+            )
 
-        if incomplete:
-            # A grain that could not be decided never claims a reliable first-shortage ／
-            # first-breach date of its own: its own marker field stays ``None`` so the per-grain
-            # surface can never contradict the result-level fail-safe (§2.1.6 / §2.1.12 E).
+        # The projection is produced whenever its own four inputs are reliable; it is reported even
+        # on a grain whose *classification* stays DATA_INCOMPLETE, because §2.1.5 derives nothing
+        # from an undecided classification and the exact projection is still a reliable fact.
+        projected: Fraction | None = None
+        if (
+            gross is not None
+            and inbound is not None
+            and substitute_supply is not None
+            and effective_opening is not None
+        ):
+            projected = effective_opening + inbound + substitute_supply - gross
+
+        safety_stock_exact = _exact_rational(safety_stock)
+        # ``§2.1.4`` D: ``DATA_INCOMPLETE`` has priority over every business classification, so the
+        # complete critical-input set is decided **before** any comparison.  An unresolved
+        # ``SafetyStock`` is one of those inputs, which is why it is tested here rather than in an
+        # ``elif`` after the ``ProjectedAvailable < 0`` branch (``§2.1.8`` decision-table order).
+        undecided = (
+            projected is None or safety_stock is None or safety_stock_exact is None
+        )
+
+        if undecided:
+            # A grain that could not be decided claims neither a business classification nor a
+            # reliable first-shortage ／ first-breach date of its own: its marker fields stay
+            # ``None`` so the per-grain surface can never contradict the result-level fail-safe
+            # (§2.1.6 / §2.1.12 E).
             results.append(
                 ShortageGrain(
                     plant_id=family.plant_id,
@@ -970,7 +1090,8 @@ def _evaluate_family(
                     required_date=required_date,
                     classification=CLASSIFICATION_DATA_INCOMPLETE,
                     outcome=SHORTAGE_DATA_INCOMPLETE,
-                    safety_stock=None if opening.quantity is None else opening.safety_stock,
+                    projected_available=projected,
+                    safety_stock=safety_stock,
                     opening_supply=opening.quantity,
                     cumulative_effective_inbound=inbound,
                     cumulative_approved_substitute_supply=substitute_supply,
@@ -993,76 +1114,26 @@ def _evaluate_family(
             )
             continue
 
-        assert gross is not None and inbound is not None
-        assert substitute_supply is not None and effective_opening is not None
-        projected = effective_opening + inbound + substitute_supply - gross
+        assert projected is not None and safety_stock_exact is not None
 
-        if projected < _ZERO:
+        # Every critical classification input is reliable here, so the registered decision table
+        # applies in its ``§2.1.8`` order.
+        if projected < 0:
             classification = CLASSIFICATION_SHORTAGE
-        elif safety_stock is None:
-            classification = CLASSIFICATION_DATA_INCOMPLETE
-            issues.append(
-                _issue(
-                    location=location,
-                    detail=(
-                        "the consumable inventory target of this exact plant_id + "
-                        "material_code states no reliable SafetyStock, so NORMAL / "
-                        "BUFFER_BREACH cannot be decided; SafetyStock is never defaulted to 0 "
-                        "and is never taken from another snapshot (§2.1.4 / §2.2.7 / S2-A)"
-                    ),
-                    design_reference="§2.1.4 / §2.2.7 / S2-A",
-                    consequence_context=(
-                        "the grain stays DATA_INCOMPLETE and no classification is produced"
-                    ),
-                )
-            )
-        elif projected < safety_stock:
+        elif projected < safety_stock_exact:
             classification = CLASSIFICATION_BUFFER_BREACH
         else:
             classification = CLASSIFICATION_NORMAL
 
-        if classification == CLASSIFICATION_DATA_INCOMPLETE:
-            # The projection is exact but the SafetyStock threshold is not decidable, so this
-            # grain claims no reliable classification and no first-shortage ／ first-breach date of
-            # its own (the result-level fail-safe is the authority, §2.1.6 / §2.1.12 E).
-            results.append(
-                ShortageGrain(
-                    plant_id=family.plant_id,
-                    material_code=family.material_code,
-                    required_date=required_date,
-                    classification=classification,
-                    projected_available=projected,
-                    safety_stock=safety_stock,
-                    opening_supply=opening.quantity,
-                    cumulative_effective_inbound=inbound,
-                    cumulative_approved_substitute_supply=substitute_supply,
-                    cumulative_gross_requirement=gross,
-                    supply_source=opening.source,
-                    source_demand_context_reference=source_context_reference,
-                    conservation_state=conservation_state,
-                    first_shortage_date=None,
-                    first_buffer_breach_date=None,
-                    outcome=SHORTAGE_DATA_INCOMPLETE,
-                    opening_provenance=opening.provenance,
-                    inherited_issues=inherited,
-                    rule_issues=_deduplicate_issues(tuple(issues)),
-                )
-            )
-            continue
-
-        shortage_qty = _ZERO - projected if projected < _ZERO else _ZERO
+        shortage_qty = -projected if projected < 0 else Fraction(0)
         buffer_gap = (
-            safety_stock - projected
-            if safety_stock is not None and projected < safety_stock
-            else _ZERO
+            safety_stock_exact - projected
+            if projected < safety_stock_exact
+            else Fraction(0)
         )
         if classification == CLASSIFICATION_SHORTAGE and first_shortage is None:
             first_shortage = required_date
-        if (
-            safety_stock is not None
-            and projected < safety_stock
-            and first_breach is None
-        ):
+        if projected < safety_stock_exact and first_breach is None:
             first_breach = required_date
 
         results.append(
@@ -1161,7 +1232,7 @@ def _requirement_table(
             continue
         per_date.setdefault(key, []).append(row.cumulative_gross_requirement)
 
-    table: dict[Any, tuple[ExactQuantity | None, str | None]] = {}
+    table: dict[Any, tuple[Fraction | None, str | None]] = {}
     for required_date, entries in per_date.items():
         numeric = [entry for entry in entries if entry is not None]
         if len(numeric) != len(entries):
@@ -1172,23 +1243,17 @@ def _requirement_table(
                 "reliably obtainable and no numeric requirement is consumed for it (§2.4.11)",
             )
             continue
-        quantity = _decimal_rational(numeric[0])
-        if quantity is None:
-            table[required_date] = (
-                None,
-                "the upstream CumulativeGrossRequirement of this exact grain is an exact "
-                "rational with no finite base-10 representation; it is never truncated, "
-                "rounded or quantized, so this grain fails as DATA_INCOMPLETE "
-                "(§2.4.8 / ADR-001)",
-            )
-            continue
-        table[required_date] = (quantity, None)
+        # The upstream value is an exact rational.  It is carried as-is: a non-terminating base-10
+        # expansion (for example ``4000/19``) is a **reliable** exact quantity, never truncated,
+        # rounded or quantized and never turned into an unresolved value
+        # (§2.4.8 / ADR-001).
+        table[required_date] = (Fraction(numeric[0]), None)
     return table
 
 
 def _inbound_table(
     targets: Sequence[EffectiveInboundTarget],
-) -> dict[Any, tuple[ExactQuantity | None, str | None]]:
+) -> dict[Any, tuple[Fraction | None, str | None]]:
     """``CumulativeEffectiveInbound(<= required_date)`` per date, carried forward once.
 
     The upstream target's own cumulative value is non-decreasing in ``required_date``, so the
@@ -1198,8 +1263,8 @@ def _inbound_table(
     """
 
     ordered = sorted(targets, key=lambda item: _sort_text(item.required_date))
-    table: dict[Any, tuple[ExactQuantity | None, str | None]] = {}
-    carried: ExactQuantity | None = _ZERO
+    table: dict[Any, tuple[Fraction | None, str | None]] = {}
+    carried: Fraction | None = Fraction(0)
     carried_problem: str | None = None
     for target in ordered:
         if target.cumulative_effective_inbound is None:
@@ -1210,7 +1275,7 @@ def _inbound_table(
                 "obtainable (§2.6.6)"
             )
         else:
-            carried = target.cumulative_effective_inbound
+            carried = _exact_rational(target.cumulative_effective_inbound)
             carried_problem = None
         key = _date_key(target.required_date)
         if key is not ABSENT:
@@ -1230,8 +1295,8 @@ def _substitute_table(
     """
 
     ordered = sorted(targets, key=lambda item: _sort_text(item.required_date))
-    table: dict[Any, tuple[ExactQuantity | None, str | None, str | None]] = {}
-    carried: ExactQuantity | None = None
+    table: dict[Any, tuple[Fraction | None, str | None, str | None]] = {}
+    carried: Fraction | None = None
     carried_problem: str | None = None
     for target in ordered:
         if target.cumulative_approved_substitute_supply is None:
@@ -1243,18 +1308,11 @@ def _substitute_table(
                 "(§2.3.12 / S3-A)"
             )
         else:
-            quantity = _decimal_rational(target.cumulative_approved_substitute_supply)
-            if quantity is None:
-                carried = None
-                carried_problem = (
-                    "the BR-SUBSTITUTE-001 cumulative approved substitute supply of this exact "
-                    "grain is an exact rational with no finite base-10 representation; it is "
-                    "never truncated, rounded or quantized, so this grain fails as "
-                    "DATA_INCOMPLETE (§2.4.8 / ADR-001)"
-                )
-            else:
-                carried = quantity
-                carried_problem = None
+            # The upstream value is an exact rational and is carried as-is; a non-terminating
+            # base-10 expansion is a reliable exact quantity, not an unresolved one
+            # (§2.4.8 / ADR-001).
+            carried = Fraction(target.cumulative_approved_substitute_supply)
+            carried_problem = None
         key = _date_key(target.required_date)
         if key is not ABSENT:
             table[key] = (carried, carried_problem, None)
@@ -1262,52 +1320,46 @@ def _substitute_table(
 
 
 def _substitute_supply_for(
-    table: dict[Any, tuple[ExactQuantity | None, str | None, str | None]],
+    table: dict[Any, tuple[Fraction | None, str | None, str | None]],
     required_date: Any,
     *,
     source_cited: bool,
-    role_present: bool,
-) -> tuple[ExactQuantity | None, str | None, str | None]:
+) -> tuple[Fraction | None, str | None, str | None]:
     """Resolve one grain's ``CumulativeApprovedSubstituteSupply`` under ``S3-A``.
 
-    The upstream ``BR-SUBSTITUTE-001`` result is the only substitute surface consumed here; raw
-    and canonical substitute evidence is never re-read.  Three cases stay strictly apart:
+    Only the **explicitly completed** ``BR-SUBSTITUTE-001`` downstream result is consumed here:
+    the caller reaches this function through the substitute result's own surfaces, and neither the
+    construction nor any raw ／ canonical substitute evidence is read to re-decide what a citation
+    means.  Two cases are explicitly stated by that result:
 
-    * the grain is a **cited Target Demand Context** of the substitute result, so its own
-      cumulative value is the answer (a numeric value, or the upstream ``DATA_INCOMPLETE``);
-    * the grain is a **cited Source Demand Context** -- the substitute rule evaluated it as a
-      reservation boundary and no Target Demand Context of that material was cited, so no
-      approved substitute supply for it exists at all and the value is the explicit ``0`` of
-      ``§4.4.88``, never an omission that looks like zero;
-    * neither is cited, so the substitute result states no conclusion for this grain and the
-      value is ``DATA_INCOMPLETE`` -- a missing ``SubstituteTarget`` is never guessed as ``0``
-      (S3-A).
+    * the grain carries its own ``SubstituteTarget`` entry -- it is a cited Target Demand Context,
+      so the answer is that target's own cumulative value (a numeric value, or the upstream
+      ``DATA_INCOMPLETE``);
+    * the grain is cited **only** as an exact Source Demand Context -- the substitute rule
+      evaluated it as a reservation boundary and stated no approved substitute supply for it, so
+      the explicit ``0`` of ``§4.4.88`` is consumed as such.
+
+    Anything else is **not stated** by the substitute result.  ``BR-SHORTAGE-001`` never infers a
+    ``0`` from a missing ``SubstituteTarget`` and never re-decides the business meaning of a
+    citation, so such a grain fails closed as ``DATA_INCOMPLETE`` (S3-A).
     """
 
     if required_date in table:
         return table[required_date]
-    if not role_present:
-        return (
-            None,
-            "the accepted package carries no Substitute Relationship role evidence, so "
-            "'business states there is no approved substitute' cannot be established and "
-            "CumulativeApprovedSubstituteSupply is never read as 0 (§2.1.7 / S3-A)",
-            None,
-        )
     if source_cited:
         return (
-            _ZERO,
+            Fraction(0),
             None,
             "no approved substitute supply reaches this grain: BR-SUBSTITUTE-001 cites this "
-            "material only as an exact Source Demand Context and cites no Target Demand Context "
+            "material only as an exact Source Demand Context and states no Target Demand Context "
             "for it, so the value is the explicit 0 of §4.4.88 rather than an omitted target",
         )
     return (
         None,
-        "BR-SUBSTITUTE-001 states neither a Target Demand Context nor a Source Demand Context "
-        "for this exact grain, so the cumulative approved substitute supply is not obtainable; a "
-        "missing SubstituteTarget is never guessed as 0 and the grain stays DATA_INCOMPLETE "
-        "(§2.3.12 / S3-A)",
+        "BR-SUBSTITUTE-001 states neither a SubstituteTarget nor a cited Source Demand Context "
+        "for this exact grain, so the downstream result does not explicitly express a numeric "
+        "cumulative substitute supply, a valid zero or DATA_INCOMPLETE for it; the missing target "
+        "is never guessed as 0 and the grain stays DATA_INCOMPLETE (§2.1.7 / §2.3.12 / S3-A)",
         None,
     )
 
