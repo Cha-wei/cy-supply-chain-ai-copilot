@@ -678,6 +678,12 @@ class ShortageRuleTestCase(unittest.TestCase):
         self.assertEqual(grain.classification, expected)
         self.assertIn(grain.classification, CLASSIFICATIONS)
 
+    def assert_is_grain_frozen(self, grain: Any) -> None:
+        """The result surface is read-only: no caller may mutate a grain in place."""
+
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            grain.classification = CLASSIFICATION_NORMAL  # type: ignore[misc]
+
 
 # --- AC-1 / AC-2 / AC-3: the four registered classifications ------------------------
 
@@ -1219,10 +1225,9 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
 
     def test_ac15h_the_construction_is_never_read_at_runtime(self) -> None:
         # Stronger than the source scan: any attribute access on the construction must be
-        # impossible.  ``compute_shortage`` therefore cannot be re-deciding substitute semantics
-        # from role presence or from any raw / canonical substitute evidence.
+        # impossible -- including dunder lookups that ``__getattr__`` would not intercept.
         class HostileConstruction:
-            def __getattr__(self, name: str) -> Any:
+            def __getattribute__(self, name: str) -> Any:
                 raise AssertionError(
                     f"compute_shortage read construction.{name}; the substitute value must come "
                     "only from the BR-SUBSTITUTE-001 downstream result (S3-A)"
@@ -1241,6 +1246,113 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
             rebuilt.substitutes,
         )
         self.assertEqual(result.to_dict(), rebuilt.shortage.to_dict())
+
+    def test_ac15i_a_sibling_date_citation_never_reaches_the_other_direction(self) -> None:
+        # The mirror image of AC-15g: the cited Source Demand Context is at the **later** date D2
+        # while an earlier demand grain exists at D1.  The D1 grain is not stated by the substitute
+        # result (neither a SubstituteTarget nor a cited context of its own date), so it fails
+        # closed rather than consuming a material-wide zero, and it claims no context reference.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "10", D1),
+                Demand(DEMAND, DEMAND, "10", D2),
+                Demand(SOURCE, SOURCE, "20", D1),
+                Demand(SOURCE, SOURCE, "30", D2),
+            ),
+            inventory={DEMAND: "100", SOURCE: "100"},
+            safety_stock={DEMAND: "5", SOURCE: "0"},
+            conservation=(DEMAND, SOURCE, "60"),
+            targets=((DEMAND, D1, "APPROVED"), (SOURCE, D1, "APPROVED")),
+            name="ac15i-later-citation",
+        )
+        self.assertEqual(
+            [
+                context.required_date
+                for context in built.substitutes.source_demand_contexts
+                if context.target_material_code == SOURCE
+            ],
+            [D2],
+        )
+        # The grain whose own date the result states keeps its stated value and stays decided.
+        early = self.grain(built, DEMAND, D1)
+        self.assert_quantity(early, "cumulative_approved_substitute_supply", "0")
+        self.assert_quantity(early, "projected_available", "90")
+        self.assertEqual(early.classification, CLASSIFICATION_NORMAL)
+        # The grain on the sibling date is not stated by the result: it fails closed and claims no
+        # context reference, even though the same material is cited on another date.
+        late = self.grain(built, DEMAND, D2)
+        self.assert_classification(late, CLASSIFICATION_DATA_INCOMPLETE)
+        self.assertIsNone(late.cumulative_approved_substitute_supply)
+        self.assertIsNone(late.projected_available)
+        self.assertIsNone(late.source_demand_context_reference)
+        self.assertIsNone(late.conservation_state)
+        # The cited source grain of the sibling date does keep its explicit zero and context.
+        cited = self.grain(built, SOURCE, D2)
+        self.assert_quantity(cited, "cumulative_approved_substitute_supply", "0")
+        self.assertIsNotNone(cited.source_demand_context_reference)
+
+    def test_ac15j_an_unhashable_cited_date_fails_closed(self) -> None:
+        # A foreign / hand-built substitute result could carry a date that cannot index a table.
+        # The module's own convention (``_groupable`` ／ ``_date_key``) is to fail such a grain
+        # closed rather than raise, and the grain-scoped citation set follows it: an unattributable
+        # citation authorises nothing, and the computation still completes without raising.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "10", D2),
+                Demand(SOURCE, SOURCE, "20", D2),
+            ),
+            conservation=(DEMAND, SOURCE, "60"),
+            name="ac15j-unhashable-date",
+        )
+        forged = tuple(
+            dataclasses.replace(
+                context,
+                required_date=["2026-10-20"]
+                if context.target_material_code == SOURCE
+                else context.required_date,
+            )
+            for context in built.substitutes.source_demand_contexts
+        )
+        substitute_result = dataclasses.replace(
+            built.substitutes, source_demand_contexts=forged
+        )
+        # The unattributable citation must not raise, and it must not authorise a substitute
+        # conclusion for any grain: the SOURCE grain keeps the fail-closed DATA_INCOMPLETE it has
+        # without a cited context of its own.
+        result = compute_shortage(
+            built.construction,
+            built.requirements,
+            built.inbounds,
+            built.inventory,
+            substitute_result,
+        )
+        source_grain = result.for_grain(PLANT, SOURCE, D2)
+        assert source_grain is not None
+        self.assert_classification(source_grain, CLASSIFICATION_DATA_INCOMPLETE)
+        self.assertIsNone(source_grain.cumulative_approved_substitute_supply)
+        self.assertIsNone(source_grain.projected_available)
+        self.assertIsNone(source_grain.source_demand_context_reference)
+        self.assert_is_grain_frozen(source_grain)
+
+    def test_ac15k_the_explicit_zero_note_is_reported(self) -> None:
+        # The explicit valid zero of §4.4.88 is a stated conclusion, so the grain records it.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "10", D2),
+                Demand(SOURCE, SOURCE, "20", D2),
+            ),
+            conservation=(DEMAND, SOURCE, "60"),
+            name="ac15k-explicit-zero-note",
+        )
+        grain = self.grain(built, SOURCE, D2)
+        self.assert_quantity(grain, "cumulative_approved_substitute_supply", "0")
+        self.assertTrue(
+            any("explicit 0 of §4.4.88" in note for note in grain.notes),
+            msg=f"explicit-zero note missing from {grain.notes!r}",
+        )
+        self.assertTrue(
+            any("explicit 0 of §4.4.88" in note for note in grain.to_dict()["notes"])
+        )
 
     def test_ac15f_the_rule_never_reads_substitute_role_presence(self) -> None:
         # §2.1.12 C: the substitute *value* semantics come only from the explicitly completed
@@ -1345,6 +1457,18 @@ class NumericAndTraceTests(ShortageRuleTestCase):
         # The consumed canonical decimals keep their exact decimal rendering.
         self.assertEqual(grain["EffectiveOpeningSupply"], "100")
         self.assertEqual(grain["SafetyStock"], "5")
+        # Every rational payload has exactly one exact decimal companion field.
+        rationals = (
+            "ProjectedAvailable",
+            "ShortageQty",
+            "BufferGap",
+            "CumulativeEffectiveInbound",
+            "CumulativeApprovedSubstituteSupply",
+            "CumulativeGrossRequirement",
+        )
+        for field in rationals:
+            with self.subTest(field=field):
+                self.assertIn(f"{field}Decimal", grain)
         for field in (
             "SafetyStock",
             "EffectiveOpeningSupply",
@@ -1357,6 +1481,29 @@ class NumericAndTraceTests(ShortageRuleTestCase):
             "BufferGap",
         ):
             self.assertIn(field, grain)
+
+    def test_ac18d_a_non_terminating_value_has_no_decimal_companion(self) -> None:
+        # A companion is ``None`` exactly when the exact rational has no finite base-10 form: the
+        # value is never rounded to make the companion readable.
+        built = self.build(
+            demand=(Demand(DEMAND, DEMAND, "200", D2),),
+            loss_rate="0.05",
+            targets=((DEMAND, D2, "APPROVED"),),
+            name="ac18d-no-decimal-companion",
+        )
+        grain = self.grain(built).to_dict()
+        self.assertEqual(
+            grain["CumulativeGrossRequirement"], {"numerator": 4000, "denominator": 19}
+        )
+        self.assertIsNone(grain["CumulativeGrossRequirementDecimal"])
+        self.assertIsNone(grain["ProjectedAvailableDecimal"])
+        # A value that does have one keeps it.
+        self.assertEqual(grain["CumulativeEffectiveInbound"], {"numerator": 0, "denominator": 1})
+        self.assertEqual(grain["CumulativeEffectiveInboundDecimal"], "0")
+        self.assertEqual(
+            grain["CumulativeApprovedSubstituteSupply"], {"numerator": 0, "denominator": 1}
+        )
+        self.assertEqual(grain["CumulativeApprovedSubstituteSupplyDecimal"], "0")
 
     def test_ac19_the_result_is_deterministic_and_read_only(self) -> None:
         first = self.build(

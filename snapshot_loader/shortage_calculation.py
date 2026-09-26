@@ -958,7 +958,16 @@ def _evaluate_family(
     #: ``BR-SUBSTITUTE-001`` cited.  The citation is grain-scoped: ``SourceDemandContext`` carries
     #: its own ``required_date``, so a context of a sibling date never authorises a substitute
     #: conclusion for this grain (S3-A).
-    source_cited_dates = {context.required_date for context in family.sources}
+    #:
+    #: The set is built through :func:`_date_key` so a foreign ／ hand-built result carrying a date
+    #: that cannot index a table (a JSON array ／ object) fails the grains closed instead of raising:
+    #: the module never coerces such a value with ``str()`` ／ ``repr()`` into a key that could
+    #: collide with another date.
+    source_cited_dates = {
+        key
+        for key in (_date_key(context.required_date) for context in family.sources)
+        if key is not ABSENT
+    }
 
     first_shortage: Any = None
     first_breach: Any = None
@@ -1120,7 +1129,8 @@ def _evaluate_family(
                     first_shortage_date=None,
                     first_buffer_breach_date=None,
                     opening_provenance=opening.provenance,
-                    notes=(
+                    notes=tuple(notes)
+                    + (
                         "at least one critical input of this grain could not be reliably "
                         "obtained, so no NORMAL / BUFFER_BREACH / SHORTAGE is produced and no "
                         "reliable first-shortage ／ first-breach date is claimed for it "
@@ -1174,6 +1184,7 @@ def _evaluate_family(
                 first_shortage_date=first_shortage,
                 first_buffer_breach_date=first_breach,
                 outcome=None,
+                notes=tuple(notes),
                 opening_provenance=opening.provenance,
                 inherited_issues=inherited,
                 rule_issues=_deduplicate_issues(tuple(issues)),
