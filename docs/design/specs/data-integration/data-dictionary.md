@@ -989,10 +989,19 @@ latest wins` / `sum` / `average`。
 rational derived result**（`§2.4.8` / `ADR-001`）：upstream 的 exact `Fraction`（例如
 `GrossRequirement = 4000/19`）是**可靠** quantity，**不因**没有有限十进制表示而成为
 missing / invalid / unresolved，也**不得** `round` / `truncate` / `quantize`。该 exact value 在
-runtime payload 中以仓库既有的 derived-quantity representation
+runtime payload 中**只**以仓库既有的 derived-quantity representation
 `{"numerator": <int>, "denominator": <positive int>}` 表达（与 `BaseRequirement` /
-`GrossRequirement` / `EquivalentTargetQty` 同形式）；存在有限十进制表示时同时提供对应 exact decimal
-text。该 representation **不改变**本表各行的 business meaning，也**不新增** canonical field / entity。
+`GrossRequirement` / `EquivalentTargetQty` 同形式）。该 representation 对有限与无限十进制表示一致
+适用，**不**增设 parallel ／ companion 的 decimal text 字段，因此 **不改变**本表各行的 business
+meaning，也**不新增** canonical field / entity。
+
+`CumulativeApprovedSubstituteSupply` 的 completeness 边界（`S3-A`）**在 `BR-SUBSTITUTE-001` 的
+result boundary 完成**：substitute rule 对全部已解析 shortage demand grains（来源为
+`BR-REQUIREMENT-001` 的已解析 requirement rows）显式表达 `CumulativeApprovedSubstituteSupply(<= t)`
+数值或 `DATA_INCOMPLETE`；因此已有可靠 contribution 会 carry forward 到更晚 grain，更晚 grain
+自身没有新增 contribution **不等于** `DATA_INCOMPLETE`，而任何影响 `<= t` 累计的 unresolved
+applicability 都使该 grain 为 `DATA_INCOMPLETE`。`BR-SHORTAGE-001` **只消费**该已完成结果：不补全
+grain universe、不推断 `0`、也不重算 `BR-SUBSTITUTE-001`。
 
 **本澄清不新增任何 canonical field / entity / identity component / grain**：涉及的
 `ProjectedAvailable` ／ `Classification` ／ `ShortageQty` ／ `BufferGap` /

@@ -2902,14 +2902,20 @@ resolved upstream result 的消费边界是 rule-specific 的，
   `>1` 个不同 `inventory_snapshot_time` ⇒ `DATA_INCOMPLETE`（0 个**不得**读成合法 `0`）。**禁止**
   `earliest/latest wins`、跨 snapshot `sum` ／ `average`、自动令
   `inventory_snapshot_time = AnalysisDate`。
-- **substitute result completeness（`S3-A`）**：missing `SubstituteTarget` **不得**被猜成 `0`；**不得**
-  回读 raw ／ canonical substitute evidence 重算 `BR-SUBSTITUTE-001`，也**不得**由 downstream rule
-  读取 accepted package 的 role-presence 来补解释替代语义。upstream `DATA_INCOMPLETE` 在 affected
-  grain 上原样传播。
+- **substitute result completeness（`S3-A`）**：该 completeness **在 `BR-SUBSTITUTE-001` 的 result
+  boundary 完成** —— substitute rule 对全部已解析 shortage demand grains 显式表达
+  `CumulativeApprovedSubstituteSupply(<= t)` 数值或 `DATA_INCOMPLETE`；downstream rule **只消费**该已
+  完成结果，**不**补全 grain universe。因此 missing ／ unstated substitute answer **不得**被猜成 `0`；
+  **不得**回读 raw ／ canonical substitute evidence 重算 `BR-SUBSTITUTE-001`，也**不得**由 downstream
+  rule 读取 accepted package 的 role-presence 来补解释替代语义。已有可靠 contribution 会 carry forward
+  到更晚 grain（更晚 grain 自身无新增 contribution **不等于** `DATA_INCOMPLETE`）；任何影响 `<= t`
+  累计的 unresolved applicability 使该 grain `DATA_INCOMPLETE`；valid zero 只能来自 upstream 的显式
+  结论。upstream `DATA_INCOMPLETE` 在 affected grain 上原样传播。
 - **exact rational 不是 unresolved**：upstream 的 exact `Fraction`（例如 `GrossRequirement = 4000/19`）
   是可靠 quantity；**不得**因该值没有有限十进制表示而将其降级为 `DATA_INCOMPLETE`，也**不得**
-  `round` ／ `truncate` ／ `quantize`（`§2.4.8` / `ADR-001`）。derived result 以仓库既有的 exact
-  rational payload 表达。
+  `round` ／ `truncate` ／ `quantize`（`§2.4.8` / `ADR-001`）。derived result **只**以仓库既有的 exact
+  rational payload 表达；**不**存在 parallel ／ companion 的 decimal text 字段，因此该 representation
+  不构成新的 canonical field contract。
 - **fail-safe first date**：更早日期 unresolved 而未建立可靠 marker 时，**不得**把后面可靠的
   `SHORTAGE` 声称成 `FirstShortageDate`；已建立的可靠日期**不**被后续 `DATA_INCOMPLETE` 改写；无 marker
   但 horizon unresolved 时**不得**输出 valid absence `null`（`§4.4.22` / `§4.4.10` failure isolation）。

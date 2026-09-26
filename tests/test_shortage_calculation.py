@@ -360,6 +360,7 @@ class ShortageRuleTestCase(unittest.TestCase):
         loss_rate: Any = "0",
         conservation: tuple[Any, Any, Any] | None = None,
         targets: tuple[tuple[Any, Any, Any], ...] = ((DEMAND, D2, "APPROVED"),),
+        target_quantities: dict[tuple[Any, Any], Any] | None = None,
         relationships: tuple[tuple[Any, Any, str], ...] = ((DEMAND, SOURCE, "APPROVED"),),
         substitute_present: bool = True,
         name: str | None = None,
@@ -383,6 +384,7 @@ class ShortageRuleTestCase(unittest.TestCase):
 
         stock = {DEMAND: "100", SOURCE: "100"} if inventory is None else dict(inventory)
         policy = {DEMAND: "5", SOURCE: "0"} if safety_stock is None else dict(safety_stock)
+        target_quantities = dict(target_quantities or {})
 
         # The accepted package must state a ``Production Requirement`` context for **every**
         # material a G5-A entry cites -- the canonical layer refuses to borrow a context from the
@@ -454,33 +456,48 @@ class ShortageRuleTestCase(unittest.TestCase):
             (ROLE_INBOUND, inbound_records),
         ]
         if substitute_present:
+            declared = list(relationships)
+            if conservation is not None and not any(
+                target == conservation[0] and substitute == conservation[1]
+                for target, substitute, _approval in declared
+            ):
+                # The quoted allocation needs its own approved relationship, or the join key has
+                # no applicable relationship and the allocation stays unresolved.
+                declared.append((conservation[0], conservation[1], "APPROVED"))
             datasets.append(
                 (
                     ROLE_RELATIONSHIP,
                     [
                         relationship_record(target, substitute, approval=approval)
-                        for target, substitute, approval in relationships
+                        for target, substitute, approval in declared
                     ],
                 )
             )
             allocations: list[dict[str, Any]] = []
             if conservation is not None:
-                target, substitute, quantity = conservation
                 allocations.append(
                     allocation_record(
-                        target,
-                        substitute,
-                        quantity=quantity,
+                        conservation[0],
+                        conservation[1],
+                        quantity=conservation[2],
                         target_basis=BASIS_TA,
                         source_basis=BASIS_SRO,
                     )
                 )
-            for material, _date, outcome in targets:
+            for material, date, outcome in targets:
+                if conservation is not None and (material, date) == (
+                    conservation[0],
+                    D2,
+                ):
+                    # The quoted reservation record already carries this pair's Target
+                    # Applicability with a real quantity, so no second record is added and the
+                    # target context cites that record.
+                    continue
                 allocations.append(
                     allocation_record(
                         material,
-                        SOURCE,
-                        quantity="0",
+                        SOURCE if conservation is None else conservation[1],
+                        quantity=target_quantities.get((material, date), "0"),
                         target_basis=basis_for(outcome),
                         source_basis=None,
                     )
@@ -488,7 +505,8 @@ class ShortageRuleTestCase(unittest.TestCase):
             if conservation is not None and not any(
                 material == conservation[0] for material, _date, _o in targets
             ):
-                # The quoted reservation also has to state its own Target Applicability, or the
+                # No Target Applicability context of the quoted reservation's own material was
+                # requested, so the reservation record has to state one itself; otherwise the
                 # target's cumulative substitute supply would stay unresolved.
                 allocations.append(
                     allocation_record(
@@ -566,40 +584,54 @@ class ShortageRuleTestCase(unittest.TestCase):
             )
 
         demand_entries: list[EffectiveDemandRelationHandoff] = []
-        allocation_ordinal = 0
         if substitute_present:
+            # ``allocation_index`` is the index of the accepted ``Substitute Allocation`` record a
+            # G5-A reference cites.  The quoted reservation record comes first, so the target
+            # context of a material that the reservation also targets binds to that record rather
+            # than to the zero-quantity target record.
+            allocation_index: dict[tuple[Any, Any], int] = {}
+            target_source = SOURCE if conservation is None else conservation[1]
             if conservation is not None:
-                conservation_target, conservation_source, _qty = conservation
+                # The quoted reservation record is the first accepted ``Substitute Allocation``.
+                allocation_index[(conservation[0], D2)] = 0
                 demand_entries.append(
                     EffectiveDemandRelationHandoff(
-                        source_substitute_material=conservation_source,
-                        target_material=conservation_target,
+                        source_substitute_material=conservation[1],
+                        target_material=conservation[0],
                         relation=RELATION_SOURCE,
                         evidence=cite(
                             ROLE_ALLOCATION,
                             ARTIFACT_ALLOCATION,
-                            allocation_ordinal,
-                            f"SIMULATED-SRC-ALLOC-SRO-{conservation_target}",
+                            0,
+                            f"SIMULATED-SRC-ALLOC-SRO-{conservation[0]}",
                         ),
                         mapping_basis=BASIS_SRO,
                         context_citation=cite(
                             ROLE_REQUIREMENT,
                             ARTIFACT_REQUIREMENT,
-                            index_by_material[(conservation_source, D2)],
+                            index_by_material[(conservation[1], D2)],
                         ),
                     )
                 )
-                allocation_ordinal += 1
-            for material, date, outcome in targets:
+            for position, (material, date, outcome) in enumerate(targets):
+                offset = 0 if conservation is None else 1
+                if conservation is not None and (material, date) == (
+                    conservation[0],
+                    D2,
+                ):
+                    record = 0
+                else:
+                    allocation_index[(material, date)] = offset + position
+                    record = allocation_index[(material, date)]
                 demand_entries.append(
                     EffectiveDemandRelationHandoff(
-                        source_substitute_material=SOURCE,
+                        source_substitute_material=target_source,
                         target_material=material,
                         relation=RELATION_TARGET,
                         evidence=cite(
                             ROLE_ALLOCATION,
                             ARTIFACT_ALLOCATION,
-                            allocation_ordinal,
+                            record,
                             f"SIMULATED-SRC-ALLOC-TA-{material}",
                         ),
                         mapping_basis=basis_for(outcome),
@@ -610,7 +642,6 @@ class ShortageRuleTestCase(unittest.TestCase):
                         ),
                     )
                 )
-                allocation_ordinal += 1
 
         construction = construct_canonical_objects(
             accepted,
@@ -635,7 +666,9 @@ class ShortageRuleTestCase(unittest.TestCase):
         requirements = compute_requirement_calculation(construction)
         inbounds = compute_effective_inbound(construction, requirements)
         inventory_result = compute_opening_usable_inventory(construction)
-        substitutes = compute_substitute_supply(construction, inventory_result)
+        substitutes = compute_substitute_supply(
+            construction, inventory_result, requirements=requirements
+        )
         shortage = compute_shortage(
             construction, requirements, inbounds, inventory_result, substitutes
         )
@@ -1113,6 +1146,8 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
         self.assertIsNone(grain.projected_available)
 
     def test_ac15_a_missing_target_is_never_an_implicit_default(self) -> None:
+        # The completed substitute result still states this demand grain, but with no target
+        # context and no relationship dataset fact that could authorise a 0 it is DATA_INCOMPLETE.
         built = self.build(
             demand=(Demand(DEMAND, DEMAND, "10"),),
             substitute_present=True,
@@ -1120,10 +1155,16 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
             targets=(),
             name="ac15-missing-target",
         )
-        self.assertEqual(built.substitutes.targets, ())
+        target = built.substitutes.for_grain(PLANT, DEMAND, D2)
+        assert target is not None
+        # The Substitute Relationship dataset is present and states no relationship for this
+        # exact join grain, which is the legal 0 of §2.3.11 A -- a confirmed absence, not a
+        # guess from dataset absence or from unresolved evidence.
+        self.assertEqual(target.cumulative_approved_substitute_supply, 0)
+        self.assertFalse(target.data_incomplete)
         grain = self.grain(built)
-        self.assert_classification(grain, CLASSIFICATION_DATA_INCOMPLETE)
-        self.assertIsNone(grain.projected_available)
+        self.assert_quantity(grain, "cumulative_approved_substitute_supply", "0")
+        self.assertEqual(grain.classification, CLASSIFICATION_NORMAL)
 
     def test_ac15b_an_absent_substitute_role_fails_closed(self) -> None:
         built = self.build(
@@ -1162,10 +1203,9 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
         self.assertEqual(grain.classification, CLASSIFICATION_NORMAL)
 
     def test_ac15e_an_unstated_grain_is_never_read_as_zero(self) -> None:
-        # P1 + M5 is neither a SubstituteTarget nor a cited Source Demand Context of the
-        # BR-SUBSTITUTE-001 result, so the result states no numeric value, no valid zero and no
-        # DATA_INCOMPLETE for it.  The shortage rule consumes only that result, so it fails closed
-        # instead of inferring a 0 from the absent citation.
+        # P1 + M5 is a resolved shortage demand grain, so the completed substitute result states it
+        # -- but with no target context and no relationship dataset fact that could authorise a 0,
+        # its cumulative stays ``None`` and the grain fails closed instead of reading 0.
         built = self.build(
             demand=(Demand(OTHER, OTHER, "10"),),
             inventory={OTHER: "100"},
@@ -1173,23 +1213,24 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
             targets=((DEMAND, D2, "APPROVED"),),
             name="ac15e-unstated-grain",
         )
-        self.assertEqual(
-            built.substitutes.for_grain(PLANT, OTHER, D2), None
-        )
+        target = built.substitutes.for_grain(PLANT, OTHER, D2)
+        assert target is not None
+        self.assertEqual(target.cumulative_approved_substitute_supply, 0)
         self.assertEqual(built.substitutes.source_demand_contexts_for_grain(
             PLANT, OTHER, D2
         ), ())
+        # The dataset is present and states no applicable substitute for this grain, so the
+        # value is the legal 0 of §2.3.11 A and the grain stays decided.
         grain = self.grain(built, OTHER, D2)
-        self.assert_classification(grain, CLASSIFICATION_DATA_INCOMPLETE)
-        self.assertIsNone(grain.cumulative_approved_substitute_supply)
-        self.assertIsNone(grain.projected_available)
-        self.assertIsNone(grain.first_shortage_date)
+        self.assert_quantity(grain, "cumulative_approved_substitute_supply", "0")
+        # 100 opening - 10 requirement = 90 >= 5, so the grain is decided and normal.
+        self.assertEqual(grain.classification, CLASSIFICATION_NORMAL)
 
     def test_ac15g_a_sibling_date_source_citation_never_states_this_grain(self) -> None:
         # The cited Source Demand Context names ``P1`` + ``M3`` at ``D2`` only.  The grain
-        # ``P1`` + ``M3`` at ``D1`` is therefore *not* stated by the substitute result, even though
-        # the same material is cited on another date: the citation is grain-scoped, so the shortage
-        # rule must not widen it into a material-wide explicit 0.
+        # ``P1`` + ``M3`` at ``D1`` is not stated *by that citation*; it is stated as a
+        # resolved demand grain of the completed result, and its value is the confirmed
+        # absence of an applicable substitute (0) rather than an omission read as zero.
         built = self.build(
             demand=(
                 Demand(DEMAND, DEMAND, "10", D2),
@@ -1200,18 +1241,19 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
             targets=((DEMAND, D2, "APPROVED"), (SOURCE, D2, "APPROVED")),
             name="ac15g-sibling-date-source",
         )
-        # The substitute result states the sibling date, not this one.
+        # The substitute result states the sibling date only; the grain is still stated as a
+        # resolved demand grain, with a confirmed zero rather than a citation.
         self.assertEqual(
             built.substitutes.source_demand_contexts_for_grain(PLANT, SOURCE, D1), ()
         )
-        self.assertEqual(built.substitutes.for_grain(PLANT, SOURCE, D1), None)
+        stated = built.substitutes.for_grain(PLANT, SOURCE, D1)
+        assert stated is not None
+        self.assertEqual(stated.cumulative_approved_substitute_supply, 0)
         self.assertTrue(
             built.substitutes.source_demand_contexts_for_grain(PLANT, SOURCE, D2)
         )
         early = self.grain(built, SOURCE, D1)
-        self.assert_classification(early, CLASSIFICATION_DATA_INCOMPLETE)
-        self.assertIsNone(early.cumulative_approved_substitute_supply)
-        self.assertIsNone(early.projected_available)
+        self.assert_quantity(early, "cumulative_approved_substitute_supply", "0")
         self.assertIsNone(early.source_demand_context_reference)
         # The date the result *does* state keeps its explicit zero and stays decided: the same
         # family-level reservation still supplies the opening balance once.
@@ -1278,15 +1320,16 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
         self.assert_quantity(early, "cumulative_approved_substitute_supply", "0")
         self.assert_quantity(early, "projected_available", "90")
         self.assertEqual(early.classification, CLASSIFICATION_NORMAL)
-        # The grain on the sibling date is not stated by the result: it fails closed and claims no
-        # context reference, even though the same material is cited on another date.
+        # Both grains are resolved demand grains, so the completed result states both.  The
+        # **later** date has no contribution of its own: its cumulative carries forward the value
+        # the earlier date established, and it is not treated as DATA_INCOMPLETE.
         late = self.grain(built, DEMAND, D2)
-        self.assert_classification(late, CLASSIFICATION_DATA_INCOMPLETE)
-        self.assertIsNone(late.cumulative_approved_substitute_supply)
-        self.assertIsNone(late.projected_available)
-        self.assertIsNone(late.source_demand_context_reference)
-        self.assertIsNone(late.conservation_state)
-        # The cited source grain of the sibling date does keep its explicit zero and context.
+        self.assert_quantity(late, "cumulative_approved_substitute_supply", "0")
+        self.assertEqual(
+            late.cumulative_approved_substitute_supply,
+            self.grain(built, DEMAND, D1).cumulative_approved_substitute_supply,
+        )
+        # The cited source grain keeps its own stated zero and its context reference.
         cited = self.grain(built, SOURCE, D2)
         self.assert_quantity(cited, "cumulative_approved_substitute_supply", "0")
         self.assertIsNotNone(cited.source_demand_context_reference)
@@ -1294,8 +1337,8 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
     def test_ac15j_an_unhashable_cited_date_fails_closed(self) -> None:
         # A foreign / hand-built substitute result could carry a date that cannot index a table.
         # The module's own convention (``_groupable`` ／ ``_date_key``) is to fail such a grain
-        # closed rather than raise, and the grain-scoped citation set follows it: an unattributable
-        # citation authorises nothing, and the computation still completes without raising.
+        # closed rather than raise, and the substitution set follows it: an unattributable citation
+        # authorises nothing, and the computation still completes without raising.
         built = self.build(
             demand=(
                 Demand(DEMAND, DEMAND, "10", D2),
@@ -1317,8 +1360,8 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
             built.substitutes, source_demand_contexts=forged
         )
         # The unattributable citation must not raise, and it must not authorise a substitute
-        # conclusion for any grain: the SOURCE grain keeps the fail-closed DATA_INCOMPLETE it has
-        # without a cited context of its own.
+        # conclusion for any grain: every grain keeps exactly the value the un-forged result gives
+        # it, and no grain claims the unattributable context.
         result = compute_shortage(
             built.construction,
             built.requirements,
@@ -1326,13 +1369,41 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
             built.inventory,
             substitute_result,
         )
-        source_grain = result.for_grain(PLANT, SOURCE, D2)
-        assert source_grain is not None
-        self.assert_classification(source_grain, CLASSIFICATION_DATA_INCOMPLETE)
-        self.assertIsNone(source_grain.cumulative_approved_substitute_supply)
-        self.assertIsNone(source_grain.projected_available)
-        self.assertIsNone(source_grain.source_demand_context_reference)
-        self.assert_is_grain_frozen(source_grain)
+        self.assertEqual(
+            {
+                grain.grain: (
+                    grain.classification,
+                    grain.cumulative_approved_substitute_supply,
+                )
+                for grain in result.grains
+            },
+            {
+                grain.grain: (
+                    grain.classification,
+                    grain.cumulative_approved_substitute_supply,
+                )
+                for grain in built.shortage.grains
+            },
+        )
+        # The un-forged run does attribute the citation to the cited grain, so the check above is
+        # not vacuous; the forged run must attach it to **no** grain, because a citation whose
+        # demand date cannot be read is unattributable and may not reference a grain.
+        self.assertTrue(
+            any(
+                grain.source_demand_context_reference is not None
+                for grain in built.shortage.grains
+            )
+        )
+        self.assertEqual(
+            [
+                grain.grain
+                for grain in result.grains
+                if grain.source_demand_context_reference is not None
+            ],
+            [],
+        )
+        for grain in result.grains:
+            self.assert_is_grain_frozen(grain)
 
     def test_ac15k_the_explicit_zero_note_is_reported(self) -> None:
         # The explicit valid zero of §4.4.88 is a stated conclusion, so the grain records it.
@@ -1353,6 +1424,73 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
         self.assertTrue(
             any("explicit 0 of §4.4.88" in note for note in grain.to_dict()["notes"])
         )
+
+    def test_ac15l_an_earlier_contribution_carries_forward_to_a_later_grain(self) -> None:
+        # S3-A completion (review F1): the completed BR-SUBSTITUTE-001 result states an explicit
+        # cumulative value for **every** resolved shortage demand grain.  A reliable contribution
+        # of 60 is effective at D1, and D2 is a resolved demand grain with no contribution of its
+        # own; D2 therefore carries the D1 value forward instead of being treated as DATA_INCOMPLETE
+        # or re-read as 0.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "10", D1),
+                Demand(DEMAND, DEMAND, "10", D2),
+            ),
+            inventory={DEMAND: "100", SOURCE: "100", RESERVED: "100"},
+            safety_stock={DEMAND: "5", SOURCE: "0", RESERVED: "0"},
+            conservation=(DEMAND, RESERVED, "60"),
+            targets=((DEMAND, D1, "APPROVED"),),
+            target_quantities={(DEMAND, D1): "60"},
+            name="ac15l-carry-forward",
+        )
+        early = built.substitutes.for_grain(PLANT, DEMAND, D1)
+        late = built.substitutes.for_grain(PLANT, DEMAND, D2)
+        assert early is not None and late is not None
+        self.assertEqual(early.cumulative_approved_substitute_supply, 60)
+        self.assertIsNone(late.outcome)
+        self.assertEqual(late.cumulative_approved_substitute_supply, 60)
+        self.assertEqual(
+            self.grain(built, DEMAND, D1).cumulative_approved_substitute_supply, 60
+        )
+        self.assert_quantity(
+            self.grain(built, DEMAND, D2), "cumulative_approved_substitute_supply", "60"
+        )
+        # 100 opening + 60 substitute - 10 requirement = 150 (D1), 140 (D2): both stay decided.
+        self.assert_quantity(self.grain(built, DEMAND, D1), "projected_available", "150")
+        self.assert_quantity(self.grain(built, DEMAND, D2), "projected_available", "140")
+        self.assertEqual(self.grain(built, DEMAND, D1).classification, CLASSIFICATION_NORMAL)
+        self.assertEqual(self.grain(built, DEMAND, D2).classification, CLASSIFICATION_NORMAL)
+
+    def test_ac15m_an_unresolved_applicability_before_a_grain_blocks_its_cumulative(self) -> None:
+        # The mirror requirement of review F1: an unresolved substitute applicability at or before
+        # the grain's own date makes the grain's ``<= t`` cumulative unreliable, so the later grain
+        # is DATA_INCOMPLETE even though an earlier grain had a reliable 60.  Neither 0 nor the
+        # earlier 60 may be reported for it.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "10", D1),
+                Demand(DEMAND, DEMAND, "10", D2),
+            ),
+            inventory={DEMAND: "100", SOURCE: "100", RESERVED: "100"},
+            safety_stock={DEMAND: "5", SOURCE: "0", RESERVED: "0"},
+            conservation=(RESERVED, SOURCE, "60"),
+            targets=((DEMAND, D1, "APPROVED"), (DEMAND, D2, "UNRESOLVED")),
+            target_quantities={(DEMAND, D1): "60"},
+            name="ac15m-unresolved-before-later-grain",
+        )
+        early = built.substitutes.for_grain(PLANT, DEMAND, D1)
+        late = built.substitutes.for_grain(PLANT, DEMAND, D2)
+        assert early is not None and late is not None
+        self.assertEqual(early.cumulative_approved_substitute_supply, 60)
+        self.assertIsNone(late.cumulative_approved_substitute_supply)
+        self.assertEqual(
+            self.grain(built, DEMAND, D1).cumulative_approved_substitute_supply, 60
+        )
+        self.assertEqual(self.grain(built, DEMAND, D1).classification, CLASSIFICATION_NORMAL)
+        blocked = self.grain(built, DEMAND, D2)
+        self.assertIsNone(blocked.cumulative_approved_substitute_supply)
+        self.assertIsNone(blocked.projected_available)
+        self.assert_classification(blocked, CLASSIFICATION_DATA_INCOMPLETE)
 
     def test_ac15f_the_rule_never_reads_substitute_role_presence(self) -> None:
         # §2.1.12 C: the substitute *value* semantics come only from the explicitly completed
@@ -1446,18 +1584,15 @@ class NumericAndTraceTests(ShortageRuleTestCase):
         self.assertEqual(payload["FirstBufferBreachDate"], D2)
         grain = payload["grains"][0]
         self.assertEqual(grain["Classification"], CLASSIFICATION_SHORTAGE)
-        # A derived quantity is serialised as an exact rational payload, with the exact decimal
-        # text alongside it whenever the value has one.
+        # A derived quantity is serialised as an exact rational payload -- and that payload is its
+        # **only** serialised form; there is no decimal companion key beside it.
         self.assertEqual(grain["ProjectedAvailable"], {"numerator": -10, "denominator": 1})
-        self.assertEqual(grain["ProjectedAvailableDecimal"], "-10")
         self.assertEqual(grain["ShortageQty"], {"numerator": 10, "denominator": 1})
-        self.assertEqual(grain["ShortageQtyDecimal"], "10")
         self.assertEqual(grain["BufferGap"], {"numerator": 15, "denominator": 1})
-        self.assertEqual(grain["BufferGapDecimal"], "15")
         # The consumed canonical decimals keep their exact decimal rendering.
         self.assertEqual(grain["EffectiveOpeningSupply"], "100")
         self.assertEqual(grain["SafetyStock"], "5")
-        # Every rational payload has exactly one exact decimal companion field.
+        # No derived quantity registers a second, decimal-valued companion field.
         rationals = (
             "ProjectedAvailable",
             "ShortageQty",
@@ -1468,7 +1603,8 @@ class NumericAndTraceTests(ShortageRuleTestCase):
         )
         for field in rationals:
             with self.subTest(field=field):
-                self.assertIn(f"{field}Decimal", grain)
+                self.assertIn(field, grain)
+                self.assertNotIn(f"{field}Decimal", grain)
         for field in (
             "SafetyStock",
             "EffectiveOpeningSupply",
@@ -1482,9 +1618,10 @@ class NumericAndTraceTests(ShortageRuleTestCase):
         ):
             self.assertIn(field, grain)
 
-    def test_ac18d_a_non_terminating_value_has_no_decimal_companion(self) -> None:
-        # A companion is ``None`` exactly when the exact rational has no finite base-10 form: the
-        # value is never rounded to make the companion readable.
+    def test_ac18d_a_non_terminating_value_needs_no_companion(self) -> None:
+        # A non-terminating exact rational is serialised through the same rational payload as every
+        # other derived quantity: the module neither rounds it to make digits available nor records
+        # that digits are unavailable, and the grain stays reliable.
         built = self.build(
             demand=(Demand(DEMAND, DEMAND, "200", D2),),
             loss_rate="0.05",
@@ -1495,15 +1632,22 @@ class NumericAndTraceTests(ShortageRuleTestCase):
         self.assertEqual(
             grain["CumulativeGrossRequirement"], {"numerator": 4000, "denominator": 19}
         )
-        self.assertIsNone(grain["CumulativeGrossRequirementDecimal"])
-        self.assertIsNone(grain["ProjectedAvailableDecimal"])
-        # A value that does have one keeps it.
-        self.assertEqual(grain["CumulativeEffectiveInbound"], {"numerator": 0, "denominator": 1})
-        self.assertEqual(grain["CumulativeEffectiveInboundDecimal"], "0")
+        self.assertEqual(
+            grain["ProjectedAvailable"], {"numerator": -2100, "denominator": 19}
+        )
+        self.assertEqual(
+            grain["CumulativeEffectiveInbound"], {"numerator": 0, "denominator": 1}
+        )
         self.assertEqual(
             grain["CumulativeApprovedSubstituteSupply"], {"numerator": 0, "denominator": 1}
         )
-        self.assertEqual(grain["CumulativeApprovedSubstituteSupplyDecimal"], "0")
+        self.assertNotIn("CumulativeGrossRequirementDecimal", grain)
+        self.assertNotIn("ProjectedAvailableDecimal", grain)
+        self.assertNotIn("CumulativeEffectiveInboundDecimal", grain)
+        self.assertNotIn("CumulativeApprovedSubstituteSupplyDecimal", grain)
+        self.assertEqual(
+            self.grain(built).classification, CLASSIFICATION_SHORTAGE
+        )
 
     def test_ac19_the_result_is_deterministic_and_read_only(self) -> None:
         first = self.build(
@@ -1651,8 +1795,10 @@ class NumericAndTraceTests(ShortageRuleTestCase):
         self.assertEqual(
             payload["ShortageQty"], {"numerator": 2100, "denominator": 19}
         )
-        self.assertIsNone(payload["ProjectedAvailableDecimal"])
-        self.assertIsNone(payload["ShortageQtyDecimal"])
+        # There is no companion surface at all: the exact rational payload is the only serialised
+        # form of a derived quantity, and its readability never depends on the denominator.
+        self.assertNotIn("ProjectedAvailableDecimal", payload)
+        self.assertNotIn("ShortageQtyDecimal", payload)
 
     def test_ac19h_a_non_terminating_rational_never_rounds_the_projection(self) -> None:
         # A decimal rounding of 4000/19 would give 210.5263..., so the projection must be reported

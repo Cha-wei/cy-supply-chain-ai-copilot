@@ -83,7 +83,7 @@ from .constants import (
 from .exact_quantity import ExactQuantity, parse_exact_quantity
 from .inventory_calculation import InventoryCalculationResult, InventoryTarget
 from .issues import Issue
-from .requirement_calculation import OUTCOME_DATA_INCOMPLETE
+from .requirement_calculation import OUTCOME_DATA_INCOMPLETE, RequirementCalculationResult
 
 # --- vocabulary --------------------------------------------------------------------
 
@@ -585,14 +585,34 @@ class SubstituteCalculationResult:
 def compute_substitute_supply(
     construction: CanonicalConstructionReport,
     inventory: InventoryCalculationResult,
+    *,
+    requirements: RequirementCalculationResult,
 ) -> SubstituteCalculationResult:
-    """Run ``BR-SUBSTITUTE-001`` over one construction and its inventory result.
+    """Run ``BR-SUBSTITUTE-001`` over one construction, its inventory and its requirement results.
 
-    Target grains come from the resolved G5-A ``Target Applicability`` contexts; the candidate
-    allocations come only from the resolved ``Substitute Allocation`` canonical objects; the
-    eligible source supply comes only from ``BR-INVENTORY-001``'s ``OpeningUsableInventory``.  A
-    raw accepted artifact is never read, an Inventory eligibility rule is never re-implemented,
-    and no caller may inject a business date or a quantity.
+    Candidate allocations come only from the resolved ``Substitute Allocation`` canonical objects
+    and the eligible source supply comes only from ``BR-INVENTORY-001``'s
+    ``OpeningUsableInventory``; a raw accepted artifact is never read, an Inventory eligibility rule
+    is never re-implemented, and no caller may inject a business date or a quantity.
+
+    **Result completeness (approved ``S3-A`` ／ ``§2.3.12``).**  ``requirements`` names the resolved
+    shortage demand grains -- the exact ``plant_id`` + component ``material_code`` +
+    ``required_date`` rows of ``BR-REQUIREMENT-001`` that produced a reliable requirement -- and this
+    rule states an explicit ``CumulativeApprovedSubstituteSupply(<= t)`` answer for **every** of
+    them, not only for the grains a G5-A ``Target Applicability`` context happens to cite:
+
+    * a reliable contribution from an effective context ``<= t`` accumulates, so an earlier
+      contribution carries forward to a later grain;
+    * a later grain with no contribution of its own therefore keeps the carried-forward value and is
+      **not** automatically ``DATA_INCOMPLETE``;
+    * an unresolved applicability that can affect the ``<= t`` cumulative makes that grain
+      ``DATA_INCOMPLETE`` -- it is never read as ``0``;
+    * a reliably confirmed absence of an approved ／ applicable substitute is the legal ``0`` of
+      ``§2.3.11`` A ／ ``§4.4.88``;
+    * an absent ``Substitute Relationship`` dataset is never read as ``0``.
+
+    ``construction`` is consumed only through the canonical objects the construction already
+    resolved plus the one role-level fact :func:`_relationship_dataset_present` states.
     """
 
     allocations = _allocation_index(construction)
@@ -621,14 +641,14 @@ def compute_substitute_supply(
             )
             entry[1].append(outcome)
 
-    # ``CumulativeApprovedSubstituteSupply(<= t)`` is a deterministic pass over every cited
-    # target context of the same ``plant_id`` + ``target_material_code`` whose ``required_date``
-    # is ``<= t`` (§2.3.12).  An allocation that is ``applicable`` to several target demand
-    # contexts is **one** supply: it is reserved to the earliest such context by its own exact
-    # allocation record identity, so a context multiplicity never multiplies the supply and no
-    # same-value deduplication is ever applied (§4.5.9 Decision 8 / AC-31).
+    # Every resolved shortage demand grain of ``BR-REQUIREMENT-001`` completes the answer surface.
+    # A grain without a cited target context carries no evaluation of its own and is not a
+    # reservation owner; it exists so the grain -- and the cumulative at its date -- is stated.
+    cited_grains = set(target_contexts)
+    demand_grains = _demand_grains(requirements)
     grain_order = sorted(
-        target_contexts, key=lambda item: tuple(_sort_text(part) for part in item)
+        cited_grains | demand_grains,
+        key=lambda item: tuple(_sort_text(part) for part in item),
     )
     grain_evaluations: dict[
         tuple[Any, Any, Any], tuple[SubstituteEvaluation, ...]
@@ -643,10 +663,16 @@ def compute_substitute_supply(
                 relationship_index=relationship_index,
                 relationship_present=relationship_present,
             )
-            for outcome in target_contexts[grain]
+            for outcome in target_contexts.get(grain, ())
         )
         grain_evaluations[grain] = evaluations
         if any(item.data_incomplete for item in evaluations):
+            unreliable_grains.append(grain)
+        elif grain not in cited_grains and not relationship_present:
+            # No target context cites this grain and the accepted package declared no
+            # ``Substitute Relationship`` role at all.  "Business states there is no approved
+            # substitute" therefore cannot be established for it, so its cumulative is
+            # ``DATA_INCOMPLETE`` rather than an inferred ``0`` (§2.3.11 B ／ S3-A).
             unreliable_grains.append(grain)
 
     reserved_grain: dict[str, tuple[Any, Any, Any]] = {}
@@ -762,6 +788,34 @@ def _cited_source_demand_contexts(
             )
         )
     return tuple(contexts)
+
+
+def _demand_grains(
+    requirements: RequirementCalculationResult,
+) -> set[tuple[Any, Any, Any]]:
+    """The resolved shortage demand grains of ``BR-REQUIREMENT-001``, as exact grains.
+
+    A demand grain is a ``BR-REQUIREMENT-001`` calculation row that produced a **reliable** derived
+    requirement (``has_numeric_result``); its grain is ``plant_id`` + component ``material_code`` +
+    ``required_date`` (``§2.4.2``), which is the same grain this rule and ``BR-SHORTAGE-001`` use.
+    An unreliable row is not a resolved demand grain and is left out: the substitute rule never
+    invents the grain of a requirement that could not be computed.
+
+    A grain whose own components cannot be used as a key is skipped rather than coerced, so an
+    ungroupable value never shares a bucket with an unrelated grain.
+    """
+
+    grains: set[tuple[Any, Any, Any]] = set()
+    for row in requirements.calculations:
+        if not row.has_numeric_result:
+            continue
+        grain = (row.plant_id, row.component_material_code, row.required_date)
+        try:
+            hash(grain)
+        except TypeError:  # pragma: no cover - ungroupable canonical value
+            continue
+        grains.add(grain)
+    return grains
 
 
 # --- construction index -------------------------------------------------------------

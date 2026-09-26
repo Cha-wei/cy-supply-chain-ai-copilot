@@ -196,31 +196,6 @@ def _quantity_text(value: ExactQuantity | None) -> str | None:
     return None if value is None else value.text()
 
 
-def _rational_text(value: Fraction | None) -> str | None:
-    """Render one exact rational as plain base-10 text when it has a finite representation.
-
-    ``"5"`` ／ ``"0.05"`` stay decimal text; a non-terminating value returns ``None`` and is
-    serialised through :func:`_rational_payload` instead, so nothing is ever rounded to fit.
-    """
-
-    if value is None:
-        return None
-    denominator = value.denominator
-    numerator = value.numerator
-    scale = 0
-    while denominator % 2 == 0:
-        denominator //= 2
-        numerator *= 5
-        scale += 1
-    while denominator % 5 == 0:
-        denominator //= 5
-        numerator *= 2
-        scale += 1
-    if denominator != 1:
-        return None
-    return ExactQuantity(numerator, scale).text()
-
-
 def _rational_payload(value: Fraction | None) -> dict[str, int] | None:
     """Lossless serialisation of an exact rational derived quantity.
 
@@ -365,21 +340,11 @@ class ShortageGrain:
             "CumulativeGrossRequirement": _rational_payload(
                 self.cumulative_gross_requirement
             ),
-            # The exact decimal text is kept alongside each rational payload whenever the value
-            # has a finite base-10 representation, so a decimal consumer is not forced to read
-            # the rational form and a non-terminating value is never rounded to fit.
-            "ProjectedAvailableDecimal": _rational_text(self.projected_available),
-            "ShortageQtyDecimal": _rational_text(self.shortage_qty),
-            "BufferGapDecimal": _rational_text(self.buffer_gap),
-            "CumulativeEffectiveInboundDecimal": _rational_text(
-                self.cumulative_effective_inbound
-            ),
-            "CumulativeApprovedSubstituteSupplyDecimal": _rational_text(
-                self.cumulative_approved_substitute_supply
-            ),
-            "CumulativeGrossRequirementDecimal": _rational_text(
-                self.cumulative_gross_requirement
-            ),
+            # A derived quantity has exactly one serialised form: the exact rational payload above,
+            # the same form ``BR-REQUIREMENT-001`` and ``BR-SUBSTITUTE-001`` use.  There is no
+            # decimal companion surface, so a value with a non-terminating base-10 expansion
+            # (``4000/19``) is a perfectly readable, reliable exact quantity (``§2.4.8`` ／
+            # ``ADR-001``) and never becomes ``DATA_INCOMPLETE`` for being unrenderable as digits.
             "opening_supply_source": self.supply_source,
             "source_demand_context_reference": self.source_demand_context_reference,
             "conservation_state": self.conservation_state,
@@ -954,15 +919,11 @@ def _evaluate_family(
     substitute_table = _substitute_table(family.substitutes)
     source_entry = _source_entry(family, groups)
     inherited = _family_inherited(family)
-    #: ``required_date`` -> the exact Source Demand Context of **this grain** that
-    #: ``BR-SUBSTITUTE-001`` cited.  The citation is grain-scoped: ``SourceDemandContext`` carries
-    #: its own ``required_date``, so a context of a sibling date never authorises a substitute
-    #: conclusion for this grain (S3-A).
-    #:
-    #: The set is built through :func:`_date_key` so a foreign ／ hand-built result carrying a date
-    #: that cannot index a table (a JSON array ／ object) fails the grains closed instead of raising:
-    #: the module never coerces such a value with ``str()`` ／ ``repr()`` into a key that could
-    #: collide with another date.
+    #: The ``required_date`` values of the exact Source Demand Contexts this result cites for the
+    #: family.  A grain cited as a reservation boundary has an explicit ``0`` substitute supply:
+    #: the substitute result stated it as a boundary and stated no approved substitute supply
+    #: reaching it from any target.  The set is built through :func:`_date_key` so a date that
+    #: cannot index a table is never coerced into a key that could collide with another date.
     source_cited_dates = {
         key
         for key in (_date_key(context.required_date) for context in family.sources)
@@ -1315,7 +1276,7 @@ def _inbound_table(
 def _substitute_table(
     targets: Sequence[SubstituteTarget],
 ) -> dict[Any, tuple[Fraction | None, str | None, str | None]]:
-    """``CumulativeApprovedSubstituteSupply(<= required_date)`` per **cited** target grain.
+    """``CumulativeApprovedSubstituteSupply(<= required_date)`` per **stated** target grain.
 
     The value is ``BR-SUBSTITUTE-001``'s own cumulative result for that target grain and is read
     as-is -- never recomputed from raw or canonical substitute evidence.  A target whose own
@@ -1346,9 +1307,21 @@ def _substitute_table(
             # (§2.4.8 / ADR-001).
             carried = Fraction(target.cumulative_approved_substitute_supply)
             carried_problem = None
+        carried_note: str | None = None
+        if carried is not None and not target.evaluations:
+            # ``S3-A`` completion: the result states this grain even though no G5-A Target
+            # Applicability context cites it and no reliable contribution accumulates to it.  Its
+            # confirmed answer is therefore the legal zero of §2.3.11 A / §4.4.88, and the note
+            # makes the zero visibly a *stated* conclusion rather than an omitted target.
+            carried_note = (
+                "no approved substitute supply reaches this grain: BR-SUBSTITUTE-001 states this "
+                "material's demand context only as a resolved shortage demand grain and states no "
+                "Target Demand Context for it, so the value is the explicit 0 of §4.4.88 rather "
+                "than an omitted target"
+            )
         key = _date_key(target.required_date)
         if key is not ABSENT:
-            table[key] = (carried, carried_problem, None)
+            table[key] = (carried, carried_problem, carried_note)
     return table
 
 
@@ -1360,21 +1333,19 @@ def _substitute_supply_for(
 ) -> tuple[Fraction | None, str | None, str | None]:
     """Resolve one grain's ``CumulativeApprovedSubstituteSupply`` under ``S3-A``.
 
-    Only the **explicitly completed** ``BR-SUBSTITUTE-001`` downstream result is consumed here:
-    the caller reaches this function through the substitute result's own surfaces, and neither the
-    construction nor any raw ／ canonical substitute evidence is read to re-decide what a citation
-    means.  Two cases are explicitly stated by that result:
+    Only the **explicitly completed** ``BR-SUBSTITUTE-001`` downstream result is consumed here.
+    That result states an explicit answer for every resolved shortage demand grain -- its own
+    cumulative value (``<= t``, so an earlier reliable contribution carries forward) or the
+    upstream ``DATA_INCOMPLETE`` -- so a stated grain is answered directly.
 
-    * the grain carries its own ``SubstituteTarget`` entry -- it is a cited Target Demand Context,
-      so the answer is that target's own cumulative value (a numeric value, or the upstream
-      ``DATA_INCOMPLETE``);
-    * the grain is cited **only** as an exact Source Demand Context -- the substitute rule
-      evaluated it as a reservation boundary and stated no approved substitute supply for it, so
-      the explicit ``0`` of ``§4.4.88`` is consumed as such.
+    Two further cases come from the same result's own citation surface:
 
-    Anything else is **not stated** by the substitute result.  ``BR-SHORTAGE-001`` never infers a
-    ``0`` from a missing ``SubstituteTarget`` and never re-decides the business meaning of a
-    citation, so such a grain fails closed as ``DATA_INCOMPLETE`` (S3-A).
+    * the grain is cited as an exact Source Demand Context of this result -- the substitute rule
+      stated it as a reservation boundary and stated no approved substitute supply reaching it from
+      any target, so the answer is the explicit ``0`` of ``§4.4.88``;
+    * nothing states the grain at all -- ``BR-SHORTAGE-001`` never infers a ``0`` from a missing
+      ``SubstituteTarget`` and never re-decides the business meaning of a citation, so it fails
+      closed as ``DATA_INCOMPLETE``.
     """
 
     if required_date in table:
@@ -1383,16 +1354,17 @@ def _substitute_supply_for(
         return (
             Fraction(0),
             None,
-            "no approved substitute supply reaches this grain: BR-SUBSTITUTE-001 cites this "
-            "material only as an exact Source Demand Context and states no Target Demand Context "
-            "for it, so the value is the explicit 0 of §4.4.88 rather than an omitted target",
+            "no approved substitute supply reaches this grain: BR-SUBSTITUTE-001 states this "
+            "material's demand context only as an exact Source Demand Context and states no "
+            "Target Demand Context for it, so the value is the explicit 0 of §4.4.88 rather than "
+            "an omitted target",
         )
     return (
         None,
-        "BR-SUBSTITUTE-001 states neither a SubstituteTarget nor a cited Source Demand Context "
-        "for this exact grain, so the downstream result does not explicitly express a numeric "
-        "cumulative substitute supply, a valid zero or DATA_INCOMPLETE for it; the missing target "
-        "is never guessed as 0 and the grain stays DATA_INCOMPLETE (§2.1.7 / §2.3.12 / S3-A)",
+        "BR-SUBSTITUTE-001 states no CumulativeApprovedSubstituteSupply for this exact grain, so "
+        "the completed downstream result does not express a numeric cumulative substitute supply "
+        "or DATA_INCOMPLETE for it; a missing target is never guessed as 0 and the grain stays "
+        "DATA_INCOMPLETE (§2.1.7 / §2.3.12 / S3-A)",
         None,
     )
 

@@ -23,6 +23,7 @@ from snapshot_loader import (
     PhaseAHandoff,
     TrustedInputBoundary,
     compute_opening_usable_inventory,
+    compute_requirement_calculation,
     compute_substitute_supply,
     construct_canonical_objects,
     load_package,
@@ -336,7 +337,9 @@ class SubstituteRuleTestCase(unittest.TestCase):
             accepted,
             construction,
             inventory,
-            compute_substitute_supply(construction, inventory),
+            compute_substitute_supply(
+                construction, inventory, requirements=compute_requirement_calculation(construction)
+            ),
         )
 
     # --- scenario builders -----------------------------------------------------------
@@ -403,7 +406,9 @@ class SubstituteRuleTestCase(unittest.TestCase):
             accepted,
             construction,
             inventory,
-            compute_substitute_supply(construction, inventory),
+            compute_substitute_supply(
+                construction, inventory, requirements=compute_requirement_calculation(construction)
+            ),
         )
 
     def target_cumulative_scenario(
@@ -475,7 +480,9 @@ class SubstituteRuleTestCase(unittest.TestCase):
             accepted,
             construction,
             inventory,
-            compute_substitute_supply(construction, inventory),
+            compute_substitute_supply(
+                construction, inventory, requirements=compute_requirement_calculation(construction)
+            ),
         )
 
     def single_allocation_two_contexts_scenario(
@@ -550,7 +557,9 @@ class SubstituteRuleTestCase(unittest.TestCase):
             accepted,
             construction,
             inventory,
-            compute_substitute_supply(construction, inventory),
+            compute_substitute_supply(
+                construction, inventory, requirements=compute_requirement_calculation(construction)
+            ),
         )
 
     def source_scenario(
@@ -624,7 +633,9 @@ class SubstituteRuleTestCase(unittest.TestCase):
             accepted,
             construction,
             inventory,
-            compute_substitute_supply(construction, inventory),
+            compute_substitute_supply(
+                construction, inventory, requirements=compute_requirement_calculation(construction)
+            ),
         )
 
 
@@ -1099,7 +1110,9 @@ class RelationshipJoinTests(SubstituteRuleTestCase):
         # Downstream proof: both source contexts cite SOURCE_A, so both groups are cross-context
         # unresolved; the SOURCE_B context of grain B keeps a healthy numeric conservation.
         inventory = compute_opening_usable_inventory(construction)
-        result = compute_substitute_supply(construction, inventory)
+        result = compute_substitute_supply(
+            construction, inventory, requirements=compute_requirement_calculation(construction)
+        )
         self.assertEqual(len(result.conservation_groups), 3)
         by_context = {group.source_material_code: group for group in result.conservation_groups}
         self.assertEqual(set(by_context), {SOURCE_A, SOURCE_B})
@@ -1809,7 +1822,9 @@ class TraceAndIsolationTests(SubstituteRuleTestCase):
         _a, construction, inventory, first = self.target_scenario(
             quantities=("60", "40"), ratio="0.8", name="ac47"
         )
-        second = compute_substitute_supply(construction, inventory)
+        second = compute_substitute_supply(
+            construction, inventory, requirements=compute_requirement_calculation(construction)
+        )
         self.assertEqual(first.to_dict(), second.to_dict())
         _a2, _c2, _i2, third = self.target_scenario(
             quantities=("60", "40"), ratio="0.8", name="ac47b"

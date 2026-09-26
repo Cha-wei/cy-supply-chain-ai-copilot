@@ -2072,18 +2072,28 @@ conservation unresolved / DATA_INCOMPLETE
 **C. `S3-A` —— substitute result completeness**
 
 `BR-SUBSTITUTE-001` 的 downstream result 必须对全部已解析 shortage demand grains **显式**表达
-`numeric cumulative supply` ／ `valid zero` ／ `DATA_INCOMPLETE`：
+`numeric cumulative supply` ／ `valid zero` ／ `DATA_INCOMPLETE`。该 completeness **在
+`BR-SUBSTITUTE-001` 的 result boundary 完成**：substitute rule 以 `BR-REQUIREMENT-001` 的
+`RequirementCalculationResult` 中已解析的 shortage demand grains（exact `plant_id` +
+component `material_code` + `required_date`）补全其 answer surface，使每个 grain 都带一个显式
+`CumulativeApprovedSubstituteSupply(<= t)` 值或显式 `DATA_INCOMPLETE`。因此：
 
-- `BR-SHORTAGE-001` **不得**把 missing `SubstituteTarget` 猜成 `0`；
+- `BR-SHORTAGE-001` **只消费**已完成的 substitute result：不补全 grain universe，不为 substitute
+  语义做任何 business 判断，也**不得**把 missing `SubstituteTarget` 猜成 `0`；
 - **不得**回读 raw ／ canonical substitute evidence 重算 `BR-SUBSTITUTE-001`；
 - **不得**由 `BR-SHORTAGE-001` 读取 accepted package 的 role-presence（`Substitute Relationship` role
   是否存在）或任何 substitute canonical evidence 来**补解释**该 grain 的替代语义 —— 该判断只属于
   `BR-SUBSTITUTE-001` 自己的 result；
-- 该 grain 是 `BR-SUBSTITUTE-001` 已引用的 Target Demand Context ⇒ 直接消费其
-  `CumulativeApprovedSubstituteSupply(<= t)`；
-- 该 grain 只被引用为 Source Demand Context ⇒ 该 material 不存在 approved substitute supply 的
+- 已有可靠 contribution 的 effective context `<= t` ⇒ 该 contribution 继续累积（carry forward）到更晚
+  grain：**更晚 grain 自身没有新增 contribution 不等于 `DATA_INCOMPLETE`**，它保留 carry-forward 值；
+- 任何 unresolved applicability 只要可能影响 `<= t` 的 cumulative ⇒ 该 grain 为 `DATA_INCOMPLETE`，
+  **不得**读成 `0`，也**不得**只报告部分数值；
+- 可靠的「不存在 approved ／ applicable substitute」结论 ⇒ `§2.3.11` A ／ `§4.4.88` 的 valid zero；
+  该 valid zero **只能**来自 substitute rule 的显式结论，**不得**由 dataset 缺失 ／ 证据未解析推断；
+- 该 grain 被引用为 exact Source Demand Context 且 substitute rule 未给出任何 Target Demand Context ⇒
   显式 0（`§4.4.88` valid zero），不是被省略的目标；
-- 两者都未被引用 ⇒ `DATA_INCOMPLETE`（`BR-SHORTAGE-001` **不得**自行推断 `0`）。
+- completed result 对该 grain 既不表达数值也不表达 `DATA_INCOMPLETE` ⇒ `BR-SHORTAGE-001`
+  fail closed 为 `DATA_INCOMPLETE`（**不得**自行推断 `0`）。
 
 **D. 数值语义（exact rational，`§2.4.8` ／ `ADR-001`）**
 
@@ -2093,11 +2103,11 @@ rational derived result**：
 - upstream 的 exact `Fraction`（例如 `GrossRequirement = 4000/19`）是**可靠** quantity，**不是**
   missing ／ invalid ／ unresolved ⇒ **不得**因「无法有限十进制表示」而降级为 `DATA_INCOMPLETE`；
 - 禁止 `float` ／ `round` ／ `truncate` ／ `quantize` ／ `Decimal` default context；
-- serialization：derived result 以 exact rational payload
+- serialization：derived result **只**以 exact rational payload
   `{"numerator": <int>, "denominator": <positive int>}` 表达 —— 这是仓库中**既有**的 derived-quantity
-  representation（`BaseRequirement` ／ `GrossRequirement` ／ `EquivalentTargetQty` 使用同一形式）；
-  当该 exact value **确实**存在有限十进制表示时，同时提供对应的 exact decimal text 字段。
-  该 representation 是 runtime payload，**不新增** canonical field ／ entity，也**不改变**
+  representation（`BaseRequirement` ／ `GrossRequirement` ／ `EquivalentTargetQty` 使用同一形式），
+  对有限与无限十进制表示一致适用。**不新增** parallel ／ companion 的 decimal text 字段，因此该
+  representation 是 runtime payload，**不新增** canonical field ／ entity，也**不改变**
   `§4.2.10` 已登记 derived field 的 business meaning。
 
 **E. `DATA_INCOMPLETE` 优先级（`§2.1.4` D ／ `§2.1.8`）**
