@@ -526,11 +526,20 @@ def compute_substitute_supply(
     reserved_qty: dict[str, Fraction] = {}
     for grain in grain_order:
         for item in grain_evaluations[grain]:
+            # Only a **reliable eligible participation** claims the allocation identity.  A legal
+            # ``not applicable`` (and a legal zero-quantity eligibility) states no contribution
+            # for that grain, so it neither claims the identity nor blocks the same allocation's
+            # later ``applicable`` contribution in another demand context (§2.3.11 A ／ §4.4.89).
+            # An unreliable grain never claims it either, so its ``DATA_INCOMPLETE`` is not
+            # silently converted into "this allocation was consumed here".
+            if not item.contributes:
+                continue
             contribution = item.grain_equivalent
-            if contribution is None:
+            if contribution is None:  # pragma: no cover - ``contributes`` implies a value
                 continue
             identity = _allocation_identity(item)
-            # The earliest cited grain owns the reservation; later grains never re-add it.
+            # The earliest cited grain that actually contributes owns the reservation; later
+            # grains never re-add it (§4.5.9 Decision 8 / AC-31).
             if identity in reserved_grain:
                 continue
             reserved_grain[identity] = grain

@@ -412,6 +412,7 @@ class SubstituteRuleTestCase(unittest.TestCase):
         pairs: tuple[tuple[Any, Any, Any], ...],
         ratio: Any = "1.0",
         on_hand: Any = "100",
+        bases: tuple[str, ...] | None = None,
         name: str | None = None,
     ):
         """One allocation per target demand context, for the ``<= t`` cumulative pass.
@@ -421,13 +422,20 @@ class SubstituteRuleTestCase(unittest.TestCase):
         pass is exercised across several distinct target demand contexts
         (``§2.3.12``).  ``Target Applicability`` cites the allocation's **target** side, so the
         cited requirement must state that same target material (``§4.5.9`` ／ ``CB-1'``).
+
+        ``bases`` optionally gives each allocation its own registered ``Target Applicability``
+        basis, so a state transition (``not applicable`` → ``applicable`` and back) can be driven
+        for the very same allocation record.
         """
 
+        selected_bases = bases or tuple(BASIS_TA_APPLICABLE for _ in pairs)
         allocations = [
             ALLOCATION(
-                target=material, quantity=quantity, target_basis=BASIS_TA_APPLICABLE
+                target=material,
+                quantity=quantity,
+                target_basis=basis,
             )
-            for quantity, material, _date in pairs
+            for (quantity, material, _date), basis in zip(pairs, selected_bases)
         ]
         datasets: list[tuple[str, list[dict[str, object]]]] = [
             (ROLE_ALLOCATION, allocations),
@@ -443,7 +451,7 @@ class SubstituteRuleTestCase(unittest.TestCase):
             self.demand_entry(
                 accepted,
                 relation=TARGET_RELATION,
-                basis=BASIS_TA_APPLICABLE,
+                basis=selected_bases[index],
                 allocation_artifact="0.json",
                 allocation_ordinal=index,
                 context_artifact="3.json",
@@ -451,6 +459,81 @@ class SubstituteRuleTestCase(unittest.TestCase):
                 target=pairs[index][1],
             )
             for index in range(len(allocations))
+        )
+        scope = self.scope_handoffs(accepted, artifact="1.json", ordinals=(0,))
+        construction = construct_canonical_objects(
+            accepted,
+            PhaseAHandoff(
+                analysis_run_id="RUN-1",
+                analysis_date="2026-10-01",
+                inventory_scope=scope,
+                effective_demand=demand,
+            ),
+        )
+        inventory = compute_opening_usable_inventory(construction)
+        return (
+            accepted,
+            construction,
+            inventory,
+            compute_substitute_supply(construction, inventory),
+        )
+
+    def single_allocation_two_contexts_scenario(
+        self,
+        *,
+        quantity: Any = "60",
+        states: tuple[tuple[str, str], ...] = (
+            (BASIS_TA_APPLICABLE, R1),
+            (BASIS_TA_APPLICABLE, R2),
+        ),
+        ratio: Any = "1.0",
+        on_hand: Any = "100",
+        name: str | None = None,
+    ):
+        """**One** allocation record cited by several target contexts with per-context basis.
+
+        ``states`` is ``(target_applicability_basis, required_date)`` per cited demand context.
+        Because the same accepted ``Substitute Allocation`` record registers one basis per
+        association, the record carries every basis the contexts need, so the exact same
+        allocation identity is cited by all of them (``§4.3.28`` E).  This is what makes the
+        cumulative state transition (``not applicable`` → ``applicable`` and back) observable.
+        """
+
+        bases = tuple(sorted({basis for basis, _date in states}))
+        allocation = with_provenance(
+            {
+                "plant_id": PLANT,
+                "target_material_code": TARGET,
+                "substitute_material_code": SOURCE,
+                "AllocatedSubstituteQty": quantity,
+            },
+            [
+                ("target_material_code", [LOCATOR_ALLOCATION], basis)
+                for basis in bases
+            ],
+        )
+        datasets: list[tuple[str, list[dict[str, object]]]] = [
+            (ROLE_ALLOCATION, [allocation]),
+            (ROLE_INVENTORY, [INVENTORY_RECORD(on_hand=on_hand)]),
+            (ROLE_RELATIONSHIP, [RELATIONSHIP(ratio=ratio)]),
+            (
+                ROLE_REQUIREMENT,
+                [REQUIREMENT(material=TARGET, required_date=date) for _b, date in states],
+            ),
+        ]
+        accepted = self.accepted(datasets, name=name)
+        demand = tuple(
+            self.demand_entry(
+                accepted,
+                relation=TARGET_RELATION,
+                basis=basis,
+                allocation_artifact="0.json",
+                allocation_ordinal=0,
+                context_artifact="3.json",
+                context_ordinal=ordinal,
+                target=TARGET,
+            )
+            for ordinal, (basis, _date) in enumerate(states)
         )
         scope = self.scope_handoffs(accepted, artifact="1.json", ordinals=(0,))
         construction = construct_canonical_objects(
@@ -630,33 +713,9 @@ class CalculationCorrectnessTests(SubstituteRuleTestCase):
         **not** ``120``.
         """
 
-        datasets: list[tuple[str, list[dict[str, object]]]] = [
-            (ROLE_ALLOCATION, [ALLOCATION(quantity="60")]),
-            (ROLE_INVENTORY, [INVENTORY_RECORD(on_hand="100")]),
-            (ROLE_RELATIONSHIP, [RELATIONSHIP(ratio="1.0")]),
-            (
-                ROLE_REQUIREMENT,
-                [
-                    REQUIREMENT(material=TARGET, required_date=R1),
-                    REQUIREMENT(material=TARGET, required_date=R2),
-                ],
-            ),
-        ]
-        accepted = self.accepted(datasets, name="ac5-two-contexts")
-        demand = tuple(
-            self.demand_entry(
-                accepted,
-                relation=TARGET_RELATION,
-                basis=BASIS_TA_APPLICABLE,
-                allocation_artifact="0.json",
-                allocation_ordinal=0,
-                context_artifact="3.json",
-                context_ordinal=ordinal,
-            )
-            for ordinal in (0, 1)
-        )
-        _a, construction, inventory, result = self.run_package(
-            datasets, demand=demand, name="ac5-two-contexts-run"
+        _a, construction, _i, result = self.single_allocation_two_contexts_scenario(
+            states=((BASIS_TA_APPLICABLE, R1), (BASIS_TA_APPLICABLE, R2)),
+            name="ac5-two-contexts",
         )
         self.assertEqual(len(construction.objects_for(ROLE_ALLOCATION)), 1)
         self.assertEqual(len(construction.effective_demand_contexts), 2)
@@ -672,6 +731,61 @@ class CalculationCorrectnessTests(SubstituteRuleTestCase):
             {evaluation.allocation_reference for evaluation in first.evaluations},
             {evaluation.allocation_reference for evaluation in second.evaluations},
         )
+
+    def test_ac5_not_applicable_never_claims_the_allocation_identity(self) -> None:
+        """Blocker: ``not applicable`` is a legal 0 but never claims the cumulative identity.
+
+        One allocation record (``qty 60``) is ``not applicable`` to ``R1`` and ``applicable`` to
+        ``R2``.  The legal ``0`` of ``R1`` must not reserve the allocation identity, so the later
+        ``applicable`` context still produces its contribution:
+
+        ``R1 = 0`` and ``R2 = 60`` -- **not** ``R2 = 0``.
+        """
+
+        _a, construction, _i, result = self.single_allocation_two_contexts_scenario(
+            states=((BASIS_TA_NOT_APPLICABLE, R1), (BASIS_TA_APPLICABLE, R2)),
+            name="ac5-not-applicable-then-applicable",
+        )
+        self.assertEqual(len(construction.objects_for(ROLE_ALLOCATION)), 1)
+        first = result.for_grain(PLANT, TARGET, R1)
+        second = result.for_grain(PLANT, TARGET, R2)
+        assert first is not None and second is not None
+        # R1: a reliable not-applicable is a legal 0 and is **not** a defect.
+        self.assertEqual(first.grain_equivalent, Fraction(0))
+        self.assertEqual(first.cumulative_approved_substitute_supply, Fraction(0))
+        self.assertFalse(first.data_incomplete)
+        self.assertEqual(first.outcome, None)
+        self.assertEqual(first.eligible_target_qty, 0)
+        # R2: the same allocation is applicable here and still contributes.
+        self.assertEqual(second.grain_equivalent, Fraction(60))
+        self.assertEqual(second.cumulative_approved_substitute_supply, Fraction(60))
+        self.assertFalse(second.data_incomplete)
+
+    def test_ac5_applicable_then_not_applicable_keeps_the_earlier_contribution(self) -> None:
+        """Blocker: a later ``not applicable`` never erases an earlier contribution.
+
+        One allocation record (``qty 60``) is ``applicable`` to ``R1`` and ``not applicable`` to
+        ``R2``.  ``R2`` adds no new contribution, but ``CumulativeApprovedSubstituteSupply(<= R2)``
+        still includes the contribution that reliably happened at ``R1``:
+
+        ``R1 = 60`` and ``R2 = 60``.
+        """
+
+        _a, construction, _i, result = self.single_allocation_two_contexts_scenario(
+            states=((BASIS_TA_APPLICABLE, R1), (BASIS_TA_NOT_APPLICABLE, R2)),
+            name="ac5-applicable-then-not-applicable",
+        )
+        self.assertEqual(len(construction.objects_for(ROLE_ALLOCATION)), 1)
+        first = result.for_grain(PLANT, TARGET, R1)
+        second = result.for_grain(PLANT, TARGET, R2)
+        assert first is not None and second is not None
+        self.assertEqual(first.grain_equivalent, Fraction(60))
+        self.assertEqual(first.cumulative_approved_substitute_supply, Fraction(60))
+        # R2's own contribution is the legal not-applicable 0, not a second 60.
+        self.assertEqual(second.grain_equivalent, Fraction(0))
+        self.assertEqual(second.cumulative_approved_substitute_supply, Fraction(60))
+        self.assertFalse(second.data_incomplete)
+        self.assertEqual(second.eligible_target_qty, 0)
 
     def test_ac5_unreliable_earlier_context_does_not_produce_a_numeric_cumulative(self) -> None:
         """AC-5 ／ AC-48: an unreliable earlier context fails the cumulative, never silently 0."""

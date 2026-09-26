@@ -2856,6 +2856,27 @@ context 求 EquivalentTargetQty 之和；晚于 t 的 context 不计入。
 因此 `R1: A1 = 60` 与 `R2: A2 = 40` ⇒ `R1 = 60`、`R2 = 100`；而同一 `A1 = 60` 同时
 applicable 于 `R1` 与 `R2` ⇒ `R1 = 60`、`R2 = 60`（**不是** `120`）。
 
+**exact allocation identity 只在该 allocation 第一次可靠 eligible ／ applicable participation 时
+进入 cumulative uniqueness set。** 因此：
+
+```
+A1 = 60
+R1 = not applicable（合法 0，不是 DATA_INCOMPLETE）  ⇒ R1 = 0
+R2 = applicable                                     ⇒ R2 = 60
+```
+
+`not applicable` **不得** claim ／ reserve 该 allocation identity，**不得**阻止后续 context 中同一
+allocation 的 `applicable` contribution；反过来，后续 context 的 `not applicable` **不得**抹掉更早
+已经可靠发生的 contribution：
+
+```
+A1 = 60
+R1 = applicable      ⇒ R1 = 60
+R2 = not applicable  ⇒ R2 = 60（不新增 contribution，但 cumulative <= R2 保留 R1 的有效 contribution）
+```
+
+uniqueness 依据始终是 **exact allocation record identity**，**不得**使用 quantity value。
+
 若某个 `required_date <= t` 的 context 无法可靠评估，则该 grain 的 cumulative **不产生数值**
 （`DATA_INCOMPLETE`），**不得**以部分和冒充结果；其他 Plant ／ Target Material 的 grain 不受影响
 （failure isolation）。

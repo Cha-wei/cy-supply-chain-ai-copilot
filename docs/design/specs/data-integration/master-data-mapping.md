@@ -1707,6 +1707,19 @@ pools）：每个 context 仍然是它自己的 group（**不得** merge），�
 applicable，仍然只是**一份** supply，唯一性依据是 **exact allocation record identity**，
 **不得**按 context 数量重复累计，**不得** same-value dedup。
 
+**exact allocation identity 只在该 allocation 第一次可靠 eligible ／ applicable participation 时进入
+cumulative uniqueness set**，所以：
+
+```
+A1 = 60 ; R1 = not applicable ; R2 = applicable      ⇒ R1 = 0,  R2 = 60
+A1 = 60 ; R1 = applicable    ; R2 = not applicable   ⇒ R1 = 60, R2 = 60
+```
+
+合法 `not applicable` 是 `0`、**不是** `DATA_INCOMPLETE`，但它**不得** claim ／ reserve 该 allocation
+identity，**不得**阻止后续 context 中同一 allocation 的 `applicable` contribution；反之，后续 context
+的 `not applicable` **不得**抹掉更早已可靠发生的 contribution。uniqueness 依据始终是 exact
+allocation record identity，**不得**使用 quantity value。
+
 #### 4.5.10 Supplier-Material Relationship
 
 **必须明确：**
