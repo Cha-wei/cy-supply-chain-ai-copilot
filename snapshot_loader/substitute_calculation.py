@@ -323,6 +323,47 @@ class SubstituteTarget:
 
 
 @dataclass(frozen=True, slots=True)
+class SourceDemandContext:
+    """One exact resolved G5-A Source Demand Context reference cited by this result.
+
+    This is the **consumption attribution** surface of the approved ``S1-A`` boundary: a
+    downstream rule that must not reuse an already allocated source quantity needs to know
+    that a shortage grain is *this* exact Source Demand Context, and needs to know it even
+    when no numeric ``RemainingUnallocatedSourceSupply`` could be produced for it.  The
+    context's own grain is ``plant_id`` + ``source_material_code`` + ``required_date``
+    (``target_material_code`` carries the material component, exactly as
+    :class:`SubstituteEvaluation` does for this surface).
+
+    No new canonical entity, canonical field, identity component or grain is created here:
+    the reference and its grain are the ones the canonical G5-A context already carries.
+    """
+
+    plant_id: Any
+    target_material_code: Any
+    required_date: Any
+    reference: Any
+    citation_count: int = 0
+    provenance: EvidenceReference | None = None
+
+    @property
+    def grain(self) -> tuple[Any, Any, Any]:
+        """The exact demand context grain this citation names."""
+
+        return (self.plant_id, self.target_material_code, self.required_date)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "rule": SUBSTITUTE_RULE_ID,
+            "reference": self.reference,
+            "plant_id": self.plant_id,
+            "material_code": self.target_material_code,
+            "required_date": self.required_date,
+            "citation_count": self.citation_count,
+            "provenance": _provenance_payload(self.provenance),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ConservationGroup:
     """One exact resolved Source Demand Context reference and its conservation outcome.
 
@@ -330,6 +371,13 @@ class ConservationGroup:
     ``B2-A'`` grouping boundary.  Allocations whose Source Reservation Overlap is ``overlaps``
     for this exact context are summed together; no cross-context merge and no date proximity
     ever happens.
+
+    ``source_demand_context_grain`` is that same context's own registration grain
+    (``plant_id`` + ``source_material_code`` + ``required_date``), read from the resolved
+    context reference; it is ``None`` only when the cited context states no complete grain.
+    It is a derived output of the rule, not a new canonical field / identity component, and it
+    exists so a downstream rule can attribute this group's supply to the exact grain the
+    approved ``S1-A`` boundary names instead of re-reading the construction.
     """
 
     reservation_context: str
@@ -340,6 +388,7 @@ class ConservationGroup:
     allocated_substitute_qty: ExactQuantity | None
     remaining_unallocated_source_supply: ExactQuantity | None
     allocating_references: tuple[str, ...]
+    source_demand_context_grain: tuple[Any, Any, Any] | None = None
     conservation_state: str | None = None
     outcome: str | None = None
     notes: tuple[str, ...] = ()
@@ -357,6 +406,19 @@ class ConservationGroup:
         return self.conservation_state == CONSERVATION_OVER_ALLOCATED
 
     @property
+    def source_reservation_attributable(self) -> bool:
+        """Whether this group's supply is attributable to one exact shortage grain.
+
+        ``True`` exactly when the cited Source Demand Context states a complete grain, so an
+        upstream rule can attribute this group's ``RemainingUnallocatedSourceSupply`` -- or its
+        ``DATA_INCOMPLETE`` -- to that exact grain.  A group without a complete grain is cited
+        by no attributable grain, so it can never be silently dropped in favour of a full
+        inventory snapshot; the consuming rule must fail closed globally instead.
+        """
+
+        return self.source_demand_context_grain is not None
+
+    @property
     def issues(self) -> tuple[Issue, ...]:
         return _deduplicate_issues(self.inherited_issues + self.rule_issues)
 
@@ -367,6 +429,11 @@ class ConservationGroup:
             "plant_id": self.plant_id,
             "source_material_code": self.source_material_code,
             "source_demand_context_reference": self.source_demand_context_reference,
+            "source_demand_context_grain": (
+                None
+                if self.source_demand_context_grain is None
+                else list(self.source_demand_context_grain)
+            ),
             "EligibleSubstituteSupply": _quantity_text(self.eligible_substitute_supply),
             "AllocatedSubstituteQty": _quantity_text(self.allocated_substitute_qty),
             "RemainingUnallocatedSourceSupply": _quantity_text(
@@ -401,6 +468,7 @@ class SubstituteCalculationResult:
 
     targets: tuple[SubstituteTarget, ...]
     conservation_groups: tuple[ConservationGroup, ...] = ()
+    source_demand_contexts: tuple[SourceDemandContext, ...] = ()
     inherited_issues: tuple[Issue, ...] = ()
     rule_issues: tuple[Issue, ...] = ()
 
@@ -415,6 +483,62 @@ class SubstituteCalculationResult:
     @property
     def over_allocated_groups(self) -> tuple[ConservationGroup, ...]:
         return tuple(item for item in self.conservation_groups if item.over_allocated)
+
+    @property
+    def unattributable_conservation_groups(self) -> tuple[ConservationGroup, ...]:
+        """Groups whose cited Source Demand Context states no complete grain.
+
+        They cannot be attributed to any grain, so a downstream rule that consumes them per
+        grain cannot rule them out and must fail closed rather than fall back to a full
+        inventory snapshot.
+        """
+
+        return tuple(
+            group
+            for group in self.conservation_groups
+            if not group.source_reservation_attributable
+        )
+
+    def source_demand_contexts_for_grain(
+        self, plant_id: Any, material_code: Any, required_date: Any
+    ) -> tuple[SourceDemandContext, ...]:
+        """Every cited Source Demand Context of one exact grain, deterministically ordered."""
+
+        return tuple(
+            item
+            for item in self.source_demand_contexts
+            if item.plant_id == plant_id
+            and item.target_material_code == material_code
+            and item.required_date == required_date
+        )
+
+    def conservation_for_source_grain(
+        self, plant_id: Any, material_code: Any, required_date: Any
+    ) -> tuple[tuple[SourceDemandContext, ConservationGroup | None], ...]:
+        """The exact-grain view of the approved ``S1-A`` consumption boundary.
+
+        One entry per cited Source Demand Context of ``plant_id`` + ``material_code`` +
+        ``required_date``, paired with the conservation group formed for that exact context
+        reference (``None`` when no group could be formed, which is *not* the same as "no
+        source reservation": the citation itself proves the reservation exists).  The result is
+        ordered by the context's own grain and then by its exact reference, so a caller never
+        has to rely on construction order.
+        """
+
+        groups = {group.reservation_context: group for group in self.conservation_groups}
+        entries = [
+            (context, groups.get(str(context.reference)))
+            for context in self.source_demand_contexts_for_grain(
+                plant_id, material_code, required_date
+            )
+        ]
+        entries.sort(
+            key=lambda entry: (
+                tuple(_sort_text(part) for part in entry[0].grain),
+                _sort_text(entry[0].reference),
+            )
+        )
+        return tuple(entries)
 
     def for_grain(
         self, plant_id: Any, material_code: Any, required_date: Any
@@ -447,6 +571,9 @@ class SubstituteCalculationResult:
             "rule": SUBSTITUTE_RULE_ID,
             "targets": [item.to_dict() for item in self.targets],
             "conservation_groups": [item.to_dict() for item in self.conservation_groups],
+            "source_demand_contexts": [
+                item.to_dict() for item in self.source_demand_contexts
+            ],
             "inherited_issues": [issue.to_dict() for issue in self.inherited_issues],
             "rule_issues": [issue.to_dict() for issue in self.rule_issues],
         }
@@ -599,9 +726,42 @@ def compute_substitute_supply(
     return SubstituteCalculationResult(
         targets=tuple(targets),
         conservation_groups=tuple(conservation),
+        source_demand_contexts=_cited_source_demand_contexts(source_contexts),
         inherited_issues=inherited,
         rule_issues=_deduplicate_issues(tuple(rule_issues)),
     )
+
+
+def _cited_source_demand_contexts(
+    source_contexts: Mapping[
+        str, tuple[tuple[Any, Any, Any], list[RelationOutcomeReference]]
+    ],
+) -> tuple[SourceDemandContext, ...]:
+    """One :class:`SourceDemandContext` per cited exact Source Demand Context reference.
+
+    This is the citation surface of the approved ``S1-A`` boundary: it records every exact
+    Source Demand Context the resolved G5-A relations cite, **including** a context for which
+    no conservation group could be formed.  Without it a downstream rule could not tell
+    "business cites no source reservation for this grain" (a legal full-inventory path) apart
+    from "business cites one and it could not be resolved" (``DATA_INCOMPLETE``), and would
+    risk reusing an already allocated source quantity as uncommitted inventory.
+    """
+
+    contexts: list[SourceDemandContext] = []
+    for reference in sorted(source_contexts):
+        grain, citations = source_contexts[reference]
+        sample = citations[0]
+        contexts.append(
+            SourceDemandContext(
+                plant_id=grain[0],
+                target_material_code=grain[1],
+                required_date=grain[2],
+                reference=reference,
+                citation_count=len(citations),
+                provenance=sample.context.provenance,
+            )
+        )
+    return tuple(contexts)
 
 
 # --- construction index -------------------------------------------------------------
@@ -1411,6 +1571,7 @@ def _conservation_groups(
                 allocated_substitute_qty=allocated,
                 remaining_unallocated_source_supply=remaining,
                 allocating_references=tuple(sorted(allocating)),
+                source_demand_context_grain=_grain,
                 conservation_state=state,
                 outcome=result_outcome,
                 notes=tuple(notes),
@@ -1701,6 +1862,7 @@ __all__ = [
     "SUBSTITUTE_DATA_INCOMPLETE",
     "SUBSTITUTE_JOIN_PROPERTIES",
     "SUBSTITUTE_RULE_ID",
+    "SourceDemandContext",
     "SubstituteCalculationResult",
     "SubstituteEvaluation",
     "SubstituteTarget",

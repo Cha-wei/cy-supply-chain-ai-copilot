@@ -966,6 +966,28 @@ valid absence
 **不得新增** `NOT_APPLICABLE` / `N/A` / `NO_SHORTAGE` / `NO_RECOMMENDATION`
 等正式业务 enum / classification。
 
+**注册澄清（Human Decision `S1-A` ／ `S2-A` ／ `S3-A`，`§2.1.12`）：**
+
+```text
+ProjectedAvailable 公式中的 inventory-side 项 = EffectiveOpeningSupply
+EffectiveOpeningSupply 按 exact Source Demand Context（S1-A）
+                    ／ exact plant_id + material_code（S2-A）解析
+```
+
+即：`ProjectedAvailable` 公式里写出的 `OpeningUsableInventory` **不**表示"总是完整使用
+`BR-INVENTORY-001` 的 `OpeningUsableInventory`"。当该 exact `plant_id` + `material_code` 被
+exact Source Demand Context 引用时，inventory-side supply **替换**为该 context 由
+`BR-SUBSTITUTE-001` 已产生的 `RemainingUnallocatedSourceSupply`（**不是**两项相加）；只有未被任何
+exact context 引用时才是 S2-A 的完整 `OpeningUsableInventory` 路径。
+
+`SafetyStock` 与 `OpeningUsableInventory` **必须**取自同一个被消费的 `InventoryTarget`；二者任一
+不可靠时该 grain 为 `DATA_INCOMPLETE`，**不得**默认成 0、**不得**跨 snapshot 混用或 `earliest /
+latest wins` / `sum` / `average`。
+
+**本澄清不新增任何 canonical field / entity / identity component / grain**：涉及的
+`ProjectedAvailable` ／ `Classification` ／ `ShortageQty` ／ `BufferGap` /
+`FirstShortageDate` 行本身**未修改**，只是明确其 inventory-side 输入的消费边界。
+
 #### 4.2.11 Time Semantics
 
 沿用 §4.1.6 的六类时间语义，并额外登记两项：
