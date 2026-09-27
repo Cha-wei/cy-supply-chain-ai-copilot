@@ -846,11 +846,19 @@ database field / API enum / ranking / selection result）。
 
 **不得创建** `is_eligible` / `SupplierEligibilityStatus` 等 canonical field。
 
+> **Runtime eligibility resolution（`A′`，Issue #162）：** 本字段的 runtime 解释已登记 —— 由 same
+> AcceptedPackage 的 `sourcing_status` association 上的 **exact registered `mapping_basis`** 经 approved
+> deterministic SIMULATED mapping registry 解析为 `eligible` ／ `ineligible` ／ `unresolved`；
+> **不得**解释 raw source value、**不得**假设任何真实 source vocabulary。登记见
+> `poc-design-v0.2.md` §2.7.25、`snapshot-import-contract.md` §4.3.31 G I-10 与
+> `data-validation.md` §4.4.103。`sourcing_status` 的 Class ／ Requiredness ／ logical type
+> **未改变**，也**未新增**任何 Data Dictionary field row。
+
 #### 4.2.9 Procurement Fields
 
 | Field | Logical Type | Requiredness | Class | Business Semantic | Valid / Invalid Boundary | Missing Behavior | Rule(s) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `RecommendationNeedDate` | `DATE` | `CONDITIONAL`（`Classification = SHORTAGE` 且 Procurement Recommendation applicable 时 `REQUIRED`） | `CONTEXT` | 采购建议所使用的 business need date | 当前 POC `= FirstShortageDate` | 见下方条件性说明 | `BR-PROCUREMENT-001` |
+| `RecommendationNeedDate` | `DATE` | `CONDITIONAL`（`Classification = SHORTAGE` 且 Procurement Recommendation applicable 时 `REQUIRED`） | `CONTEXT` | 采购建议所使用的 business need date | 当前 POC `= FirstShortageDate` | 见下方条件性说明 | `BR-PROCUREMENT-001`（producer）；`BR-SUPPLIER-RISK-001`（consumer，经 §2.7.25 ／ I-10 composition） |
 | `ApplicableMOQ` | `NON_NEGATIVE_QUANTITY` | `CONDITIONAL`（`Classification = SHORTAGE` 时 `REQUIRED`） | `POLICY_INPUT` | 当前采购建议所适用的最小采购数量约束 | `ApplicableMOQ >= 0` | `DATA_INCOMPLETE`；**不得默认成 0** | `BR-PROCUREMENT-001` |
 
 > **`ApplicableMOQ` 仍是原有 canonical attribute** —— **未新增** Data Dictionary field row。

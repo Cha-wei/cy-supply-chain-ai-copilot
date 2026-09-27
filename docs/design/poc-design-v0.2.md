@@ -5447,6 +5447,117 @@ Supplier B = HIGH
 > 本 Task **不定义** supplier qualification workflow。
 > 这些仍属于后续 Design。
 
+#### 2.7.25 Supplier Risk Runtime Input Seam（`A′`，Human Decision，Issue #162）
+
+**Registration Status：`REGISTERED`** —— 依据 **Human Decision `A′` = `APPROVED`**（Supplier Risk
+Runtime Input Seam，Issue #162）。
+
+本小节**只**登记 `BR-SUPPLIER-RISK-001` 的两个 runtime input 边界 —— Supplier-Material
+**eligibility resolution** 与 supplier-material **evaluation composition**；**不新增** canonical
+entity ／ field ／ grain ／ business enum ／ Validation Category ／ Reason，**不定义**任何真实 source
+vocabulary，也**不实现**任何 risk classification：`DaysUntilNeed` ／ `LeadTimeRisk` ／ `DeliveryRisk` ／
+`QualityRisk` ／ `OverallSupplierRisk` 及各 threshold 仍属 `§2.7.4` ～ `§2.7.8` 的后续实现。
+
+**A. Eligibility resolution（`§4.4.62` ／ `§4.5.11` 的 runtime 落地）**
+
+```text
+source-specific sourcing_status evidence
+  ＋ exact Stable Source Evidence Locator
+  ＋ exact registered mapping_basis
+        ↓
+approved deterministic SIMULATED mapping registry（exact mapping_basis literal → outcome）
+        ↓
+eligible / ineligible / unresolved
+```
+
+- registry 的 key 是 **approved `mapping_basis` literal**，**不是** source `sourcing_status` value：
+  该 basis 已代表「已明确解释 source-specific status」的 approved mapping evidence，因此 runtime
+  **不得**解释任何真实 source value，也**不得**假设 `APPROVED` ／ `ACTIVE` ／ `QUALIFIED` ／
+  `BLOCKED` ／ `INACTIVE` 等 vocabulary（`§2.7.24` ／ `§4.4.33`）。
+- `eligible` ／ `ineligible` ／ `unresolved` **只是 runtime conceptual mapping outcome**：**不是**
+  source enum、canonical field、persisted field、business status、Risk Level，也**不是**
+  Supplier Ranking ／ Selection ／ Recommendation。
+- cardinality = **exactly one applicable resolution per relationship or unresolved**：多个
+  registration ／ 未注册 basis ／ 无 registration ／ 无可用 `sourcing_status` value 一律 `unresolved`。
+- caller **不得**提供 outcome；**不得**用 `relationship exists ⇒ eligible`、
+  `Supplier exists ⇒ eligible`、first ／ latest ／ default ／ LLM guess。
+
+**B. Eligibility semantics**
+
+| outcome | 含义 | 后果 |
+| --- | --- | --- |
+| `eligible` | relationship 具有足够可靠的 eligibility evidence | 允许进入 Supplier Risk evaluation |
+| `ineligible` | valid but not applicable | **不进入** candidate set；**NO Validation Issue**；**NO `DATA_INCOMPLETE`** |
+| `unresolved` | eligibility 无法可靠判断 | `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`；capability 需要该 relationship 时 fail closed |
+
+**必须保持** `explicitly ineligible ≠ semantic unresolved`（`§4.4.62`）。
+
+**C. Risk evaluation composition**
+
+```text
+business grain      = supplier_id + material_code（**未改变**；**不加入** plant_id）
+evaluation context  = plant_id + material_code + RecommendationNeedDate
+context 集合        = eligible relationship × 其 material 的 Procurement Recommendation Context
+```
+
+同一 supplier + material 在不同 Plant 的采购需求中**允许**形成独立 evaluation context；
+**不得**跨 Plant 借用 `RecommendationNeedDate`。`plant_id` 只是 evaluation context，
+**不得**成为新的 canonical Supplier-Material grain。
+
+**D. `RecommendationNeedDate` authority（不新增第二个 authority）**
+
+```text
+BR-SHORTAGE-001 FirstShortageDate
+  → existing Procurement Recommendation ／ registered handoff（§4.4.65 ／ §4.3.31 G I-4）
+  → 本 composition
+```
+
+Supplier Risk **不得**重算 `FirstShortageDate`、**不得**由 caller override、**不得**重读 raw date
+evidence，也**不得**从其他 Plant ／ Material 借用日期。
+
+**E. Registered context behavior**
+
+| # | 情形 | 行为 |
+| --- | --- | --- |
+| 1 | reliable shortage ＋ reliable `RecommendationNeedDate` | eligible relationship 形成 evaluation context |
+| 2 | Procurement Recommendation **quantity** `DATA_INCOMPLETE`，但 `RecommendationNeedDate` 可靠 | evaluation context **仍形成**；MOQ ／ policy-input failure **不得**污染 Supplier Risk |
+| 3 | `RecommendationNeedDate` unresolved | composition state 保持 unresolved：context **保留**可靠 supplier-side evidence，future `LeadTimeRisk` ／ `OverallSupplierRisk` 必须 fail closed；**不得**猜 date |
+| 4 | reliable `NORMAL` ／ `BUFFER_BREACH` valid absence | **不形成** evaluation context；valid absence；**不是** `DATA_INCOMPLETE` |
+
+**F. Capability unavailable boundary**
+
+```text
+required supplier-side evidence role NOT PROVIDED
+  = EVIDENCE_AVAILABILITY ／ EVIDENCE_ROLE_NOT_PROVIDED（capability unavailable）
+  ≠ business DATA_INCOMPLETE
+```
+
+该 seam **不得**把 capability unavailable 伪造成 Risk Card `DATA_INCOMPLETE`
+（`§4.4.6` Capability C ／ `§4.4.80` #2 ／ `§4.4.81` #2 ／ `§4.4.84`）。
+
+**G. Preserved upstream surfaces（本 seam 只表达，不计算）**
+
+relationship ／ `sourcing_status` evidence ／ eligibility resolution ／ Supplier Performance ／
+`standard_lead_time_days` ／ `DeliveryPerformance` ／ `QualityPerformance` ／ `PerformancePeriod` ／
+`PerformanceUpdatedAt` ／ `RecommendationNeedDate` ／ `AnalysisDate` 必须保持可读；
+**不定义** `PerformancePeriod` vocabulary、**不定义** freshness threshold，`PerformanceUpdatedAt`
+**不得**替代 `PerformancePeriod`（`§2.7.23` ／ `§4.4.64`）。
+
+**严格限定：**
+
+```text
+not a new canonical entity ／ field ／ grain ／ business enum
+not a new Validation Category ／ Reason ／ status
+not a supplier ranking ／ selection ／ recommendation capability
+not a Risk classification ／ threshold or quantity calculation
+not a physical carrier ／ Adapter ／ ERP ／ SRM mapping
+```
+
+本登记**不修改** `§2.7.4` ～ `§2.7.8` 的 business thresholds，**不修改** `§2.7.23` 的
+`PerformancePeriod` 完整性要求，也**不修改** `adr-001-deterministic-core.md`。
+Runtime 实现登记：`snapshot-import-contract.md` §4.3.31 G **I-10**；
+eligibility runtime record：`data-validation.md` §4.4.103。
+
 ---
 
 ## 3. System Boundary

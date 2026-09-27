@@ -86,6 +86,10 @@ ROLE_ALLOCATION = "Substitute Allocation"
 #: The phase B recognized role literal (role 12): its ``POLICY_INPUT`` channel is opened by the
 #: Phase B procurement-policy-input seam only, never by phase A.
 ROLE_PROCUREMENT_POLICY_INPUT = "Procurement policy input"
+#: The supplier-side phase A recognized role literals (roles 9 / 10 / 11).
+ROLE_SUPPLIER_IDENTITY = "Supplier identity"
+ROLE_SUPPLIER_RELATIONSHIP = "Supplier-Material Relationship"
+ROLE_SUPPLIER_PERFORMANCE = "Supplier Performance"
 
 BASIS_SCOPE_IN = "SIMULATED-INV-SCOPE-A-IN"
 BASIS_LOSS = "SIMULATED-BASIS-LOSS-RATE"
@@ -413,6 +417,9 @@ class ShortageRuleTestCase(unittest.TestCase):
         relationships: tuple[tuple[Any, Any, str], ...] = ((DEMAND, SOURCE, "APPROVED"),),
         substitute_present: bool = True,
         moq_policies: tuple[dict[str, Any], ...] = (),
+        supplier_identities: tuple[dict[str, Any], ...] = (),
+        supplier_relationships: tuple[dict[str, Any], ...] = (),
+        supplier_performances: tuple[dict[str, Any], ...] = (),
         analysis_run_id: str = "RUN-1",
         analysis_date: Any = "2026-10-01",
         package_id: str = "SIMULATED-PKG-0001",
@@ -617,6 +624,15 @@ class ShortageRuleTestCase(unittest.TestCase):
             # The phase B ``Procurement policy input`` dataset (role 12).  It is appended last, so
             # the phase A artifacts keep their existing ordinals and no other fixture changes.
             datasets.append((ROLE_PROCUREMENT_POLICY_INPUT, list(moq_policies)))
+
+        if supplier_identities:
+            # The supplier-side phase A datasets (roles 9 / 10 / 11).  They are appended after every
+            # existing dataset, so no earlier fixture's artifact ordinal moves.
+            datasets.append((ROLE_SUPPLIER_IDENTITY, list(supplier_identities)))
+        if supplier_relationships:
+            datasets.append((ROLE_SUPPLIER_RELATIONSHIP, list(supplier_relationships)))
+        if supplier_performances:
+            datasets.append((ROLE_SUPPLIER_PERFORMANCE, list(supplier_performances)))
 
         built = build_package(
             self.boundary / (name or uuid.uuid4().hex[:8]),
