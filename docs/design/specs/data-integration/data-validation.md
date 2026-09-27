@@ -2424,6 +2424,32 @@ required package-scoped provenance linkage 无法可靠建立 / 无法可靠解�
 
 **不得**把 **artifact missing** 错误归到 `PROVENANCE_MISMATCH`。
 
+**Derived Result Provenance 的 runtime 登记（`F3-RB1` ／ `Option A′`，Human Decision `APPROVED`）**
+
+`Derived Result Provenance = Analysis Run + Deterministic Rule ID + Upstream Canonical References ／
+Contexts`（`master-data-mapping.md` **Derived Result Provenance**）在 deterministic rule chain 上的
+runtime 实现契约：
+
+```
+每个 deterministic rule result 携带其 construction 的既有 AnalysisRunContext
+（analysis_run_id ＋ analysis_date ＋ snapshot_package_identity ＋ accepted_content_view_digest）
+
+消费 upstream deterministic result 之前，rule 必须先验证：
+  upstream_result.analysis_run == construction.analysis_run
+  至少覆盖 analysis_run_id ＋ snapshot_package_identity ＋ accepted_content_view_digest
+
+mismatch  ⇒ PROVENANCE ／ PROVENANCE_MISMATCH
+         ⇒ 拒绝该次 rule invocation（invocation-level）
+         ⇒ 不消费任何 foreign business value，不制造 business grain，
+            不返回 NORMAL ／ SHORTAGE ／ numeric business result
+         ⇒ **不得**伪装成某 grain 的 DATA_INCOMPLETE，**不得**改写成 CONSISTENCY_CONFLICT
+
+binding 完全不存在 / 无法可靠建立 ⇒ PROVENANCE ／ PROVENANCE_UNRESOLVED（与 mismatch **不合并**）
+```
+
+该登记**只**落实既有 authority：**未新增** canonical field ／ entity ／ grain ／ taxonomy ／ reason，
+**未新增** ADR，**未引入** provenance service ／ result registry ／ persistence。
+
 #### 4.4.94 Scope vs Identity
 
 必须区分 `UNRESOLVED_IDENTITY` 与 `UNRESOLVED_SCOPE`：

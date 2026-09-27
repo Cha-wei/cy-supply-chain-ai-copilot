@@ -54,6 +54,7 @@ from typing import Any, Iterable
 
 from .canonical_objects import (
     ABSENT,
+    AnalysisRunContext,
     CanonicalConstructionReport,
     CanonicalObject,
     EvidenceReference,
@@ -70,6 +71,8 @@ from .requirement_calculation import (
     RequirementCalculation,
     RequirementCalculationResult,
 )
+from .requirement_calculation import RULE_ID as REQUIREMENT_RULE_ID
+from .result_binding import require_same_analysis_run
 
 # --- vocabulary --------------------------------------------------------------------
 
@@ -332,8 +335,15 @@ class EffectiveInboundResult:
     re-reached it, so this surface is deduplicated across the whole result by
     ``location + category + reason``.  Per-target / per-evaluation findings remain available
     for local trace, but a logical defect is registered here exactly once.
+
+    ``analysis_run`` is the **existing** :class:`AnalysisRunContext` of the construction this
+    result was produced from.  It is the derived-result provenance binding of ``F3-RB1``
+    (``Option A′``): a consumer verifies it against its own construction before it consumes any
+    value from this result, and rejects its invocation on a mismatch instead of combining a
+    foreign or stale result.
     """
 
+    analysis_run: AnalysisRunContext
     targets: tuple[EffectiveInboundTarget, ...]
 
     @property
@@ -438,7 +448,18 @@ def compute_effective_inbound(
     no numeric cumulative supply is produced.  Every row's true upstream trace (parent
     ``Production Requirement``, ``BOM Component``, resolved context, and each one's own
     provenance) is retained per row on the target.
+
+    **Result binding (``F3-RB1`` ／ ``Option A′``).**  The upstream requirement result is verified
+    against this construction's Analysis Run **before** any requirement row is consumed.  A foreign,
+    stale or mismatched result rejects the invocation with the inherited ``PROVENANCE`` ／
+    ``PROVENANCE_MISMATCH`` finding instead of being silently combined; a result carrying no binding
+    at all is ``PROVENANCE`` ／ ``PROVENANCE_UNRESOLVED``.
     """
+
+    require_same_analysis_run(
+        construction.analysis_run,
+        (REQUIREMENT_RULE_ID, requirements.analysis_run),
+    )
 
     targets = _targets_from_requirements(requirements)
     inbounds = tuple(construction.inbound_records)
@@ -515,7 +536,10 @@ def compute_effective_inbound(
             _sort_text(item.required_date),
         )
     )
-    return EffectiveInboundResult(targets=tuple(outbound))
+    return EffectiveInboundResult(
+        analysis_run=construction.analysis_run,
+        targets=tuple(outbound),
+    )
 
 
 def _deduplicate_issues(issues: Iterable[Issue]) -> tuple[Issue, ...]:

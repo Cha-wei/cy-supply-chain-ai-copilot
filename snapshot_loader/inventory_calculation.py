@@ -78,6 +78,7 @@ from .canonical_objects import (
     ABSENT,
     ROLE_INVENTORY_SNAPSHOT,
     TARGET_INVENTORY_SNAPSHOT,
+    AnalysisRunContext,
     CanonicalConstructionReport,
     CanonicalObject,
     EvidenceReference,
@@ -320,8 +321,15 @@ class InventoryCalculationResult:
     they are neither pushed into some arbitrary target nor used to invent a target identity;
     their registered upstream findings stay in ``inherited_issues`` for the downstream
     fail-safe.
+
+    ``analysis_run`` is the **existing** :class:`AnalysisRunContext` of the construction this
+    result was produced from.  It is the derived-result provenance binding of ``F3-RB1``
+    (``Option A′``): a consumer verifies it against its own construction before it consumes any
+    value from this result, and rejects its invocation on a mismatch instead of combining a
+    foreign or stale result.
     """
 
+    analysis_run: AnalysisRunContext
     targets: tuple[InventoryTarget, ...]
     unassigned_inventory_references: tuple[str, ...] = ()
     inherited_issues: tuple[Issue, ...] = ()
@@ -444,6 +452,7 @@ def compute_opening_usable_inventory(
     rule.extend(readiness_rule_issues)
 
     return InventoryCalculationResult(
+        analysis_run=construction.analysis_run,
         targets=tuple(targets),
         unassigned_inventory_references=unassigned_references_tuple,
         inherited_issues=_deduplicate_issues(inherited),

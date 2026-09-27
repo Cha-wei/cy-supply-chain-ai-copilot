@@ -70,6 +70,7 @@ from .canonical_objects import (
     RELATION_TARGET_APPLICABILITY,
     ROLE_SUBSTITUTE_ALLOCATION,
     ROLE_SUBSTITUTE_RELATIONSHIP,
+    AnalysisRunContext,
     CanonicalConstructionReport,
     CanonicalObject,
     EvidenceReference,
@@ -81,9 +82,15 @@ from .constants import (
     REASON_SEMANTIC_UNRESOLVED,
 )
 from .exact_quantity import ExactQuantity, parse_exact_quantity
-from .inventory_calculation import InventoryCalculationResult, InventoryTarget
+from .inventory_calculation import (
+    INVENTORY_RULE_ID,
+    InventoryCalculationResult,
+    InventoryTarget,
+)
 from .issues import Issue
 from .requirement_calculation import OUTCOME_DATA_INCOMPLETE, RequirementCalculationResult
+from .requirement_calculation import RULE_ID as REQUIREMENT_RULE_ID
+from .result_binding import require_same_analysis_run
 
 # --- vocabulary --------------------------------------------------------------------
 
@@ -464,8 +471,15 @@ class SubstituteCalculationResult:
     ``rule_issues`` is the authoritative result-level finding surface, deduplicated by
     ``location + category + reason``: one logical defect is registered exactly once regardless
     of how many targets re-reached it.
+
+    ``analysis_run`` is the **existing** :class:`AnalysisRunContext` of the construction this
+    result was produced from.  It is the derived-result provenance binding of ``F3-RB1``
+    (``Option A′``): a consumer verifies it against its own construction before it consumes any
+    value from this result, and rejects its invocation on a mismatch instead of combining a
+    foreign or stale result.
     """
 
+    analysis_run: AnalysisRunContext
     targets: tuple[SubstituteTarget, ...]
     conservation_groups: tuple[ConservationGroup, ...] = ()
     source_demand_contexts: tuple[SourceDemandContext, ...] = ()
@@ -618,7 +632,19 @@ def compute_substitute_supply(
 
     ``construction`` is consumed only through the canonical objects the construction already
     resolved plus the one role-level fact :func:`_relationship_dataset_present` states.
+
+    **Result binding (``F3-RB1`` ／ ``Option A′``).**  Both upstream deterministic results are
+    verified against this construction's Analysis Run **before** any business evaluation.  A
+    foreign, stale or mismatched result rejects the invocation with the inherited ``PROVENANCE`` ／
+    ``PROVENANCE_MISMATCH`` finding instead of being silently combined; a result carrying no binding
+    at all is ``PROVENANCE`` ／ ``PROVENANCE_UNRESOLVED``.
     """
+
+    require_same_analysis_run(
+        construction.analysis_run,
+        (REQUIREMENT_RULE_ID, requirements.analysis_run),
+        (INVENTORY_RULE_ID, inventory.analysis_run),
+    )
 
     allocations = _allocation_index(construction)
     relationship_index = _relationship_index(construction)
@@ -772,6 +798,7 @@ def compute_substitute_supply(
         rule_issues.extend(group.rule_issues)
 
     return SubstituteCalculationResult(
+        analysis_run=construction.analysis_run,
         targets=tuple(targets),
         conservation_groups=tuple(conservation),
         source_demand_contexts=_cited_source_demand_contexts(

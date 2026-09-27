@@ -261,6 +261,16 @@ REASON_SEMANTIC_UNRESOLVED: str = "SEMANTIC_UNRESOLVED"
 CATEGORY_SCOPE_COVERAGE: str = "SCOPE_COVERAGE"
 REASON_UNRESOLVED_SCOPE: str = "UNRESOLVED_SCOPE"
 
+#: ``§4.4.80`` #8 / ``§4.4.81`` #11 and #12 -- the **existing** registered provenance
+#: category and its two reasons.  ``PROVENANCE_MISMATCH`` means the required
+#: package-scoped provenance linkage **is** established but points at a wrong ／
+#: incompatible Analysis Context; ``PROVENANCE_UNRESOLVED`` means that linkage cannot be
+#: reliably established ／ resolved at all.  The two are deliberately never merged
+#: (``§4.4.93`` ／ PR #44 ／ PR #46 Human Decisions), and no new reason is introduced here.
+CATEGORY_PROVENANCE: str = "PROVENANCE"
+REASON_PROVENANCE_MISMATCH: str = "PROVENANCE_MISMATCH"
+REASON_PROVENANCE_UNRESOLVED: str = "PROVENANCE_UNRESOLVED"
+
 # --- Layer-2 reporting surface: no new status vocabulary ------------------------
 #
 # Current canonical authority registers exactly these status vocabularies, and Layer 2
