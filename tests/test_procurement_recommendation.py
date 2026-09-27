@@ -851,6 +851,10 @@ class PartitionValidationTests(ProcurementRecommendationTestCase):
         )
         # The genuine valid absence of the same result is untouched.
         self.assertTrue(result.is_valid_absence(PLANT, OTHER))
+        # A valid-absence claim is a family key, not a stated context: no context reference exists.
+        self.assertIsNone(item.policy_input_reference)
+        assert item.shortage_reference is not None
+        self.assertEqual(item.shortage_reference.grain, (PLANT, DEMAND, D2))
 
     def test_a25_a_shortage_family_omitted_by_the_policy_result_does_not_vanish(self) -> None:
         built, policy = self.coherent("a25-omitted-family")
@@ -919,6 +923,9 @@ class PartitionValidationTests(ProcurementRecommendationTestCase):
             [("CONSISTENCY", "CONSISTENCY_CONFLICT")],
         )
         self.assertEqual(len(result.recommendations), 1)
+        # The context that really exists is referenced as the actual conflicting upstream context.
+        assert item.policy_input_reference is not None
+        self.assertEqual(item.policy_input_reference.grain, (PLANT, DEMAND, D2))
 
     def test_a28_an_unresolved_family_is_never_valid_absence(self) -> None:
         # The family's shortage state is unresolved (the registered fail-safe literal), while the
@@ -951,6 +958,10 @@ class PartitionValidationTests(ProcurementRecommendationTestCase):
             [(issue.category, issue.reason) for issue in item.rule_issues],
             [("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED")],
         )
+        # A valid-absence claim is not a context, and the consumed shortage result states no reliable
+        # date for this family: neither reference is invented.
+        self.assertIsNone(item.policy_input_reference)
+        self.assertIsNone(item.shortage_reference)
 
     def test_a29_a_policy_family_the_shortage_result_does_not_state_is_never_accepted(self) -> None:
         built, policy = self.coherent("a29-unsupported-family")
@@ -1070,6 +1081,154 @@ class PartitionValidationTests(ProcurementRecommendationTestCase):
         )
         # The triggered family of the same result is unaffected.
         self.assertTrue(result.for_family(PLANT, DEMAND).has_numeric_result)
+        # The unearned claim is a context that really exists, so it is referenced as such; the
+        # shortage result states no reliable date for that family, so no shortage reference exists.
+        assert item.policy_input_reference is not None
+        self.assertEqual(item.policy_input_reference.grain, (PLANT, OTHER, D2))
+        self.assertIsNone(item.shortage_reference)
+
+    def test_a34_an_absent_policy_context_is_never_fabricated(self) -> None:
+        built, policy = self.coherent("a34-absent-context")
+        tampered = dataclasses.replace(
+            policy,
+            contexts=tuple(item for item in policy.contexts if item.material_code != DEMAND),
+        )
+        result = compute_procurement_recommendation(
+            built.construction, built.shortage, tampered
+        )
+        item = result.for_family(PLANT, DEMAND)
+        assert item is not None
+        # The fail-closed result is preserved ...
+        self.assertTrue(item.data_incomplete)
+        self.assertIsNone(item.recommended_purchase_qty)
+        self.assertIsNone(result.recommended_purchase_qty_for(PLANT, DEMAND))
+        self.assertEqual(item.root_condition, "MOQ_POLICY_PARTITION_UNRESOLVED")
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in item.rule_issues],
+            [("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED")],
+        )
+        # ... while the missing required Phase B context is never represented as though it existed.
+        self.assertIsNone(item.policy_input_reference)
+        self.assertIsNone(item.to_dict()["policy_input_reference"])
+        # The shortage grain that really states this family is still referenced truthfully.
+        assert item.shortage_reference is not None
+        self.assertEqual(item.shortage_reference.rule, "BR-SHORTAGE-001")
+        self.assertEqual(item.shortage_reference.grain, (PLANT, DEMAND, D2))
+        self.assertEqual(
+            item.to_dict()["shortage_reference"],
+            {"rule": "BR-SHORTAGE-001", "grain": [PLANT, DEMAND, D2]},
+        )
+
+    def test_a35_an_actual_policy_context_keeps_its_real_reference(self) -> None:
+        built, policy = self.coherent("a35-real-reference")
+        context = policy.for_family(PLANT, DEMAND)
+        assert context is not None
+        item = self.recommend(built, policy).for_family(PLANT, DEMAND)
+        assert item is not None
+        assert item.policy_input_reference is not None
+        self.assertEqual(item.policy_input_reference.rule, PROCUREMENT_POLICY_INPUT_STAGE)
+        self.assertEqual(item.policy_input_reference.grain, context.grain)
+        self.assertEqual(
+            item.to_dict()["policy_input_reference"],
+            {"rule": PROCUREMENT_POLICY_INPUT_STAGE, "grain": [PLANT, DEMAND, D2]},
+        )
+        # A fail-closed entry that really did consume a context keeps that real reference too.
+        missing = self.build_family(
+            demands=((DEMAND, "140", D2),),
+            moq_policies=(moq_policy_record(DEMAND, moq=None),),
+            name="a35-real-reference-fail-closed",
+        )
+        missing_item = self.recommend(missing).for_family(PLANT, DEMAND)
+        assert missing_item is not None
+        self.assertTrue(missing_item.data_incomplete)
+        assert missing_item.policy_input_reference is not None
+        self.assertEqual(
+            missing_item.policy_input_reference.grain, (PLANT, DEMAND, D2)
+        )
+
+    def test_a36_duplicate_contexts_reference_no_single_consumed_context(self) -> None:
+        built, policy = self.coherent("a36-duplicate-reference")
+        duplicated = dataclasses.replace(
+            policy, contexts=policy.contexts + policy.contexts
+        )
+        result = compute_procurement_recommendation(
+            built.construction, built.shortage, duplicated
+        )
+        matching = [
+            entry for entry in result.recommendations if entry.material_code == DEMAND
+        ]
+        self.assertEqual(len(matching), 1)
+        item = matching[0]
+        self.assertTrue(item.data_incomplete)
+        # No single context was consumed, so none is presented as the consumed policy input.
+        self.assertIsNone(item.policy_input_reference)
+        self.assertIsNone(item.to_dict()["policy_input_reference"])
+        assert item.shortage_reference is not None
+        self.assertEqual(item.shortage_reference.grain, (PLANT, DEMAND, D2))
+
+    def test_a37_an_unsupported_actual_context_is_still_referenced(self) -> None:
+        built, policy = self.coherent("a37-unsupported-reference")
+        hand_made = ProcurementPolicyInputContext(
+            plant_id=PLANT,
+            material_code="M9",
+            recommendation_need_date=D2,
+            applicable_moq=ExactQuantity(50, 0),
+        )
+        claimed = dataclasses.replace(policy, contexts=policy.contexts + (hand_made,))
+        result = compute_procurement_recommendation(
+            built.construction, built.shortage, claimed
+        )
+        item = result.for_family(PLANT, "M9")
+        assert item is not None
+        self.assertTrue(item.data_incomplete)
+        # The conflicting claim is a context that really exists, so it is referenced as such ...
+        assert item.policy_input_reference is not None
+        self.assertEqual(item.policy_input_reference.rule, PROCUREMENT_POLICY_INPUT_STAGE)
+        self.assertEqual(item.policy_input_reference.grain, (PLANT, "M9", D2))
+        # ... while the shortage result states no such family, so no shortage reference is invented.
+        self.assertIsNone(item.shortage_reference)
+        self.assertIsNone(item.to_dict()["shortage_reference"])
+
+        # Two competing actual contexts for one unsupported family: neither is presented as *the* one.
+        twice = dataclasses.replace(
+            policy, contexts=policy.contexts + (hand_made, hand_made)
+        )
+        twice_result = compute_procurement_recommendation(
+            built.construction, built.shortage, twice
+        )
+        twice_matching = [
+            entry for entry in twice_result.recommendations if entry.material_code == "M9"
+        ]
+        self.assertEqual(len(twice_matching), 1)
+        self.assertIsNone(twice_matching[0].policy_input_reference)
+        self.assertEqual(twice_matching[0].root_condition, "MOQ_POLICY_PARTITION_UNRESOLVED")
+
+    def test_a38_serialization_is_deterministic_and_invents_no_reference(self) -> None:
+        built, policy = self.coherent("a38-serialization")
+        tampered = dataclasses.replace(
+            policy,
+            contexts=tuple(item for item in policy.contexts if item.material_code != DEMAND),
+            valid_absence_grains=policy.valid_absence_grains + ((PLANT, DEMAND),),
+        )
+        first = compute_procurement_recommendation(
+            built.construction, built.shortage, tampered
+        )
+        second = compute_procurement_recommendation(
+            built.construction, built.shortage, tampered
+        )
+        self.assertEqual(first.to_dict(), second.to_dict())
+        payloads = [entry.to_dict() for entry in first.recommendations]
+        self.assertEqual(len(payloads), 1)
+        payload = payloads[0]
+        # A valid-absence claim is a family key, not a stated context: nothing is invented for it.
+        self.assertIsNone(payload["policy_input_reference"])
+        self.assertEqual(payload["outcome"], "DATA_INCOMPLETE")
+        self.assertIsNone(payload["RecommendedPurchaseQty"])
+        self.assertEqual(payload["root_condition"], "MOQ_POLICY_PARTITION_INCONSISTENT")
+        # Every reference that *is* present points at an upstream item the consumed results state.
+        grain = payload["shortage_reference"]["grain"]
+        self.assertEqual(payload["shortage_reference"]["rule"], "BR-SHORTAGE-001")
+        self.assertIsNotNone(built.shortage.for_grain(*grain))
 
 
 if __name__ == "__main__":  # pragma: no cover - direct invocation

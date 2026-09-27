@@ -108,6 +108,11 @@ class UpstreamResultReference:
     derived value, so the reference is exactly the producing rule ／ seam and the upstream grain; the
     upstream result itself keeps the evidence ／ record reference that answers "which source evidence
     supported it".
+
+    A reference is only ever built from an upstream result ／ context that **actually exists** in the
+    consumed results, and it is therefore optional: a family whose required upstream context (or
+    shortage grain) is missing, or whose upstream claim is not a context at all, carries **no**
+    reference rather than a synthesised one.
     """
 
     rule: str
@@ -140,6 +145,13 @@ class ProcurementRecommendation:
     never re-derived here.  ``inherited_issues`` carries the registered findings of the consumed
     policy input verbatim; ``rule_issues`` carries only findings this rule owns (an upstream Shortage
     Result that cannot state the registered grain, or that contradicts it).
+
+    ``policy_input_reference`` ／ ``shortage_reference`` are the **actual** upstream references of this
+    entry (``master-data-mapping.md`` 決定 7 ／ 決定 11) and are optional for exactly that reason: a
+    fail-closed entry whose required Phase B policy context is absent, whose upstream claim is only a
+    valid-absence key, or whose several contexts were never reduced to one, carries ``None`` instead of
+    a reference to a context that does not exist; likewise a family without a reliable shortage grain
+    carries no shortage reference.
     """
 
     plant_id: Any
@@ -344,6 +356,12 @@ def compute_procurement_recommendation(
       representation;
     * a policy family the consumed shortage result does not state at all is never accepted.
 
+    **Provenance stays truthful.**  Every reference this result exposes is built from an upstream
+    context ／ grain that really exists in the consumed results (``決定 7`` ／ ``決定 11``): a missing
+    required Phase B context, a valid-absence claim (a family key, not a context) and a set of competing
+    contexts are never represented as though one authoritative upstream context existed, so the absent
+    reference is reported as absent instead of being synthesised.
+
     Every one of those cases yields ``DATA_INCOMPLETE`` with **No Numeric Recommendation** and a finding
     using only the registered ``SEMANTIC_RESOLUTION`` ／ ``SEMANTIC_UNRESOLVED`` (the required input
     cannot be reliably established) and ``CONSISTENCY`` ／ ``CONSISTENCY_CONFLICT`` (two reliably
@@ -394,19 +412,32 @@ def compute_procurement_recommendation(
         + [item for item in absences if not any(item == family for family in families)]
     )
     for plant_id, material_code in unsupported:
+        claimed = tuple(
+            item
+            for item in contexts
+            if (item.plant_id, item.material_code) == (plant_id, material_code)
+        )
         recommendations.append(
             _partition_failure(
                 plant_id=plant_id,
                 material_code=material_code,
                 recommendation_need_date=None,
                 problem=(
-                    "the consumed Phase B policy result states this plant_id + material_code family, "
-                    "but the consumed BR-SHORTAGE-001 result of the same Analysis Run states no such "
-                    "family at all, so neither the family's shortage state nor the required policy "
-                    "input of that family can be reliably established; the claim is never accepted as "
-                    "a recommendation or as a valid absence (§4.4.65 / §4.4.66)"
+                    "the consumed Phase B policy result states this plant_id + material_code family "
+                    "(as a policy context and ／ or as a valid absence), but the consumed "
+                    "BR-SHORTAGE-001 result of the same Analysis Run states no such family at all, so "
+                    "neither the family's shortage state nor the required policy input of that family "
+                    "can be reliably established; the claim is never accepted as a recommendation or "
+                    "as a valid absence (§4.4.65 / §4.4.66)"
                 ),
                 conflict=False,
+                # Only a context that really exists is referenced, and only when exactly one claims the
+                # family; the family is absent from the consumed shortage result, so there is no
+                # shortage grain reference to cite either.
+                policy_input_reference=(
+                    _context_reference(claimed[0]) if len(claimed) == 1 else None
+                ),
+                shortage_reference=None,
             )
         )
 
@@ -442,21 +473,10 @@ def _evaluate_family(
     never relaxed by what the policy result claims about the family's partition.
     """
 
-    if absences and contexts:
-        return _partition_failure(
-            plant_id=plant_id,
-            material_code=material_code,
-            recommendation_need_date=_reliable_need_date(expected),
-            problem=(
-                f"the consumed Phase B policy result states both {len(contexts)} policy context(s) and "
-                "a valid absence for this exact plant_id + material_code family; one family's "
-                "applicability cannot be both 'a purchase recommendation applies' and 'no purchase "
-                "recommendation by design', and neither representation is silently preferred over the "
-                "other (§4.4.65 / §4.4.66 / §4.4.87)"
-            ),
-            conflict=True,
-        )
     if len(contexts) > 1:
+        # Several contexts claim the family, so **no** single context was consumed: the result never
+        # references one as though it were the uniquely consumed policy input, and the claims stay
+        # visible through the finding.  The family fails closed instead of being reconciled.
         return _partition_failure(
             plant_id=plant_id,
             material_code=material_code,
@@ -465,9 +485,32 @@ def _evaluate_family(
                 f"the consumed Phase B policy result states {len(contexts)} policy contexts for this "
                 "exact plant_id + material_code family; exactly one baseline recommendation exists per "
                 "family per analysis run, and several candidate policy inputs are never reconciled by "
-                "first ／ last wins or any other precedence (§2.5.3 / §4.4.66)"
+                "first ／ last wins or any other precedence, so no single context is consumed and none "
+                "is referenced (§2.5.3 / §4.4.66)"
             ),
             conflict=False,
+            policy_input_reference=None,
+            shortage_reference=_shortage_grain_reference(
+                shortage, plant_id, material_code, _reliable_need_date(expected)
+            ),
+        )
+    if absences and contexts:
+        return _partition_failure(
+            plant_id=plant_id,
+            material_code=material_code,
+            recommendation_need_date=_reliable_need_date(expected),
+            problem=(
+                "the consumed Phase B policy result states a policy context **and** a valid absence for "
+                "this exact plant_id + material_code family; one family's applicability cannot be both "
+                "'a purchase recommendation applies' and 'no purchase recommendation by design', and "
+                "neither representation is silently preferred over the other (§4.4.65 / §4.4.66 / "
+                "§4.4.87)"
+            ),
+            conflict=True,
+            policy_input_reference=_context_reference(contexts[0]),
+            shortage_reference=_shortage_grain_reference(
+                shortage, plant_id, material_code, _reliable_need_date(expected)
+            ),
         )
     if absences:
         if expected is None:
@@ -487,6 +530,12 @@ def _evaluate_family(
                 "from the contradicting claims (§4.4.65 / §4.4.66)"
             ),
             conflict=expected != SHORTAGE_DATA_INCOMPLETE,
+            # A valid-absence claim is a family key, **not** a stated ProcurementPolicyInputContext:
+            # nothing is referenced as though such a context existed.
+            policy_input_reference=None,
+            shortage_reference=_shortage_grain_reference(
+                shortage, plant_id, material_code, _reliable_need_date(expected)
+            ),
         )
     if contexts:
         if expected is None:
@@ -502,6 +551,8 @@ def _evaluate_family(
                     "is never accepted and no quantity is produced from it (§4.4.22 / §4.4.87)"
                 ),
                 conflict=True,
+                policy_input_reference=_context_reference(contexts[0]),
+                shortage_reference=None,
             )
         return _evaluate(contexts[0], shortage)
 
@@ -509,6 +560,9 @@ def _evaluate_family(
         # Reliable valid absence; a policy result that omits such a family omits it by design, because
         # no Procurement Recommendation Context and no ApplicableMOQ exist for it (§4.4.67).
         return None
+    # The required policy context is **absent**: this family has no upstream Phase B context to
+    # reference, so none is fabricated -- only the shortage grain that actually states the family is
+    # referenced, and the family still fails closed with No Numeric Recommendation.
     return _partition_failure(
         plant_id=plant_id,
         material_code=material_code,
@@ -522,6 +576,10 @@ def _evaluate_family(
             "(§2.5.2 / §4.4.65 / §4.4.67)"
         ),
         conflict=False,
+        policy_input_reference=None,
+        shortage_reference=_shortage_grain_reference(
+            shortage, plant_id, material_code, _reliable_need_date(expected)
+        ),
     )
 
 
@@ -543,9 +601,7 @@ def _evaluate(
     plant_id = context.plant_id
     material_code = context.material_code
     need_date = context.recommendation_need_date
-    policy_reference = UpstreamResultReference(
-        rule=PROCUREMENT_POLICY_INPUT_STAGE, grain=context.grain
-    )
+    policy_reference = _context_reference(context)
     inherited = context.issues
 
     if need_date is None:
@@ -564,8 +620,8 @@ def _evaluate(
             inherited_issues=inherited,
         )
 
-    shortage_reference = UpstreamResultReference(
-        rule=SHORTAGE_RULE_ID, grain=(plant_id, material_code, need_date)
+    shortage_reference = _shortage_grain_reference(
+        shortage, plant_id, material_code, need_date
     )
     expected = shortage.first_shortage_date_for(plant_id, material_code)
     if expected != need_date:
@@ -757,8 +813,17 @@ def _partition_failure(
     recommendation_need_date: Any,
     problem: str,
     conflict: bool,
+    policy_input_reference: UpstreamResultReference | None,
+    shortage_reference: UpstreamResultReference | None,
 ) -> ProcurementRecommendation:
     """One fail-closed family whose Phase B policy-input partition does not hold.
+
+    Both references are **passed in explicitly**: this helper never synthesises one, so a failure that
+    has no upstream claim to cite carries no reference at all.  A missing required Phase B context, a
+    valid-absence claim (a family key, not a context) and several competing contexts therefore never
+    appear as though one authoritative upstream context existed, while a genuinely stated context ／
+    shortage grain is still referenced truthfully (``master-data-mapping.md`` 決定 7 ／ 決定 11: the
+    Analysis Run ＋ the deterministic Rule ID ＋ references to **actual** upstream inputs).
 
     ``conflict`` selects between the two **existing** registered pairs, by the registered root
     condition of the failure: two reliably established answers about the same ``plant_id`` +
@@ -786,19 +851,9 @@ def _partition_failure(
             "Recommendation and is never silently accepted or silently dropped (§2.5.2 / §4.4.65 / "
             "§4.4.66 / §4.4.87)"
         ),
-        policy_input_reference=UpstreamResultReference(
-            rule=PROCUREMENT_POLICY_INPUT_STAGE,
-            grain=(plant_id, material_code, recommendation_need_date),
-        ),
+        policy_input_reference=policy_input_reference,
         inherited_issues=(),
-        shortage_reference=(
-            None
-            if recommendation_need_date is None
-            else UpstreamResultReference(
-                rule=SHORTAGE_RULE_ID,
-                grain=(plant_id, material_code, recommendation_need_date),
-            )
-        ),
+        shortage_reference=shortage_reference,
         category=(
             _CATEGORY_CONSISTENCY if conflict else CATEGORY_SEMANTIC_RESOLUTION
         ),
@@ -937,6 +992,38 @@ def _reliable_need_date(expected: Any) -> Any:
     if expected is None or expected == SHORTAGE_DATA_INCOMPLETE:
         return None
     return expected
+
+
+def _context_reference(context: ProcurementPolicyInputContext) -> UpstreamResultReference:
+    """The **actual** reference of one stated Phase B policy context.
+
+    Built only from a context that really exists in the consumed ``ProcurementPolicyInputResult``, so
+    it can never stand for a context that was merely expected (§4.3.31 G I-3 ／ I-4).
+    """
+
+    return UpstreamResultReference(rule=PROCUREMENT_POLICY_INPUT_STAGE, grain=context.grain)
+
+
+def _shortage_grain_reference(
+    shortage: ShortageCalculationResult,
+    plant_id: Any,
+    material_code: Any,
+    required_date: Any,
+) -> UpstreamResultReference | None:
+    """The **actual** upstream shortage grain reference, or ``None`` when no such grain is stated.
+
+    The reference exists only when the consumed ``BR-SHORTAGE-001`` result really states that exact
+    ``plant_id`` + ``material_code`` + ``required_date`` grain; a family without a reliable date, or a
+    date the consumed result does not state, yields no reference instead of a synthesised one.
+    """
+
+    if required_date is None:
+        return None
+    if shortage.for_grain(plant_id, material_code, required_date) is None:
+        return None
+    return UpstreamResultReference(
+        rule=SHORTAGE_RULE_ID, grain=(plant_id, material_code, required_date)
+    )
 
 
 def _exact_rational(value: ExactQuantity) -> Fraction:
