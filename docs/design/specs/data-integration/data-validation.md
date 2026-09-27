@@ -2926,10 +2926,14 @@ resolved upstream result 的消费边界是 rule-specific 的，
   finding free text。
 - **supply conservation 的 target 侧消费（`§2.3.10` 实现修正）**：conservation group 的结论为
   `DATA_INCOMPLETE` 且该 group **归属**了参与 sum 的 allocations（`Σ AllocatedSubstituteQty >
-  EligibleSubstituteSupply`）时，这些 exact allocation record 的 target contribution 不是可靠 substitute
-  supply ⇒ affected Target demand grain `DATA_INCOMPLETE`，其 cumulative 依 `S3-A` 传播。**不得** clamp ／
-  重新分配 ／ 引入 priority ／ 修改 invariant；守恒结论不可靠但**未形成 sum** 的 context 无归属
-  allocation，因此不使任何 target contribution 失效（两个 G5-A relation 独立）。
+  EligibleSubstituteSupply`）时，这些 exact allocation record 的 target participation **只**在其本来会
+  **实际贡献 positive eligible supply** 时失效 ⇒ affected Target demand grain `DATA_INCOMPLETE`，其
+  cumulative 依 `S3-A` 传播。既有 Target semantics **先**判定：可靠的 `not applicable`、valid but
+  ineligible（`PENDING` ／ `REJECTED`）、`AllocatedSubstituteQty = 0`、该 grain 明确没有 relationship
+  仍是合法 `0`（`§4.4.89`），**不得**因为**另一个** allocation 造成 conservation 失败而变成
+  `DATA_INCOMPLETE`。**不得** clamp ／ 重新分配 ／ 引入 priority ／ 修改 invariant；守恒结论不可靠但
+  **未形成 sum** 的 context 无归属 allocation，因此不使任何 target contribution 失效（两个 G5-A
+  relation 独立）。
 - **exact rational 不是 unresolved**：upstream 的 exact `Fraction`（例如 `GrossRequirement = 4000/19`）
   是可靠 quantity；**不得**因该值没有有限十进制表示而将其降级为 `DATA_INCOMPLETE`，也**不得**
   `round` ／ `truncate` ／ `quantize`（`§2.4.8` / `ADR-001`）。derived result **只**以仓库既有的 exact

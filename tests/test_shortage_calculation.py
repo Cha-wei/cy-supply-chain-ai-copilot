@@ -315,8 +315,16 @@ def allocation_record(
     *,
     quantity: Any = "0",
     target_basis: Any = BASIS_TA,
+    target_bases: tuple[Any, ...] = (),
     source_basis: Any = BASIS_SRO,
 ) -> dict[str, Any]:
+    """One accepted ``Substitute Allocation`` record with its registered G5-A associations.
+
+    ``target_bases`` registers further Target Applicability bases on the ``target_material_code``
+    observation, so one allocation record can legally state several registered Target outcomes (a
+    G5-A claim only *selects* one of the registrations the accepted record already states).
+    """
+
     record: dict[str, Any] = {
         "plant_id": PLANT,
         "target_material_code": target,
@@ -324,9 +332,11 @@ def allocation_record(
         "AllocatedSubstituteQty": quantity,
     }
     associations: list[tuple[str, list[str], str | None]] = []
-    if target_basis is not None:
+    for basis in (target_basis, *target_bases):
+        if basis is None:
+            continue
         associations.append(
-            ("target_material_code", [f"SIMULATED-SRC-ALLOC-TA-{target}"], target_basis)
+            ("target_material_code", [f"SIMULATED-SRC-ALLOC-TA-{target}"], basis)
         )
     if source_basis is not None:
         associations.append(
@@ -337,6 +347,20 @@ def allocation_record(
             )
         )
     return with_provenance(record, associations)
+
+
+@dataclasses.dataclass(frozen=True)
+class ReservationAllocation:
+    """One extra accepted ``Substitute Allocation`` record of the quoted reservation's own pair.
+
+    ``quantity`` is that record's own ``AllocatedSubstituteQty``.  It registers the SRO basis on its
+    source side, so it joins the **same** exact Source Demand Context conservation sum as the quoted
+    reservation, and ``target_claims`` names one ``(required_date, Target Applicability outcome)`` per
+    Target Demand Context that cites it (the record registers every basis its own claims name).
+    """
+
+    quantity: Any
+    target_claims: tuple[tuple[Any, Any], ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -377,6 +401,7 @@ class ShortageRuleTestCase(unittest.TestCase):
         conservation: tuple[Any, Any, Any] | None = None,
         source_reservation_registration: Any = BASIS_SRO,
         source_reservation_claim: Any = None,
+        extra_reservation_allocations: tuple[ReservationAllocation, ...] = (),
         targets: tuple[tuple[Any, Any, Any], ...] = ((DEMAND, D2, "APPROVED"),),
         target_quantities: dict[tuple[Any, Any], Any] | None = None,
         relationships: tuple[tuple[Any, Any, str], ...] = ((DEMAND, SOURCE, "APPROVED"),),
@@ -405,6 +430,11 @@ class ShortageRuleTestCase(unittest.TestCase):
         reproduces the registered G5-A failure class "unregistered mapping basis" on the source side
         (the overlap outcome cannot be formed), and passing another *registered* basis exercises the
         other registered SRO outcomes.
+
+        ``extra_reservation_allocations`` adds further accepted allocation records of the quoted
+        reservation's own ``target_material`` + ``substitute_material`` pair that also register the SRO
+        basis, so they join the **same** exact Source Demand Context conservation sum; each one states
+        its own quantity and its own Target Applicability claims.
         """
 
         stock = {DEMAND: "100", SOURCE: "100"} if inventory is None else dict(inventory)
@@ -423,6 +453,9 @@ class ShortageRuleTestCase(unittest.TestCase):
             cited.append((conservation[1], D2))
         for material, date, _outcome in targets:
             cited.append((material, date))
+        for extra in extra_reservation_allocations:
+            for date, _outcome in extra.target_claims:
+                cited.append((conservation[0] if conservation else DEMAND, date))
 
         entry_index: dict[tuple[Any, Any], int] = {}
         entries: list[Demand] = []
@@ -530,6 +563,27 @@ class ShortageRuleTestCase(unittest.TestCase):
                         quantity=target_quantities.get((material, date), "0"),
                         target_basis=basis_for(outcome),
                         source_basis=None,
+                    )
+                )
+            # Further allocation records of the quoted reservation's own pair: they register the SRO
+            # basis, so they reserve inside the same exact Source Demand Context, and they register
+            # every Target Applicability basis their own claims name.
+            extra_positions: list[int] = []
+            for extra in extra_reservation_allocations:
+                extra_positions.append(len(allocations))
+                allocations.append(
+                    allocation_record(
+                        conservation[0],
+                        conservation[1],
+                        quantity=extra.quantity,
+                        target_basis=None,
+                        target_bases=tuple(
+                            dict.fromkeys(
+                                basis_for(outcome)
+                                for _date, outcome in extra.target_claims
+                            )
+                        ),
+                        source_basis=source_reservation_registration,
                     )
                 )
             if conservation is not None and not any(
@@ -670,6 +724,49 @@ class ShortageRuleTestCase(unittest.TestCase):
                         ),
                     )
                 )
+            for extra, position in zip(extra_reservation_allocations, extra_positions):
+                # The extra record reserves inside the quoted reservation's own exact Source Demand
+                # Context (same SRO basis registration) ...
+                demand_entries.append(
+                    EffectiveDemandRelationHandoff(
+                        source_substitute_material=conservation[1],
+                        target_material=conservation[0],
+                        relation=RELATION_SOURCE,
+                        evidence=cite(
+                            ROLE_ALLOCATION,
+                            ARTIFACT_ALLOCATION,
+                            position,
+                            f"SIMULATED-SRC-ALLOC-SRO-{conservation[0]}",
+                        ),
+                        mapping_basis=source_reservation_registration,
+                        context_citation=cite(
+                            ROLE_REQUIREMENT,
+                            ARTIFACT_REQUIREMENT,
+                            index_by_material[(conservation[1], D2)],
+                        ),
+                    )
+                )
+                # ... and states its own Target Applicability for each context that cites it.
+                for date, outcome in extra.target_claims:
+                    demand_entries.append(
+                        EffectiveDemandRelationHandoff(
+                            source_substitute_material=conservation[1],
+                            target_material=conservation[0],
+                            relation=RELATION_TARGET,
+                            evidence=cite(
+                                ROLE_ALLOCATION,
+                                ARTIFACT_ALLOCATION,
+                                position,
+                                f"SIMULATED-SRC-ALLOC-TA-{conservation[0]}",
+                            ),
+                            mapping_basis=basis_for(outcome),
+                            context_citation=cite(
+                                ROLE_REQUIREMENT,
+                                ARTIFACT_REQUIREMENT,
+                                index_by_material[(conservation[0], date)],
+                            ),
+                        )
+                    )
 
         construction = construct_canonical_objects(
             accepted,
@@ -1901,8 +1998,126 @@ class ConservationPropagationTests(ShortageRuleTestCase):
             self.grain(built, DEMAND, D2), "cumulative_approved_substitute_supply", "60"
         )
 
+    def test_f1_gate_preserves_a_reliable_not_applicable_zero(self) -> None:
+        # Review blocker: the conservation gate must not run before the existing legal Target
+        # outcomes.  One exact allocation record (qty 50) belongs to an over-allocated conservation
+        # group (the quoted record reserves 200 against an eligible 100) and is cited by two Target
+        # Demand Contexts: D1 states a reliable `not applicable`, D2 states `applicable`.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "10", D1),
+                Demand(DEMAND, DEMAND, "10", D2),
+            ),
+            inventory={DEMAND: "0", SOURCE: "100"},
+            safety_stock={DEMAND: "0", SOURCE: "0"},
+            conservation=(DEMAND, SOURCE, "200"),
+            extra_reservation_allocations=(
+                ReservationAllocation(
+                    quantity="50",
+                    target_claims=((D1, "NOT_APPLICABLE"), (D2, "APPROVED")),
+                ),
+            ),
+            name="f1-gate-legal-zero",
+        )
+        group = built.substitutes.conservation_groups[0]
+        self.assertEqual(group.conservation_state, "OVER_ALLOCATED")
+        allocation = built.substitutes.for_grain(PLANT, DEMAND, D2)
+        assert allocation is not None
+        extra_reference = allocation.evaluations[0].allocation_reference
+        self.assertIn(extra_reference, group.allocating_references)
+        # D1: the reliable `not applicable` stays a legal zero -- it never claims the allocation
+        # identity and is never converted into DATA_INCOMPLETE by another allocation's failure.
+        early = built.substitutes.for_grain(PLANT, DEMAND, D1)
+        assert early is not None
+        self.assertIsNone(early.outcome)
+        self.assertEqual(early.grain_equivalent, 0)
+        self.assertEqual(
+            [item.eligibility_reason for item in early.evaluations],
+            ["TARGET_NOT_APPLICABLE"],
+        )
+        self.assertEqual(early.cumulative_approved_substitute_supply, 0)
+        early_grain = self.grain(built, DEMAND, D1)
+        self.assertNotEqual(early_grain.classification, CLASSIFICATION_DATA_INCOMPLETE)
+        self.assert_quantity(early_grain, "cumulative_approved_substitute_supply", "0")
+        self.assert_quantity(early_grain, "projected_available", "-10")
+        self.assert_classification(early_grain, CLASSIFICATION_SHORTAGE)
+        # D2: the same allocation would contribute positive supply, so the conservation failure
+        # applies and the grain fails closed.
+        self.assertEqual(early.outcome is None, True)
+        self.assertIsNone(allocation.cumulative_approved_substitute_supply)
+        self.assert_classification(
+            self.grain(built, DEMAND, D2), CLASSIFICATION_DATA_INCOMPLETE
+        )
+        self.assertIsNone(self.grain(built, DEMAND, D2).projected_available)
+
+    def test_f1_gate_preserves_an_ineligible_relationship_zero(self) -> None:
+        # A valid but ineligible relationship states a reliable zero (PENDING / REJECTED).  The
+        # quoted allocation record is the one that over-allocates the source context, and its
+        # Target Applicability is applicable -- the ineligibility must still win.
+        for approval, reason in (("PENDING", "PENDING"), ("REJECTED", "REJECTED")):
+            with self.subTest(approval=approval):
+                built = self.build(
+                    demand=(Demand(DEMAND, DEMAND, "10", D2),),
+                    inventory={DEMAND: "0", SOURCE: "100"},
+                    safety_stock={DEMAND: "0", SOURCE: "0"},
+                    conservation=(DEMAND, SOURCE, "200"),
+                    relationships=((DEMAND, SOURCE, approval),),
+                    name=f"f1-gate-ineligible-{approval.lower()}",
+                )
+                group = built.substitutes.conservation_groups[0]
+                self.assertEqual(group.conservation_state, "OVER_ALLOCATED")
+                target = built.substitutes.for_grain(PLANT, DEMAND, D2)
+                assert target is not None
+                self.assertIn(
+                    target.evaluations[0].allocation_reference,
+                    group.allocating_references,
+                )
+                self.assertIsNone(target.evaluations[0].outcome)
+                self.assertEqual(target.evaluations[0].grain_equivalent, 0)
+                self.assertEqual(target.evaluations[0].eligibility_reason, reason)
+                self.assertEqual(target.cumulative_approved_substitute_supply, 0)
+                grain = self.grain(built, DEMAND, D2)
+                self.assertNotEqual(grain.classification, CLASSIFICATION_DATA_INCOMPLETE)
+                self.assert_quantity(grain, "cumulative_approved_substitute_supply", "0")
+                self.assert_classification(grain, CLASSIFICATION_SHORTAGE)
+
+    def test_f1_gate_preserves_an_explicit_zero_quantity(self) -> None:
+        # An approved allocation with `AllocatedSubstituteQty = 0` is a reliable zero: another
+        # allocation (the quoted 200) caused the conservation group to fail, but that never turns a
+        # legal zero into DATA_INCOMPLETE.  The zero contributes to the sum, so the record really is
+        # inside the failed group.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "10", D1),
+                Demand(DEMAND, DEMAND, "10", D2),
+            ),
+            inventory={DEMAND: "0", SOURCE: "100"},
+            safety_stock={DEMAND: "0", SOURCE: "0"},
+            conservation=(DEMAND, SOURCE, "200"),
+            extra_reservation_allocations=(
+                ReservationAllocation(
+                    quantity="0",
+                    target_claims=((D1, "APPROVED"),),
+                ),
+            ),
+            name="f1-gate-explicit-zero",
+        )
+        group = built.substitutes.conservation_groups[0]
+        self.assertEqual(group.conservation_state, "OVER_ALLOCATED")
+        self.assert_quantity(group, "allocated_substitute_qty", "200")
+        self.assertEqual(len(group.allocating_references), 2)
+        early = built.substitutes.for_grain(PLANT, DEMAND, D1)
+        assert early is not None
+        self.assertIn(early.evaluations[0].allocation_reference, group.allocating_references)
+        self.assertIsNone(early.evaluations[0].outcome)
+        self.assertEqual(early.evaluations[0].grain_equivalent, 0)
+        self.assertEqual(early.evaluations[0].eligibility_reason, "APPROVED")
+        early_grain = self.grain(built, DEMAND, D1)
+        self.assertNotEqual(early_grain.classification, CLASSIFICATION_DATA_INCOMPLETE)
+        self.assert_quantity(early_grain, "cumulative_approved_substitute_supply", "0")
+        self.assert_classification(early_grain, CLASSIFICATION_SHORTAGE)
+
     def test_f1_and_f2_leave_the_target_applicability_rule_unchanged(self) -> None:
-        # A grain-scoped unresolved *Target* Applicability still behaves exactly as approved by
         # Option A': the grain is DATA_INCOMPLETE, nothing is inferred for the other relation and no
         # target grain is failed by a source-side failure.
         built = self.build(

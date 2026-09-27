@@ -2799,18 +2799,27 @@ MAT-B AVAILABLE = 100
 **over-allocation 的消费边界（实现修正，不是新 authority）**
 
 constraint 被违反时，受影响的不只是 conservation result 本身：参与该 exact context sum 的
-`AllocatedSubstituteQty` **已经不可信**，因此**不得**在 Target 侧继续作为可靠 substitute supply 被消费：
+`AllocatedSubstituteQty` **已经不可信**，因此**不得**在 Target 侧继续作为可靠 substitute supply 被消费。
+该 gate **只**作用于否则会**实际贡献正数 eligible substitute supply** 的 participation：
 
 ```
 exact Source Demand Context 的 Σ AllocatedSubstituteQty > EligibleSubstituteSupply
   ⇒ 该 context 的 conservation = CONSISTENCY ／ CONSISTENCY_CONFLICT ＋ DATA_INCOMPLETE
-  ⇒ 参与该 sum 的每个 allocation 的 target contribution（AllocatedSubstituteQty × substitution_ratio）
-     不是可靠 substitute supply
-  ⇒ affected Target demand grain = DATA_INCOMPLETE，其 CumulativeApprovedSubstituteSupply(<= t)
-     依既有 S3-A 语义传播
+  ⇒ 参与该 sum 的 allocation，若其 Target evaluation 本来会贡献 positive eligible supply
+     （AllocatedSubstituteQty × substitution_ratio > 0，且 relation 本身可靠）
+     ⇒ 该 contribution 不是可靠 substitute supply
+     ⇒ affected Target demand grain = DATA_INCOMPLETE，其 CumulativeApprovedSubstituteSupply(<= t)
+        依既有 S3-A 语义传播
   ⇒ 其他 allocation ／ 其他 target grain 保持可靠（exact failure isolation，不得 global ／
      material-level ／ package-level poisoning）
 ```
+
+**既有 legal zero 必须保持**（`§4.4.89`）：同一 allocation 若在某个 Target Demand Context 上是可靠的
+`not applicable`、或 relationship 为 valid but ineligible（`PENDING` ／ `REJECTED`）、或
+`AllocatedSubstituteQty = 0`、或该 grain 明确没有 relationship，则结果仍是合法 `0`，**不得**因为**另一个**
+allocation 造成 conservation 失败而变成 `DATA_INCOMPLETE`；zero contribution 不 claim allocation
+identity。因此判定顺序是：**先**既有 Target semantics，**再**只对实际 `contributes` 的 evaluation 施加
+conservation gate。
 
 **不得**据此 clamp allocation、重新分配数量、引入 allocation priority 或 optimization，也**不得**修改
 conservation invariant 本身。守恒结论不可靠（例如 overlap unresolved、source supply 不可得）而**未能**

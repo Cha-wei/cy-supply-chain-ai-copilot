@@ -1011,12 +1011,14 @@ surface（carrying existing relation ＋ resolved `DemandContextReference` ＋
 business enum，**不是** persisted state，也**不是** wire schema；`ADR-001` 未改变。
 
 `AllocatedSubstituteQty` 的 supply conservation（`§2.3.10`）在 **target 侧**同样必须被消费：参与 sum 的
-allocations 违反 `Σ AllocatedSubstituteQty <= EligibleSubstituteSupply` 时，其 target contribution 不是可靠
-substitute supply ⇒ affected Target demand grain 的 `CumulativeApprovedSubstituteSupply` 为
-`DATA_INCOMPLETE`（**不得** clamp ／ 重新分配 ／ 修改 invariant）。同一 reference 对
-`Source Reservation Overlap` 的消费（`SRO-U1` ／ Human Decision `Option A`）走既有 `S1-A` 边界：exact
-unresolved SRO context ⇒ source `EffectiveOpeningSupply` 为 `DATA_INCOMPLETE`，**不得**回退为完整
-`OpeningUsableInventory`。
+allocations 违反 `Σ AllocatedSubstituteQty <= EligibleSubstituteSupply` 时，其 target participation
+**只**在本来会实际贡献 positive eligible supply 时失效 ⇒ affected Target demand grain 的
+`CumulativeApprovedSubstituteSupply` 为 `DATA_INCOMPLETE`；可靠的 `not applicable`、valid but ineligible
+（`PENDING` ／ `REJECTED`）、`AllocatedSubstituteQty = 0` 等合法 `0` 保持 `0`（`§4.4.89`），**不得**因
+**另一个** allocation 的 conservation 失败而被改成 `DATA_INCOMPLETE`（**不得** clamp ／ 重新分配 ／ 修改
+invariant）。同一 reference 对 `Source Reservation Overlap` 的消费（`SRO-U1` ／ Human Decision
+`Option A`）走既有 `S1-A` 边界：exact unresolved SRO context ⇒ source `EffectiveOpeningSupply` 为
+`DATA_INCOMPLETE`，**不得**回退为完整 `OpeningUsableInventory`。
 
 **本澄清不新增任何 canonical field / entity / identity component / grain**：涉及的
 `ProjectedAvailable` ／ `Classification` ／ `ShortageQty` ／ `BufferGap` /

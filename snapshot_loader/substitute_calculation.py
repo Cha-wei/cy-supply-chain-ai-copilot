@@ -1145,11 +1145,15 @@ def _evaluate_target_outcome(
 
     ``conservation_unreliable`` names the accepted ``Substitute Allocation`` records whose supply
     conservation inside their exact Source Demand Context is not reliable (``§2.3.10``: the same
-    exact context's ``Σ AllocatedSubstituteQty`` exceeds its ``EligibleSubstituteSupply``).  Such an
-    allocation's quantity is not conserved, so it is never consumable as reliable substitute supply
-    and the target demand grain stays ``DATA_INCOMPLETE`` instead of exposing
-    ``AllocatedSubstituteQty × substitution_ratio``.  Matching is by the exact allocation record, so
-    an unrelated allocation and an unrelated target grain stay reliable (``§4.4.10``).
+    exact context's ``Σ AllocatedSubstituteQty`` exceeds its ``EligibleSubstituteSupply``).  The
+    existing Target semantics are evaluated **first**: this gate is applied only where the otherwise
+    reliable evaluation would actually contribute positive eligible substitute supply
+    (:attr:`SubstituteEvaluation.contributes`), so a reliable ``not applicable``, a valid but
+    ineligible ``PENDING`` ／ ``REJECTED`` relationship, a legal zero quantity and a stated absence of
+    a relationship all keep their legal-zero result instead of becoming ``DATA_INCOMPLETE`` because
+    some *other* allocation over-allocated the same source context (``§4.4.89``).  Matching is by the
+    exact allocation record, so an unrelated allocation and an unrelated target grain stay reliable
+    (``§4.4.10``).
     """
 
     reference = _artifact_ordinal(outcome)
@@ -1237,29 +1241,6 @@ def _evaluate_target_outcome(
             affected_evidence=ROLE_SUBSTITUTE_ALLOCATION,
         )
 
-    if reference in conservation_unreliable:
-        # ``§2.3.10`` supply conservation: this exact accepted allocation record reserves inside an
-        # exact Source Demand Context whose ``Σ AllocatedSubstituteQty`` already exceeds its
-        # ``EligibleSubstituteSupply``.  The allocated quantity is therefore not conserved and is
-        # never silently over-allocated onto the target side: the grain is DATA_INCOMPLETE rather
-        # than exposing ``AllocatedSubstituteQty × substitution_ratio`` as reliable supply.  The
-        # failure is isolated to this exact allocation record and this exact grain -- the quantity is
-        # never clamped, redistributed, reprioritised or summed differently (``§2.3.10`` /
-        # ``§2.3.11`` B / ``§4.4.10``).
-        return _unresolved(
-            **base,
-            detail=(
-                "the supply conservation of this exact accepted allocation record is not reliable: "
-                "Σ AllocatedSubstituteQty exceeds EligibleSubstituteSupply inside its exact Source "
-                f"Demand Context, so AllocatedSubstituteQty {allocated.text()} is not conserved and "
-                "is never consumable as reliable substitute supply; the target demand grain stays "
-                "DATA_INCOMPLETE and the allocation is never clamped or redistributed (§2.3.10 / "
-                "§2.3.11 B)"
-            ),
-            location=_target_location(grain, reference),
-            affected_evidence=ROLE_SUBSTITUTE_ALLOCATION,
-        )
-
     relationship, problem = _joined_relationship(
         join_key=(grain[0], _join_target_material(allocation, grain), substitute_material),
         index=relationship_index,
@@ -1335,6 +1316,32 @@ def _evaluate_target_outcome(
         )
 
     equivalent = _as_rational(allocated) * ratio
+    if equivalent > 0 and reference in conservation_unreliable:
+        # ``§2.3.10`` supply conservation, applied **last** and only to a participation that would
+        # otherwise actually consume reliable positive substitute supply.  Every legal but
+        # non-contributing outcome above (reliable ``not applicable``, a valid ``PENDING`` ／
+        # ``REJECTED`` relationship, a legal zero quantity, a stated absence of a relationship) is
+        # decided before this gate and is preserved as-is: the allocation identity is not claimed by
+        # a zero contribution, so an over-allocating *other* allocation never turns a valid zero into
+        # ``DATA_INCOMPLETE``.  This exact accepted allocation record reserves inside an exact Source
+        # Demand Context whose ``Σ AllocatedSubstituteQty`` exceeds its ``EligibleSubstituteSupply``,
+        # so the quantity is not conserved and is never silently over-allocated onto the target side.
+        # The failure is isolated to this exact allocation record and this exact grain -- nothing is
+        # clamped, redistributed, reprioritised or summed differently (``§2.3.10`` / ``§2.3.11`` B /
+        # ``§4.4.89`` / ``§4.4.10``).
+        return _unresolved(
+            **base,
+            detail=(
+                "the supply conservation of this exact accepted allocation record is not reliable: "
+                "Σ AllocatedSubstituteQty exceeds EligibleSubstituteSupply inside its exact Source "
+                f"Demand Context, so AllocatedSubstituteQty {allocated.text()} is not conserved and "
+                "is never consumable as reliable substitute supply; the target demand grain stays "
+                "DATA_INCOMPLETE and the allocation is never clamped or redistributed (§2.3.10 / "
+                "§2.3.11 B)"
+            ),
+            location=_target_location(grain, reference),
+            affected_evidence=ROLE_SUBSTITUTE_ALLOCATION,
+        )
     return _resolved(
         **base, equivalent_target_qty=equivalent, eligibility_reason=ELIGIBLE_APPROVED
     )
