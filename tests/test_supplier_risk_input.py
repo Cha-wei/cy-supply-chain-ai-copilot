@@ -161,11 +161,17 @@ class SupplierRiskInputTestCase(ProcurementRecommendationTestCase):
         supplier_identities: tuple[dict[str, Any], ...] = (),
         supplier_relationships: tuple[dict[str, Any], ...] = (),
         supplier_performances: tuple[dict[str, Any], ...] = (),
+        extra_plant_families: tuple[tuple[Any, Any, Any, Any], ...] = (),
         analysis_run_id: str = "RUN-1",
         package_id: str = "SIMULATED-PKG-0001",
         name: str,
     ):
-        """Assemble one registered chain with optional supplier-side roles (9 ／ 10 ／ 11)."""
+        """Assemble one registered chain with optional supplier-side roles (9 ／ 10 ／ 11).
+
+        ``extra_plant_families`` states additional Plant-scoped demand families of the same materials
+        inside the *same* analysis run (``(plant_id, material_code, quantity, required_date)``), so a
+        Plant-isolation test consumes genuinely formed upstream results instead of a fabricated one.
+        """
 
         demand = [
             Demand(material, material, quantity, date)
@@ -187,6 +193,7 @@ class SupplierRiskInputTestCase(ProcurementRecommendationTestCase):
             supplier_identities=supplier_identities,
             supplier_relationships=supplier_relationships,
             supplier_performances=supplier_performances,
+            extra_plant_families=extra_plant_families,
             analysis_run_id=analysis_run_id,
             package_id=package_id,
             name=name,
@@ -503,34 +510,50 @@ class CompositionTests(SupplierRiskInputTestCase):
         self.assertEqual(result.analysis_date, built.construction.analysis_run.analysis_date)
 
     def test_a12_the_same_material_in_two_plants_keeps_its_own_need_date(self) -> None:
-        built = self.eligible_chain("a12-plant-isolation")
+        # A genuine second Plant demand for the *same* material inside the same analysis run: both
+        # Plant-scoped recommendation contexts are produced by the registered chain, each with its own
+        # upstream shortage reference -- nothing about the upstream result is fabricated.
+        built = self.build_chain(
+            extra_plant_families=((OTHER_PLANT, DEMAND, "120", D1),),
+            moq_policies=(
+                moq_policy_record(DEMAND, moq="100"),
+                moq_policy_record(
+                    DEMAND,
+                    moq="100",
+                    plant=OTHER_PLANT,
+                    locator="SIMULATED-SRC-MOQ-P2",
+                ),
+            ),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            name="a12-plant-isolation",
+        )
         recommendations = self.recommendations(built)
-        first = recommendations.for_family(PLANT, DEMAND)
-        assert first is not None
-        # A second Plant demanding the same material: the fixture package is single-plant, so the
-        # upstream entry is stated directly.  The seam must keep the two plant-scoped dates isolated.
-        second = dataclasses.replace(
-            first, plant_id=OTHER_PLANT, recommendation_need_date=D1
-        )
-        two_plants = dataclasses.replace(
-            recommendations, recommendations=(first, second)
-        )
-        result = self.supplier_input(built, recommendations=two_plants)
-        first_context = result.context_for(PLANT, SUPPLIER, DEMAND)
-        second_context = result.context_for(OTHER_PLANT, SUPPLIER, DEMAND)
-        assert first_context is not None and second_context is not None
-        self.assertEqual(first_context.recommendation_need_date, D2)
-        self.assertEqual(second_context.recommendation_need_date, D1)
+        # Each Plant's own entry carries its own truthful shortage reference.
+        for plant_id, expected_date in ((PLANT, D2), (OTHER_PLANT, D1)):
+            entry = recommendations.for_family(plant_id, DEMAND)
+            assert entry is not None
+            self.assertEqual(entry.recommendation_need_date, expected_date)
+            reference = entry.shortage_reference
+            assert reference is not None
+            self.assertEqual(reference.rule, "BR-SHORTAGE-001")
+            self.assertEqual(reference.grain, (plant_id, DEMAND, expected_date))
+
+        result = self.supplier_input(built, recommendations=recommendations)
+        first = result.context_for(PLANT, SUPPLIER, DEMAND)
+        second = result.context_for(OTHER_PLANT, SUPPLIER, DEMAND)
+        assert first is not None and second is not None
+        self.assertEqual(first.recommendation_need_date, D2)
+        self.assertEqual(second.recommendation_need_date, D1)
         self.assertNotEqual(
-            first_context.recommendation_need_date,
-            second_context.recommendation_need_date,
+            first.recommendation_need_date, second.recommendation_need_date
         )
         self.assertEqual(len(result.evaluation_contexts), 2)
+        self.assertEqual(result.issues, ())
         # The business grain never absorbs plant_id; plant stays evaluation context.
-        self.assertEqual(first_context.grain, (SUPPLIER, DEMAND))
-        self.assertEqual(
-            first_context.evaluation_context, (PLANT, DEMAND, SUPPLIER)
-        )
+        self.assertEqual(first.grain, (SUPPLIER, DEMAND))
+        self.assertEqual(first.evaluation_context, (PLANT, DEMAND, SUPPLIER))
+        self.assertEqual(second.evaluation_context, (OTHER_PLANT, DEMAND, SUPPLIER))
 
     def test_a13_a_reliable_need_date_forms_the_evaluation_context(self) -> None:
         built = self.eligible_chain("a13-reliable-need-date")
@@ -554,9 +577,12 @@ class CompositionTests(SupplierRiskInputTestCase):
         recommendations = self.recommendations(built)
         entry = recommendations.for_family(PLANT, DEMAND)
         assert entry is not None
-        # The procurement quantity is DATA_INCOMPLETE while RecommendationNeedDate stays reliable.
+        # The procurement quantity is DATA_INCOMPLETE while RecommendationNeedDate stays reliable and
+        # is still supported by the entry's own matching shortage reference.
         self.assertEqual(entry.outcome, "DATA_INCOMPLETE")
         self.assertEqual(entry.recommendation_need_date, D2)
+        assert entry.shortage_reference is not None
+        self.assertEqual(entry.shortage_reference.grain, (PLANT, DEMAND, D2))
         result = self.supplier_input(built, recommendations=recommendations)
         context = result.context_for(PLANT, SUPPLIER, DEMAND)
         assert context is not None
@@ -611,6 +637,19 @@ class CompositionTests(SupplierRiskInputTestCase):
         # Valid absence is never DATA_INCOMPLETE and generates no issue.
         self.assertEqual(result.issues, ())
         self.assertEqual(result.valid_absence_grains, ((PLANT, OTHER),))
+        # Audit: the seam consumes the upstream valid-absence surface **verbatim** -- it neither adds
+        # nor drops a family and therefore never claims a stronger authority than the registered
+        # upstream result (which already derives it from the consumed shortage result and validates its
+        # own family partition).  Re-validating it here would need the shortage result as a new runtime
+        # input, which A′ does not authorise and which this seam must not invent.
+        upstream = self.recommendations(built)
+        self.assertEqual(
+            set(result.valid_absence_grains), set(upstream.valid_absence_grains)
+        )
+        self.assertEqual(
+            len(result.valid_absence_grains), len(set(result.valid_absence_grains))
+        )
+        self.assertEqual(result.valid_absence_grains, tuple(sorted(result.valid_absence_grains)))
 
     def test_a17_a_not_provided_evidence_role_is_capability_unavailable(self) -> None:
         # Supplier-Material Relationship provided, Supplier Performance not provided.
@@ -654,6 +693,152 @@ class CompositionTests(SupplierRiskInputTestCase):
                 for issue in missing_result.capability_issues
             )
         )
+
+    def test_a21_a_tampered_need_date_without_a_matching_reference_fails_closed(self) -> None:
+        built = self.eligible_chain("a21-tampered-date")
+        recommendations = self.recommendations(built)
+        entry = recommendations.for_family(PLANT, DEMAND)
+        assert entry is not None and entry.shortage_reference is not None
+        # The claimed date is altered while the entry keeps its original upstream shortage reference.
+        tampered = dataclasses.replace(entry, recommendation_need_date=D1)
+        replaced = dataclasses.replace(recommendations, recommendations=(tampered,))
+        result = self.supplier_input(built, recommendations=replaced)
+        context = result.context_for(PLANT, SUPPLIER, DEMAND)
+        assert context is not None
+        # Not a normal context: the claimed date is neither trusted nor replaced ...
+        self.assertIsNone(context.recommendation_need_date)
+        self.assertFalse(context.recommendation_need_date_resolved)
+        self.assertEqual(
+            context.root_condition, "RECOMMENDATION_NEED_DATE_LINKAGE_MISMATCH"
+        )
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in context.rule_issues],
+            [("PROVENANCE", "PROVENANCE_MISMATCH")],
+        )
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in result.rule_issues],
+            [("PROVENANCE", "PROVENANCE_MISMATCH")],
+        )
+        # ... while the reliable supplier-side evidence stays visible (fail closed, not dropped).
+        self.assertEqual(context.eligibility.outcome, ELIGIBILITY_ELIGIBLE)
+        self.assertEqual(len(context.performance), 1)
+
+    def test_a22_a_tampered_plant_without_a_matching_reference_fails_closed(self) -> None:
+        built = self.eligible_chain("a22-tampered-plant")
+        recommendations = self.recommendations(built)
+        entry = recommendations.for_family(PLANT, DEMAND)
+        assert entry is not None and entry.shortage_reference is not None
+        # The Plant is altered while the reference still points at the original Plant.
+        tampered = dataclasses.replace(entry, plant_id=OTHER_PLANT)
+        replaced = dataclasses.replace(recommendations, recommendations=(tampered,))
+        result = self.supplier_input(built, recommendations=replaced)
+        context = result.context_for(OTHER_PLANT, SUPPLIER, DEMAND)
+        assert context is not None
+        self.assertIsNone(context.recommendation_need_date)
+        self.assertEqual(
+            context.root_condition, "RECOMMENDATION_NEED_DATE_LINKAGE_MISMATCH"
+        )
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in context.rule_issues],
+            [("PROVENANCE", "PROVENANCE_MISMATCH")],
+        )
+        # The original Plant's context is untouched: no date moved with the claim.
+        self.assertIsNone(result.context_for(PLANT, SUPPLIER, DEMAND))
+
+    def test_a23_a_tampered_material_with_a_foreign_reference_fails_closed(self) -> None:
+        built = self.build_chain(
+            supplier_relationships=(
+                relationship_record(material=DEMAND),
+                relationship_record(material=OTHER),
+            ),
+            supplier_performances=(
+                performance_record(material=DEMAND),
+                performance_record(material=OTHER),
+            ),
+            name="a23-tampered-material",
+        )
+        recommendations = self.recommendations(built)
+        entry = recommendations.for_family(PLANT, DEMAND)
+        assert entry is not None and entry.shortage_reference is not None
+        # The material is altered while the reference still names the original material: an eligible
+        # relationship for the new material exists, so a *trusting* seam would form a normal context.
+        tampered = dataclasses.replace(entry, material_code=OTHER)
+        replaced = dataclasses.replace(recommendations, recommendations=(tampered,))
+        result = self.supplier_input(built, recommendations=replaced)
+        context = result.context_for(PLANT, SUPPLIER, OTHER)
+        assert context is not None
+        self.assertIsNone(context.recommendation_need_date)
+        self.assertEqual(
+            context.root_condition, "RECOMMENDATION_NEED_DATE_LINKAGE_MISMATCH"
+        )
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in context.rule_issues],
+            [("PROVENANCE", "PROVENANCE_MISMATCH")],
+        )
+
+    def test_a24_a_missing_or_foreign_rule_reference_is_not_a_linkage(self) -> None:
+        built = self.eligible_chain("a24-reference-shapes")
+        recommendations = self.recommendations(built)
+        entry = recommendations.for_family(PLANT, DEMAND)
+        assert entry is not None and entry.shortage_reference is not None
+        # (a) no reference at all: the required linkage is absent, not mismatched.
+        absent = dataclasses.replace(entry, shortage_reference=None)
+        absent_result = self.supplier_input(
+            built,
+            recommendations=dataclasses.replace(
+                recommendations, recommendations=(absent,)
+            ),
+        )
+        absent_context = absent_result.context_for(PLANT, SUPPLIER, DEMAND)
+        assert absent_context is not None
+        self.assertIsNone(absent_context.recommendation_need_date)
+        self.assertEqual(
+            absent_context.root_condition, "RECOMMENDATION_NEED_DATE_LINKAGE_ABSENT"
+        )
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in absent_context.rule_issues],
+            [("PROVENANCE", "PROVENANCE_UNRESOLVED")],
+        )
+        # (b) a reference to another rule is not the registered shortage linkage either.
+        foreign = dataclasses.replace(
+            entry, shortage_reference=dataclasses.replace(
+                entry.shortage_reference, rule="BR-NOT-THE-SHORTAGE-RULE"
+            )
+        )
+        foreign_result = self.supplier_input(
+            built,
+            recommendations=dataclasses.replace(
+                recommendations, recommendations=(foreign,)
+            ),
+        )
+        foreign_context = foreign_result.context_for(PLANT, SUPPLIER, DEMAND)
+        assert foreign_context is not None
+        self.assertIsNone(foreign_context.recommendation_need_date)
+        self.assertEqual(
+            foreign_context.root_condition, "RECOMMENDATION_NEED_DATE_LINKAGE_MISMATCH"
+        )
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in foreign_context.rule_issues],
+            [("PROVENANCE", "PROVENANCE_MISMATCH")],
+        )
+
+    def test_a25_a_coherent_entry_with_a_matching_reference_still_forms_the_context(self) -> None:
+        built = self.eligible_chain("a25-coherent-linkage")
+        recommendations = self.recommendations(built)
+        entry = recommendations.for_family(PLANT, DEMAND)
+        assert entry is not None and entry.shortage_reference is not None
+        self.assertEqual(entry.shortage_reference.rule, "BR-SHORTAGE-001")
+        self.assertEqual(
+            entry.shortage_reference.grain, (PLANT, DEMAND, entry.recommendation_need_date)
+        )
+        result = self.supplier_input(built, recommendations=recommendations)
+        context = result.context_for(PLANT, SUPPLIER, DEMAND)
+        assert context is not None
+        self.assertEqual(context.recommendation_need_date, D2)
+        self.assertTrue(context.recommendation_need_date_resolved)
+        self.assertEqual(context.root_condition, None)
+        self.assertEqual(context.issues, ())
+        self.assertEqual(result.issues, ())
 
     def test_a20_determinism_frozen_surfaces_and_stable_serialization(self) -> None:
         first = self.build_chain(

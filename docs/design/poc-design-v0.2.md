@@ -5515,6 +5515,16 @@ BR-SHORTAGE-001 FirstShortageDate
 Supplier Risk **不得**重算 `FirstShortageDate`、**不得**由 caller override、**不得**重读 raw date
 evidence，也**不得**从其他 Plant ／ Material 借用日期。
 
+**Runtime enforcement：** 一个 reliable `RecommendationNeedDate` **只**在该 recommendation entry 自身
+携带的 upstream `shortage_reference` **恰好**指向同一 `plant_id` + `material_code` +
+`RecommendationNeedDate`（且 `rule = BR-SHORTAGE-001`）时才被接受。reference 缺失、或指向其他 Plant ／
+material ／ date ／ rule 时，**不得**被重建、修复或替换：该 evaluation context 保持**无 need date**
+（可靠 supplier-side evidence 仍保留），并以既有 `PROVENANCE` taxonomy fail closed ——
+**缺失** linkage → `PROVENANCE` ／ `PROVENANCE_UNRESOLVED`；**已建立但指向错误 context** →
+`PROVENANCE` ／ `PROVENANCE_MISMATCH`（`§4.4.69` ／ `§4.4.80` #8 ／ `§4.4.81` #11 ／ #12 ／ `§4.4.93`；
+`§4.4.93` 明确要求此类 provenance 问题**不得**仅写成 `CONSISTENCY_CONFLICT`）。
+**不得**新增 Category ／ Reason。
+
 **E. Registered context behavior**
 
 | # | 情形 | 行为 |

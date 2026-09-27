@@ -861,6 +861,13 @@ database field / API enum / ranking / selection result）。
 | `RecommendationNeedDate` | `DATE` | `CONDITIONAL`（`Classification = SHORTAGE` 且 Procurement Recommendation applicable 时 `REQUIRED`） | `CONTEXT` | 采购建议所使用的 business need date | 当前 POC `= FirstShortageDate` | 见下方条件性说明 | `BR-PROCUREMENT-001`（producer）；`BR-SUPPLIER-RISK-001`（consumer，经 §2.7.25 ／ I-10 composition） |
 | `ApplicableMOQ` | `NON_NEGATIVE_QUANTITY` | `CONDITIONAL`（`Classification = SHORTAGE` 时 `REQUIRED`） | `POLICY_INPUT` | 当前采购建议所适用的最小采购数量约束 | `ApplicableMOQ >= 0` | `DATA_INCOMPLETE`；**不得默认成 0** | `BR-PROCUREMENT-001` |
 
+> **`RecommendationNeedDate` consumer boundary（`A′`，Issue #162）：** `BR-SUPPLIER-RISK-001` 经
+> §2.7.25 ／ I-10 composition 消费该 date 时，**只**接受该 recommendation entry 自身携带的
+> `shortage_reference` 恰好指向同一 `plant_id` + `material_code` + `RecommendationNeedDate` 的值；
+> reference 缺失 ／ 指向其他 context 时以既有 `PROVENANCE` ／ `PROVENANCE_UNRESOLVED` ／
+> `PROVENANCE_MISMATCH` fail closed（登记见 `data-validation.md` §4.4.103），该字段的
+> `Class` ／ `Requiredness` ／ logical type **未改变**。
+
 > **`ApplicableMOQ` 仍是原有 canonical attribute** —— **未新增** Data Dictionary field row。
 >
 > **Canonical Applicability Contract = `DESIGN RESOLVED`**（**§4.5.22 Option D Implementation Record**）：

@@ -247,8 +247,9 @@ def inventory_record(
     on_hand: Any = "100",
     snapshot_time: Any = SNAPSHOT_TIME,
     status: Any = "AVAILABLE",
+    plant: Any = PLANT,
 ) -> dict[str, Any]:
-    record: dict[str, Any] = {"plant_id": PLANT}
+    record: dict[str, Any] = {"plant_id": plant}
     if material is not None:
         record["material_code"] = material
     if snapshot_time is not None:
@@ -262,8 +263,8 @@ def inventory_record(
     )
 
 
-def safety_stock_record(material: Any, value: Any) -> dict[str, Any]:
-    record: dict[str, Any] = {"plant_id": PLANT}
+def safety_stock_record(material: Any, value: Any, *, plant: Any = PLANT) -> dict[str, Any]:
+    record: dict[str, Any] = {"plant_id": plant}
     if material is not None:
         record["material_code"] = material
     if value is not None:
@@ -420,6 +421,7 @@ class ShortageRuleTestCase(unittest.TestCase):
         supplier_identities: tuple[dict[str, Any], ...] = (),
         supplier_relationships: tuple[dict[str, Any], ...] = (),
         supplier_performances: tuple[dict[str, Any], ...] = (),
+        extra_plant_families: tuple[tuple[Any, Any, Any, Any], ...] = (),
         analysis_run_id: str = "RUN-1",
         analysis_date: Any = "2026-10-01",
         package_id: str = "SIMULATED-PKG-0001",
@@ -522,6 +524,68 @@ class ShortageRuleTestCase(unittest.TestCase):
             inbound_record(material, ordered=ordered, arrival=arrival)
             for material, ordered, arrival in inbound
         ]
+
+        # --- optional extra Plant-scoped families of one material -------------------------
+        #
+        # A genuine second Plant demand for the *same* material inside the same analysis run, so a
+        # Plant-isolation test never has to fabricate an upstream result to obtain two Plant-scoped
+        # contexts.  The family is stated through exactly the same registered roles (Production
+        # Requirement + BOM Component + Inventory Snapshot + Configured Safety Stock) and its records
+        # are appended after every existing record, so no artifact ordinal moves.  No Target
+        # Applicability context is added, so the substitute side stays "not applicable" for it.
+        extra_families: list[tuple[Any, Any, Any, int, int]] = []
+        for plant_id, material_code, quantity, required_date in extra_plant_families:
+            requirement_ordinal = len(requirement_records)
+            requirement_records.append(
+                with_provenance(
+                    {
+                        "plant_id": plant_id,
+                        "material_code": material_code,
+                        "required_date": required_date,
+                        "ProductionQty": quantity,
+                    },
+                    [
+                        (
+                            "ProductionQty",
+                            [f"SIMULATED-SRC-REQ-{plant_id}-{material_code}"],
+                            None,
+                        )
+                    ],
+                )
+            )
+            bom_ordinal = len(bom_records)
+            bom_records.append(
+                with_provenance(
+                    {
+                        "plant_id": plant_id,
+                        "required_date": required_date,
+                        "material_code": material_code,
+                        "BOMComponentQty": "1",
+                        "loss_rate": "0",
+                    },
+                    [
+                        (
+                            "BOMComponentQty",
+                            [f"SIMULATED-SRC-BOM-{plant_id}-{material_code}"],
+                            None,
+                        ),
+                        (
+                            "loss_rate",
+                            [f"SIMULATED-SRC-LOSS-{plant_id}-{material_code}"],
+                            BASIS_LOSS,
+                        ),
+                    ],
+                )
+            )
+            inventory_records.append(
+                inventory_record(material_code, on_hand="100", plant=plant_id)
+            )
+            safety_records.append(
+                safety_stock_record(material_code, "5", plant=plant_id)
+            )
+            extra_families.append(
+                (plant_id, material_code, required_date, requirement_ordinal, bom_ordinal)
+            )
 
         datasets: list[tuple[str, list[dict[str, Any]]]] = [
             (ROLE_REQUIREMENT, requirement_records),
@@ -695,6 +759,42 @@ class ShortageRuleTestCase(unittest.TestCase):
                         ),
                     ),
                     loss_rate=loss_rate,
+                    resolution_basis=BASIS_LOSS,
+                )
+            )
+
+        for (
+            plant_id,
+            material_code,
+            required_date,
+            requirement_ordinal,
+            bom_ordinal,
+        ) in extra_families:
+            # The same two registered handoffs the main loop states, scoped to this extra Plant.
+            bom_binding.append(
+                BomParentContextHandoff(
+                    bom_evidence=cite(ROLE_BOM, ARTIFACT_BOM, bom_ordinal),
+                    parent_evidence=cite(
+                        ROLE_REQUIREMENT, ARTIFACT_REQUIREMENT, requirement_ordinal
+                    ),
+                )
+            )
+            loss_handoffs.append(
+                LossRateHandoff(
+                    plant_id=plant_id,
+                    parent_material_code=material_code,
+                    required_date=required_date,
+                    evidence=cite(ROLE_BOM, ARTIFACT_BOM, bom_ordinal),
+                    component_material_code=material_code,
+                    loss_rate_evidence=(
+                        cite(
+                            ROLE_BOM,
+                            ARTIFACT_BOM,
+                            bom_ordinal,
+                            f"SIMULATED-SRC-LOSS-{plant_id}-{material_code}",
+                        ),
+                    ),
+                    loss_rate="0",
                     resolution_basis=BASIS_LOSS,
                 )
             )

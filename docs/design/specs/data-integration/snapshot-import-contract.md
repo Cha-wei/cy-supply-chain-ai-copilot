@@ -6967,6 +6967,12 @@ evaluation context        = plant_id ＋ material_code ＋ RecommendationNeedDat
 RecommendationNeedDate    = BR-SHORTAGE-001 既有 FirstShortageDate handoff
                             （§4.4.65 ／ I-4；**不得**重算、**不得** caller override、
                             **不得**建立第二个 date authority）
+need-date linkage         = 一个 reliable RecommendationNeedDate **只**在该 recommendation entry
+                            自身携带的 shortage_reference 恰好指向同一 plant_id + material_code +
+                            RecommendationNeedDate（rule = BR-SHORTAGE-001）时被接受；缺失 →
+                            PROVENANCE ／ PROVENANCE_UNRESOLVED；指向其他 context →
+                            PROVENANCE ／ PROVENANCE_MISMATCH（§4.4.69 ／ §4.4.93）；
+                            **不得**重建 reference，也**不得**把该 date 视为可信
 context behavior          = reliable need date → context forms；procurement **quantity** DATA_INCOMPLETE
                             ＋ reliable need date → context **仍**forms（MOQ failure 不得污染）；
                             need date unresolved → unresolved composition state（保留 supplier-side

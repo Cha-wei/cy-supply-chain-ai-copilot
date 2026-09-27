@@ -38,7 +38,12 @@ Boundaries preserved by construction:
 * ``RecommendationNeedDate`` keeps its single registered authority (``BR-SHORTAGE-001``
   ``FirstShortageDate`` → the registered Procurement Recommendation ／ handoff): it is never
   recomputed, never caller-overridden, never re-read from raw evidence and never borrowed across
-  Plants (``§4.4.65`` ／ ``§4.3.31`` G I-4);
+  Plants (``§4.4.65`` ／ ``§4.3.31`` G I-4).  A recommendation entry's claimed date is only accepted
+  when the entry's **own upstream shortage reference** names exactly that ``plant_id`` +
+  ``material_code`` + ``RecommendationNeedDate``; a reference that is absent or points elsewhere is
+  never repaired -- the context keeps the reliable supplier-side evidence with no need date and fails
+  closed with the existing ``PROVENANCE`` ／ ``PROVENANCE_UNRESOLVED`` ／ ``PROVENANCE_MISMATCH``
+  semantics (``§4.4.69`` ／ ``§4.4.93``);
 * an unavailable capability (a required supplier-side evidence role was **not provided**) stays the
   registered ``EVIDENCE_AVAILABILITY`` ／ ``EVIDENCE_ROLE_NOT_PROVIDED`` condition and is never faked
   into a business ``DATA_INCOMPLETE`` Risk Card (``§4.4.6`` Capability C ／ ``§4.4.80`` #2 ／
@@ -66,16 +71,21 @@ from .canonical_objects import (
     read_provenance_associations,
 )
 from .constants import (
+    CATEGORY_PROVENANCE,
     CATEGORY_SEMANTIC_RESOLUTION,
     LAYER_2,
+    REASON_PROVENANCE_MISMATCH,
+    REASON_PROVENANCE_UNRESOLVED,
     REASON_SEMANTIC_UNRESOLVED,
 )
 from .issues import Issue
 from .procurement_recommendation import (
     PROCUREMENT_RECOMMENDATION_RULE_ID,
+    ProcurementRecommendation,
     ProcurementRecommendationResult,
 )
 from .result_binding import require_same_accepted_package, require_same_analysis_run
+from .shortage_calculation import SHORTAGE_RULE_ID
 
 # --- vocabulary --------------------------------------------------------------------
 
@@ -116,6 +126,10 @@ ROOT_MAPPING_AMBIGUOUS: str = "SOURCING_STATUS_MAPPING_AMBIGUOUS"
 ROOT_CONFLICTING_RELATIONSHIP_EVIDENCE: str = "SUPPLIER_RELATIONSHIP_EVIDENCE_CONFLICT"
 ROOT_RELATIONSHIP_ABSENT: str = "SUPPLIER_RELATIONSHIP_ABSENT"
 ROOT_NEED_DATE_UNRESOLVED: str = "RECOMMENDATION_NEED_DATE_UNRESOLVED"
+#: The claimed ``RecommendationNeedDate`` of an entry whose own upstream shortage reference does not
+#: support it: the required linkage is either absent or points at another context.
+ROOT_NEED_DATE_LINKAGE_ABSENT: str = "RECOMMENDATION_NEED_DATE_LINKAGE_ABSENT"
+ROOT_NEED_DATE_LINKAGE_MISMATCH: str = "RECOMMENDATION_NEED_DATE_LINKAGE_MISMATCH"
 
 #: The **existing** registered capability-readiness pair for a required logical evidence role that the
 #: accepted package did not provide (``§4.4.80`` #2 ／ ``§4.4.81`` #2), used verbatim exactly as the
@@ -253,10 +267,14 @@ class SupplierRiskEvaluationContext:
     Plants (``§2.7.25`` C).
 
     ``recommendation_need_date`` is the registered ``RecommendationNeedDate`` of that exact
-    ``plant_id`` + ``material_code`` family.  When it is ``None`` the composition state stays
-    **unresolved** (``§2.7.25`` F3): the context is still formed so the reliable supplier-side evidence
-    is preserved, and a future ``LeadTimeRisk`` ／ ``OverallSupplierRisk`` must fail closed on it.  No
-    date is guessed here.
+    ``plant_id`` + ``material_code`` family -- and only when the consumed recommendation entry's own
+    upstream shortage reference supports exactly that Plant ／ material ／ date (``§4.4.65`` ／
+    ``§4.4.66`` ／ ``§4.4.69`` ／ ``§4.4.93``).  When it is ``None`` the composition state stays
+    **unresolved**, either because the need date itself is unresolved (``§2.7.25`` F3) or because the
+    claimed date's required linkage is absent ／ inconsistent (``PROVENANCE`` ／
+    ``PROVENANCE_UNRESOLVED`` ／ ``PROVENANCE_MISMATCH``): the context is still formed so the reliable
+    supplier-side evidence is preserved, and a future ``LeadTimeRisk`` ／ ``OverallSupplierRisk`` must
+    fail closed on it.  No date is guessed and no date is borrowed from another context.
 
     ``performance`` ／ ``unresolved_performance`` carry the real accepted ``Supplier Performance``
     canonical objects of this exact supplier + material -- resolved and supplied-but-ungrainable (for
@@ -327,7 +345,10 @@ class SupplierRiskInputResult:
     ``evaluation_contexts`` states one composition entry per (Procurement Recommendation Context,
     eligible relationship) pair.  ``valid_absence_grains`` names the families whose reliable
     ``NORMAL`` ／ ``BUFFER_BREACH`` horizon means **no** Supplier Risk evaluation context exists at all
-    (``§4.4.87``: valid absence, which is not ``DATA_INCOMPLETE``).
+    (``§4.4.87``: valid absence, which is not ``DATA_INCOMPLETE``).  It is consumed **verbatim** from
+    the upstream registered result, which already derives it from the consumed shortage result and
+    validates its own family partition: this seam never widens it, never adds a family of its own and
+    therefore never claims a stronger guarantee than the upstream result provides.
 
     ``capability_issues`` carries the registered ``EVIDENCE_AVAILABILITY`` ／
     ``EVIDENCE_ROLE_NOT_PROVIDED`` finding when a required supplier-side evidence role was not provided:
@@ -802,11 +823,19 @@ def _composition(
     prevent it (the failure stays with the procurement result); an unresolved
     ``RecommendationNeedDate`` keeps the context with an unresolved composition state; and a reliable
     ``NORMAL`` ／ ``BUFFER_BREACH`` valid absence forms no context at all.
+
+    A claimed reliable date is only accepted when the entry's **own upstream shortage reference**
+    supports exactly that ``plant_id`` + ``material_code`` + ``RecommendationNeedDate``
+    (``§4.4.65`` ／ ``§4.4.66`` ／ ``§4.4.69`` ／ ``§4.4.93``): an entry whose reference is absent or
+    points at another context never becomes a normal evaluation context and never has its claimed date
+    trusted -- the context keeps the reliable supplier-side evidence with **no** need date, so a future
+    ``LeadTimeRisk`` ／ ``OverallSupplierRisk`` must fail closed.
     """
 
     eligible = [item for item in relationships if item.eligible]
     contexts: list[SupplierRiskEvaluationContext] = []
     for entry in recommendations.recommendations:
+        decision = _need_date_decision(entry)
         for relationship in eligible:
             if relationship.material_code != entry.material_code:
                 continue
@@ -815,46 +844,137 @@ def _composition(
                 supplier_id=relationship.supplier_id,
                 material_code=entry.material_code,
             )
-            unresolved_need_date = entry.recommendation_need_date is None
             contexts.append(
                 SupplierRiskEvaluationContext(
                     plant_id=entry.plant_id,
                     material_code=entry.material_code,
                     supplier_id=relationship.supplier_id,
-                    recommendation_need_date=entry.recommendation_need_date,
+                    recommendation_need_date=decision.need_date,
                     eligibility=relationship,
                     performance=performance,
                     unresolved_performance=unresolved_performance,
-                    root_condition=(
-                        ROOT_NEED_DATE_UNRESOLVED if unresolved_need_date else None
-                    ),
-                    notes=(
-                        (
-                            "the Procurement Recommendation quantity of this family is "
-                            "DATA_INCOMPLETE while its RecommendationNeedDate stays reliable, so the "
-                            "Supplier Risk evaluation context is still formed: an MOQ ／ policy-input "
-                            "failure never pollutes Supplier Risk (§2.7.25 F2)",
-                        )
-                        if entry.outcome is not None and not unresolved_need_date
-                        else (
-                            "RecommendationNeedDate is unresolved for this family, so the composition "
-                            "state stays unresolved: the context keeps the reliable supplier-side "
-                            "evidence, and a future LeadTimeRisk ／ OverallSupplierRisk must fail "
-                            "closed on it -- no date is guessed and no second date authority exists "
-                            "(§2.7.25 F3 / §2.7.16)"
-                        )
-                        if unresolved_need_date
-                        else (
-                            "the registered RecommendationNeedDate of this exact plant_id + "
-                            "material_code family forms the evaluation context of this eligible "
-                            "supplier-material relationship; the business grain stays supplier_id + "
-                            "material_code and plant_id is evaluation context only (§2.7.25 C ／ F1)",
-                        )
-                    ),
-                    inherited_issues=entry.issues if unresolved_need_date else (),
+                    root_condition=decision.root_condition,
+                    notes=(decision.note,),
+                    inherited_issues=decision.inherited_issues,
+                    rule_issues=decision.rule_issues,
                 )
             )
     return contexts
+
+
+@dataclass(frozen=True, slots=True)
+class _NeedDateDecision:
+    """What one recommendation entry's ``RecommendationNeedDate`` may contribute to a context."""
+
+    need_date: Any
+    root_condition: str | None
+    note: str
+    inherited_issues: tuple[Issue, ...] = ()
+    rule_issues: tuple[Issue, ...] = ()
+
+
+def _need_date_decision(entry: ProcurementRecommendation) -> _NeedDateDecision:
+    """Validate one entry's date claim against its own upstream shortage reference.
+
+    Only the reference the upstream result **actually carries** is consumed (``§2.7.25`` D): it is
+    never reconstructed or repaired.  The two registered linkage failure modes are mapped onto the
+    existing ``PROVENANCE`` pair exactly as the Analysis-Run binding already maps them -- an **absent**
+    required linkage is ``PROVENANCE_UNRESOLVED``, a linkage that **is** established but points at
+    another Plant ／ material ／ date (or another rule) is ``PROVENANCE_MISMATCH`` (``§4.4.80`` #8 ／
+    ``§4.4.81`` #11 ／ #12 ／ ``§4.4.93``, which explicitly forbids writing such a problem as
+    ``CONSISTENCY_CONFLICT``).  No new Category ／ Reason is introduced.
+    """
+
+    if entry.recommendation_need_date is None:
+        # A genuinely unresolved date stays unresolved: it is never upgraded into a reliable date
+        # because another field or reference happens to exist (§2.7.25 F3).
+        return _NeedDateDecision(
+            need_date=None,
+            root_condition=ROOT_NEED_DATE_UNRESOLVED,
+            note=(
+                "RecommendationNeedDate is unresolved for this family, so the composition state stays "
+                "unresolved: the context keeps the reliable supplier-side evidence, and a future "
+                "LeadTimeRisk ／ OverallSupplierRisk must fail closed on it -- no date is guessed and "
+                "no second date authority exists (§2.7.25 F3 / §2.7.16)"
+            ),
+            inherited_issues=entry.issues,
+        )
+
+    expected = (entry.plant_id, entry.material_code, entry.recommendation_need_date)
+    reference = entry.shortage_reference
+    if reference is None or reference.rule != SHORTAGE_RULE_ID or tuple(reference.grain) != expected:
+        absent = reference is None
+        return _NeedDateDecision(
+            need_date=None,
+            root_condition=(
+                ROOT_NEED_DATE_LINKAGE_ABSENT if absent else ROOT_NEED_DATE_LINKAGE_MISMATCH
+            ),
+            note=(
+                "the recommendation entry's own upstream shortage reference "
+                + ("is absent" if absent else f"does not support this context ({reference!r})")
+                + ", so its claimed RecommendationNeedDate is never trusted: the context keeps the "
+                "reliable supplier-side evidence with no need date and fails closed "
+                "(§4.4.65 / §4.4.66 / §4.4.69 / §4.4.93)"
+            ),
+            rule_issues=(
+                Issue(
+                    location=(
+                        "supplier_risk_input.need_date_linkage["
+                        f"{_sort_text(entry.plant_id)}/{_sort_text(entry.material_code)}/"
+                        f"{_sort_text(entry.recommendation_need_date)}]"
+                    ),
+                    detail=(
+                        "the consumed Procurement Recommendation entry claims the context "
+                        f"{expected!r}, but the shortage reference it actually carries "
+                        + ("is absent" if absent else f"is {reference!r}")
+                        + ": the required linkage between the recommendation and the "
+                        "BR-SHORTAGE-001 result it derives from cannot be established for this exact "
+                        "Plant ／ material ／ RecommendationNeedDate, so the claimed date is not "
+                        "trusted, the Supplier Risk evaluation context stays without a need date and "
+                        "no date is borrowed from another context (§4.4.65 / §4.4.66 / §4.4.69 / "
+                        "§4.4.93)"
+                    ),
+                    category=CATEGORY_PROVENANCE,
+                    reason=(
+                        REASON_PROVENANCE_UNRESOLVED if absent else REASON_PROVENANCE_MISMATCH
+                    ),
+                    layer=LAYER_2,
+                    affected_evidence=PROCUREMENT_RECOMMENDATION_RULE_ID,
+                    blast_radius="the Supplier Risk evaluation context of this family only",
+                    design_reference=(
+                        "§4.4.65 / §4.4.66 / §4.4.69 / §4.4.80 #8 / §4.4.81 #11 ／ #12 / §4.4.93 / "
+                        "§4.3.31 G I-4"
+                    ),
+                    consequence_context=(
+                        "the claimed RecommendationNeedDate is neither trusted nor replaced, and the "
+                        "context carries no need date; a downstream LeadTimeRisk ／ "
+                        "OverallSupplierRisk must fail closed rather than use a date from another "
+                        "Plant, material or date"
+                    ),
+                ),
+            ),
+        )
+
+    return _NeedDateDecision(
+        need_date=entry.recommendation_need_date,
+        root_condition=None,
+        note=(
+            (
+                "the Procurement Recommendation quantity of this family is DATA_INCOMPLETE while its "
+                "RecommendationNeedDate stays reliable and is supported by the entry's own matching "
+                "shortage reference, so the Supplier Risk evaluation context is still formed: an MOQ ／ "
+                "policy-input failure never pollutes Supplier Risk (§2.7.25 F2)"
+            )
+            if entry.outcome is not None
+            else (
+                "the registered RecommendationNeedDate of this exact plant_id + material_code family "
+                "forms the evaluation context of this eligible supplier-material relationship, and the "
+                "entry's own shortage reference supports exactly that Plant ／ material ／ date; the "
+                "business grain stays supplier_id + material_code and plant_id is evaluation context "
+                "only (§2.7.25 C ／ D ／ F1)"
+            )
+        ),
+    )
 
 
 def _performance_for(
@@ -1050,6 +1170,8 @@ __all__ = [
     "ELIGIBILITY_UNRESOLVED",
     "ROOT_CONFLICTING_RELATIONSHIP_EVIDENCE",
     "ROOT_MAPPING_AMBIGUOUS",
+    "ROOT_NEED_DATE_LINKAGE_ABSENT",
+    "ROOT_NEED_DATE_LINKAGE_MISMATCH",
     "ROOT_NEED_DATE_UNRESOLVED",
     "ROOT_NO_MAPPING_EVIDENCE",
     "ROOT_RELATIONSHIP_ABSENT",

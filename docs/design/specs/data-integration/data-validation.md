@@ -3104,6 +3104,12 @@ RecommendationNeedDate authority = BR-SHORTAGE-001 FirstShortageDate → registe
 
 - 同一 supplier + material 在不同 Plant 的采购需求中形成**独立** evaluation context；
   **不得**跨 Plant 借用 `RecommendationNeedDate`，**不得**重算或 caller override。
+- 一个 reliable `RecommendationNeedDate` **只**在其 recommendation entry 自身携带的
+  upstream `shortage_reference` **恰好**指向同一 `plant_id` + `material_code` +
+  `RecommendationNeedDate`（`rule = BR-SHORTAGE-001`）时被接受；reference **缺失** →
+  `PROVENANCE` ／ `PROVENANCE_UNRESOLVED`，reference **已建立但指向其他 context** →
+  `PROVENANCE` ／ `PROVENANCE_MISMATCH`（`§4.4.69` ／ `§4.4.93`）；该 date **不得**被信任、
+  **不得**被替换，context 保持无 need date 并 fail closed。
 - Procurement Recommendation 的**数量** `DATA_INCOMPLETE`（例如 `ApplicableMOQ` missing）
   **不**阻止 evaluation context 形成：MOQ ／ policy-input failure 不污染 Supplier Risk。
 - `RecommendationNeedDate` unresolved 时 composition state 保持 unresolved（保留可靠 supplier-side

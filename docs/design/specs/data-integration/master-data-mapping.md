@@ -2378,6 +2378,10 @@ Adapter mapping implemented / mapping configuration exists / Supplier Risk imple
 Supplier Risk runtime input seam        = REGISTERED（poc-design §2.7.25 ／ §4.3.31 G I-10）
 eligibility resolution registry key     = approved mapping_basis literal（**不是** source value）
 eligibility runtime record              = data-validation §4.4.103
+need-date linkage                       = verified against the recommendation entry's own
+                                          upstream shortage_reference（plant ／ material ／ date）；
+                                          缺失 ／ 不一致 → PROVENANCE ／ PROVENANCE_UNRESOLVED ／
+                                          PROVENANCE_MISMATCH，不得重建 reference
 source value → eligibility condition     = 仍由未来 Adapter ／ source-specific mapping 提供
 real source vocabulary                  = 仍未知，且仍**不得**被声明 ／ 列举
 Adapter mapping implemented             = NO
