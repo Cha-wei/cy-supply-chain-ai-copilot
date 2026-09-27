@@ -98,9 +98,25 @@ RELATION_TARGET = "Target Applicability"
 RELATION_SOURCE = "Source Reservation Overlap"
 
 
+def _object_label(item: Any) -> str:
+    """A short deterministic label for an assertion message.
+
+    ``assert_quantity`` is used on shortage grains, substitute targets and conservation groups
+    alike, so the label is read defensively instead of assuming a ``grain`` attribute.
+    """
+
+    grain = getattr(item, "grain", None)
+    if grain is not None:
+        return repr(grain)
+    for name in ("reservation_context", "reference", "material_code"):
+        value = getattr(item, name, None)
+        if value is not None:
+            return repr(value)
+    return type(item).__name__
+
+
 def basis_for(outcome: Any) -> str:
     """The registered ``Target Applicability`` basis of one requested relation outcome."""
-
     return {
         "APPROVED": BASIS_TA,
         "NOT_APPLICABLE": BASIS_TA_NOT_APPLICABLE,
@@ -359,6 +375,8 @@ class ShortageRuleTestCase(unittest.TestCase):
         inbound: tuple[tuple[Any, Any, Any], ...] = (),
         loss_rate: Any = "0",
         conservation: tuple[Any, Any, Any] | None = None,
+        source_reservation_registration: Any = BASIS_SRO,
+        source_reservation_claim: Any = None,
         targets: tuple[tuple[Any, Any, Any], ...] = ((DEMAND, D2, "APPROVED"),),
         target_quantities: dict[tuple[Any, Any], Any] | None = None,
         relationships: tuple[tuple[Any, Any, str], ...] = ((DEMAND, SOURCE, "APPROVED"),),
@@ -380,6 +398,13 @@ class ShortageRuleTestCase(unittest.TestCase):
         and adds the quoted ``Substitute Allocation`` record with both of its G5-A relations; the
         same-date Target Applicability context of the target material is added for it.
         ``relationships`` declares further ``Substitute Relationship`` records.
+
+        ``source_reservation_registration`` is the basis the quoted allocation record registers for
+        its ``substitute_material_code`` (the SRO side); ``source_reservation_claim`` is the basis
+        the SRO handoff claims and defaults to that same registration.  Passing a different claim
+        reproduces the registered G5-A failure class "unregistered mapping basis" on the source side
+        (the overlap outcome cannot be formed), and passing another *registered* basis exercises the
+        other registered SRO outcomes.
         """
 
         stock = {DEMAND: "100", SOURCE: "100"} if inventory is None else dict(inventory)
@@ -474,14 +499,18 @@ class ShortageRuleTestCase(unittest.TestCase):
                 )
             )
             allocations: list[dict[str, Any]] = []
+            # Each allocation record's own position inside the accepted artifact, keyed by the
+            # target pair it states, so a G5-A handoff always cites the record it means.
+            allocation_positions: dict[tuple[Any, Any], int] = {}
             if conservation is not None:
+                allocation_positions[(conservation[0], D2)] = len(allocations)
                 allocations.append(
                     allocation_record(
                         conservation[0],
                         conservation[1],
                         quantity=conservation[2],
                         target_basis=BASIS_TA,
-                        source_basis=BASIS_SRO,
+                        source_basis=source_reservation_registration,
                     )
                 )
             for material, date, outcome in targets:
@@ -493,6 +522,7 @@ class ShortageRuleTestCase(unittest.TestCase):
                     # Applicability with a real quantity, so no second record is added and the
                     # target context cites that record.
                     continue
+                allocation_positions[(material, date)] = len(allocations)
                 allocations.append(
                     allocation_record(
                         material,
@@ -585,15 +615,11 @@ class ShortageRuleTestCase(unittest.TestCase):
 
         demand_entries: list[EffectiveDemandRelationHandoff] = []
         if substitute_present:
-            # ``allocation_index`` is the index of the accepted ``Substitute Allocation`` record a
-            # G5-A reference cites.  The quoted reservation record comes first, so the target
-            # context of a material that the reservation also targets binds to that record rather
-            # than to the zero-quantity target record.
-            allocation_index: dict[tuple[Any, Any], int] = {}
+            # The quoted reservation record comes first, so the target context of a material that
+            # the reservation also targets binds to that record rather than to a zero-quantity
+            # target record; every other target cites the record its own pair states.
             target_source = SOURCE if conservation is None else conservation[1]
             if conservation is not None:
-                # The quoted reservation record is the first accepted ``Substitute Allocation``.
-                allocation_index[(conservation[0], D2)] = 0
                 demand_entries.append(
                     EffectiveDemandRelationHandoff(
                         source_substitute_material=conservation[1],
@@ -605,7 +631,11 @@ class ShortageRuleTestCase(unittest.TestCase):
                             0,
                             f"SIMULATED-SRC-ALLOC-SRO-{conservation[0]}",
                         ),
-                        mapping_basis=BASIS_SRO,
+                        mapping_basis=(
+                            source_reservation_registration
+                            if source_reservation_claim is None
+                            else source_reservation_claim
+                        ),
                         context_citation=cite(
                             ROLE_REQUIREMENT,
                             ARTIFACT_REQUIREMENT,
@@ -613,16 +643,14 @@ class ShortageRuleTestCase(unittest.TestCase):
                         ),
                     )
                 )
-            for position, (material, date, outcome) in enumerate(targets):
-                offset = 0 if conservation is None else 1
+            for material, date, outcome in targets:
                 if conservation is not None and (material, date) == (
                     conservation[0],
                     D2,
                 ):
                     record = 0
                 else:
-                    allocation_index[(material, date)] = offset + position
-                    record = allocation_index[(material, date)]
+                    record = allocation_positions[(material, date)]
                 demand_entries.append(
                     EffectiveDemandRelationHandoff(
                         source_substitute_material=target_source,
@@ -700,7 +728,9 @@ class ShortageRuleTestCase(unittest.TestCase):
         """
 
         value = getattr(grain, field)
-        self.assertIsNotNone(value, msg=f"{field} is unresolved for {grain.grain!r}")
+        self.assertIsNotNone(
+            value, msg=f"{field} is unresolved for {_object_label(grain)}"
+        )
         assert value is not None
         self.assertEqual(_rational_value(value), _rational_value(expected))
         rendered = getattr(value, "text", None)
@@ -1608,6 +1638,299 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
         self.assertNotIn("effective_demand_contexts", source)
         self.assertNotIn("unresolved_for", source)
         self.assertNotIn("objects_for", source)
+
+
+# --- cross-rule substitute conservation propagation (F1 / F2) -------------------------
+
+
+class ConservationPropagationTests(ShortageRuleTestCase):
+    """`§2.3.10` supply conservation must reach the surface it protects.
+
+    ``F1``: a failed ／ over-allocated conservation group makes every target allocation
+    contribution whose reliability depends on that failed conservation not consumable as reliable
+    substitute supply.  ``F2`` ／ ``SRO-U1``: an exact Source Demand Context whose ``Source
+    Reservation Overlap`` outcome could not be formed enters the existing ``S1-A`` seam, so the
+    source grain fails closed instead of falling back to the complete ``OpeningUsableInventory``.
+    Both are exact-grain: no global, material-level or package-level poisoning.
+    """
+
+    def test_f1_over_allocation_fails_the_affected_target_grain(self) -> None:
+        # Reviewed case: eligible source inventory 100, approved allocation to target 200, target
+        # demand 150, target opening inventory 0.  The conservation group already fails as
+        # CONSISTENCY / CONSISTENCY_CONFLICT; the target side must not keep exposing 200.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "150", D2),
+                Demand(DEMAND, DEMAND, "10", D3),
+                Demand(OTHER, OTHER, "10", D2),
+            ),
+            inventory={DEMAND: "0", SOURCE: "100", OTHER: "0"},
+            safety_stock={DEMAND: "0", SOURCE: "0", OTHER: "0"},
+            conservation=(DEMAND, SOURCE, "200"),
+            targets=((DEMAND, D2, "APPROVED"), (OTHER, D2, "APPROVED")),
+            target_quantities={(OTHER, D2): "10"},
+            relationships=((DEMAND, SOURCE, "APPROVED"), (OTHER, SOURCE, "APPROVED")),
+            name="f1-over-allocation",
+        )
+        groups = built.substitutes.over_allocated_groups
+        self.assertEqual(len(groups), 1)
+        group = groups[0]
+        self.assertEqual(group.conservation_state, "OVER_ALLOCATED")
+        self.assertIsNone(group.remaining_unallocated_source_supply)
+        self.assert_quantity(group, "eligible_substitute_supply", "100")
+        self.assert_quantity(group, "allocated_substitute_qty", "200")
+        self.assertEqual(len(group.allocating_references), 1)
+        self.assertTrue(
+            any(
+                issue.category == "CONSISTENCY"
+                and issue.reason == "CONSISTENCY_CONFLICT"
+                for issue in group.issues
+            )
+        )
+        # BR-SUBSTITUTE-001: the affected target grain is DATA_INCOMPLETE -- never 200, never 0.
+        target = built.substitutes.for_grain(PLANT, DEMAND, D2)
+        assert target is not None
+        self.assertIsNone(target.cumulative_approved_substitute_supply)
+        self.assertIsNone(target.grain_equivalent)
+        self.assertEqual(target.outcome, "DATA_INCOMPLETE")
+        # BR-SHORTAGE-001: no reliable projection and no business classification for it.
+        grain = self.grain(built, DEMAND, D2)
+        self.assertIsNone(grain.cumulative_approved_substitute_supply)
+        self.assertIsNone(grain.projected_available)
+        self.assertIsNone(grain.shortage_qty)
+        self.assertIsNone(grain.buffer_gap)
+        self.assert_classification(grain, CLASSIFICATION_DATA_INCOMPLETE)
+        # The cumulative `<= t` propagation follows the existing S3-A semantics: the unreliable
+        # date is not skipped for a later grain of the same Plant + Material.
+        later = self.grain(built, DEMAND, D3)
+        self.assertIsNone(later.cumulative_approved_substitute_supply)
+        self.assertIsNone(later.projected_available)
+        self.assert_classification(later, CLASSIFICATION_DATA_INCOMPLETE)
+        self.assertEqual(built.shortage.first_shortage_date, SHORTAGE_DATA_INCOMPLETE)
+
+    def test_f1_over_allocation_isolates_unrelated_allocations_and_grains(self) -> None:
+        # The same package: an unrelated target material whose own accepted allocation record
+        # states no reservation-overlap claim for the failed context keeps its full, reliable
+        # substitute contribution, and an unrelated demand grain keeps its own classification.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "150", D2),
+                Demand(OTHER, OTHER, "10", D2),
+            ),
+            inventory={DEMAND: "0", SOURCE: "100", OTHER: "0"},
+            safety_stock={DEMAND: "0", SOURCE: "0", OTHER: "0"},
+            conservation=(DEMAND, SOURCE, "200"),
+            targets=((DEMAND, D2, "APPROVED"), (OTHER, D2, "APPROVED")),
+            target_quantities={(OTHER, D2): "10"},
+            relationships=((DEMAND, SOURCE, "APPROVED"), (OTHER, SOURCE, "APPROVED")),
+            name="f1-over-allocation-isolation",
+        )
+        failed = built.substitutes.over_allocated_groups[0]
+        self.assertEqual(len(failed.allocating_references), 1)
+        unaffected = built.substitutes.for_grain(PLANT, OTHER, D2)
+        assert unaffected is not None
+        self.assertNotIn(
+            unaffected.evaluations[0].allocation_reference, failed.allocating_references
+        )
+        self.assert_quantity(unaffected, "cumulative_approved_substitute_supply", "10")
+        self.assertIsNone(unaffected.outcome)
+        grain = self.grain(built, OTHER, D2)
+        self.assert_quantity(grain, "cumulative_approved_substitute_supply", "10")
+        self.assert_quantity(grain, "projected_available", "0")
+        self.assertEqual(grain.classification, CLASSIFICATION_NORMAL)
+
+    def test_f1_a_conserved_allocation_stays_reliable(self) -> None:
+        # Control: the identical shape with an allocation inside its eligible supply is conserved,
+        # so the target contribution stays reliable and no target grain is failed.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "60", D2),
+                Demand(SOURCE, SOURCE, "80", D2),
+            ),
+            inventory={DEMAND: "0", SOURCE: "100"},
+            safety_stock={DEMAND: "0", SOURCE: "0"},
+            conservation=(DEMAND, SOURCE, "60"),
+            name="f1-conserved-control",
+        )
+        group = built.substitutes.conservation_groups[0]
+        self.assertEqual(group.conservation_state, "WITHIN_ELIGIBLE_SUPPLY")
+        self.assert_quantity(group, "remaining_unallocated_source_supply", "40")
+        target = built.substitutes.for_grain(PLANT, DEMAND, D2)
+        assert target is not None
+        self.assert_quantity(target, "cumulative_approved_substitute_supply", "60")
+        self.assert_quantity(
+            self.grain(built, DEMAND, D2), "cumulative_approved_substitute_supply", "60"
+        )
+        self.assertEqual(self.grain(built, DEMAND, D2).classification, CLASSIFICATION_NORMAL)
+
+    def test_f2_unresolved_source_reservation_fails_the_source_grain_closed(self) -> None:
+        # Required regression: source inventory 100, target allocation 60, Target Applicability
+        # reliably applicable, Source Reservation Overlap unresolved (its claim names a basis the
+        # accepted record does not register, so the G5-A layer forms no SRO reference), target
+        # demand 60, source own demand 80.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "60", D2),
+                Demand(SOURCE, SOURCE, "80", D2),
+            ),
+            inventory={DEMAND: "0", SOURCE: "100"},
+            safety_stock={DEMAND: "0", SOURCE: "0"},
+            conservation=(DEMAND, SOURCE, "60"),
+            source_reservation_claim="SIMULATED-G5A-SRO-UNREGISTERED",
+            name="f2-sro-unresolved",
+        )
+        # The G5-A failure is grain-scoped and names the exact Source Demand Context.
+        unresolved = built.construction.unresolved_effective_demand_contexts
+        self.assertEqual(len(unresolved), 1)
+        self.assertEqual(unresolved[0].relation, "Source Reservation Overlap")
+        self.assertEqual(
+            [prop.value for prop in unresolved[0].context.grain],
+            [PLANT, SOURCE, D2],
+        )
+        # The exact context is still a *citation* of the substitute result, and its conservation is
+        # stated as unresolved -- never as "no reservation" and never as a numeric remaining supply.
+        cited = built.substitutes.source_demand_contexts_for_grain(PLANT, SOURCE, D2)
+        self.assertEqual(len(cited), 1)
+        group = built.substitutes.conservation_for(str(cited[0].reference))
+        assert group is not None
+        self.assertEqual(group.conservation_state, "SOURCE_RESERVATION_OVERLAP_UNRESOLVED")
+        self.assertEqual(group.outcome, "DATA_INCOMPLETE")
+        self.assertIsNone(group.remaining_unallocated_source_supply)
+        self.assertEqual(group.allocating_references, ())
+        # Target side: governed independently by its reliable Target Applicability.
+        target = built.substitutes.for_grain(PLANT, DEMAND, D2)
+        assert target is not None
+        self.assert_quantity(target, "cumulative_approved_substitute_supply", "60")
+        target_grain = self.grain(built, DEMAND, D2)
+        self.assert_quantity(target_grain, "projected_available", "0")
+        self.assertEqual(target_grain.classification, CLASSIFICATION_NORMAL)
+        # Source side: no full-OpeningUsableInventory fallback, so the grain fails closed instead
+        # of being NORMAL on the complete 100.
+        source_grain = self.grain(built, SOURCE, D2)
+        self.assertIsNone(source_grain.opening_supply)
+        self.assertIsNone(source_grain.projected_available)
+        self.assertIsNone(source_grain.shortage_qty)
+        self.assert_classification(source_grain, CLASSIFICATION_DATA_INCOMPLETE)
+        self.assertEqual(
+            source_grain.supply_source, SUPPLY_UNRESOLVED_SOURCE_RESERVATION
+        )
+
+    def test_f2_a_reliable_overlapping_reservation_is_unchanged(self) -> None:
+        # The registered `overlaps` path keeps its exact S1-A semantics: 100 - 60 = 40 remains the
+        # source's opening supply and the target keeps its reliable 60.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "60", D2),
+                Demand(SOURCE, SOURCE, "80", D2),
+            ),
+            inventory={DEMAND: "0", SOURCE: "100"},
+            safety_stock={DEMAND: "0", SOURCE: "0"},
+            conservation=(DEMAND, SOURCE, "60"),
+            name="f2-reliable-overlaps",
+        )
+        self.assertEqual(built.construction.unresolved_effective_demand_contexts, ())
+        group = built.substitutes.conservation_groups[0]
+        self.assertEqual(group.conservation_state, "WITHIN_ELIGIBLE_SUPPLY")
+        self.assert_quantity(group, "remaining_unallocated_source_supply", "40")
+        source_grain = self.grain(built, SOURCE, D2)
+        self.assert_quantity(source_grain, "opening_supply", "40")
+        self.assert_quantity(source_grain, "projected_available", "-40")
+        self.assert_classification(source_grain, CLASSIFICATION_SHORTAGE)
+        self.assertEqual(source_grain.supply_source, SUPPLY_FROM_SOURCE_RESERVATION)
+        self.assert_quantity(
+            self.grain(built, DEMAND, D2), "cumulative_approved_substitute_supply", "60"
+        )
+
+    def test_f2_a_reliable_non_overlapping_reservation_is_unchanged(self) -> None:
+        # The registered `does not overlap` path keeps its exact S1-A semantics: the allocation
+        # never enters the sum, so the source keeps the complete eligible supply.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "60", D2),
+                Demand(SOURCE, SOURCE, "80", D2),
+            ),
+            inventory={DEMAND: "0", SOURCE: "100"},
+            safety_stock={DEMAND: "0", SOURCE: "0"},
+            conservation=(DEMAND, SOURCE, "60"),
+            source_reservation_registration="SIMULATED-G5A-SRO-NO-OVERLAP",
+            name="f2-reliable-no-overlap",
+        )
+        self.assertEqual(built.construction.unresolved_effective_demand_contexts, ())
+        group = built.substitutes.conservation_groups[0]
+        self.assertEqual(group.conservation_state, "WITHIN_ELIGIBLE_SUPPLY")
+        self.assertEqual(group.allocating_references, ())
+        self.assert_quantity(group, "remaining_unallocated_source_supply", "100")
+        source_grain = self.grain(built, SOURCE, D2)
+        self.assert_quantity(source_grain, "opening_supply", "100")
+        self.assert_quantity(source_grain, "projected_available", "20")
+        self.assertEqual(source_grain.classification, CLASSIFICATION_NORMAL)
+        self.assertEqual(source_grain.supply_source, SUPPLY_FROM_SOURCE_RESERVATION)
+        self.assert_quantity(
+            self.grain(built, DEMAND, D2), "cumulative_approved_substitute_supply", "60"
+        )
+
+    def test_f2_an_unresolved_source_reservation_fails_only_its_own_grain(self) -> None:
+        # Exact-grain isolation: an unrelated demand grain of another material in the same package
+        # keeps its own reliable result, and the approved Target Applicability Option A' surface is
+        # untouched by the source-side failure.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "60", D2),
+                Demand(SOURCE, SOURCE, "80", D2),
+                Demand(OTHER, OTHER, "10", D2),
+            ),
+            inventory={DEMAND: "0", SOURCE: "100", OTHER: "100"},
+            safety_stock={DEMAND: "0", SOURCE: "0", OTHER: "5"},
+            conservation=(DEMAND, SOURCE, "60"),
+            targets=((DEMAND, D2, "APPROVED"),),
+            source_reservation_claim="SIMULATED-G5A-SRO-UNREGISTERED",
+            name="f2-sro-isolation",
+        )
+        self.assertEqual(
+            [
+                (item.relation, [prop.value for prop in item.context.grain])
+                for item in built.construction.unresolved_effective_demand_contexts
+            ],
+            [("Source Reservation Overlap", [PLANT, SOURCE, D2])],
+        )
+        unaffected = self.grain(built, OTHER, D2)
+        self.assert_quantity(unaffected, "opening_supply", "100")
+        self.assert_quantity(unaffected, "projected_available", "90")
+        self.assertEqual(unaffected.classification, CLASSIFICATION_NORMAL)
+        self.assert_quantity(
+            self.grain(built, DEMAND, D2), "cumulative_approved_substitute_supply", "60"
+        )
+
+    def test_f1_and_f2_leave_the_target_applicability_rule_unchanged(self) -> None:
+        # A grain-scoped unresolved *Target* Applicability still behaves exactly as approved by
+        # Option A': the grain is DATA_INCOMPLETE, nothing is inferred for the other relation and no
+        # target grain is failed by a source-side failure.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "60", D2),
+                Demand(SOURCE, SOURCE, "80", D2),
+            ),
+            inventory={DEMAND: "0", SOURCE: "100", RESERVED: "100"},
+            safety_stock={DEMAND: "0", SOURCE: "0", RESERVED: "0"},
+            conservation=(DEMAND, RESERVED, "60"),
+            targets=((DEMAND, D2, "UNRESOLVED"),),
+            target_quantities={(DEMAND, D2): "60"},
+            name="f1-f2-target-applicability-unchanged",
+        )
+        relations = {
+            item.relation for item in built.construction.unresolved_effective_demand_contexts
+        }
+        self.assertEqual(relations, {"Target Applicability"})
+        target = built.substitutes.for_grain(PLANT, DEMAND, D2)
+        assert target is not None
+        self.assertIsNone(target.cumulative_approved_substitute_supply)
+        self.assert_classification(
+            self.grain(built, DEMAND, D2), CLASSIFICATION_DATA_INCOMPLETE
+        )
+        # The unrelated source grain is not poisoned by the target-side failure.
+        source_grain = self.grain(built, SOURCE, D2)
+        self.assert_quantity(source_grain, "opening_supply", "100")
+        self.assertEqual(source_grain.classification, CLASSIFICATION_NORMAL)
 
 
 # --- AC-16 / AC-17: grain isolation --------------------------------------------------

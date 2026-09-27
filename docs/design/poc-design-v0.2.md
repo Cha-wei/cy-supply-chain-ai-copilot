@@ -2046,6 +2046,11 @@ conservation unresolved / DATA_INCOMPLETE
 - 被引用的 exact context 未形成 conservation group（例如 allocation 未解析、overlap unresolved、
   over-allocation）时 = `DATA_INCOMPLETE`；**不得**回退为完整 inventory。未被任何 exact context
   引用时，才是正常 `OpeningUsableInventory` 路径。
+- **exact unresolved SRO context（`SRO-U1` ／ Human Decision `Option A`）**：exact Source Demand Context
+  已被可靠解析、但 `Source Reservation Overlap` outcome 无法形成正常 reference 时，该 exact context 仍是
+  citation，且其 conservation = unresolved ⇒ `EffectiveOpeningSupply = DATA_INCOMPLETE`，**不得**回退为完整
+  `OpeningUsableInventory`；判定**只**作用于该 exact source grain，`Target Applicability` 仍独立评估
+  （见 `§2.3.10`）。
 
 **B. `S2-A` —— inventory snapshot consumption boundary**
 
@@ -2791,6 +2796,27 @@ MAT-B AVAILABLE = 100
 
 **不得 silently over-allocate。**
 
+**over-allocation 的消费边界（实现修正，不是新 authority）**
+
+constraint 被违反时，受影响的不只是 conservation result 本身：参与该 exact context sum 的
+`AllocatedSubstituteQty` **已经不可信**，因此**不得**在 Target 侧继续作为可靠 substitute supply 被消费：
+
+```
+exact Source Demand Context 的 Σ AllocatedSubstituteQty > EligibleSubstituteSupply
+  ⇒ 该 context 的 conservation = CONSISTENCY ／ CONSISTENCY_CONFLICT ＋ DATA_INCOMPLETE
+  ⇒ 参与该 sum 的每个 allocation 的 target contribution（AllocatedSubstituteQty × substitution_ratio）
+     不是可靠 substitute supply
+  ⇒ affected Target demand grain = DATA_INCOMPLETE，其 CumulativeApprovedSubstituteSupply(<= t)
+     依既有 S3-A 语义传播
+  ⇒ 其他 allocation ／ 其他 target grain 保持可靠（exact failure isolation，不得 global ／
+     material-level ／ package-level poisoning）
+```
+
+**不得**据此 clamp allocation、重新分配数量、引入 allocation priority 或 optimization，也**不得**修改
+conservation invariant 本身。守恒结论不可靠（例如 overlap unresolved、source supply 不可得）而**未能**
+形成 sum 的 context 不在此列：它没有可归属的 allocation，因此不使任何 Target contribution 失效 —— 两个
+G5-A relation 相互独立。
+
 **Supply Conservation / Reservation Constraint**
 
 一旦 `AllocatedSubstituteQty` 被分配给某 Target Material，该数量**必须**从 Source Material 在**相同有效需求窗口**内仍可自由使用的 **Eligible Supply Pool** 中**保留 / 扣除**。
@@ -2885,6 +2911,25 @@ reservation windows 是否互相 overlap。
 ```
 
 **没有**自身 reservation contribution 的 context 仍然是合法 `0`，**不得**被牵连。
+
+**`SRO-U1`（Human Decision `Option A`，已批准）：exact unresolved SRO context 的 S1-A 消费**
+
+当**exact Source Demand Context 已可靠解析**、但 `Source Reservation Overlap` relation outcome **无法形成**
+正常 reference（既有 semantic-resolution failure，例如 unregistered ／ ambiguous mapping basis）时，G5-A 的
+grain-scoped unresolved reference 必须进入**既有 `S1-A` 消费边界**：
+
+```
+exact unresolved SRO context
+  ⇒ 该 exact Source Demand Context 的 conservation = unresolved → DATA_INCOMPLETE
+  ⇒ source EffectiveOpeningSupply = DATA_INCOMPLETE
+  ⇒ **不得**回退为完整 OpeningUsableInventory，**不得**重新计算 reservation
+  ⇒ exact source shortage grain 依既有 §2.1.12 A fail closed
+```
+
+边界（不得越界）：`Target Applicability` 仍**独立**评估（**不得**因其自动变 unresolved）；**不得**推断
+`overlaps` ／ `does not overlap`；**不得**从 allocation grain 推 `required_date`；**不得**解析 finding
+free text；**不得** role-level ／ material-level ／ package-level poisoning；**不新增** canonical field ／
+entity ／ identity component ／ grain ／ business enum ／ persistence ／ wire schema。
 
 `ExactQuantity` 的减法保持既有 exact 语义（与 §2.3.12 一致）：只有在
 `Σ <= EligibleSubstituteSupply` 时才产生 `RemainingUnallocatedSourceSupply`，否则**不产生**任何数值。

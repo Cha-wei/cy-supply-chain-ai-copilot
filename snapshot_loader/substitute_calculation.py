@@ -655,6 +655,30 @@ def compute_substitute_supply(
         cited_grains | demand_grains,
         key=lambda item: tuple(_sort_text(part) for part in item),
     )
+
+    # --- source-side conservation, decided **before** the target side ----------------------
+    # The target side consumes the conservation result (``§2.3.10``): an allocation whose supply is
+    # not conserved is not reliable substitute supply, so the conservation groups are formed first.
+    unresolved_source_contexts = _unresolved_source_demand_contexts(construction)
+    source_evaluations: list[SubstituteEvaluation] = []
+    for key in sorted(source_contexts):
+        _grain, outcomes = source_contexts[key]
+        for outcome in outcomes:
+            source_evaluations.extend(
+                _evaluate_source_outcome(
+                    outcome=outcome,
+                    allocations=allocations,
+                )
+            )
+
+    conservation = _conservation_groups(
+        source_contexts=source_contexts,
+        evaluations=source_evaluations,
+        inventory=inventory,
+        unresolved_source_contexts=unresolved_source_contexts,
+    )
+    conservation_unreliable = _unconsumable_allocation_references(conservation)
+
     # ``Option A′`` (Human-approved): the G5-A layer states, per exact demand context, when the
     # *relation outcome itself* could not be established.  Such a grain is **not** a reliable "no
     # new applicable contribution": whether an approved substitute reaches it is unknown.
@@ -670,6 +694,7 @@ def compute_substitute_supply(
                 allocations=allocations,
                 relationship_index=relationship_index,
                 relationship_present=relationship_present,
+                conservation_unreliable=conservation_unreliable,
             )
             for outcome in target_contexts.get(grain, ())
         )
@@ -740,23 +765,6 @@ def compute_substitute_supply(
             )
         )
 
-    source_evaluations: list[SubstituteEvaluation] = []
-    for key in sorted(source_contexts):
-        _grain, outcomes = source_contexts[key]
-        for outcome in outcomes:
-            source_evaluations.extend(
-                _evaluate_source_outcome(
-                    outcome=outcome,
-                    allocations=allocations,
-                )
-            )
-
-    conservation = _conservation_groups(
-        source_contexts=source_contexts,
-        evaluations=source_evaluations,
-        inventory=inventory,
-    )
-
     rule_issues: list[Issue] = []
     for item in targets:
         rule_issues.extend(item.rule_issues)
@@ -766,7 +774,9 @@ def compute_substitute_supply(
     return SubstituteCalculationResult(
         targets=tuple(targets),
         conservation_groups=tuple(conservation),
-        source_demand_contexts=_cited_source_demand_contexts(source_contexts),
+        source_demand_contexts=_cited_source_demand_contexts(
+            source_contexts, extra=unresolved_source_contexts
+        ),
         inherited_issues=inherited,
         rule_issues=_deduplicate_issues(tuple(rule_issues)),
     )
@@ -776,6 +786,8 @@ def _cited_source_demand_contexts(
     source_contexts: Mapping[
         str, tuple[tuple[Any, Any, Any], list[RelationOutcomeReference]]
     ],
+    *,
+    extra: Sequence[SourceDemandContext] = (),
 ) -> tuple[SourceDemandContext, ...]:
     """One :class:`SourceDemandContext` per cited exact Source Demand Context reference.
 
@@ -785,6 +797,11 @@ def _cited_source_demand_contexts(
     "business cites no source reservation for this grain" (a legal full-inventory path) apart
     from "business cites one and it could not be resolved" (``DATA_INCOMPLETE``), and would
     risk reusing an already allocated source quantity as uncommitted inventory.
+
+    ``extra`` carries the exact Source Demand Contexts whose ``Source Reservation Overlap``
+    outcome the G5-A layer could not form at all (``Option A′`` ／ ``SRO-U1``): their citation
+    never produced a reference, so without it they would be invisible to the ``S1-A`` seam and a
+    downstream rule would fall back to the complete ``OpeningUsableInventory``.
     """
 
     contexts: list[SourceDemandContext] = []
@@ -801,7 +818,92 @@ def _cited_source_demand_contexts(
                 provenance=sample.context.provenance,
             )
         )
+    seen = {str(context.reference) for context in contexts}
+    for context in extra:
+        if str(context.reference) in seen:
+            continue
+        seen.add(str(context.reference))
+        contexts.append(context)
+    contexts.sort(key=lambda item: _sort_text(item.reference))
     return tuple(contexts)
+
+
+def _unresolved_source_demand_contexts(
+    construction: CanonicalConstructionReport,
+) -> tuple[SourceDemandContext, ...]:
+    """Exact Source Demand Contexts whose ``Source Reservation Overlap`` outcome is unresolved.
+
+    ``Option A′`` ／ ``SRO-U1`` (Human-approved): the approved grain-scoped unresolved reference is
+    relation-generic, and for ``Source Reservation Overlap`` it means that the exact Source Demand
+    Context **was** reliably resolved while the overlap outcome could not be formed.  Its
+    conservation is therefore unresolved: the reservation is neither assumed to overlap nor assumed
+    not to overlap, no numeric ``RemainingUnallocatedSourceSupply`` exists, and the exact source
+    grain fails closed instead of consuming the complete ``OpeningUsableInventory`` (``§2.3.10`` /
+    ``§4.4.60`` path B / ``S1-A``).
+
+    The reference is consumed **only** through the existing ``S1-A`` seam: it becomes a cited
+    context of this result plus a conservation group whose conclusion is ``DATA_INCOMPLETE``.
+    Nothing about ``Target Applicability`` is touched, no ``overlaps`` ／ ``does not overlap``
+    outcome is inferred, no reservation is recomputed, no finding text is parsed and no
+    ``required_date`` is taken from an allocation.  A reference whose cited context states no
+    complete grain is left out: it can be attributed to no grain and none is invented
+    (``§4.4.10``).
+    """
+
+    contexts: list[SourceDemandContext] = []
+    seen: set[str] = set()
+    for reference in construction.unresolved_effective_demand_contexts:
+        if reference.relation != RELATION_SOURCE_RESERVATION_OVERLAP:
+            continue
+        grain = _context_grain(reference.context, DEMAND_CONTEXT_SOURCE)
+        if grain is None:
+            continue
+        key = str(reference.context.record_reference)
+        if key in seen:
+            continue
+        seen.add(key)
+        contexts.append(
+            SourceDemandContext(
+                plant_id=grain[0],
+                target_material_code=grain[1],
+                required_date=grain[2],
+                reference=reference.context.record_reference,
+                citation_count=0,
+                provenance=reference.context.provenance,
+            )
+        )
+    contexts.sort(
+        key=lambda item: (
+            tuple(_sort_text(part) for part in item.grain),
+            _sort_text(item.reference),
+        )
+    )
+    return tuple(contexts)
+
+
+def _unconsumable_allocation_references(
+    groups: Sequence[ConservationGroup],
+) -> frozenset[str]:
+    """Allocation record paths whose source supply conservation is **not** reliable (``§2.3.10``).
+
+    A conservation group whose conclusion is ``DATA_INCOMPLETE`` states that the quantity it
+    attributes cannot be conserved inside its exact Source Demand Context, so every target
+    contribution of those exact accepted allocation records is not consumable as reliable
+    substitute supply and its target demand grain is ``DATA_INCOMPLETE``.
+
+    Only a group that **attributes** the reserving allocations can do this.  A group whose overlap
+    outcome is unresolved (or whose source supply could not be established) could not form its sum
+    at all and therefore attributes none: it never invalidates a target contribution, so the two
+    G5-A relations stay independent and no target grain is failed by a source-side relation
+    failure (``§4.4.60`` path B / ``F2`` boundary).
+    """
+
+    references: set[str] = set()
+    for group in groups:
+        if not group.data_incomplete:
+            continue
+        references.update(group.allocating_references)
+    return frozenset(references)
 
 
 def _g5a_target_unresolved(
@@ -1037,8 +1139,18 @@ def _evaluate_target_outcome(
     allocations: Mapping[str, CanonicalObject],
     relationship_index: _RelationshipGrainIndex,
     relationship_present: bool,
+    conservation_unreliable: frozenset[str] = frozenset(),
 ) -> SubstituteEvaluation:
-    """Evaluate one G5-A Target Applicability reference for its own target grain."""
+    """Evaluate one G5-A Target Applicability reference for its own target grain.
+
+    ``conservation_unreliable`` names the accepted ``Substitute Allocation`` records whose supply
+    conservation inside their exact Source Demand Context is not reliable (``§2.3.10``: the same
+    exact context's ``Σ AllocatedSubstituteQty`` exceeds its ``EligibleSubstituteSupply``).  Such an
+    allocation's quantity is not conserved, so it is never consumable as reliable substitute supply
+    and the target demand grain stays ``DATA_INCOMPLETE`` instead of exposing
+    ``AllocatedSubstituteQty × substitution_ratio``.  Matching is by the exact allocation record, so
+    an unrelated allocation and an unrelated target grain stay reliable (``§4.4.10``).
+    """
 
     reference = _artifact_ordinal(outcome)
     base: dict[str, Any] = {
@@ -1120,6 +1232,29 @@ def _evaluate_target_outcome(
             detail=(
                 f"AllocatedSubstituteQty {allocated.text()!r} is negative; it is never clamped "
                 "and the allocation stays DATA_INCOMPLETE (§2.3.7)"
+            ),
+            location=_target_location(grain, reference),
+            affected_evidence=ROLE_SUBSTITUTE_ALLOCATION,
+        )
+
+    if reference in conservation_unreliable:
+        # ``§2.3.10`` supply conservation: this exact accepted allocation record reserves inside an
+        # exact Source Demand Context whose ``Σ AllocatedSubstituteQty`` already exceeds its
+        # ``EligibleSubstituteSupply``.  The allocated quantity is therefore not conserved and is
+        # never silently over-allocated onto the target side: the grain is DATA_INCOMPLETE rather
+        # than exposing ``AllocatedSubstituteQty × substitution_ratio`` as reliable supply.  The
+        # failure is isolated to this exact allocation record and this exact grain -- the quantity is
+        # never clamped, redistributed, reprioritised or summed differently (``§2.3.10`` /
+        # ``§2.3.11`` B / ``§4.4.10``).
+        return _unresolved(
+            **base,
+            detail=(
+                "the supply conservation of this exact accepted allocation record is not reliable: "
+                "Σ AllocatedSubstituteQty exceeds EligibleSubstituteSupply inside its exact Source "
+                f"Demand Context, so AllocatedSubstituteQty {allocated.text()} is not conserved and "
+                "is never consumable as reliable substitute supply; the target demand grain stays "
+                "DATA_INCOMPLETE and the allocation is never clamped or redistributed (§2.3.10 / "
+                "§2.3.11 B)"
             ),
             location=_target_location(grain, reference),
             affected_evidence=ROLE_SUBSTITUTE_ALLOCATION,
@@ -1436,12 +1571,21 @@ def _conservation_groups(
     ],
     evaluations: list[SubstituteEvaluation],
     inventory: InventoryCalculationResult,
+    unresolved_source_contexts: Sequence[SourceDemandContext] = (),
 ) -> list[ConservationGroup]:
     """Form one conservation group per exact resolved Source Demand Context reference.
 
     Only the allocations whose Source Reservation Overlap is ``overlaps`` for that exact context
     enter its sum.  A different exact context is a different group: contexts are never merged,
     never auto-overlapped and never compared by date proximity.
+
+    ``unresolved_source_contexts`` carries the exact Source Demand Contexts whose ``Source
+    Reservation Overlap`` outcome the G5-A layer could not form (``SRO-U1``).  Their conservation is
+    unresolved by definition, so each one gets a ``DATA_INCOMPLETE`` group: a formed group of the
+    same exact context is forced unresolved (its sum could be missing an allocation that the dropped
+    claim would have contributed), and an exact context that produced no reference at all still gets
+    its group, so the ``S1-A`` seam can attribute the failure to the exact grain instead of falling
+    back to the complete inventory.
 
     **Cross-context fail-safe (B2-A′).**  ``EligibleSubstituteSupply`` is one baseline per exact
     ``plant_id`` + ``source_material_code``.  When several **distinct** exact Source Demand
@@ -1454,6 +1598,10 @@ def _conservation_groups(
     auto-overlapped, auto-non-overlapped or merged, and no date proximity is inferred.  A context
     with no reservation contribution of its own stays a legal zero and is never poisoned.
     """
+
+    unresolved_by_reference = {
+        str(context.reference): context for context in unresolved_source_contexts
+    }
 
     by_context: dict[str, list[SubstituteEvaluation]] = {}
     for item in evaluations:
@@ -1483,11 +1631,73 @@ def _conservation_groups(
     }
 
     groups: list[ConservationGroup] = []
-    for reservation_context in sorted(source_contexts):
+    for reservation_context in sorted(set(source_contexts) | set(unresolved_by_reference)):
         resolved = context_evaluations.get(reservation_context, [])
-        if not resolved:
+        entry = source_contexts.get(reservation_context)
+        unresolved_context = unresolved_by_reference.get(reservation_context)
+        if entry is None:
+            # ``SRO-U1``: the G5-A layer could not form a Source Reservation Overlap reference for
+            # this exact Source Demand Context at all.  The cited context is still an exact resolved
+            # Demand Context, so its conservation is stated as unresolved here -- the exact grain
+            # fails closed and a downstream rule never falls back to the complete inventory.
+            if unresolved_context is None:  # pragma: no cover - union invariant
+                continue
+            grain = unresolved_context.grain
+            supply, _supply_problem, supply_provenance = _eligible_substitute_supply(
+                inventory, plant_id=grain[0], material_code=grain[1]
+            )
+            groups.append(
+                ConservationGroup(
+                    reservation_context=reservation_context,
+                    plant_id=grain[0],
+                    source_material_code=grain[1],
+                    source_demand_context_reference=unresolved_context.reference,
+                    eligible_substitute_supply=supply,
+                    allocated_substitute_qty=None,
+                    remaining_unallocated_source_supply=None,
+                    allocating_references=(),
+                    source_demand_context_grain=grain,
+                    conservation_state=CONSERVATION_OVERLAP_UNRESOLVED,
+                    outcome=SUBSTITUTE_DATA_INCOMPLETE,
+                    notes=(
+                        "the G5-A Source Reservation Overlap outcome of this exact Source Demand "
+                        "Context is unresolved, so the supply conservation of that context is "
+                        "unresolved and no numeric RemainingUnallocatedSourceSupply is produced "
+                        "(§2.3.10)",
+                    ),
+                    source_supply_provenance=supply_provenance,
+                    source_context_provenance=unresolved_context.provenance,
+                    inherited_issues=(),
+                    rule_issues=_deduplicate_issues(
+                        (
+                            _issue(
+                                location=f"reservation_context[{reservation_context}]",
+                                detail=(
+                                    "the G5-A Source Reservation Overlap outcome of this exact "
+                                    "Source Demand Context could not be established, so its supply "
+                                    "conservation is unresolved: overlap is neither assumed nor "
+                                    "denied, no numeric RemainingUnallocatedSourceSupply is "
+                                    "produced, and the exact source grain fails closed instead of "
+                                    "consuming the complete OpeningUsableInventory "
+                                    "(§2.3.10 / §4.4.60 path B / S1-A / SRO-U1)"
+                                ),
+                                category=CATEGORY_SEMANTIC_RESOLUTION,
+                                reason=REASON_SEMANTIC_UNRESOLVED,
+                                affected_evidence=ROLE_SUBSTITUTE_ALLOCATION,
+                                design_reference="§2.3.10 / §4.4.60 (B2-A′ / SRO-U1)",
+                                consequence_context=(
+                                    "the affected conservation result is DATA_INCOMPLETE and no "
+                                    "reliable numeric RemainingUnallocatedSourceSupply is produced"
+                                ),
+                            ),
+                        )
+                    ),
+                )
+            )
             continue
-        _grain, citations = source_contexts[reservation_context]
+        if not resolved:  # pragma: no cover - a cited context always yields an evaluation
+            continue
+        _grain, citations = entry
         if not citations:  # pragma: no cover - a group always carries its citation
             continue
         outcome = citations[0]
@@ -1598,7 +1808,7 @@ def _conservation_groups(
                 else:
                     unreliable = True
                     break
-            if unreliable:
+            if unreliable or unresolved_context is not None:
                 allocated = None
                 state = CONSERVATION_OVERLAP_UNRESOLVED
                 result_outcome = SUBSTITUTE_DATA_INCOMPLETE
@@ -1606,10 +1816,11 @@ def _conservation_groups(
                     _issue(
                         location=f"reservation_context[{reservation_context}]",
                         detail=(
-                            "at least one allocation of this exact Source Demand Context states "
-                            "no reliable Source Reservation Overlap outcome, so the conservation "
-                            "sum cannot be formed; overlap is neither assumed nor denied "
-                            "(§2.3.10 / §2.3.11 B / §4.4.60 path B)"
+                            "at least one allocation of this exact Source Demand Context could not "
+                            "establish a reliable Source Reservation Overlap outcome, so the "
+                            "conservation sum cannot be formed; overlap is neither assumed nor "
+                            "denied and no allocation is silently omitted from the sum "
+                            "(§2.3.10 / §2.3.11 B / §4.4.60 path B / SRO-U1)"
                         ),
                         category=CATEGORY_SEMANTIC_RESOLUTION,
                         reason=REASON_SEMANTIC_UNRESOLVED,
