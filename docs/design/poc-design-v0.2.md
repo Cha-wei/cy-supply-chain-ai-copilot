@@ -4248,6 +4248,11 @@ Recommendation Context**，并在 **Phase B** 解析（`§4.3.31` F ／ G I-3 �
   （`F3-RB1` ／ `§4.3.31` E）；
 - evidence 仍**只**来自 same AcceptedPackage 的 role 12 `Procurement policy input`；Phase A **仍**
   不打开该 channel；
+- identity readiness：只有**可靠确立**的 `plant_id` + `material_code`（非空 exact JSON string，
+  `§4.3.22` C-10）才可证明一条 record 属于其他 family；property **存在**但不可用（JSON `null` ／
+  空 string ／ 非 JSON string ／ 缺失）的 record **不可** scope，**不得**被静默排除，而是参与
+  fail-closed（`§4.4.67` root B），其自身 finding 沿用既有 `IDENTITY_RESOLUTION` ／
+  `UNRESOLVED_IDENTITY`（`§4.4.26`）与 `FIELD_VALUE` ／ `INVALID_TYPE`（`§4.3.22` C-10）taxonomy；
 - resolution contract = **exactly one applicable `ApplicableMOQ` 或 unresolved**；ambiguous ／
   missing ／ invalid 一律 fail closed，**不得** default ／ clamp ／ precedence；
 - `ApplicableMOQ = 0` 是**合法显式值**，与 missing ／ invalid 严格区分（`§2.5.6`）；

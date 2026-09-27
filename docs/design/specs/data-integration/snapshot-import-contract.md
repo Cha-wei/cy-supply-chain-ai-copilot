@@ -6740,6 +6740,10 @@ owner grain               = plant_id + material_code + RecommendationNeedDate（
 RecommendationNeedDate    = BR-SHORTAGE-001 既有 per-family FirstShortageDate handoff
                             （shortage-side，PR #157；**不得**重算、**不得**建立第二个 date authority）
 input authority           = same AcceptedPackage evidence only（§4.3.31 E）
+identity readiness        = 只有**可靠确立**的 plant_id + material_code（非空 exact JSON string，
+                            §4.3.22 C-10）才可证明一条 record 属于**其他** family；property **存在**
+                            但不可用（JSON null ／ 空 string ／ 非 JSON string ／ 缺失）的 record
+                            **不可** scope，**不得**被静默排除，而是参与 fail-closed（root B）
 association               = exact `ApplicableMOQ` observation
                             + exact registered mapping_basis
                             + exact Stable Source Evidence Locator
@@ -6761,6 +6765,20 @@ read-only surface         = per-context ApplicableMOQ ＋ outcome ＋ resolution
 same AcceptedPackage evidence，验证 `upstream_result.analysis_run == construction.analysis_run`
 （`F3-RB1`）以及 accepted package 与 Analysis Run 的 own package identity ／ accepted content view
 一致后才消费证据。
+
+**Identity readiness（review resolution）：** 「property 存在」**不等于**「identity 已可靠确立」。
+每条 role-12 record 自身的 identity finding 使用**既有** taxonomy，**未新增** identity 规则 ／
+Category ／ Reason ／ field：
+
+```text
+缺失 ／ JSON null（C-2 explicit missing）／ empty identifier
+                          → IDENTITY_RESOLUTION ／ UNRESOLVED_IDENTITY（§4.4.26）
+非 JSON string            → FIELD_VALUE ／ INVALID_TYPE（§4.3.22 C-10；与 layer 2 对同一 value
+                            的判定一致，§4.4.27 ～ §4.4.34）
+```
+
+一个不可 scope 的 record 使**每个**被触发的 context 落 root B 并 `DATA_INCOMPLETE`（保守取全部），
+而**不影响** reliable valid absence 的判定，也**不**为它发明任何 family 归属。
 
 **严格限定：**
 

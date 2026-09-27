@@ -53,12 +53,14 @@ from .canonical_objects import (
 )
 from .constants import (
     CATEGORY_FIELD_VALUE,
+    CATEGORY_IDENTITY_RESOLUTION,
     CATEGORY_SEMANTIC_RESOLUTION,
     LAYER_2,
     REASON_INVALID_TYPE,
     REASON_MISSING,
     REASON_OUT_OF_DEFINED_RANGE,
     REASON_SEMANTIC_UNRESOLVED,
+    REASON_UNRESOLVED_IDENTITY,
 )
 from .exact_quantity import ExactQuantity, parse_exact_quantity
 from .issues import Issue
@@ -95,6 +97,7 @@ ROOT_APPLICABILITY_UNRESOLVED: str = "MOQ_APPLICABILITY_UNRESOLVED"
 ROOT_AMBIGUOUS_APPLICABILITY: str = "MOQ_APPLICABILITY_AMBIGUOUS"
 ROOT_NO_APPLICABLE_EVIDENCE: str = "MOQ_NO_APPLICABLE_EVIDENCE"
 ROOT_NEED_DATE_UNRESOLVED: str = "RECOMMENDATION_NEED_DATE_UNRESOLVED"
+ROOT_RECORD_IDENTITY_UNRESOLVED: str = "MOQ_RECORD_IDENTITY_UNRESOLVED"
 
 
 # --- registered Phase B applicability wiring ---------------------------------------
@@ -392,21 +395,32 @@ def _resolve(
     ``§4.4.67`` semantics: the applicability mapping must be reliably determined **and** the value
     must be a registered non-negative quantity; otherwise the context is ``DATA_INCOMPLETE`` and the
     value is never defaulted, clamped or chosen by precedence.
+
+    **Identity readiness (``§4.4.26`` ／ ``§4.3.22`` C-10).**  Only a **reliably established**
+    ``plant_id`` + ``material_code`` may prove that a record belongs to *another* family.  A record
+    whose identity properties are present but not usable as registered canonical identifiers (JSON
+    ``null``, an empty string, a non-string) cannot be scoped to any family, so it is never silently
+    excluded: its applicability to this exact context is unresolved and it participates in the
+    fail-closed path.
     """
 
     considered: list[str] = []
     applicable: list[_PolicyRecord] = []
+    identity_unresolved: list[_PolicyRecord] = []
     unresolved_evidence = False
 
     for record in records:
-        if record.identity_complete and (
+        if record.identity_resolved and (
             record.plant_id,
             record.material_code,
         ) != (plant_id, material_code):
-            # Unambiguously another plant ／ material: it is not evidence about this context, so it
-            # neither applies to it nor blocks it.
+            # Only a reliably established identity proves another family: the record is not
+            # evidence about this context, so it neither applies to it nor blocks it.
             continue
         considered.append(record.reference)
+        if not record.identity_resolved:
+            identity_unresolved.append(record)
+            continue
         if record.problem is not None or record.outcome == "unresolved":
             # A record that may belong to this context but whose applicability cannot be reliably
             # determined can never be silently ignored: the resolution fails closed instead of
@@ -414,6 +428,34 @@ def _resolve(
             unresolved_evidence = True
             continue
         applicable.append(record)
+
+    if identity_unresolved:
+        # The record's own canonical identity is not reliably resolved, so nothing proves it belongs
+        # to another family -- and its applicability to this context is unresolved.  The context is
+        # never resolved from the remaining evidence (no numeric value from a partial view).
+        sample = identity_unresolved[0]
+        return _unresolved_context(
+            plant_id=plant_id,
+            material_code=material_code,
+            recommendation_need_date=recommendation_need_date,
+            root=ROOT_RECORD_IDENTITY_UNRESOLVED,
+            considered=tuple(sorted(considered)),
+            detail=(
+                f"{len(identity_unresolved)} accepted Procurement policy input record(s) state a "
+                "plant_id ／ material_code that is present but is not a reliably established "
+                "canonical identifier, so the family they belong to cannot be resolved; such a "
+                "record may belong to this exact plant_id + material_code, so its applicability to "
+                "this Procurement Recommendation Context is unresolved and no MOQ is resolved from "
+                "the remaining evidence (§4.4.26 / §4.3.22 C-10 / §4.4.67 root B)"
+            ),
+            category=CATEGORY_SEMANTIC_RESOLUTION,
+            reason=REASON_SEMANTIC_UNRESOLVED,
+            record_issues=tuple(
+                issue for item in identity_unresolved for issue in item.identity_issues
+            ),
+            record_reference=sample.reference,
+            evidence_reference=sample.evidence,
+        )
 
     if unresolved_evidence:
         return _unresolved_context(
@@ -565,6 +607,7 @@ def _unresolved_context(
     record_reference: str | None = None,
     evidence_reference: EvidenceReference | None = None,
     applicability_basis: str | None = None,
+    record_issues: tuple[Issue, ...] = (),
 ) -> ProcurementPolicyInputContext:
     location = (
         f"procurement_policy_input[{_sort_text(plant_id)}/"
@@ -599,7 +642,7 @@ def _unresolved_context(
             "the required ApplicableMOQ of this exact Procurement Recommendation Context is not "
             "reliably available, so the context is DATA_INCOMPLETE and never carries a guessed value",
         ),
-        rule_issues=(issue,),
+        rule_issues=(issue, *record_issues),
     )
 
 
@@ -610,17 +653,21 @@ def _unresolved_context(
 class _PolicyRecord:
     """One accepted role-12 record projected onto the minimum Phase B decision inputs.
 
-    ``identity_complete`` says whether the record states a ``plant_id`` + ``material_code``: when it
-    does not, the record cannot be scoped to any context and must therefore be taken into account for
-    every context (fail closed) instead of being dropped.  ``problem`` states why an identified record
-    of this exact context cannot be interpreted (no ／ ambiguous ／ unapproved applicability
-    registration).
+    ``identity_resolved`` says whether the record states a **reliably established**
+    ``plant_id`` + ``material_code`` -- the registered canonical identifier representation
+    (``§4.3.22`` C-10: an exact JSON string; ``§4.4.26``: a present identifier that is empty does not
+    resolve identity).  Only then may the record be scoped to a family and skipped as another family's
+    evidence; otherwise it is unscopable, must be taken into account for every context and fails closed
+    (never silently dropped).  ``identity_issues`` carries that record's own registered identity
+    findings (one per unusable component), and ``problem`` states why an *identified* record of this
+    exact context cannot be interpreted (no ／ ambiguous ／ unapproved applicability registration).
     """
 
     reference: str
-    identity_complete: bool
+    identity_resolved: bool
     plant_id: Any
     material_code: Any
+    identity_issues: tuple[Issue, ...]
     problem: str | None
     basis: str | None
     outcome: str | None
@@ -677,9 +724,13 @@ def _policy_record(
     record: JsonObject,
 ) -> _PolicyRecord:
     reference = f"{artifact}#{ordinal}"
-    identity_complete = "plant_id" in record and "material_code" in record
-    plant_id = record["plant_id"] if "plant_id" in record else None
-    material_code = record["material_code"] if "material_code" in record else None
+    states = (_identifier_state(record, "plant_id"), _identifier_state(record, "material_code"))
+    identity_resolved = all(state.usable for state in states)
+    identity_issues = tuple(
+        _identity_issue(reference=reference, state=state)
+        for state in states
+        if not state.usable
+    )
     evidence = _evidence_reference(
         accepted=accepted, role=role, artifact=artifact, ordinal=ordinal, record=record
     )
@@ -695,10 +746,10 @@ def _policy_record(
     problem: str | None = None
     basis_literal: str | None = None
     outcome: str | None = None
-    if not identity_complete:
+    if not identity_resolved:
         problem = (
-            "the accepted Procurement policy input record does not state both plant_id and "
-            "material_code, so the context it belongs to cannot be established"
+            "the accepted Procurement policy input record does not state a reliably established "
+            "plant_id + material_code, so the family it belongs to cannot be resolved"
         )
     else:
         registrations = [
@@ -729,9 +780,10 @@ def _policy_record(
             outcome = entry.outcome
     return _PolicyRecord(
         reference=reference,
-        identity_complete=identity_complete,
-        plant_id=plant_id,
-        material_code=material_code,
+        identity_resolved=identity_resolved,
+        plant_id=states[0].value,
+        material_code=states[1].value,
+        identity_issues=identity_issues,
         problem=problem,
         basis=basis_literal,
         outcome=outcome,
@@ -739,6 +791,152 @@ def _policy_record(
         value=value,
         negative=negative,
         evidence=evidence,
+    )
+
+
+#: The two **existing** registered ways an accepted value can fail to establish canonical identity.
+#: They are the categories ／ reasons ``layer2`` itself reports for the very same value
+#: (``§4.4.26`` ／ ``§4.3.22`` C-10) -- never a new identity vocabulary.
+_IDENTITY_REPRESENTATION: str = "REPRESENTATION"
+_IDENTITY_UNRESOLVED: str = "UNRESOLVED"
+
+
+@dataclass(frozen=True, slots=True)
+class _IdentifierState:
+    """One canonical identity component of an accepted record, as the registered rule reads it.
+
+    ``usable`` is ``True`` only when the component **reliably establishes** identity: the property is
+    present and holds a non-empty exact JSON string (``§4.3.22`` C-10 ＋ ``§4.4.26``).  Everything else
+    is present-but-unusable -- or not present at all -- and carries the registered ``category`` ／
+    ``reason`` of that defect (``kind`` says which of the two, for the record's own ``Issue``).
+    """
+
+    name: str
+    value: Any
+    problem: str | None
+    kind: str | None
+    category: str | None
+    reason: str | None
+
+    @property
+    def usable(self) -> bool:
+        return self.problem is None
+
+
+def _identifier_state(record: JsonObject, name: str) -> _IdentifierState:
+    """Read one canonical identity component exactly as the **existing** registered rule does.
+
+    The rule is the one ``layer2._representation_defect`` already applies (``§4.3.22`` C-10 ＋
+    ``§4.4.26``): a canonical identifier is an exact JSON string, and an empty one leaves the affected
+    evidence unresolved.  Nothing is repaired, coerced or defaulted here, and no new identity rule is
+    introduced:
+
+    * the property is **absent** -- a registered canonical identity component is not present, the same
+      condition ``canonicalization`` reports as unresolved identity for an ungrainable record
+      (``§4.4.26`` ／ ``§4.4.94``);
+    * the value is JSON ``null`` -- ``§4.3.22`` C-2 explicit missing ／ unavailable, which ``layer2``
+      reports as *not evaluable* and **never** as ``INVALID_TYPE``: no identifier value exists to
+      resolve identity with, so identity is not established;
+    * the value is **not** a JSON string -- the registered representation is violated
+      (``§4.3.22`` C-10) and is classified precisely as ``layer2`` classifies it:
+      ``FIELD_VALUE`` ／ ``INVALID_TYPE``;
+    * the value is an **empty** string -- ``§4.4.26``: the identifier is present but empty and leaves
+      the affected evidence unresolved (``IDENTITY_RESOLUTION`` ／ ``UNRESOLVED_IDENTITY``).
+    """
+
+    if name not in record:
+        return _IdentifierState(
+            name=name,
+            value=None,
+            problem=(
+                f"the accepted record states no {name} at all, so this canonical identity component "
+                "is not present"
+            ),
+            kind=_IDENTITY_UNRESOLVED,
+            category=CATEGORY_IDENTITY_RESOLUTION,
+            reason=REASON_UNRESOLVED_IDENTITY,
+        )
+
+    value = record[name]
+    if value is None:
+        return _IdentifierState(
+            name=name,
+            value=None,
+            problem=(
+                f"{name} is present as JSON null, i.e. an explicit missing ／ unavailable value "
+                "(§4.3.22 C-2), so no identifier value resolves this identity"
+            ),
+            kind=_IDENTITY_UNRESOLVED,
+            category=CATEGORY_IDENTITY_RESOLUTION,
+            reason=REASON_UNRESOLVED_IDENTITY,
+        )
+    if not isinstance(value, str):
+        return _IdentifierState(
+            name=name,
+            value=value,
+            problem=(
+                f"{name} is present as JSON {type(value).__name__}, not the exact JSON string the "
+                "registered canonical identifier representation requires (§4.3.22 C-10)"
+            ),
+            kind=_IDENTITY_REPRESENTATION,
+            category=CATEGORY_FIELD_VALUE,
+            reason=REASON_INVALID_TYPE,
+        )
+    if value == "":
+        return _IdentifierState(
+            name=name,
+            value=value,
+            problem=(
+                f"{name} is present but empty; §4.4.26 treats an empty canonical identifier as "
+                "leaving the affected evidence's identity unresolved"
+            ),
+            kind=_IDENTITY_UNRESOLVED,
+            category=CATEGORY_IDENTITY_RESOLUTION,
+            reason=REASON_UNRESOLVED_IDENTITY,
+        )
+    return _IdentifierState(
+        name=name,
+        value=value,
+        problem=None,
+        kind=None,
+        category=None,
+        reason=None,
+    )
+
+
+def _identity_issue(*, reference: str, state: _IdentifierState) -> Issue:
+    """The record's own registered finding for one unusable identity component.
+
+    The category ／ reason are the inherited ones and mirror ``layer2`` for the very same value:
+    ``IDENTITY_RESOLUTION`` ／ ``UNRESOLVED_IDENTITY`` for an identifier that is missing (absent or JSON
+    ``null``) or empty, and ``FIELD_VALUE`` ／ ``INVALID_TYPE`` for a present value whose representation
+    is not the registered one.  One ``Issue`` is reported per unusable component, so a record with two
+    defective components never has to invent an ordering between them.
+    """
+
+    assert state.problem is not None
+    return Issue(
+        location=f"procurement_policy_input_record[{reference}].{state.name}",
+        detail=(
+            "this accepted Procurement policy input record does not state a reliably established "
+            f"canonical identity: {state.problem}. It is never treated as confidently belonging to "
+            "another family and never silently ignored; its applicability to the Procurement "
+            "Recommendation Contexts stays unresolved (§4.4.26 / §4.3.22 C-10 / §4.4.67 root B)"
+        ),
+        category=state.category,
+        reason=state.reason,
+        layer=LAYER_2,
+        affected_evidence=ROLE_PROCUREMENT_POLICY_INPUT,
+        blast_radius="every Procurement Recommendation Context of this result",
+        design_reference=(
+            "§4.4.27 ～ §4.4.34 + §4.3.22 C-10"
+            if state.kind == _IDENTITY_REPRESENTATION
+            else "§4.4.26 (identifier) + §4.3.22 C-10"
+        ),
+        consequence_context=(
+            "the affected policy input cannot be scoped to a family, so no context may be resolved "
+            "from a partial view of the evidence"
+        ),
     )
 
 

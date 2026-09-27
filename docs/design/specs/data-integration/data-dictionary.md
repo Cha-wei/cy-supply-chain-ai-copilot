@@ -876,7 +876,10 @@ database field / API enum / ranking / selection result）。
 > （resolved value ＋ outcome ＋ resolution basis ＋ accepted record ／ evidence reference）。
 > `ApplicableMOQ = 0` 与 missing ／ invalid 严格区分；missing ／ invalid ／ ambiguous 一律
 > `DATA_INCOMPLETE`（**不得**默认成 0）。该 handoff **只**读取 same AcceptedPackage 的 role 12
-> evidence 并验证 same analysis run；`Physical Carrier` 仍 `NOT YET DEFINED`，**未新增** canonical
+> evidence 并验证 same analysis run；只有**可靠确立**的 `plant_id` + `material_code`（非空 exact
+> JSON string）才可证明一条 record 属于其他 family，property 存在但不可用（JSON `null` ／ 空 string ／
+> 非 JSON string ／ 缺失）的 record 不可 scope 且**不得**被静默排除，而是参与 fail-closed；
+> `Physical Carrier` 仍 `NOT YET DEFINED`，**未新增** canonical
 > field ／ entity ／ business enum，也**未**实现 `BR-PROCUREMENT-001` 的数量计算
 > （`base purchase need` ／ `MOQ adjustment` ／ `recommended purchase qty` 仍属该规则）。
 

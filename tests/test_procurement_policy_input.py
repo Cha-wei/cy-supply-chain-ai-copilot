@@ -21,10 +21,13 @@ from snapshot_loader import (
     compute_procurement_policy_input,
 )
 from snapshot_loader.constants import (
+    CATEGORY_FIELD_VALUE,
+    CATEGORY_IDENTITY_RESOLUTION,
     REASON_INVALID_TYPE,
     REASON_MISSING,
     REASON_OUT_OF_DEFINED_RANGE,
     REASON_SEMANTIC_UNRESOLVED,
+    REASON_UNRESOLVED_IDENTITY,
 )
 from tests.test_shortage_calculation import (
     BASIS_SRO,
@@ -52,9 +55,10 @@ def moq_policy_record(
     *,
     moq: object = "100",
     basis: str | None = BASIS_MOQ_APPLICABLE,
-    plant: str = PLANT,
+    plant: object = PLANT,
     locator: str | None = None,
     extra_associations: tuple[tuple[str, str], ...] = (),
+    drop_identity: tuple[str, ...] = (),
 ) -> dict[str, object]:
     """One accepted ``Procurement policy input`` record for one material.
 
@@ -62,13 +66,17 @@ def moq_policy_record(
     all).  ``basis`` is the applicability literal the record registers on the ``ApplicableMOQ``
     observation; ``basis=None`` registers no association for that observation at all.
     ``extra_associations`` adds further ``(basis)`` registrations on the same observation, so a test
-    can state an ambiguous or unapproved registration.
+    can state an ambiguous or unapproved registration.  ``plant`` ／ ``material`` state the identity
+    components as-is (so a test can state an unusable one), and ``drop_identity`` names components the
+    record does not state at all.
     """
 
     record: dict[str, object] = {
         "plant_id": plant,
         "material_code": material,
     }
+    for name in drop_identity:
+        record.pop(name, None)
     if moq is not None:
         record[MOQ_OBSERVATION] = moq
     associations: list[tuple[str, list[str], str | None]] = []
@@ -141,6 +149,15 @@ class ProcurementPolicyInputTestCase(ShortageRuleTestCase):
 
     def policy_reference(self, built, ordinal: int = 0) -> str:
         return f"{self.policy_artifact(built)}#{ordinal}"
+
+    def identity_issues(self, context) -> list:
+        """The record-scoped identity findings of one context (never the context-level one)."""
+
+        return [
+            issue
+            for issue in context.rule_issues
+            if "procurement_policy_input_record" in issue.location
+        ]
 
 
 class ResolutionTests(ProcurementPolicyInputTestCase):
@@ -516,6 +533,188 @@ class ResolutionTests(ProcurementPolicyInputTestCase):
         self.assertEqual(
             states.get(f"canonicalization.recognized_role:{artifact}#0"), "not_evaluable"
         )
+
+    def test_a13_a_json_null_identity_is_unscopable_and_never_another_family(self) -> None:
+        # The record states plant_id explicitly as JSON null: the property is *present*, but it is not
+        # an established canonical identity, so nothing proves the record belongs to another family.
+        built = self.build_chain(
+            moq_policies=(moq_policy_record(DEMAND, moq="100", plant=None),),
+            name="a13-null-identity",
+        )
+        result = self.resolve(built)
+        context = result.for_owner(PLANT, DEMAND, D2)
+        assert context is not None
+        self.assertTrue(context.data_incomplete)
+        self.assertIsNone(context.applicable_moq)
+        self.assertIsNone(result.applicable_moq_for(PLANT, DEMAND, D2))
+        self.assertEqual(context.root_condition, "MOQ_RECORD_IDENTITY_UNRESOLVED")
+        # The unscopable record is accounted for, never silently dropped as another family's evidence.
+        self.assertEqual(context.considered_references, (self.policy_reference(built),))
+        issues = self.identity_issues(context)
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].category, CATEGORY_IDENTITY_RESOLUTION)
+        self.assertEqual(issues[0].reason, REASON_UNRESOLVED_IDENTITY)
+        self.assertIn("plant_id", issues[0].location)
+        # The identity finding is a result-level finding too and never a valid absence.
+        self.assertEqual(
+            {issue.reason for issue in result.rule_issues},
+            {REASON_UNRESOLVED_IDENTITY, REASON_SEMANTIC_UNRESOLVED},
+        )
+
+    def test_a13b_an_empty_identifier_is_unresolved_identity(self) -> None:
+        built = self.build_chain(
+            moq_policies=(moq_policy_record(material="", moq="100"),),
+            name="a13b-empty-identity",
+        )
+        context = self.resolve(built).for_owner(PLANT, DEMAND, D2)
+        assert context is not None
+        self.assertTrue(context.data_incomplete)
+        self.assertEqual(context.root_condition, "MOQ_RECORD_IDENTITY_UNRESOLVED")
+        self.assertEqual(context.considered_references, (self.policy_reference(built),))
+        issues = self.identity_issues(context)
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].category, CATEGORY_IDENTITY_RESOLUTION)
+        self.assertEqual(issues[0].reason, REASON_UNRESOLVED_IDENTITY)
+        self.assertIn("empty", issues[0].detail)
+
+    def test_a13c_a_non_string_identifier_is_a_representation_defect(self) -> None:
+        # A present value of the wrong JSON type is not an identity at all; it is classified exactly as
+        # the registered representation rule classifies it.
+        built = self.build_chain(
+            moq_policies=(moq_policy_record(DEMAND, moq="100", plant=5),),
+            name="a13c-non-string-identity",
+        )
+        context = self.resolve(built).for_owner(PLANT, DEMAND, D2)
+        assert context is not None
+        self.assertTrue(context.data_incomplete)
+        self.assertIsNone(context.applicable_moq)
+        self.assertEqual(context.root_condition, "MOQ_RECORD_IDENTITY_UNRESOLVED")
+        issues = self.identity_issues(context)
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].category, CATEGORY_FIELD_VALUE)
+        self.assertEqual(issues[0].reason, REASON_INVALID_TYPE)
+
+    def test_a13d_an_absent_identifier_component_is_unresolved_identity(self) -> None:
+        built = self.build_chain(
+            moq_policies=(
+                moq_policy_record(DEMAND, moq="100", drop_identity=("material_code",)),
+            ),
+            name="a13d-absent-identity",
+        )
+        context = self.resolve(built).for_owner(PLANT, DEMAND, D2)
+        assert context is not None
+        self.assertTrue(context.data_incomplete)
+        self.assertEqual(context.root_condition, "MOQ_RECORD_IDENTITY_UNRESOLVED")
+        issues = self.identity_issues(context)
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].category, CATEGORY_IDENTITY_RESOLUTION)
+        self.assertEqual(issues[0].reason, REASON_UNRESOLVED_IDENTITY)
+        self.assertIn("material_code", issues[0].location)
+
+    def test_a13e_the_mixed_case_yields_no_numeric_applicable_moq(self) -> None:
+        # One record of this exact family that *is* applicable, plus one unscopable record that could
+        # also belong to this family: the numeric value is never claimed from the partial view.
+        built = self.build_chain(
+            moq_policies=(
+                moq_policy_record(DEMAND, moq="100"),
+                moq_policy_record(
+                    DEMAND,
+                    moq="50",
+                    plant=None,
+                    locator="SIMULATED-SRC-MOQ-UNSCOPABLE",
+                ),
+            ),
+            name="a13e-mixed-view",
+        )
+        result = self.resolve(built)
+        context = result.for_owner(PLANT, DEMAND, D2)
+        assert context is not None
+        self.assertTrue(context.data_incomplete)
+        self.assertIsNone(context.applicable_moq)
+        self.assertIsNone(result.applicable_moq_for(PLANT, DEMAND, D2))
+        self.assertEqual(context.root_condition, "MOQ_RECORD_IDENTITY_UNRESOLVED")
+        self.assertEqual(
+            context.considered_references,
+            (self.policy_reference(built, 0), self.policy_reference(built, 1)),
+        )
+        self.assertEqual(len(self.identity_issues(context)), 1)
+        self.assertIsNone(context.to_dict()["ApplicableMOQ"])
+
+    def test_a13f_two_unusable_components_are_reported_without_invented_precedence(self) -> None:
+        built = self.build_chain(
+            moq_policies=(moq_policy_record(material=7, moq="100", plant=None),),
+            name="a13f-two-components",
+        )
+        context = self.resolve(built).for_owner(PLANT, DEMAND, D2)
+        assert context is not None
+        issues = self.identity_issues(context)
+        self.assertEqual(len(issues), 2)
+        self.assertEqual(
+            {(issue.category, issue.reason) for issue in issues},
+            {
+                (CATEGORY_IDENTITY_RESOLUTION, REASON_UNRESOLVED_IDENTITY),
+                (CATEGORY_FIELD_VALUE, REASON_INVALID_TYPE),
+            },
+        )
+
+    def test_a13g_a_reliably_established_other_family_record_is_still_skipped(self) -> None:
+        # The fail-safe only covers identity that is *not* reliably established: a well-formed record
+        # of another family stays another family's evidence and never poisons this context.
+        built = self.build_chain(
+            moq_policies=(
+                moq_policy_record(OTHER, moq="70"),
+                moq_policy_record(DEMAND, moq="100", locator="SIMULATED-SRC-MOQ-DEMAND"),
+            ),
+            name="a13g-reliable-other-family",
+        )
+        result = self.resolve(built)
+        context = result.for_owner(PLANT, DEMAND, D2)
+        assert context is not None
+        self.assertTrue(context.resolved)
+        self.assertEqual(context.applicable_moq.text(), "100")
+        self.assertEqual(context.considered_references, (self.policy_reference(built, 1),))
+        self.assertEqual(self.identity_issues(context), [])
+
+    def test_a13h_a_valid_absence_family_stays_a_valid_absence(self) -> None:
+        built = self.build_chain(
+            moq_policies=(
+                moq_policy_record(DEMAND, moq="100"),
+                moq_policy_record(DEMAND, moq="50", plant=None, locator="SIMULATED-SRC-MOQ-UNSCOPABLE"),
+            ),
+            name="a13h-valid-absence-kept",
+        )
+        result = self.resolve(built)
+        # The unscopable record blocks the triggered family; it never invents a context for the
+        # never-short family, which stays a reliable valid absence.
+        self.assertTrue(result.is_valid_absence(PLANT, OTHER))
+        self.assertIsNone(result.for_family(PLANT, OTHER))
+        self.assertEqual(result.valid_absence_grains, ((PLANT, OTHER),))
+        self.assertTrue(result.for_family(PLANT, DEMAND).data_incomplete)
+
+    def test_a13i_property_presence_is_not_identity_resolution(self) -> None:
+        import snapshot_loader.procurement_policy_input as policy_module
+
+        usable = policy_module._identifier_state({"plant_id": PLANT}, "plant_id")
+        self.assertTrue(usable.usable)
+        self.assertEqual(usable.value, PLANT)
+        self.assertIsNone(usable.category)
+        unresolved = {
+            "present-but-null": ({"plant_id": None}, REASON_UNRESOLVED_IDENTITY),
+            "present-but-empty": ({"plant_id": ""}, REASON_UNRESOLVED_IDENTITY),
+            "present-but-wrong-type": ({"plant_id": ["P"]}, REASON_INVALID_TYPE),
+            "absent": ({}, REASON_UNRESOLVED_IDENTITY),
+        }
+        for label, (record, reason) in unresolved.items():
+            with self.subTest(label=label):
+                state = policy_module._identifier_state(record, "plant_id")
+                self.assertFalse(state.usable)
+                self.assertEqual(state.reason, reason)
+                self.assertEqual(
+                    state.category,
+                    CATEGORY_IDENTITY_RESOLUTION
+                    if reason == REASON_UNRESOLVED_IDENTITY
+                    else CATEGORY_FIELD_VALUE,
+                )
 
     def test_a1b_the_basis_registry_is_closed_and_exact(self) -> None:
         import snapshot_loader.procurement_policy_input as module

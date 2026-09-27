@@ -1898,6 +1898,10 @@ owner grain           = plant_id + material_code + RecommendationNeedDate
 association           = exact ApplicableMOQ observation ＋ exact registered Phase B mapping_basis
                         ＋ exact Stable Source Evidence Locator
 cardinality           = exactly one applicable ApplicableMOQ 或 unresolved
+identity readiness    = 只有**可靠确立**的 plant_id + material_code（非空 exact JSON string，
+                        §4.3.22 C-10）才可证明一条 record 属于**其他** family；property **存在**
+                        但不可用（JSON null ／ 空 string ／ 非 JSON string ／ 缺失）的 record
+                        **不可** scope ／ **不得**被静默排除 → 参与 fail-closed（root B）
 root A（missing ／ unusable）  → FIELD_VALUE ／ MISSING ／ INVALID_TYPE → DATA_INCOMPLETE
 root B（applicability 无法可靠判定 ／ 多个 applicable ／ 无 approved registration）
                               → SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED → DATA_INCOMPLETE
@@ -1909,6 +1913,12 @@ fail closed 是**逐 context** 的：一个 context 的 unresolved **不**改写
 registration 的 evidence **不得**被忽略，也**不得**用 first ／ last wins 或任何未批准 precedence 选值；
 caller **不得**提供 `ApplicableMOQ` value。本登记**未**新增 canonical field ／ entity ／ enum、
 **未**重定义 `SEMANTIC_UNRESOLVED`，physical carrier 仍 `NOT YET DEFINED`。
+
+identity readiness 亦按**既有** taxonomy 落地，**未新增** identity 规则 ／ Category ／ Reason：
+缺失 ／ JSON `null`（C-2 explicit missing）／ empty identifier → `IDENTITY_RESOLUTION` ／
+`UNRESOLVED_IDENTITY`（`§4.4.26`）；非 JSON string → `FIELD_VALUE` ／ `INVALID_TYPE`
+（`§4.3.22` C-10，与 layer 2 对同一 value 的判定一致）。一个不可 scope 的 record 使每个被触发的
+context 落 root B；「property 存在」**不得**被当作「identity 已确立」而把该 record 静默排除。
 
 **Valid Absence Boundary：** `Classification = NORMAL` 或 `BUFFER_BREACH` 时
 **No Purchase Recommendation**，因此 `ApplicableMOQ` **not present by design**
