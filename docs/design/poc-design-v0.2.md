@@ -2170,6 +2170,32 @@ substitute business semantics 的禁令**未改变**：仍**不得**回读 raw �
 **不得**读取 role-presence、**不得**用 `construction` 补齐缺失的 shortage 输入、也**不得**重开
 `S1-A` ／ `S2-A` ／ `S3-A`。
 
+**I. per-family `FirstShortageDate` handoff seam（Issue #156，既有 authority 的消费边界登记）**
+
+`BR-PROCUREMENT-001` 的 registered 形态是 **每个 `plant_id` + `material_code`、每个 analysis run 一条**
+baseline recommendation，且 `RecommendationNeedDate = FirstShortageDate`、
+`BasePurchaseNeed = ShortageQty at FirstShortageDate`。因此 `BR-SHORTAGE-001` 提供一个
+**per-family** 的 read-only consumption seam，返回既有三态语义（**不新增** business enum ／ status）：
+
+```
+first_shortage_date_for(plant_id, material_code)
+  = DATE                      ← 该 family 内最早可靠 ProjectedAvailable < 0 日期（§2.1.6）
+  | SHORTAGE_DATA_INCOMPLETE  ← 该 family 的 first shortage date 无法可靠判定（见下）
+  | None                      ← 该 family 整个 horizon 可靠且从未 shortage（§4.4.22 valid absence）
+```
+
+- 该 seam **只**扫描该 exact family 自己的 grains：result-wide marker 会跨 family 取 earliest，
+  因此**不得**作为 per-family downstream authority；grain-level marker 只是 family marker，也不替代该 seam。
+- 三态判定**复用** `§2.1.6` 既有 fail-safe：更早的 unresolved grain 使该 family 的 first date 不可知 ⇒
+  `SHORTAGE_DATA_INCOMPLETE`（后面的可靠 `SHORTAGE` **不得**被声称为可靠 first date）；已经可靠建立的更早日期
+  **不**被后来的 `DATA_INCOMPLETE` 移动；无 reliable marker 且 horizon unresolved ⇒
+  `SHORTAGE_DATA_INCOMPLETE`，**不得**输出 valid-absence。
+- `ShortageQty`（`BasePurchaseNeed` 的输入）仍由既有 grain 访问面按 exact
+  `plant_id` + `material_code` + `required_date` 提供，**不**新增字段。
+- 该登记**不改变** classification 公式、business grain、`S1-A` ／ `S2-A` ／ `S3-A` 或 `F1` ／ `F2` ／ `F3`；
+  它**只**把既有 fail-safe 语义登记为一个 per-family 消费边界。grain-level family marker 与之一致：
+  它**不得**跨越同 family 更早的 `DATA_INCOMPLETE` 声称更晚的可靠日期。
+
 ### 2.2 Available Inventory / Safety Stock
 
 **Rule ID:** `BR-INVENTORY-001`

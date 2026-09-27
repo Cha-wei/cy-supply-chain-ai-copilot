@@ -1054,6 +1054,22 @@ RecommendationNeedDate = FirstShortageDate
 
 但**两个 canonical concepts 不得因为当前值相同就完全混为同一字段语义**。
 
+**`FirstShortageDate` 的 per-family 消费边界（Issue #156，既有 authority 的登记）**
+
+`BR-PROCUREMENT-001` 按 **每个 `plant_id` + `material_code`** 消费该日期。`BR-SHORTAGE-001` 因此提供
+per-family 的 read-only seam（`first_shortage_date_for(plant_id, material_code)`），返回既有三态语义：
+
+```
+DATE  |  DATA_INCOMPLETE（既有 SHORTAGE_DATA_INCOMPLETE literal）  |  None（valid absence）
+```
+
+- 该 seam **只**扫描该 exact family 的 grains：result-level `FirstShortageDate` 会跨 family 取 earliest
+  并因此可被另一个 family 影响，**不得**作为 per-family downstream authority；
+- `ShortageQty`（`BasePurchaseNeed` 的输入）仍由既有 grain 访问面提供（exact
+  `plant_id` + `material_code` + `required_date`），**不新增**字段；
+- **未新增** canonical field ／ entity ／ grain ／ business enum；`§2.1.6` ／ `§2.1.12 I` 的 fail-safe
+  语义**未改变**。
+
 #### 4.2.12 Zero vs Missing
 
 集中记录**已经批准**的 `Zero ≠ Missing` 语义（**不得改变**）：

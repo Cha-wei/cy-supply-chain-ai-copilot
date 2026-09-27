@@ -408,9 +408,46 @@ class ShortageCalculationResult:
 
     @property
     def first_shortage_date(self) -> Any:
-        """The earliest reliable ``ProjectedAvailable < 0`` date, ``None`` or the fail-safe."""
+        """The earliest reliable ``ProjectedAvailable < 0`` date, ``None`` or the fail-safe.
+
+        This is the **result-wide** marker: it scans every grain of the whole result, so a failure or
+        a shortage in one ``plant_id`` + ``material_code`` family is visible in it.  It is therefore
+        **not** the per-family handoff a downstream per-material rule consumes -- use
+        :meth:`first_shortage_date_for` for that.
+        """
 
         return _first_marker(self.grains, lambda item: item.shortage)
+
+    def first_shortage_date_for(self, plant_id: Any, material_code: Any) -> Any:
+        """The reliable ``FirstShortageDate`` of one exact ``plant_id`` + ``material_code`` family.
+
+        This is the registered **per-family consumption seam** of ``BR-SHORTAGE-001``: a downstream
+        per-material rule (``BR-PROCUREMENT-001``) consumes the date for the exact family it is
+        recommending for, so it never has to re-derive ``§2.1.6`` itself and is never affected by
+        another family's result.
+
+        The answer is exactly the existing three-state semantic -- no new status, no new enum:
+
+        * a ``DATE`` -- the earliest reliable ``ProjectedAvailable < 0`` date of this family, never
+          replaced by a later one;
+        * ``SHORTAGE_DATA_INCOMPLETE`` -- this family's first shortage date is not reliably
+          knowable: an unresolved grain of this family precedes the earliest reliable shortage (so a
+          later ``SHORTAGE`` must never be claimed as the reliable first date), or the family has no
+          reliable shortage at all while its horizon is unresolved (a valid-absence ``None`` is never
+          produced over an unresolved horizon, ``§2.1.6`` ／ ``§4.4.87``);
+        * ``None`` -- valid absence: the whole horizon of this family is reliable and it never went
+          short (``§4.4.22``).
+
+        Only this family's grains are scanned, so one family never answers for another.  A family
+        this result does not name at all has no grain and therefore no horizon of its own; the
+        accessor returns ``None`` exactly as the result-wide property does for an empty result, and
+        the caller is expected to take the exact family from this result's own grains.
+        """
+
+        return _first_marker(
+            self.for_plant_material(plant_id, material_code),
+            lambda item: item.shortage,
+        )
 
     @property
     def first_buffer_breach_date(self) -> Any:
@@ -457,8 +494,33 @@ class ShortageCalculationResult:
         }
 
 
+def _fail_safe_marker(candidate: Any, incomplete_before: Any) -> Any:
+    """The reliably known marker of one scanned horizon (``§2.1.6`` fail-safe).
+
+    ``candidate`` is the earliest reliably established marker date of the scanned grains (or
+    ``None``) and ``incomplete_before`` is the earliest ``required_date`` of an unresolved grain in
+    the same scan (or ``None``).  The three-state answer is:
+
+    * ``candidate`` -- a reliable date, never replaced by a later one;
+    * ``SHORTAGE_DATA_INCOMPLETE`` -- an unresolved grain earlier than the candidate would have made
+      the true first date unknowable, or there is no candidate at all over an unresolved horizon;
+    * ``None`` -- valid absence: a fully reliable horizon without the marker.
+
+    The result-wide scan and the per-family scan both go through this one function, so the fail-safe
+    semantic is defined exactly once and no surface can disagree with it.
+    """
+
+    if candidate is None:
+        return SHORTAGE_DATA_INCOMPLETE if incomplete_before is not None else None
+    if incomplete_before is not None and _sort_text(incomplete_before) < _sort_text(
+        candidate
+    ):
+        return SHORTAGE_DATA_INCOMPLETE
+    return candidate
+
+
 def _first_marker(grains: Sequence[ShortageGrain], marker) -> Any:
-    """The reliable earliest marker **date** of the whole result, or the ``DATA_INCOMPLETE`` fail-safe.
+    """The reliable earliest marker **date** of the scanned grains, or the ``DATA_INCOMPLETE`` fail-safe.
 
     ``§2.1.6`` defines both dates over ``required_date`` ascending, and a failure is isolated to
     the affected grain rather than to one Plant ／ Material family, so the scan is a deterministic
@@ -467,11 +529,14 @@ def _first_marker(grains: Sequence[ShortageGrain], marker) -> Any:
     * the earliest reliably established marker date is the answer and is never replaced by a later
       one, so a subsequent ``DATA_INCOMPLETE`` does not move it;
     * an unresolved grain **earlier than** that date would have made the true first date
-      unknowable, so it blocks the claim and the result fails safe to
+      unknowable, so it blocks the claim and the answer fails safe to
       ``SHORTAGE_DATA_INCOMPLETE``;
     * an unresolved grain at or after the established date cannot move it and is ignored;
     * with no reliable marker at all, ``None`` (valid absence) is produced **only** when no grain
-      of the horizon is unresolved; otherwise the result fails safe.
+      of the horizon is unresolved; otherwise the answer fails safe.
+
+    ``grains`` is the scanned horizon: the whole result for the result-wide markers, or exactly one
+    ``plant_id`` + ``material_code`` family for :meth:`ShortageCalculationResult.first_shortage_date_for`.
     """
 
     ordered = sorted(grains, key=lambda item: _sort_text(item.required_date))
@@ -484,13 +549,7 @@ def _first_marker(grains: Sequence[ShortageGrain], marker) -> Any:
             continue
         if marker(item) and candidate is None:
             candidate = item.required_date
-    if candidate is None:
-        return SHORTAGE_DATA_INCOMPLETE if incomplete_before is not None else None
-    if incomplete_before is not None and _sort_text(incomplete_before) < _sort_text(
-        candidate
-    ):
-        return SHORTAGE_DATA_INCOMPLETE
-    return candidate
+    return _fail_safe_marker(candidate, incomplete_before)
 
 
 # --- family (plant_id + material_code) index ---------------------------------------
@@ -962,8 +1021,14 @@ def _evaluate_family(
         if key is not ABSENT
     }
 
+    #: The family's running fail-safe marker state: the earliest reliable shortage ／ breach date
+    #: established so far, and the earliest ``required_date`` of an unresolved grain seen so far.
+    #: Each decided grain is given the marker that is reliably known **at its own date**
+    #: (:func:`_fail_safe_marker`), so a later grain can never claim a reliable first date while an
+    #: earlier grain of the same family is ``DATA_INCOMPLETE`` (§2.1.6 / §2.1.12 G).
     first_shortage: Any = None
     first_breach: Any = None
+    incomplete_before: Any = None
 
     results: list[ShortageGrain] = []
     for required_date in family.dates:
@@ -1101,8 +1166,12 @@ def _evaluate_family(
         if undecided:
             # A grain that could not be decided claims neither a business classification nor a
             # reliable first-shortage ／ first-breach date of its own: its marker fields stay
-            # ``None`` so the per-grain surface can never contradict the result-level fail-safe
-            # (§2.1.6 / §2.1.12 E).
+            # ``None`` so the per-grain surface can never contradict the fail-safe marker
+            # (§2.1.6 / §2.1.12 E).  It is however remembered as the family's earliest unresolved
+            # date, because a later reliable ``SHORTAGE`` must not become the family's reliable
+            # first shortage date while this grain is unresolved (§2.1.6 / §2.1.12 G).
+            if incomplete_before is None:
+                incomplete_before = required_date
             results.append(
                 ShortageGrain(
                     plant_id=family.plant_id,
@@ -1174,8 +1243,10 @@ def _evaluate_family(
                 supply_source=opening.source,
                 source_demand_context_reference=source_context_reference,
                 conservation_state=conservation_state,
-                first_shortage_date=first_shortage,
-                first_buffer_breach_date=first_breach,
+                # The same fail-safe the family accessor answers with, evaluated at this grain's own
+                # date: a later grain never claims a reliable date across an earlier unresolved one.
+                first_shortage_date=_fail_safe_marker(first_shortage, incomplete_before),
+                first_buffer_breach_date=_fail_safe_marker(first_breach, incomplete_before),
                 outcome=None,
                 notes=tuple(notes),
                 opening_provenance=opening.provenance,
