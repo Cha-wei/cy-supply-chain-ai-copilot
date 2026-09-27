@@ -6724,6 +6724,60 @@ basis literal → semantic（`IN_SCOPE` ／ `OUT_OF_SCOPE`）；`OUT_OF_SCOPE` �
 **本登记不修改 D-10，不新增 wire property ／ `"_meta"` member ／ canonical business field ／
 canonical entity，也不新增 Validation Category ／ Reason ／ status ／ enum。**
 
+**I-3 —— Phase B procurement policy input runtime seam（`A′`，Human Decision）**
+
+**Registration Status：`REGISTERED`** —— 依据 **Human Decision `A′` = `APPROVED`**（Issue #158）。
+
+本小节**只**登记 `I-3`（＋ `I-4` 的消费）在 runtime 上的最小落地，**不新增** canonical entity ／
+canonical field ／ business enum ／ supplier selection ／ supplier precedence，**不重定义** `§4.4.67`
+语义，也**不实现** `BR-PROCUREMENT-001` 的数量计算。
+
+```text
+Phase                     = B（post-shortage procurement-context resolution）
+evidence role             = recognized role 12 `Procurement policy input`（phase B）
+assigned canonical field  = ApplicableMOQ（既有 §4.2.9 attribute）
+owner grain               = plant_id + material_code + RecommendationNeedDate（§4.4.66）
+RecommendationNeedDate    = BR-SHORTAGE-001 既有 per-family FirstShortageDate handoff
+                            （shortage-side，PR #157；**不得**重算、**不得**建立第二个 date authority）
+input authority           = same AcceptedPackage evidence only（§4.3.31 E）
+association               = exact `ApplicableMOQ` observation
+                            + exact registered mapping_basis
+                            + exact Stable Source Evidence Locator
+basis semantics           = 关闭的 SIMULATED Phase B applicability registry：
+                            exact literal → applicable ／ unresolved
+cardinality               = exactly one applicable ApplicableMOQ 或 unresolved
+valid zero                = ApplicableMOQ = 0 是**合法显式值**，与 missing ／ invalid 严格区分
+fail-closed roots         = §4.4.67 root A（value missing ／ unusable，FIELD_VALUE ／ MISSING ／
+                            INVALID_TYPE）、root B（applicability 无法可靠判定 ／ 多个 applicable，
+                            SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED）、root C（negative，
+                            FIELD_VALUE ／ OUT_OF_DEFINED_RANGE）
+caller-provided value     = FORBIDDEN
+read-only surface         = per-context ApplicableMOQ ＋ outcome ＋ resolution basis ＋
+                            accepted record ／ evidence reference（＋ valid-absence families）
+```
+
+**Phase A 边界保持：** role 12 仍**只**属于 Phase B —— Phase A 继续拒绝该 `POLICY_INPUT` channel，
+不构造 role-12 object、不建立 Procurement Recommendation Context。Phase B seam **只**读取
+same AcceptedPackage evidence，验证 `upstream_result.analysis_run == construction.analysis_run`
+（`F3-RB1`）以及 accepted package 与 Analysis Run 的 own package identity ／ accepted content view
+一致后才消费证据。
+
+**严格限定：**
+
+```text
+not a new external evidence source
+not a transport carrier
+not a second Snapshot Package
+not a canonical field ／ entity ／ grain
+not a new business enum ／ status ／ Validation Category ／ Reason
+not a supplier selection ／ ranking ／ precedence rule
+```
+
+`ApplicableMOQ` 的**真实 ERP ／ source field physical carrier 仍 `NOT YET DEFINED`**（`§4.2.9` ／
+`§4.5.22`）：本登记只落地 POC 的 accepted-package in-process handoff shape，不主张任何真实来源。
+`BR-PROCUREMENT-001` 的 `BasePurchaseNeed` ／ `RecommendedPurchaseQty` ／ `MOQAdjustmentQty`
+**未**由本登记实现。
+
 **I-8 —— G5-A effective demand context realization（`A′` ＋ `CB-1′`）**
 
 **Registration Status：`REGISTERED`** —— 依据 **Human Decision `Option A′` ＋ `CB-1′`**（2026-09-25）。

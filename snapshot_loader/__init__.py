@@ -87,6 +87,7 @@ from .issues import Check, Issue
 from .result_binding import (
     ANALYSIS_RUN_COMPONENTS,
     AnalysisRunBindingError,
+    require_same_accepted_package,
     require_same_analysis_run,
 )
 from .exact_quantity import (
@@ -136,6 +137,18 @@ from .requirement_calculation import (
     compute_requirement_calculation,
 )
 from .strict_json import StrictJsonError, parse_strict_json
+from .procurement_policy_input import (
+    PROCUREMENT_POLICY_INPUT_BASIS_BY_LITERAL,
+    PROCUREMENT_POLICY_INPUT_OUTCOMES,
+    PROCUREMENT_POLICY_INPUT_REGISTRY,
+    PROCUREMENT_POLICY_INPUT_STAGE,
+    PROCUREMENT_POLICY_INPUT_UNRESOLVED,
+    PROCUREMENT_POLICY_OBSERVATION,
+    ProcurementPolicyInputBasis,
+    ProcurementPolicyInputContext,
+    ProcurementPolicyInputResult,
+    compute_procurement_policy_input,
+)
 from .shortage_calculation import (
     CLASSIFICATIONS,
     CLASSIFICATION_BUFFER_BREACH,
@@ -252,6 +265,17 @@ __all__ = [
     "CONSERVATION_OVER_ALLOCATED",
     "CONSERVATION_SOURCE_SUPPLY_UNRESOLVED",
     "CONSERVATION_WITHIN_LIMIT",
+    "PROCUREMENT_POLICY_INPUT_BASIS_BY_LITERAL",
+    "PROCUREMENT_POLICY_INPUT_OUTCOMES",
+    "PROCUREMENT_POLICY_INPUT_REGISTRY",
+    "PROCUREMENT_POLICY_INPUT_STAGE",
+    "PROCUREMENT_POLICY_INPUT_UNRESOLVED",
+    "PROCUREMENT_POLICY_OBSERVATION",
+    "ProcurementPolicyInputBasis",
+    "ProcurementPolicyInputContext",
+    "ProcurementPolicyInputResult",
+    "compute_procurement_policy_input",
+    "require_same_accepted_package",
     "CLASSIFICATIONS",
     "CLASSIFICATION_BUFFER_BREACH",
     "CLASSIFICATION_DATA_INCOMPLETE",

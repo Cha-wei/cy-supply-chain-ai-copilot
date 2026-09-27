@@ -4233,6 +4233,33 @@ RecommendedPurchaseQty
 - `BR-SUBSTITUTE-001`
 - `BR-REQUIREMENT-001`
 
+#### 2.5.19 Phase B procurement policy input runtime seam（`A′`，Human Decision）
+
+`ApplicableMOQ` 是 **canonical business input**（`§2.5.5`），其 owner 为 exact **Procurement
+Recommendation Context**，并在 **Phase B** 解析（`§4.3.31` F ／ G I-3 ／ I-4，`§4.4.67`）。
+
+**`A′`（`APPROVED`）：** `ApplicableMOQ` 由 Phase B runtime-only 的
+**procurement-policy-input handoff** 提供，并按以下已登记边界实现：
+
+- owner grain = `plant_id` + `material_code` + `RecommendationNeedDate`
+  （`RecommendationNeedDate` 取自 `BR-SHORTAGE-001` 既有 per-family `FirstShortageDate` handoff，
+  **不得**重算 shortage date，**不得**建立第二个 date authority）；
+- binding：same `analysis_run` ＋ same AcceptedPackage ／ accepted content view
+  （`F3-RB1` ／ `§4.3.31` E）；
+- evidence 仍**只**来自 same AcceptedPackage 的 role 12 `Procurement policy input`；Phase A **仍**
+  不打开该 channel；
+- resolution contract = **exactly one applicable `ApplicableMOQ` 或 unresolved**；ambiguous ／
+  missing ／ invalid 一律 fail closed，**不得** default ／ clamp ／ precedence；
+- `ApplicableMOQ = 0` 是**合法显式值**，与 missing ／ invalid 严格区分（`§2.5.6`）；
+- 只暴露**窄 read-only consumption surface**（per-context `ApplicableMOQ` ＋ outcome ＋ resolution
+  basis ＋ accepted record ／ evidence reference，以及 valid-absence family 面）给下游
+  `BR-PROCUREMENT-001`。
+
+**本小节不实现** `BR-PROCUREMENT-001`：`BasePurchaseNeed` ／ `RecommendedPurchaseQty` ／
+`MOQAdjustmentQty` 与 recommendation output 的产生仍属该规则自身，`§2.5.1` ～ `§2.5.18` 的业务语义
+**未改变**；也**不新增** canonical entity ／ field ／ business enum ／ supplier selection ／
+supplier precedence。`ApplicableMOQ` 的真实 source mapping 仍 `NOT YET DEFINED`（`§2.5.5`）。
+
 ### 2.6 Effective Inbound
 
 **Rule ID:** `BR-INBOUND-001`
