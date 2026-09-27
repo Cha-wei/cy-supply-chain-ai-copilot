@@ -1053,6 +1053,195 @@ class CumulativeAndDateTests(ShortageRuleTestCase):
         )
 
 
+# --- F4: the per-family FirstShortageDate handoff ------------------------------------
+
+
+class PerFamilyHandoffTests(ShortageRuleTestCase):
+    """The registered per-family consumption seam of ``FirstShortageDate`` (Issue #156).
+
+    ``BR-PROCUREMENT-001`` needs one baseline recommendation per ``plant_id`` + ``material_code``
+    with ``RecommendationNeedDate = FirstShortageDate`` and
+    ``BasePurchaseNeed = ShortageQty at FirstShortageDate``.  The result-wide marker scans every
+    grain of the whole result and a grain-level marker is a family marker, so neither is the
+    per-family authority: ``first_shortage_date_for()`` answers the existing three-state semantic
+    (``DATE`` ／ ``SHORTAGE_DATA_INCOMPLETE`` ／ ``None``) over exactly one family's grains.
+    """
+
+    def test_f4_1_a_reliable_first_shortage_is_reported_per_family(self) -> None:
+        # 100 opening - 10 = 90 >= 5 (NORMAL); -20 (SHORTAGE); -30 (SHORTAGE).
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "10", D1),
+                Demand(DEMAND, DEMAND, "110", D2),
+                Demand(DEMAND, DEMAND, "10", D3),
+            ),
+            inventory={DEMAND: "100"},
+            safety_stock={DEMAND: "5"},
+            name="f4-1-reliable-first-shortage",
+        )
+        self.assertEqual(built.shortage.first_shortage_date_for(PLANT, DEMAND), D2)
+        # The shortage quantity of that exact date stays directly retrievable for the baseline need.
+        first = built.shortage.for_grain(PLANT, DEMAND, D2)
+        assert first is not None
+        self.assert_classification(first, CLASSIFICATION_SHORTAGE)
+        self.assert_quantity(first, "shortage_qty", "20")
+        self.assert_quantity(first, "projected_available", "-20")
+        # The family's own grains are the horizon of the accessor; the later date carries the same
+        # established marker and the earlier reliable NORMAL grain claims none.
+        self.assertEqual(self.grain(built, DEMAND, D3).first_shortage_date, D2)
+        self.assertIsNone(self.grain(built, DEMAND, D1).first_shortage_date)
+
+    def test_f4_2_an_earlier_same_family_incomplete_blocks_the_later_shortage(self) -> None:
+        # D1's statement is unusable upstream, so exactly that grain's CumulativeGrossRequirement
+        # cannot be obtained while D2 stays decidable: the family's first shortage date is therefore
+        # NOT reliably D2, even though D2 itself is a reliable SHORTAGE.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "not-a-registered-quantity", D1),
+                Demand(DEMAND, DEMAND, "110", D2),
+            ),
+            inventory={DEMAND: "100"},
+            safety_stock={DEMAND: "5"},
+            name="f4-2-earlier-incomplete",
+        )
+        self.assert_classification(
+            self.grain(built, DEMAND, D1), CLASSIFICATION_DATA_INCOMPLETE
+        )
+        later = self.grain(built, DEMAND, D2)
+        self.assert_classification(later, CLASSIFICATION_SHORTAGE)
+        self.assert_quantity(later, "shortage_qty", "10")
+        answer = built.shortage.first_shortage_date_for(PLANT, DEMAND)
+        self.assertEqual(answer, SHORTAGE_DATA_INCOMPLETE)
+        self.assertNotEqual(answer, D2)
+        # The grain-level family marker is fail-safe too: it never claims D2 across the earlier
+        # unresolved grain, and it agrees with the per-family answer.
+        self.assertEqual(later.first_shortage_date, SHORTAGE_DATA_INCOMPLETE)
+        self.assertIsNone(self.grain(built, DEMAND, D1).first_shortage_date)
+
+    def test_f4_3_a_later_incomplete_never_moves_the_earlier_date(self) -> None:
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "110", D1),
+                Demand(DEMAND, DEMAND, "10", D2),
+            ),
+            inventory={DEMAND: "100"},
+            safety_stock={DEMAND: "5"},
+            targets=((DEMAND, D1, "APPROVED"), (DEMAND, D2, "UNRESOLVED")),
+            name="f4-3-later-incomplete",
+        )
+        self.assert_classification(
+            self.grain(built, DEMAND, D1), CLASSIFICATION_SHORTAGE
+        )
+        self.assert_classification(
+            self.grain(built, DEMAND, D2), CLASSIFICATION_DATA_INCOMPLETE
+        )
+        self.assertEqual(built.shortage.first_shortage_date_for(PLANT, DEMAND), D1)
+        self.assertEqual(self.grain(built, DEMAND, D1).first_shortage_date, D1)
+        self.assertIsNone(self.grain(built, DEMAND, D2).first_shortage_date)
+
+    def test_f4_4_a_fully_reliable_horizon_without_shortage_is_a_valid_absence(self) -> None:
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "10", D1),
+                Demand(DEMAND, DEMAND, "10", D2),
+            ),
+            inventory={DEMAND: "100"},
+            safety_stock={DEMAND: "5"},
+            name="f4-4-valid-absence",
+        )
+        self.assertEqual(built.shortage.data_incomplete_grains, ())
+        self.assertIsNone(built.shortage.first_shortage_date_for(PLANT, DEMAND))
+        self.assertIsNone(built.shortage.first_shortage_date)
+
+    def test_f4_5_an_unresolved_horizon_without_shortage_never_reports_a_valid_absence(
+        self,
+    ) -> None:
+        # No grain of the family ever goes short, but D2 is DATA_INCOMPLETE, so "never short" is not
+        # a reliable conclusion for the family and the accessor fails safe instead of returning null.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "10", D1),
+                Demand(DEMAND, DEMAND, "10", D2),
+            ),
+            inventory={DEMAND: "100"},
+            safety_stock={DEMAND: "5"},
+            targets=((DEMAND, D1, "APPROVED"), (DEMAND, D2, "UNRESOLVED")),
+            name="f4-5-unresolved-horizon",
+        )
+        self.assertEqual(built.shortage.shortage_grains, ())
+        self.assertEqual(
+            built.shortage.first_shortage_date_for(PLANT, DEMAND),
+            SHORTAGE_DATA_INCOMPLETE,
+        )
+
+    def test_f4_6_one_family_never_answers_for_another(self) -> None:
+        # M2 is DATA_INCOMPLETE at D1 while M5 is a reliable SHORTAGE at D2.  The result-wide marker
+        # is the fail-safe because of M2, so it must NOT be the per-family authority: M2 does not
+        # block M5's own date, and M5 does not make M2's answer reliable.
+        built = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "10", D1),
+                Demand(OTHER, OTHER, "110", D2),
+            ),
+            inventory={DEMAND: "100", OTHER: "100"},
+            safety_stock={DEMAND: "5", OTHER: "5"},
+            targets=((DEMAND, D1, "UNRESOLVED"), (OTHER, D2, "APPROVED")),
+            name="f4-6-family-isolation",
+        )
+        self.assertEqual(
+            built.shortage.first_shortage_date_for(PLANT, DEMAND),
+            SHORTAGE_DATA_INCOMPLETE,
+        )
+        self.assertEqual(built.shortage.first_shortage_date_for(PLANT, OTHER), D2)
+        self.assertEqual(
+            built.shortage.first_shortage_date, SHORTAGE_DATA_INCOMPLETE
+        )
+        # The unrelated family's own business result is untouched by the other family's failure.
+        other = self.grain(built, OTHER, D2)
+        self.assert_classification(other, CLASSIFICATION_SHORTAGE)
+        self.assert_quantity(other, "shortage_qty", "10")
+
+    def test_f4_the_three_states_reuse_the_existing_vocabulary(self) -> None:
+        # Exactly the registered three-state semantic, with no new business enum / status: a date,
+        # the existing SHORTAGE_DATA_INCOMPLETE literal, or a valid-absence None.
+        reliable = self.build(
+            demand=(Demand(DEMAND, DEMAND, "110", D2),),
+            inventory={DEMAND: "100"},
+            safety_stock={DEMAND: "5"},
+            name="f4-vocabulary-date",
+        )
+        unresolved = self.build(
+            demand=(
+                Demand(DEMAND, DEMAND, "10", D1),
+                Demand(DEMAND, DEMAND, "10", D2),
+            ),
+            inventory={DEMAND: "100"},
+            safety_stock={DEMAND: "5"},
+            targets=((DEMAND, D1, "APPROVED"), (DEMAND, D2, "UNRESOLVED")),
+            name="f4-vocabulary-unresolved",
+        )
+        absent = self.build(
+            demand=(Demand(DEMAND, DEMAND, "10", D2),),
+            inventory={DEMAND: "100"},
+            safety_stock={DEMAND: "5"},
+            name="f4-vocabulary-absence",
+        )
+        self.assertEqual(reliable.shortage.first_shortage_date_for(PLANT, DEMAND), D2)
+        self.assertEqual(
+            unresolved.shortage.first_shortage_date_for(PLANT, DEMAND),
+            SHORTAGE_DATA_INCOMPLETE,
+        )
+        self.assertIsNone(absent.shortage.first_shortage_date_for(PLANT, DEMAND))
+        # ``SHORTAGE_DATA_INCOMPLETE`` is the **existing** registered ``DATA_INCOMPLETE`` business
+        # outcome (the same literal the classification uses), not a new status or enum.
+        self.assertEqual(SHORTAGE_DATA_INCOMPLETE, CLASSIFICATION_DATA_INCOMPLETE)
+        self.assertIn(SHORTAGE_DATA_INCOMPLETE, CLASSIFICATIONS)
+        # A family this result does not name has no horizon of its own and is never invented.
+        self.assertIsNone(
+            reliable.shortage.first_shortage_date_for(PLANT, "M-NOT-IN-RESULT")
+        )
+
+
 # --- AC-9 / AC-10 / AC-11: S1-A source reservation consumption ----------------------
 
 
