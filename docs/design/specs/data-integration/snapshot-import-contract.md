@@ -6804,9 +6804,22 @@ plant mismatch、unresolved Production Requirement context、allocation identity
   ⇒ 不得借 allocation grain 推 required_date，不得解析 Issue.detail 取得 identity
 ```
 
-该 surface **只**服务一个已登记消费边界：`BR-SUBSTITUTE-001` 的 `S3-A` completion —— exact unresolved
-`Target Applicability` grain ⇒ `CumulativeApprovedSubstituteSupply = DATA_INCOMPLETE`（`§2.3.11` B），
-failure isolation 保持到该 exact grain（不得 role-level ／ material-level ／ allocation-level poisoning）。
+该 surface 服务**两个已登记消费边界**（同一 read-only reference，无其他通道）：
+
+```text
+relation = Target Applicability
+  ⇒ BR-SUBSTITUTE-001 的 S3-A completion
+  ⇒ exact grain 的 CumulativeApprovedSubstituteSupply = DATA_INCOMPLETE（§2.3.11 B）
+
+relation = Source Reservation Overlap（SRO-U1 ／ Human Decision Option A）
+  ⇒ 该 exact context 仍是 citation，其 supply conservation = unresolved → DATA_INCOMPLETE
+  ⇒ 既有 S1-A 消费边界：source EffectiveOpeningSupply = DATA_INCOMPLETE
+  ⇒ 不得回退为完整 OpeningUsableInventory，不得重新计算 reservation，不得推断 overlaps ／
+     does not overlap，也不得使 Target Applicability 自动变 unresolved
+```
+
+两个消费边界都保持 exact-grain failure isolation（不得 role-level ／ material-level ／
+allocation-level ／ package-level poisoning）。
 
 **D. 严格限定（保持）**
 

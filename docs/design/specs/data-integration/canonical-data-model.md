@@ -777,9 +777,23 @@ citation、material mismatch、plant mismatch、unresolved Production Requiremen
 identity 不可读），**不**产生该 reference，既有 unresolved 行为保持不变；**不得**借 allocation grain 推
 `required_date`，**不得**解析 finding 的 free text 取得 identity。
 
-该 reference 的**唯一**消费边界是 `BR-SUBSTITUTE-001` 的 `S3-A` completion：exact unresolved
-`Target Applicability` grain ⇒ `CumulativeApprovedSubstituteSupply = DATA_INCOMPLETE`（`§2.3.11` B），
-且 failure isolation 保持到该 exact grain。`ADR-001` 未改变。
+该 reference 的消费边界是**已登记的既有 seam**，且不新增其他通道：
+
+```
+relation = Target Applicability
+  ⇒ BR-SUBSTITUTE-001 的 S3-A completion
+  ⇒ exact grain 的 CumulativeApprovedSubstituteSupply = DATA_INCOMPLETE（§2.3.11 B）
+
+relation = Source Reservation Overlap（SRO-U1 ／ Human Decision Option A）
+  ⇒ BR-SUBSTITUTE-001 将该 exact context 作为 citation 与其 conservation = unresolved 表达
+  ⇒ 既有 S1-A 消费边界：source EffectiveOpeningSupply = DATA_INCOMPLETE
+  ⇒ **不得**回退为完整 OpeningUsableInventory，**不得**重新计算 reservation
+```
+
+两者都保持 exact-grain failure isolation：**不得**由 SRO 的 unresolved 推断 `overlaps` ／
+`does not overlap`，**不得**使 `Target Applicability` 自动变 unresolved，**不得**从 allocation grain 推
+`required_date`，**不得**解析 finding free text，也**不得** role-level ／ material-level ／ package-level
+poisoning。`ADR-001` 未改变。
 
 **E. `POLICY_INPUT` ／ `CONTEXT` context**
 

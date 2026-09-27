@@ -2911,14 +2911,29 @@ resolved upstream result 的消费边界是 rule-specific 的，
   到更晚 grain（更晚 grain 自身无新增 contribution **不等于** `DATA_INCOMPLETE`）；任何影响 `<= t`
   累计的 unresolved applicability 使该 grain `DATA_INCOMPLETE`；valid zero 只能来自 upstream 的显式
   结论。upstream `DATA_INCOMPLETE` 在 affected grain 上原样传播。
-- **grain-scoped unresolved effective demand reference（`Option A′`）**：G5-A 对「exact Demand Context
-  已可靠解析、但 relation outcome 无法形成正常 reference」的 entry 产出一个 read-only grain-scoped
-  unresolved reference（carrying existing relation ＋ resolved DemandContextReference ＋
-  `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`）。`BR-SUBSTITUTE-001` **只**用它把该 exact
-  `Target Applicability` grain 的 `CumulativeApprovedSubstituteSupply` 判为 `DATA_INCOMPLETE`，failure
-  isolation 到该 grain；**不得** role-level ／ material-level ／ allocation-level 推定。Demand Context
-  本身无法可靠解析时**不**产出该 reference，既有 unresolved 行为保持不变，且**不得**由 allocation
-  grain 推 `required_date` 或解析 finding free text。
+- **grain-scoped unresolved effective demand reference（`Option A′` ／ `SRO-U1`）**：G5-A 对「exact
+  Demand Context 已可靠解析、但 relation outcome 无法形成正常 reference」的 entry 产出一个 read-only
+  grain-scoped unresolved reference（carrying existing relation ＋ resolved DemandContextReference ＋
+  `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`），并按 relation 进入两个已登记消费边界：
+  `Target Applicability` ⇒ `BR-SUBSTITUTE-001` 把该 exact grain 的
+  `CumulativeApprovedSubstituteSupply` 判为 `DATA_INCOMPLETE`；`Source Reservation Overlap`
+  ⇒ 该 exact context 的 supply conservation 为 unresolved，既有 `S1-A` 边界使 source
+  `EffectiveOpeningSupply = DATA_INCOMPLETE`（**不得**回退为完整 `OpeningUsableInventory`，**不得**
+  重新计算 reservation，**不得**推断 `overlaps` ／ `does not overlap`，**不得**使 `Target
+  Applicability` 自动变 unresolved）。两者都保持 exact-grain failure isolation；**不得** role-level ／
+  material-level ／ allocation-level ／ package-level 推定。Demand Context 本身无法可靠解析时**不**产出该
+  reference，既有 unresolved 行为保持不变，且**不得**由 allocation grain 推 `required_date` 或解析
+  finding free text。
+- **supply conservation 的 target 侧消费（`§2.3.10` 实现修正）**：conservation group 的结论为
+  `DATA_INCOMPLETE` 且该 group **归属**了参与 sum 的 allocations（`Σ AllocatedSubstituteQty >
+  EligibleSubstituteSupply`）时，这些 exact allocation record 的 target participation **只**在其本来会
+  **实际贡献 positive eligible supply** 时失效 ⇒ affected Target demand grain `DATA_INCOMPLETE`，其
+  cumulative 依 `S3-A` 传播。既有 Target semantics **先**判定：可靠的 `not applicable`、valid but
+  ineligible（`PENDING` ／ `REJECTED`）、`AllocatedSubstituteQty = 0`、该 grain 明确没有 relationship
+  仍是合法 `0`（`§4.4.89`），**不得**因为**另一个** allocation 造成 conservation 失败而变成
+  `DATA_INCOMPLETE`。**不得** clamp ／ 重新分配 ／ 引入 priority ／ 修改 invariant；守恒结论不可靠但
+  **未形成 sum** 的 context 无归属 allocation，因此不使任何 target contribution 失效（两个 G5-A
+  relation 独立）。
 - **exact rational 不是 unresolved**：upstream 的 exact `Fraction`（例如 `GrossRequirement = 4000/19`）
   是可靠 quantity；**不得**因该值没有有限十进制表示而将其降级为 `DATA_INCOMPLETE`，也**不得**
   `round` ／ `truncate` ／ `quantize`（`§2.4.8` / `ADR-001`）。derived result **只**以仓库既有的 exact
