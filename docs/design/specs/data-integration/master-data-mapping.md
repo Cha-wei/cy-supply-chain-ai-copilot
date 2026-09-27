@@ -2372,6 +2372,27 @@ unresolved count                        = 7 → 6
 **不表示**：actual source values known / ERP · SRM vocabulary known /
 Adapter mapping implemented / mapping configuration exists / Supplier Risk implemented / tested。
 
+**`A′` Implementation Record（Issue #162 Human Decision）**
+
+```
+Supplier Risk runtime input seam        = REGISTERED（poc-design §2.7.25 ／ §4.3.31 G I-10）
+eligibility resolution registry key     = approved mapping_basis literal（**不是** source value）
+eligibility runtime record              = data-validation §4.4.103
+need-date linkage                       = verified against the recommendation entry's own
+                                          upstream shortage_reference（plant ／ material ／ date）；
+                                          缺失 ／ 不一致 → PROVENANCE ／ PROVENANCE_UNRESOLVED ／
+                                          PROVENANCE_MISMATCH，不得重建 reference
+source value → eligibility condition     = 仍由未来 Adapter ／ source-specific mapping 提供
+real source vocabulary                  = 仍未知，且仍**不得**被声明 ／ 列举
+Adapter mapping implemented             = NO
+BR-SUPPLIER-RISK-001 risk classification = NOT IMPLEMENTED
+```
+
+该登记**只**落地 POC 的 accepted-package in-process runtime 解析（exact `mapping_basis` literal →
+`eligible` ／ `ineligible` ／ `unresolved`），**不**改变本项的 `DESIGN RESOLVED` 结论、**不**建立
+source vocabulary、**不**新增 canonical field ／ entity ／ grain ／ Validation Category ／ Reason，
+也**不**代表 Adapter 或真实 source mapping 已实现。
+
 #### 4.5.12 Warehouse Role Resolution
 
 **Decision Question**

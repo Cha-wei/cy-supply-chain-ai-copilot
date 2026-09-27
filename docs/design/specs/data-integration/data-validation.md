@@ -3069,6 +3069,64 @@ Validation taxonomy                                       = 8 category ／ 12 re
 Runtime implementation                                     = NOT STARTED
 ```
 
+#### 4.4.103 Supplier Risk runtime eligibility ／ composition record（`A′`，Issue #162）
+
+**Registration Status：`REGISTERED`** —— 依据 **Human Decision `A′` = `APPROVED`**（Supplier Risk
+Runtime Input Seam，Issue #162）。本小节是 `§4.4.61` ／ `§4.4.62` ／ `§4.4.63` ／ `§4.4.64` 的
+**runtime 落地登记**，**不新增** Validation Category ／ Reason，**不重定义** `§2.7` 的 business
+thresholds，也**不实现** risk classification。
+
+```text
+eligibility resolution  = source-specific `sourcing_status` evidence
+                          ＋ exact Stable Source Evidence Locator
+                          ＋ exact registered mapping_basis
+                          → approved deterministic SIMULATED mapping registry
+                            （exact mapping_basis literal → eligible ／ ineligible）
+                          → 否则 unresolved
+registry key            = approved mapping_basis literal（**不是** source value）
+cardinality             = exactly one applicable resolution per relationship, or unresolved
+```
+
+| outcome | taxonomy | business 后果 |
+| --- | --- | --- |
+| `eligible` | —（无 issue） | 允许进入 Supplier Risk evaluation |
+| `ineligible` | —（无 issue） | valid but not eligible：不进入 candidate set；**NO** `DATA_INCOMPLETE` |
+| `unresolved` | `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED` | capability 需要该 relationship 时 fail closed |
+
+**Composition record：**
+
+```text
+business grain     = supplier_id + material_code（未改变）
+evaluation context = plant_id + material_code + RecommendationNeedDate
+RecommendationNeedDate authority = BR-SHORTAGE-001 FirstShortageDate → registered
+                                   Procurement Recommendation ／ handoff（§4.4.65 ／ I-4）
+```
+
+- 同一 supplier + material 在不同 Plant 的采购需求中形成**独立** evaluation context；
+  **不得**跨 Plant 借用 `RecommendationNeedDate`，**不得**重算或 caller override。
+- 一个 reliable `RecommendationNeedDate` **只**在其 recommendation entry 自身携带的
+  upstream `shortage_reference` **恰好**指向同一 `plant_id` + `material_code` +
+  `RecommendationNeedDate`（`rule = BR-SHORTAGE-001`）时被接受；reference **缺失** →
+  `PROVENANCE` ／ `PROVENANCE_UNRESOLVED`，reference **已建立但指向其他 context** →
+  `PROVENANCE` ／ `PROVENANCE_MISMATCH`（`§4.4.69` ／ `§4.4.93`）；该 date **不得**被信任、
+  **不得**被替换，context 保持无 need date 并 fail closed。
+- Procurement Recommendation 的**数量** `DATA_INCOMPLETE`（例如 `ApplicableMOQ` missing）
+  **不**阻止 evaluation context 形成：MOQ ／ policy-input failure 不污染 Supplier Risk。
+- `RecommendationNeedDate` unresolved 时 composition state 保持 unresolved（保留可靠 supplier-side
+  evidence；future `LeadTimeRisk` ／ `OverallSupplierRisk` 必须 fail closed），**不得**猜日期。
+- reliable `NORMAL` ／ `BUFFER_BREACH`（`§4.4.87` valid absence）**不**形成 evaluation context，
+  且**不是** `DATA_INCOMPLETE`。
+
+**Capability boundary（`§4.4.84` 保持）：** required supplier-side evidence role
+**not provided** = `EVIDENCE_AVAILABILITY` ／ `EVIDENCE_ROLE_NOT_PROVIDED`（capability
+unavailable），**不得**表达为 Risk Card `OverallSupplierRisk = DATA_INCOMPLETE`。
+
+**本小节未新增** canonical field ／ entity ／ grain、**未新增** business enum ／ status、
+**未新增** Validation Category ／ Reason，**未**定义任何真实 source vocabulary
+（`APPROVED` ／ `ACTIVE` ／ `QUALIFIED` ／ `BLOCKED` ／ `INACTIVE` 仍**不得**出现），
+**未**定义 `PerformancePeriod` vocabulary 或 freshness threshold。
+Runtime 实现登记见 `snapshot-import-contract.md` §4.3.31 G **I-10** 与 `poc-design-v0.2.md` §2.7.25。
+
 ---
 
 <!-- END MIGRATED LEGACY §4.4 BODY -->

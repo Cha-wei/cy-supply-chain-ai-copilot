@@ -6642,6 +6642,7 @@ Phase B 不得阻塞 Phase A
 | I-7 | BOM parent ／ requirement context（G4-A） | A | `BOM Component` evidence → resolved Production Requirement context | context reference | required | n/a | exactly one context per evidence set | `UNRESOLVED_IDENTITY` | **Stage A**（§4.4.11）→ `UNRESOLVED_IDENTITY` |
 | I-8 | effective demand context relation outcomes（G5-A） | A | source substitute material ＋ target material ＋ allocation record | two independent relation outcomes（references） | required（same AcceptedPackage-scoped source provenance） | required | exactly one pair or unresolved | `SEMANTIC_UNRESOLVED` | **Stage A**（§4.4.60 path **B**）→ `SEMANTIC_UNRESOLVED` |
 | I-9 | Inventory ownership ／ POC Inventory Scope resolution（A′） | A | exact `Inventory Snapshot` evidence citation | runtime Inventory scope context（ownership ＋ scope membership），derived by the approved deterministic basis registry | required（same AcceptedPackage-scoped source provenance） | required（exact association `mapping_basis`） | exactly one applicable resolution per Inventory evidence or unresolved | ownership → `IDENTITY_RESOLUTION` ／ `UNRESOLVED_IDENTITY`；scope → `SCOPE_COVERAGE` ／ `UNRESOLVED_SCOPE` | **Stage A**（§4.4.102 C）→ unresolved；不得 first ／ last wins、不得同值去重、不得跨 association 借用 basis |
+| I-10 | Supplier-Material relationship eligibility ＋ supplier-material evaluation composition（`A′`，Issue #162） | A ／ B | exact `Supplier-Material Relationship` evidence citation ／ `supplier_id` ＋ `material_code`；composition 另加 `plant_id` ＋ `RecommendationNeedDate` | runtime eligibility outcome（`eligible` ／ `ineligible` ／ `unresolved`）＋ read-only evaluation context list | required（same AcceptedPackage-scoped source provenance） | required（exact registered `mapping_basis` on the `sourcing_status` observation） | exactly one applicable eligibility resolution per relationship, or unresolved；one evaluation context per eligible relationship × its material's Procurement Recommendation Context | eligibility unresolved → `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`；relationship absent ／ 无可用 `sourcing_status` ／ 无 approved basis → unresolved；required supplier-side role not provided → `EVIDENCE_AVAILABILITY` ／ `EVIDENCE_ROLE_NOT_PROVIDED`（capability unavailable） | **Stage A**（§4.4.61 ／ §4.4.62 ／ §4.4.103）→ unresolved；不得 first ／ last wins、不得 `relationship exists ⇒ eligible`、不得 `Supplier exists ⇒ eligible`、不得跨 Plant 借用 `RecommendationNeedDate` |
 
 injection **不**决定任何真实 ERP ／ source file ／ ERP field physical carrier；`loss_rate` 的
 Entity ／ Dataset ／ Source Field 归属仍**不得**决定（§4.4.15）。
@@ -6929,6 +6930,80 @@ Snapshot / Import Contract                                  = DESIGN RESOLVED（
 Runtime implementation                                      = NOT STARTED
 POC success                                                 = NOT CLAIMED
 ```
+
+**I-10 —— Supplier Risk runtime input seam（`A′`，Human Decision）**
+
+**Registration Status：`REGISTERED`** —— 依据 **Human Decision `A′` = `APPROVED`**（Supplier Risk
+Runtime Input Seam，Issue #162）。
+
+本小节**只**登记 `BR-SUPPLIER-RISK-001` 的两个 runtime input 边界，**不新增** canonical entity ／
+canonical field ／ grain ／ business enum ／ Validation Category ／ Reason，**不定义**任何真实 source
+vocabulary，也**不实现**任何 risk classification（`§2.7.25` ／ `data-validation.md` §4.4.103）。
+
+```text
+phase                     = A（supplier-side canonical objects ／ roles 9 ～ 11）
+                            ＋ B（Procurement Recommendation Context ／ RecommendationNeedDate）
+evidence roles            = recognized role 10 `Supplier-Material Relationship`
+                            ＋ recognized role 11 `Supplier Performance`
+input authority           = same AcceptedPackage evidence only（§4.3.31 E）；
+                            只读取 same accepted content view 的 supplier-side dataset，
+                            **不**重新读取 raw ／ filesystem evidence
+eligibility resolution    = source-specific `sourcing_status` evidence
+                            ＋ exact Stable Source Evidence Locator
+                            ＋ exact registered mapping_basis
+                            → approved deterministic SIMULATED mapping registry
+                              （exact mapping_basis literal → eligible ／ ineligible）
+                            → 否则 unresolved
+registry key              = approved mapping_basis literal
+                            （**不是** source `sourcing_status` value；不得假设
+                            APPROVED ／ ACTIVE ／ QUALIFIED ／ BLOCKED ／ INACTIVE 等 vocabulary）
+cardinality               = exactly one applicable eligibility resolution per relationship, or unresolved
+eligible                  = 允许进入 Supplier Risk evaluation
+ineligible                = valid but not applicable；NO Validation Issue；NO DATA_INCOMPLETE；不进入 candidate set
+unresolved                = SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED（capability 需要时 fail closed）
+composition grain         = supplier_id + material_code（**未改变**；**不加入** plant_id）
+evaluation context        = plant_id ＋ material_code ＋ RecommendationNeedDate
+                            （plant_id 仅为 evaluation context；不得跨 Plant 借用 RecommendationNeedDate）
+RecommendationNeedDate    = BR-SHORTAGE-001 既有 FirstShortageDate handoff
+                            （§4.4.65 ／ I-4；**不得**重算、**不得** caller override、
+                            **不得**建立第二个 date authority）
+need-date linkage         = 一个 reliable RecommendationNeedDate **只**在该 recommendation entry
+                            自身携带的 shortage_reference 恰好指向同一 plant_id + material_code +
+                            RecommendationNeedDate（rule = BR-SHORTAGE-001）时被接受；缺失 →
+                            PROVENANCE ／ PROVENANCE_UNRESOLVED；指向其他 context →
+                            PROVENANCE ／ PROVENANCE_MISMATCH（§4.4.69 ／ §4.4.93）；
+                            **不得**重建 reference，也**不得**把该 date 视为可信
+context behavior          = reliable need date → context forms；procurement **quantity** DATA_INCOMPLETE
+                            ＋ reliable need date → context **仍**forms（MOQ failure 不得污染）；
+                            need date unresolved → unresolved composition state（保留 supplier-side
+                            evidence，future LeadTimeRisk ／ OverallSupplierRisk 必须 fail closed）；
+                            reliable NORMAL ／ BUFFER_BREACH → **不**形成 context（valid absence）
+capability boundary       = required supplier-side role not provided →
+                            EVIDENCE_AVAILABILITY ／ EVIDENCE_ROLE_NOT_PROVIDED（capability
+                            unavailable），**不得**伪造成 Risk Card DATA_INCOMPLETE（§4.4.84）
+caller-provided outcome   = FORBIDDEN
+read-only surface         = per-relationship eligibility ＋ considered references ＋
+                            per-context plant ／ material ／ supplier ／ RecommendationNeedDate ＋
+                            accepted Supplier Performance objects（resolved ／ unresolved）＋
+                            Analysis Run binding ＋ valid-absence families
+```
+
+**严格限定：**
+
+```text
+not a new external evidence source
+not a transport carrier
+not a second Snapshot Package
+not a canonical field ／ entity ／ grain
+not a new business enum ／ status ／ Risk Level
+not a new Validation Category ／ Reason
+not a supplier ranking ／ selection ／ recommendation capability
+not a Risk classification ／ threshold or quantity calculation
+not a physical carrier ／ Adapter ／ ERP ／ SRM mapping
+```
+
+I-10 **不修改** `§2.7.4` ～ `§2.7.8` 已登记的 business thresholds，**不修改** `§2.7.23` 的
+`PerformancePeriod` 完整性要求，也**不修改** `adr-001-deterministic-core.md`。
 
 ---
 
