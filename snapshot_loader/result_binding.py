@@ -185,6 +185,91 @@ def require_same_analysis_run(
         raise AnalysisRunBindingError(tuple(issues))
 
 
+def require_same_accepted_package(
+    analysis_run: AnalysisRunContext | None,
+    *,
+    package_id: Any,
+    accepted_content_view_digest: Any,
+    label: str = "accepted package",
+) -> None:
+    """Reject the invocation unless ``label`` is the Analysis Run's own accepted package.
+
+    The provenance contract binds one Analysis Run to **exactly one** accepted Snapshot Package and
+    one accepted content view (``§4.3.31`` E ／ ``§4.4.68``): evidence whose package identity or
+    accepted-content-view digest differs from the Analysis Run's own is a foreign ／ stale evidence
+    source and is never consumed.  Phase B consumption of accepted role-12 evidence uses this check,
+    because that seam reads the accepted package directly rather than through a Phase A report.
+
+    Both root conditions keep their existing taxonomy: a missing Analysis Run binding is
+    ``PROVENANCE`` ／ ``PROVENANCE_UNRESOLVED``, a mismatch is ``PROVENANCE`` ／
+    ``PROVENANCE_MISMATCH``, and the invocation is rejected either way.
+    """
+
+    issues: list[Issue] = []
+    if analysis_run is None:
+        issues.append(
+            Issue(
+                location=f"result_binding[{label}]",
+                detail=(
+                    f"this invocation carries no Analysis Run binding, so the required "
+                    f"package-scoped linkage between the {label} and the Analysis Run it is used "
+                    "for cannot be reliably established; the evidence is never consumed "
+                    "(PROVENANCE_UNRESOLVED is distinct from PROVENANCE_MISMATCH)"
+                ),
+                category=CATEGORY_PROVENANCE,
+                reason=REASON_PROVENANCE_UNRESOLVED,
+                layer=LAYER_2,
+                affected_evidence=label,
+                blast_radius="the whole rule invocation (no result is produced)",
+                design_reference=(
+                    "§4.3.31 E ／ §4.4.68 / master-data-mapping.md Cross-Package Boundary "
+                    "(F3-RB1 Option A′)"
+                ),
+                consequence_context=(
+                    "the invocation is rejected, no accepted evidence is consumed and no business "
+                    "result is produced"
+                ),
+            )
+        )
+    else:
+        differing = tuple(
+            name
+            for name, supplied in (
+                ("snapshot_package_identity", package_id),
+                ("accepted_content_view_digest", accepted_content_view_digest),
+            )
+            if supplied != _component_value(analysis_run, name)
+        )
+        if differing:
+            issues.append(
+                Issue(
+                    location=f"result_binding[{label}]",
+                    detail=(
+                        f"the {label} is not this Analysis Run's own accepted package: "
+                        f"{', '.join(differing)} differ(s) from the Analysis Run context "
+                        f"(current {_render(analysis_run)}); foreign or stale accepted evidence is "
+                        "never silently combined and no cross-package or cross-content-view "
+                        "fallback exists"
+                    ),
+                    category=CATEGORY_PROVENANCE,
+                    reason=REASON_PROVENANCE_MISMATCH,
+                    layer=LAYER_2,
+                    affected_evidence=label,
+                    blast_radius="the whole rule invocation (no result is produced)",
+                    design_reference=(
+                        "§4.3.31 E ／ §4.4.68 / master-data-mapping.md Cross-Package Boundary "
+                        "(F3-RB1 Option A′)"
+                    ),
+                    consequence_context=(
+                        "the invocation is rejected, no accepted evidence is consumed and no "
+                        "business result is produced"
+                    ),
+                )
+            )
+    if issues:
+        raise AnalysisRunBindingError(tuple(issues))
+
+
 def _render(context: AnalysisRunContext | None) -> str:
     if context is None:
         return "<no Analysis Run binding>"
@@ -205,5 +290,6 @@ def _short(value: Any) -> str:
 __all__ = [
     "ANALYSIS_RUN_COMPONENTS",
     "AnalysisRunBindingError",
+    "require_same_accepted_package",
     "require_same_analysis_run",
 ]

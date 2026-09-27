@@ -92,6 +92,10 @@ ROLE_SUBSTITUTE_ALLOCATION: str = "Substitute Allocation"
 ROLE_SUBSTITUTE_RELATIONSHIP: str = "Substitute Relationship"
 ROLE_CONFIGURED_SAFETY_STOCK: str = "Configured Safety Stock"
 ROLE_INVENTORY_SNAPSHOT: str = "Inventory Snapshot"
+#: The phase **B** recognized role literal (``§4.3.31`` B / ``data-dictionary`` role table row 12).
+#: Phase A never constructs it -- its ``POLICY_INPUT`` channel is opened only by the Phase B
+#: procurement-policy-input seam (``§4.3.31`` F ／ G I-3).
+ROLE_PROCUREMENT_POLICY_INPUT: str = "Procurement policy input"
 
 #: Canonical target literal of the retained same-grain Inventory observations
 #: (``§4.1.4 D``).  The canonical grain itself is unchanged and stays Plant-level.

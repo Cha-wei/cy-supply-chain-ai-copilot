@@ -870,6 +870,19 @@ database field / API enum / ranking / selection result）。
 > 它们只能是 **possible source forms**（见 **§4.2.16**）。
 > **不得**为解析 MOQ 而执行 Supplier Selection（见 **§4.4.67**）。
 
+> **Phase B runtime handoff（`A′`，Human Decision，Issue #158）：** `ApplicableMOQ` 由 Phase B
+> procurement-policy-input seam 按上述 owner grain（`plant_id` + `material_code` +
+> `RecommendationNeedDate`）解析，并向 `BR-PROCUREMENT-001` 暴露**窄 read-only** 消费面
+> （resolved value ＋ outcome ＋ resolution basis ＋ accepted record ／ evidence reference）。
+> `ApplicableMOQ = 0` 与 missing ／ invalid 严格区分；missing ／ invalid ／ ambiguous 一律
+> `DATA_INCOMPLETE`（**不得**默认成 0）。该 handoff **只**读取 same AcceptedPackage 的 role 12
+> evidence 并验证 same analysis run；只有**可靠确立**的 `plant_id` + `material_code`（非空 exact
+> JSON string）才可证明一条 record 属于其他 family，property 存在但不可用（JSON `null` ／ 空 string ／
+> 非 JSON string ／ 缺失）的 record 不可 scope 且**不得**被静默排除，而是参与 fail-closed；
+> `Physical Carrier` 仍 `NOT YET DEFINED`，**未新增** canonical
+> field ／ entity ／ business enum，也**未**实现 `BR-PROCUREMENT-001` 的数量计算
+> （`base purchase need` ／ `MOQ adjustment` ／ `recommended purchase qty` 仍属该规则）。
+
 **`RecommendationNeedDate` 的条件性**
 
 `RecommendationNeedDate` 的 `Requiredness` 为 **`CONDITIONAL`**，仅当：

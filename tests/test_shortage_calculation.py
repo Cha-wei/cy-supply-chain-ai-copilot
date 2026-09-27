@@ -83,6 +83,9 @@ ROLE_SAFETY_STOCK = "Configured Safety Stock"
 ROLE_INBOUND = "Inbound Supply"
 ROLE_RELATIONSHIP = "Substitute Relationship"
 ROLE_ALLOCATION = "Substitute Allocation"
+#: The phase B recognized role literal (role 12): its ``POLICY_INPUT`` channel is opened by the
+#: Phase B procurement-policy-input seam only, never by phase A.
+ROLE_PROCUREMENT_POLICY_INPUT = "Procurement policy input"
 
 BASIS_SCOPE_IN = "SIMULATED-INV-SCOPE-A-IN"
 BASIS_LOSS = "SIMULATED-BASIS-LOSS-RATE"
@@ -373,6 +376,9 @@ class Built:
     inventory: Any
     substitutes: Any
     shortage: Any
+    #: The accepted package the whole chain was built from, so a Phase B seam that must read accepted
+    #: evidence (the procurement policy input) consumes exactly this package and no other.
+    accepted: Any = None
 
 
 # --- scaffolding -------------------------------------------------------------------
@@ -406,6 +412,7 @@ class ShortageRuleTestCase(unittest.TestCase):
         target_quantities: dict[tuple[Any, Any], Any] | None = None,
         relationships: tuple[tuple[Any, Any, str], ...] = ((DEMAND, SOURCE, "APPROVED"),),
         substitute_present: bool = True,
+        moq_policies: tuple[dict[str, Any], ...] = (),
         analysis_run_id: str = "RUN-1",
         analysis_date: Any = "2026-10-01",
         package_id: str = "SIMULATED-PKG-0001",
@@ -605,6 +612,11 @@ class ShortageRuleTestCase(unittest.TestCase):
                     )
                 )
             datasets.append((ROLE_ALLOCATION, allocations))
+
+        if moq_policies:
+            # The phase B ``Procurement policy input`` dataset (role 12).  It is appended last, so
+            # the phase A artifacts keep their existing ordinals and no other fixture changes.
+            datasets.append((ROLE_PROCUREMENT_POLICY_INPUT, list(moq_policies)))
 
         built = build_package(
             self.boundary / (name or uuid.uuid4().hex[:8]),
@@ -808,6 +820,7 @@ class ShortageRuleTestCase(unittest.TestCase):
             inventory=inventory_result,
             substitutes=substitutes,
             shortage=shortage,
+            accepted=accepted,
         )
 
     # --- assertion helpers -------------------------------------------------------------
