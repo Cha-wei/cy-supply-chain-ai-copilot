@@ -6788,6 +6788,26 @@ exact 相等；
 `HandoffEvidence.evidence_locator` 在其他 seam 上的通用 optional contract（该契约未变，只在 G5-A path
 fail closed）。
 
+**C.2 Grain-scoped unresolved effective demand reference（Human Decision `Option A′`，新增登记）**
+
+```text
+Demand Context 已可靠解析（existing authority）＋ relation outcome 无法形成正常 reference
+  ⇒ runtime 额外产出 read-only grain-scoped unresolved reference
+     = existing relation
+     ＋ existing resolved DemandContextReference（该已 resolved Production Requirement context 的 grain）
+     ＋ existing unresolved meaning：SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED
+     ＋（可选）现有 provenance ／ reason trace，仅用于审计
+
+Demand Context 本身无法可靠解析（invalid ／ unverifiable citation、material mismatch、
+plant mismatch、unresolved Production Requirement context、allocation identity 不可读）
+  ⇒ **不**产出该 reference；既有 unresolved 行为不变
+  ⇒ 不得借 allocation grain 推 required_date，不得解析 Issue.detail 取得 identity
+```
+
+该 surface **只**服务一个已登记消费边界：`BR-SUBSTITUTE-001` 的 `S3-A` completion —— exact unresolved
+`Target Applicability` grain ⇒ `CumulativeApprovedSubstituteSupply = DATA_INCOMPLETE`（`§2.3.11` B），
+failure isolation 保持到该 exact grain（不得 role-level ／ material-level ／ allocation-level poisoning）。
+
 **D. 严格限定（保持）**
 
 ```text

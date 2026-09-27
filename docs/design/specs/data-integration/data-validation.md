@@ -2883,6 +2883,54 @@ exactly 1 applicable evidence                                       ⇒ resolved
 rule 聚合。除这些已登记例外之外，`>1 applicable evidence` 一律保持 unresolved；`Substitute
 Relationship` **不在**例外之内。
 
+**下游规则的已登记 consumption boundary（Human Decision `S1-A` ／ `S2-A` ／ `S3-A`，`§2.1.12`）：**
+
+> 本节位于 `§4.4.102`（First-Tranche Canonicalization Outcome & Conflict Boundary）的 Two-stage rule
+> 之内，紧接 Stage A 的已登记 multiplicity exception；它是该 boundary 的 current-state 登记，不是
+> `§4.4.12`（Grain Conflict Principle）的修改。
+
+```text
+resolved upstream result 的消费边界是 rule-specific 的，
+不得由 downstream rule 自行放宽或"补值"。
+```
+
+- **exact Source Demand Context（`S1-A`）**：该 grain 的 inventory-side supply **只能**取自
+  `BR-SUBSTITUTE-001` 已产生的 `RemainingUnallocatedSourceSupply`。conservation unresolved ／
+  `DATA_INCOMPLETE` ⇒ affected grain `DATA_INCOMPLETE`。**不得**重新计算 reservation，**不得**让已
+  allocation 的 source quantity 同时作为完整 uncommitted inventory 使用。
+- **exact `plant_id` + `material_code`（`S2-A`）**：恰 1 个可靠可消费 `InventoryTarget`；**0 个** 或
+  `>1` 个不同 `inventory_snapshot_time` ⇒ `DATA_INCOMPLETE`（0 个**不得**读成合法 `0`）。**禁止**
+  `earliest/latest wins`、跨 snapshot `sum` ／ `average`、自动令
+  `inventory_snapshot_time = AnalysisDate`。
+- **substitute result completeness（`S3-A`）**：该 completeness **在 `BR-SUBSTITUTE-001` 的 result
+  boundary 完成** —— substitute rule 对全部已解析 shortage demand grains 显式表达
+  `CumulativeApprovedSubstituteSupply(<= t)` 数值或 `DATA_INCOMPLETE`；downstream rule **只消费**该已
+  完成结果，**不**补全 grain universe。因此 missing ／ unstated substitute answer **不得**被猜成 `0`；
+  **不得**回读 raw ／ canonical substitute evidence 重算 `BR-SUBSTITUTE-001`，也**不得**由 downstream
+  rule 读取 accepted package 的 role-presence 来补解释替代语义。已有可靠 contribution 会 carry forward
+  到更晚 grain（更晚 grain 自身无新增 contribution **不等于** `DATA_INCOMPLETE`）；任何影响 `<= t`
+  累计的 unresolved applicability 使该 grain `DATA_INCOMPLETE`；valid zero 只能来自 upstream 的显式
+  结论。upstream `DATA_INCOMPLETE` 在 affected grain 上原样传播。
+- **grain-scoped unresolved effective demand reference（`Option A′`）**：G5-A 对「exact Demand Context
+  已可靠解析、但 relation outcome 无法形成正常 reference」的 entry 产出一个 read-only grain-scoped
+  unresolved reference（carrying existing relation ＋ resolved DemandContextReference ＋
+  `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`）。`BR-SUBSTITUTE-001` **只**用它把该 exact
+  `Target Applicability` grain 的 `CumulativeApprovedSubstituteSupply` 判为 `DATA_INCOMPLETE`，failure
+  isolation 到该 grain；**不得** role-level ／ material-level ／ allocation-level 推定。Demand Context
+  本身无法可靠解析时**不**产出该 reference，既有 unresolved 行为保持不变，且**不得**由 allocation
+  grain 推 `required_date` 或解析 finding free text。
+- **exact rational 不是 unresolved**：upstream 的 exact `Fraction`（例如 `GrossRequirement = 4000/19`）
+  是可靠 quantity；**不得**因该值没有有限十进制表示而将其降级为 `DATA_INCOMPLETE`，也**不得**
+  `round` ／ `truncate` ／ `quantize`（`§2.4.8` / `ADR-001`）。derived result **只**以仓库既有的 exact
+  rational payload 表达；**不**存在 parallel ／ companion 的 decimal text 字段，因此该 representation
+  不构成新的 canonical field contract。
+- **fail-safe first date**：更早日期 unresolved 而未建立可靠 marker 时，**不得**把后面可靠的
+  `SHORTAGE` 声称成 `FirstShortageDate`；已建立的可靠日期**不**被后续 `DATA_INCOMPLETE` 改写；无 marker
+  但 horizon unresolved 时**不得**输出 valid absence `null`（`§4.4.22` / `§4.4.10` failure isolation）。
+
+这些边界**不新增** canonical field ／ entity ／ identity component ／ grain，也**不新增** Validation
+category ／ reason：它们约束下游规则消费已 resolved upstream result 的方式。
+
 **Stage B —— approved consistency invariant violation**
 
 只有**同时**满足以下三条，才使用 `CONSISTENCY` ／ `CONSISTENCY_CONFLICT`：

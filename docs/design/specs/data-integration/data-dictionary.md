@@ -966,6 +966,54 @@ valid absence
 **不得新增** `NOT_APPLICABLE` / `N/A` / `NO_SHORTAGE` / `NO_RECOMMENDATION`
 等正式业务 enum / classification。
 
+**注册澄清（Human Decision `S1-A` ／ `S2-A` ／ `S3-A`，`§2.1.12`）：**
+
+```text
+ProjectedAvailable 公式中的 inventory-side 项 = EffectiveOpeningSupply
+EffectiveOpeningSupply 按 exact Source Demand Context（S1-A）
+                    ／ exact plant_id + material_code（S2-A）解析
+```
+
+即：`ProjectedAvailable` 公式里写出的 `OpeningUsableInventory` **不**表示"总是完整使用
+`BR-INVENTORY-001` 的 `OpeningUsableInventory`"。当该 exact `plant_id` + `material_code` 被
+exact Source Demand Context 引用时，inventory-side supply **替换**为该 context 由
+`BR-SUBSTITUTE-001` 已产生的 `RemainingUnallocatedSourceSupply`（**不是**两项相加）；只有未被任何
+exact context 引用时才是 S2-A 的完整 `OpeningUsableInventory` 路径。
+
+`SafetyStock` 与 `OpeningUsableInventory` **必须**取自同一个被消费的 `InventoryTarget`；
+**0 个 `InventoryTarget` 与 `>1` 个不同 `inventory_snapshot_time` 同为 `DATA_INCOMPLETE`**，二者任一
+不可靠时该 grain 为 `DATA_INCOMPLETE`，**不得**默认成 0、**不得**跨 snapshot 混用或 `earliest /
+latest wins` / `sum` / `average`。
+
+`ProjectedAvailable` ／ `ShortageQty` ／ `BufferGap` 及其消费的 cumulative values 都是 **exact
+rational derived result**（`§2.4.8` / `ADR-001`）：upstream 的 exact `Fraction`（例如
+`GrossRequirement = 4000/19`）是**可靠** quantity，**不因**没有有限十进制表示而成为
+missing / invalid / unresolved，也**不得** `round` / `truncate` / `quantize`。该 exact value 在
+runtime payload 中**只**以仓库既有的 derived-quantity representation
+`{"numerator": <int>, "denominator": <positive int>}` 表达（与 `BaseRequirement` /
+`GrossRequirement` / `EquivalentTargetQty` 同形式）。该 representation 对有限与无限十进制表示一致
+适用，**不**增设 parallel ／ companion 的 decimal text 字段，因此 **不改变**本表各行的 business
+meaning，也**不新增** canonical field / entity。
+
+`CumulativeApprovedSubstituteSupply` 的 completeness 边界（`S3-A`）**在 `BR-SUBSTITUTE-001` 的
+result boundary 完成**：substitute rule 对全部已解析 shortage demand grains（来源为
+`BR-REQUIREMENT-001` 的已解析 requirement rows）显式表达 `CumulativeApprovedSubstituteSupply(<= t)`
+数值或 `DATA_INCOMPLETE`；因此已有可靠 contribution 会 carry forward 到更晚 grain，更晚 grain
+自身没有新增 contribution **不等于** `DATA_INCOMPLETE`，而任何影响 `<= t` 累计的 unresolved
+applicability 都使该 grain 为 `DATA_INCOMPLETE`。`BR-SHORTAGE-001` **只消费**该已完成结果：不补全
+grain universe、不推断 `0`、也不重算 `BR-SUBSTITUTE-001`。
+
+同一 boundary 还消费 **grain-scoped unresolved G5-A reference**（Human Decision `Option A′`）：当 exact
+Demand Context 已可靠解析、而 relation outcome 无法形成正常 reference 时，该 exact grain 的
+`CumulativeApprovedSubstituteSupply` 为 `DATA_INCOMPLETE`。该 reference 是 read-only derived runtime
+surface（carrying existing relation ＋ resolved `DemandContextReference` ＋
+`SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`）：**不是** canonical field ／ entity ／ grain，**不是**
+business enum，**不是** persisted state，也**不是** wire schema；`ADR-001` 未改变。
+
+**本澄清不新增任何 canonical field / entity / identity component / grain**：涉及的
+`ProjectedAvailable` ／ `Classification` ／ `ShortageQty` ／ `BufferGap` /
+`FirstShortageDate` 行本身**未修改**，只是明确其 inventory-side 输入的消费边界与 exact 数值语义。
+
 #### 4.2.11 Time Semantics
 
 沿用 §4.1.6 的六类时间语义，并额外登记两项：

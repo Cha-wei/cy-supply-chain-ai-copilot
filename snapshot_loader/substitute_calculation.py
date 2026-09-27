@@ -83,7 +83,7 @@ from .constants import (
 from .exact_quantity import ExactQuantity, parse_exact_quantity
 from .inventory_calculation import InventoryCalculationResult, InventoryTarget
 from .issues import Issue
-from .requirement_calculation import OUTCOME_DATA_INCOMPLETE
+from .requirement_calculation import OUTCOME_DATA_INCOMPLETE, RequirementCalculationResult
 
 # --- vocabulary --------------------------------------------------------------------
 
@@ -323,6 +323,47 @@ class SubstituteTarget:
 
 
 @dataclass(frozen=True, slots=True)
+class SourceDemandContext:
+    """One exact resolved G5-A Source Demand Context reference cited by this result.
+
+    This is the **consumption attribution** surface of the approved ``S1-A`` boundary: a
+    downstream rule that must not reuse an already allocated source quantity needs to know
+    that a shortage grain is *this* exact Source Demand Context, and needs to know it even
+    when no numeric ``RemainingUnallocatedSourceSupply`` could be produced for it.  The
+    context's own grain is ``plant_id`` + ``source_material_code`` + ``required_date``
+    (``target_material_code`` carries the material component, exactly as
+    :class:`SubstituteEvaluation` does for this surface).
+
+    No new canonical entity, canonical field, identity component or grain is created here:
+    the reference and its grain are the ones the canonical G5-A context already carries.
+    """
+
+    plant_id: Any
+    target_material_code: Any
+    required_date: Any
+    reference: Any
+    citation_count: int = 0
+    provenance: EvidenceReference | None = None
+
+    @property
+    def grain(self) -> tuple[Any, Any, Any]:
+        """The exact demand context grain this citation names."""
+
+        return (self.plant_id, self.target_material_code, self.required_date)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "rule": SUBSTITUTE_RULE_ID,
+            "reference": self.reference,
+            "plant_id": self.plant_id,
+            "material_code": self.target_material_code,
+            "required_date": self.required_date,
+            "citation_count": self.citation_count,
+            "provenance": _provenance_payload(self.provenance),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ConservationGroup:
     """One exact resolved Source Demand Context reference and its conservation outcome.
 
@@ -330,6 +371,13 @@ class ConservationGroup:
     ``B2-A'`` grouping boundary.  Allocations whose Source Reservation Overlap is ``overlaps``
     for this exact context are summed together; no cross-context merge and no date proximity
     ever happens.
+
+    ``source_demand_context_grain`` is that same context's own registration grain
+    (``plant_id`` + ``source_material_code`` + ``required_date``), read from the resolved
+    context reference; it is ``None`` only when the cited context states no complete grain.
+    It is a derived output of the rule, not a new canonical field / identity component, and it
+    exists so a downstream rule can attribute this group's supply to the exact grain the
+    approved ``S1-A`` boundary names instead of re-reading the construction.
     """
 
     reservation_context: str
@@ -340,6 +388,7 @@ class ConservationGroup:
     allocated_substitute_qty: ExactQuantity | None
     remaining_unallocated_source_supply: ExactQuantity | None
     allocating_references: tuple[str, ...]
+    source_demand_context_grain: tuple[Any, Any, Any] | None = None
     conservation_state: str | None = None
     outcome: str | None = None
     notes: tuple[str, ...] = ()
@@ -357,6 +406,19 @@ class ConservationGroup:
         return self.conservation_state == CONSERVATION_OVER_ALLOCATED
 
     @property
+    def source_reservation_attributable(self) -> bool:
+        """Whether this group's supply is attributable to one exact shortage grain.
+
+        ``True`` exactly when the cited Source Demand Context states a complete grain, so an
+        upstream rule can attribute this group's ``RemainingUnallocatedSourceSupply`` -- or its
+        ``DATA_INCOMPLETE`` -- to that exact grain.  A group without a complete grain is cited
+        by no attributable grain, so it can never be silently dropped in favour of a full
+        inventory snapshot; the consuming rule must fail closed globally instead.
+        """
+
+        return self.source_demand_context_grain is not None
+
+    @property
     def issues(self) -> tuple[Issue, ...]:
         return _deduplicate_issues(self.inherited_issues + self.rule_issues)
 
@@ -367,6 +429,11 @@ class ConservationGroup:
             "plant_id": self.plant_id,
             "source_material_code": self.source_material_code,
             "source_demand_context_reference": self.source_demand_context_reference,
+            "source_demand_context_grain": (
+                None
+                if self.source_demand_context_grain is None
+                else list(self.source_demand_context_grain)
+            ),
             "EligibleSubstituteSupply": _quantity_text(self.eligible_substitute_supply),
             "AllocatedSubstituteQty": _quantity_text(self.allocated_substitute_qty),
             "RemainingUnallocatedSourceSupply": _quantity_text(
@@ -401,6 +468,7 @@ class SubstituteCalculationResult:
 
     targets: tuple[SubstituteTarget, ...]
     conservation_groups: tuple[ConservationGroup, ...] = ()
+    source_demand_contexts: tuple[SourceDemandContext, ...] = ()
     inherited_issues: tuple[Issue, ...] = ()
     rule_issues: tuple[Issue, ...] = ()
 
@@ -415,6 +483,62 @@ class SubstituteCalculationResult:
     @property
     def over_allocated_groups(self) -> tuple[ConservationGroup, ...]:
         return tuple(item for item in self.conservation_groups if item.over_allocated)
+
+    @property
+    def unattributable_conservation_groups(self) -> tuple[ConservationGroup, ...]:
+        """Groups whose cited Source Demand Context states no complete grain.
+
+        They cannot be attributed to any grain, so a downstream rule that consumes them per
+        grain cannot rule them out and must fail closed rather than fall back to a full
+        inventory snapshot.
+        """
+
+        return tuple(
+            group
+            for group in self.conservation_groups
+            if not group.source_reservation_attributable
+        )
+
+    def source_demand_contexts_for_grain(
+        self, plant_id: Any, material_code: Any, required_date: Any
+    ) -> tuple[SourceDemandContext, ...]:
+        """Every cited Source Demand Context of one exact grain, deterministically ordered."""
+
+        return tuple(
+            item
+            for item in self.source_demand_contexts
+            if item.plant_id == plant_id
+            and item.target_material_code == material_code
+            and item.required_date == required_date
+        )
+
+    def conservation_for_source_grain(
+        self, plant_id: Any, material_code: Any, required_date: Any
+    ) -> tuple[tuple[SourceDemandContext, ConservationGroup | None], ...]:
+        """The exact-grain view of the approved ``S1-A`` consumption boundary.
+
+        One entry per cited Source Demand Context of ``plant_id`` + ``material_code`` +
+        ``required_date``, paired with the conservation group formed for that exact context
+        reference (``None`` when no group could be formed, which is *not* the same as "no
+        source reservation": the citation itself proves the reservation exists).  The result is
+        ordered by the context's own grain and then by its exact reference, so a caller never
+        has to rely on construction order.
+        """
+
+        groups = {group.reservation_context: group for group in self.conservation_groups}
+        entries = [
+            (context, groups.get(str(context.reference)))
+            for context in self.source_demand_contexts_for_grain(
+                plant_id, material_code, required_date
+            )
+        ]
+        entries.sort(
+            key=lambda entry: (
+                tuple(_sort_text(part) for part in entry[0].grain),
+                _sort_text(entry[0].reference),
+            )
+        )
+        return tuple(entries)
 
     def for_grain(
         self, plant_id: Any, material_code: Any, required_date: Any
@@ -447,6 +571,9 @@ class SubstituteCalculationResult:
             "rule": SUBSTITUTE_RULE_ID,
             "targets": [item.to_dict() for item in self.targets],
             "conservation_groups": [item.to_dict() for item in self.conservation_groups],
+            "source_demand_contexts": [
+                item.to_dict() for item in self.source_demand_contexts
+            ],
             "inherited_issues": [issue.to_dict() for issue in self.inherited_issues],
             "rule_issues": [issue.to_dict() for issue in self.rule_issues],
         }
@@ -458,14 +585,39 @@ class SubstituteCalculationResult:
 def compute_substitute_supply(
     construction: CanonicalConstructionReport,
     inventory: InventoryCalculationResult,
+    *,
+    requirements: RequirementCalculationResult,
 ) -> SubstituteCalculationResult:
-    """Run ``BR-SUBSTITUTE-001`` over one construction and its inventory result.
+    """Run ``BR-SUBSTITUTE-001`` over one construction, its inventory and its requirement results.
 
-    Target grains come from the resolved G5-A ``Target Applicability`` contexts; the candidate
-    allocations come only from the resolved ``Substitute Allocation`` canonical objects; the
-    eligible source supply comes only from ``BR-INVENTORY-001``'s ``OpeningUsableInventory``.  A
-    raw accepted artifact is never read, an Inventory eligibility rule is never re-implemented,
-    and no caller may inject a business date or a quantity.
+    Candidate allocations come only from the resolved ``Substitute Allocation`` canonical objects
+    and the eligible source supply comes only from ``BR-INVENTORY-001``'s
+    ``OpeningUsableInventory``; a raw accepted artifact is never read, an Inventory eligibility rule
+    is never re-implemented, and no caller may inject a business date or a quantity.
+
+    **Result completeness (approved ``S3-A`` ／ ``§2.3.12``).**  ``requirements`` names the resolved
+    shortage demand grains -- the exact ``plant_id`` + component ``material_code`` +
+    ``required_date`` rows of ``BR-REQUIREMENT-001`` that produced a reliable requirement -- and this
+    rule states an explicit ``CumulativeApprovedSubstituteSupply(<= t)`` answer for **every** of
+    them, not only for the grains a G5-A ``Target Applicability`` context happens to cite:
+
+    * a reliable contribution from an effective context ``<= t`` accumulates, so an earlier
+      contribution carries forward to a later grain;
+    * a later grain with no contribution of its own therefore keeps the carried-forward value and is
+      **not** automatically ``DATA_INCOMPLETE``;
+    * an unresolved applicability that can affect the ``<= t`` cumulative makes that grain
+      ``DATA_INCOMPLETE`` -- it is never read as ``0``;
+    * a reliably confirmed absence of an approved ／ applicable substitute is the legal ``0`` of
+      ``§2.3.11`` A ／ ``§4.4.88``;
+    * an absent ``Substitute Relationship`` dataset is never read as ``0``;
+    * a **grain-scoped unresolved G5-A reference** (Human Decision ``Option A′``) makes that exact
+      grain ``DATA_INCOMPLETE``: the demand context *was* reliably resolved while the ``Target
+      Applicability`` relation outcome could not be established, so "no new contribution" is not a
+      reliable conclusion for it.  The decision is taken per exact grain, so an earlier or later
+      grain of the same Plant + Material keeps its own value (``§4.4.10``).
+
+    ``construction`` is consumed only through the canonical objects the construction already
+    resolved plus the one role-level fact :func:`_relationship_dataset_present` states.
     """
 
     allocations = _allocation_index(construction)
@@ -494,15 +646,18 @@ def compute_substitute_supply(
             )
             entry[1].append(outcome)
 
-    # ``CumulativeApprovedSubstituteSupply(<= t)`` is a deterministic pass over every cited
-    # target context of the same ``plant_id`` + ``target_material_code`` whose ``required_date``
-    # is ``<= t`` (§2.3.12).  An allocation that is ``applicable`` to several target demand
-    # contexts is **one** supply: it is reserved to the earliest such context by its own exact
-    # allocation record identity, so a context multiplicity never multiplies the supply and no
-    # same-value deduplication is ever applied (§4.5.9 Decision 8 / AC-31).
+    # Every resolved shortage demand grain of ``BR-REQUIREMENT-001`` completes the answer surface.
+    # A grain without a cited target context carries no evaluation of its own and is not a
+    # reservation owner; it exists so the grain -- and the cumulative at its date -- is stated.
+    cited_grains = set(target_contexts)
+    demand_grains = _demand_grains(requirements)
     grain_order = sorted(
-        target_contexts, key=lambda item: tuple(_sort_text(part) for part in item)
+        cited_grains | demand_grains,
+        key=lambda item: tuple(_sort_text(part) for part in item),
     )
+    # ``Option A′`` (Human-approved): the G5-A layer states, per exact demand context, when the
+    # *relation outcome itself* could not be established.  Such a grain is **not** a reliable "no
+    # new applicable contribution": whether an approved substitute reaches it is unknown.
     grain_evaluations: dict[
         tuple[Any, Any, Any], tuple[SubstituteEvaluation, ...]
     ] = {}
@@ -516,10 +671,22 @@ def compute_substitute_supply(
                 relationship_index=relationship_index,
                 relationship_present=relationship_present,
             )
-            for outcome in target_contexts[grain]
+            for outcome in target_contexts.get(grain, ())
         )
         grain_evaluations[grain] = evaluations
-        if any(item.data_incomplete for item in evaluations):
+        if _g5a_target_unresolved(construction, grain):
+            # A grain-scoped unresolved Target Applicability: the cumulative at this grain is not
+            # obtainable, so it is never read as ``0`` and never carries an earlier value forward
+            # (§2.3.11 B ／ S3-A).  The failure stays on **this exact grain**: an earlier or later
+            # grain of the same Plant + Material is unaffected (§4.4.10).
+            unreliable_grains.append(grain)
+        elif any(item.data_incomplete for item in evaluations):
+            unreliable_grains.append(grain)
+        elif grain not in cited_grains and not relationship_present:
+            # No target context cites this grain and the accepted package declared no
+            # ``Substitute Relationship`` role at all.  "Business states there is no approved
+            # substitute" therefore cannot be established for it, so its cumulative is
+            # ``DATA_INCOMPLETE`` rather than an inferred ``0`` (§2.3.11 B ／ S3-A).
             unreliable_grains.append(grain)
 
     reserved_grain: dict[str, tuple[Any, Any, Any]] = {}
@@ -599,9 +766,98 @@ def compute_substitute_supply(
     return SubstituteCalculationResult(
         targets=tuple(targets),
         conservation_groups=tuple(conservation),
+        source_demand_contexts=_cited_source_demand_contexts(source_contexts),
         inherited_issues=inherited,
         rule_issues=_deduplicate_issues(tuple(rule_issues)),
     )
+
+
+def _cited_source_demand_contexts(
+    source_contexts: Mapping[
+        str, tuple[tuple[Any, Any, Any], list[RelationOutcomeReference]]
+    ],
+) -> tuple[SourceDemandContext, ...]:
+    """One :class:`SourceDemandContext` per cited exact Source Demand Context reference.
+
+    This is the citation surface of the approved ``S1-A`` boundary: it records every exact
+    Source Demand Context the resolved G5-A relations cite, **including** a context for which
+    no conservation group could be formed.  Without it a downstream rule could not tell
+    "business cites no source reservation for this grain" (a legal full-inventory path) apart
+    from "business cites one and it could not be resolved" (``DATA_INCOMPLETE``), and would
+    risk reusing an already allocated source quantity as uncommitted inventory.
+    """
+
+    contexts: list[SourceDemandContext] = []
+    for reference in sorted(source_contexts):
+        grain, citations = source_contexts[reference]
+        sample = citations[0]
+        contexts.append(
+            SourceDemandContext(
+                plant_id=grain[0],
+                target_material_code=grain[1],
+                required_date=grain[2],
+                reference=reference,
+                citation_count=len(citations),
+                provenance=sample.context.provenance,
+            )
+        )
+    return tuple(contexts)
+
+
+def _g5a_target_unresolved(
+    construction: CanonicalConstructionReport,
+    grain: tuple[Any, Any, Any],
+) -> bool:
+    """Whether G5-A states a **grain-scoped unresolved Target Applicability** for this grain.
+
+    ``Option A′`` (Human-approved).  The G5-A layer publishes one read-only reference per handoff
+    whose exact Demand Context *was* reliably resolved while the ``Target Applicability`` relation
+    outcome could not be established (an unregistered ／ ambiguous mapping association, or a
+    registered basis that is not approved for the relation).  Such a grain is **not** a reliable "no
+    new applicable contribution": whether an approved substitute reaches it is unknown, so its
+    ``CumulativeApprovedSubstituteSupply(<= t)`` is not obtainable (§2.3.11 B ／ S3-A).
+
+    The lookup is the report's own exact-grain accessor, so only the reference of **this** plant ／
+    material ／ date is consumed: no role-level, material-level or allocation-level poisoning, and no
+    identity is inferred from any finding's free text (§4.4.10 failure isolation).
+    """
+
+    return bool(
+        construction.unresolved_effective_demand_for_grain(
+            grain[0],
+            grain[1],
+            grain[2],
+            relation=RELATION_TARGET_APPLICABILITY,
+        )
+    )
+
+
+def _demand_grains(
+    requirements: RequirementCalculationResult,
+) -> set[tuple[Any, Any, Any]]:
+    """The resolved shortage demand grains of ``BR-REQUIREMENT-001``, as exact grains.
+
+    A demand grain is a ``BR-REQUIREMENT-001`` calculation row that produced a **reliable** derived
+    requirement (``has_numeric_result``); its grain is ``plant_id`` + component ``material_code`` +
+    ``required_date`` (``§2.4.2``), which is the same grain this rule and ``BR-SHORTAGE-001`` use.
+    An unreliable row is not a resolved demand grain and is left out: the substitute rule never
+    invents the grain of a requirement that could not be computed.
+
+    A grain whose own components cannot be used as a key is skipped rather than coerced, so an
+    ungroupable value never shares a bucket with an unrelated grain.
+    """
+
+    grains: set[tuple[Any, Any, Any]] = set()
+    for row in requirements.calculations:
+        if not row.has_numeric_result:
+            continue
+        grain = (row.plant_id, row.component_material_code, row.required_date)
+        try:
+            hash(grain)
+        except TypeError:  # pragma: no cover - ungroupable canonical value
+            continue
+        grains.add(grain)
+    return grains
 
 
 # --- construction index -------------------------------------------------------------
@@ -1411,6 +1667,7 @@ def _conservation_groups(
                 allocated_substitute_qty=allocated,
                 remaining_unallocated_source_supply=remaining,
                 allocating_references=tuple(sorted(allocating)),
+                source_demand_context_grain=_grain,
                 conservation_state=state,
                 outcome=result_outcome,
                 notes=tuple(notes),
@@ -1701,6 +1958,7 @@ __all__ = [
     "SUBSTITUTE_DATA_INCOMPLETE",
     "SUBSTITUTE_JOIN_PROPERTIES",
     "SUBSTITUTE_RULE_ID",
+    "SourceDemandContext",
     "SubstituteCalculationResult",
     "SubstituteEvaluation",
     "SubstituteTarget",
