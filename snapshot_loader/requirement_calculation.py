@@ -59,6 +59,7 @@ from .canonical_objects import (
     ABSENT,
     ROLE_BOM_COMPONENT,
     ROLE_PRODUCTION_REQUIREMENT,
+    AnalysisRunContext,
     CanonicalConstructionReport,
     CanonicalObject,
     CanonicalProperty,
@@ -232,8 +233,15 @@ class RequirementCalculationResult:
     numeric derived requirement.  No cross-plant or cross-component aggregation is
     performed: the cumulative value is reported per calculation grain (``plant_id`` +
     component ``material_code``), which is exactly the grouping ``§2.4.9`` registers.
+
+    ``analysis_run`` is the **existing** :class:`AnalysisRunContext` of the construction this
+    result was produced from.  It is the derived-result provenance binding of ``F3-RB1``
+    (``Option A′``): a consumer verifies it against its own construction before it consumes any
+    value from this result, and rejects its invocation on a mismatch instead of combining a
+    foreign or stale result.
     """
 
+    analysis_run: AnalysisRunContext
     calculations: tuple[RequirementCalculation, ...]
 
     @property
@@ -455,7 +463,10 @@ def compute_requirement_calculation(
             item.bom_component_reference or "",
         )
     )
-    return RequirementCalculationResult(calculations=_with_cumulative(calculations))
+    return RequirementCalculationResult(
+        analysis_run=report.analysis_run,
+        calculations=_with_cumulative(calculations),
+    )
 
 
 def _sort_text(value: Any) -> str:

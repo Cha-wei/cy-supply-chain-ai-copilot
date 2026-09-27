@@ -2156,6 +2156,20 @@ classification 所需的**全部** critical input（含 `SafetyStock`）必须�
 - 只有整个相关 horizon 可可靠判断且从未 shortage，才是 `null / not present`（`§4.4.22` valid
   absence）。
 
+**H. `F3-RB1` ／ `Option A′`（Human Decision，已批准）：result binding 与 `construction` 的读取边界**
+
+每个 deterministic rule result 携带其 construction 的既有 `AnalysisRunContext`，且 rule 在消费 upstream
+deterministic result 前验证 `upstream_result.analysis_run == construction.analysis_run`
+（`§4.4.93` ／ `master-data-mapping.md` Derived Result Provenance）：mismatch ⇒
+`PROVENANCE` ／ `PROVENANCE_MISMATCH` 并**拒绝该次 invocation**（不消费 foreign business value、不返回
+`NORMAL` ／ `SHORTAGE` ／ numeric business result、**不得**伪装成 grain 的 `DATA_INCOMPLETE`）；
+binding 不存在 ⇒ `PROVENANCE` ／ `PROVENANCE_UNRESOLVED`（与 mismatch 不合并）。
+
+`BR-SHORTAGE-001` 因此**只**为该 provenance verification 读取 `construction.analysis_run`；C 节对
+substitute business semantics 的禁令**未改变**：仍**不得**回读 raw ／ canonical substitute evidence、
+**不得**读取 role-presence、**不得**用 `construction` 补齐缺失的 shortage 输入、也**不得**重开
+`S1-A` ／ `S2-A` ／ `S3-A`。
+
 ### 2.2 Available Inventory / Safety Stock
 
 **Rule ID:** `BR-INVENTORY-001`

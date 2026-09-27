@@ -6788,6 +6788,27 @@ Derived Result Provenance
 
 **不得要求** derived result 复制全部 source metadata。
 
+**Derived Result Provenance 的 runtime 登记（`F3-RB1` ／ `Option A′`，Human Decision `APPROVED`）**
+
+在 deterministic rule chain 上，上述 derived-result provenance completeness 由**既有**
+`AnalysisRunContext`（`analysis_run_id` ＋ `analysis_date` ＋ `snapshot_package_identity` ＋
+`accepted_content_view_digest`）落实：
+
+```
+每个 deterministic rule result 携带其 construction 的 AnalysisRunContext
+
+消费 upstream deterministic result 之前：
+  upstream_result.analysis_run == construction.analysis_run
+  （至少覆盖 analysis_run_id ＋ snapshot_package_identity ＋ accepted_content_view_digest）
+  否则该次 rule invocation 被拒绝 → PROVENANCE ／ PROVENANCE_MISMATCH
+  （不消费任何 foreign business value；不返回 NORMAL ／ SHORTAGE ／ numeric result）
+binding 不存在 / 无法可靠建立 → PROVENANCE ／ PROVENANCE_UNRESOLVED（与 mismatch 不合并）
+```
+
+**未新增** canonical field ／ entity ／ grain ／ provenance taxonomy ／ ADR；
+**未引入** provenance service ／ result registry ／ persistence；`Derived Result Provenance` 的定义本身
+**未改变**（`data-validation.md` `§4.4.93` 为该 runtime 登记的行文位置）。
+
 **Package Immutability Invariant（只定义 invariant）**
 
 ```

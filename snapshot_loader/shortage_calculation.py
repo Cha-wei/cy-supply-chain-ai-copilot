@@ -79,6 +79,7 @@ from typing import Any, Iterable, Sequence
 
 from .canonical_objects import (
     ABSENT,
+    AnalysisRunContext,
     CanonicalConstructionReport,
 )
 from .constants import (
@@ -87,15 +88,26 @@ from .constants import (
     REASON_SEMANTIC_UNRESOLVED,
 )
 from .exact_quantity import ExactQuantity
-from .inbound_calculation import EffectiveInboundResult, EffectiveInboundTarget
-from .inventory_calculation import InventoryCalculationResult, InventoryTarget
+from .inbound_calculation import (
+    INBOUND_RULE_ID,
+    EffectiveInboundResult,
+    EffectiveInboundTarget,
+)
+from .inventory_calculation import (
+    INVENTORY_RULE_ID,
+    InventoryCalculationResult,
+    InventoryTarget,
+)
 from .issues import Issue
 from .requirement_calculation import (
     OUTCOME_DATA_INCOMPLETE,
     RequirementCalculation,
     RequirementCalculationResult,
 )
+from .requirement_calculation import RULE_ID as REQUIREMENT_RULE_ID
+from .result_binding import require_same_analysis_run
 from .substitute_calculation import (
+    SUBSTITUTE_RULE_ID,
     ConservationGroup,
     SourceDemandContext,
     SubstituteCalculationResult,
@@ -371,8 +383,14 @@ class ShortageCalculationResult:
     established at an earlier-or-equal date, the corresponding date fails safe to
     ``SHORTAGE_DATA_INCOMPLETE`` -- a valid-absence ``None`` is never produced over an
     unresolved horizon (``§4.4.87``).
+
+    ``analysis_run`` is the **existing** :class:`AnalysisRunContext` of the construction this
+    result was produced from.  It is the derived-result provenance binding of ``F3-RB1``
+    (``Option A′``): the rule verifies all four upstream bindings before it computes anything, and
+    its own result carries the same context so the next consumer can verify it in turn.
     """
 
+    analysis_run: AnalysisRunContext
     grains: tuple[ShortageGrain, ...]
     rule_issues: tuple[Issue, ...] = ()
 
@@ -524,14 +542,27 @@ def compute_shortage(
     upstream rule is re-implemented, no reservation is recomputed and no caller may inject a
     business date, quantity or ``SafetyStock``.
 
-    ``construction`` is accepted for call-shape stability with the other rule entry points and is
-    deliberately **not read at all** here: every fact this rule needs -- including whether an
-    ``approved substitute supply`` participates in a grain -- is consumed from the four upstream
-    results.  In particular the accepted package's role-presence facts and any raw ／ canonical
-    substitute evidence are never consulted, so the shortage rule can never re-decide the business
-    meaning of a substitute citation (S3-A); the registered findings it reports are the ones the
-    consumed upstream results carry.
+    ``construction`` is read **only** for the registered provenance ／ result-binding verification
+    (``construction.analysis_run``, ``F3-RB1`` ／ ``Option A′``): every business fact this rule needs
+    -- including whether an ``approved substitute supply`` participates in a grain -- is consumed
+    from the four upstream results.  In particular the accepted package's role-presence facts and
+    any raw ／ canonical substitute evidence are never consulted, so the shortage rule can never
+    re-decide the business meaning of a substitute citation (S3-A); the registered findings it
+    reports are the ones the consumed upstream results carry.
+
+    All four upstream results are verified against this construction's Analysis Run **before** any
+    business calculation.  A foreign, stale or mismatched result rejects the invocation with the
+    inherited ``PROVENANCE`` ／ ``PROVENANCE_MISMATCH`` finding instead of being silently combined;
+    a result carrying no binding at all is ``PROVENANCE`` ／ ``PROVENANCE_UNRESOLVED``.
     """
+
+    require_same_analysis_run(
+        construction.analysis_run,
+        (REQUIREMENT_RULE_ID, requirements.analysis_run),
+        (INBOUND_RULE_ID, inbounds.analysis_run),
+        (INVENTORY_RULE_ID, inventory.analysis_run),
+        (SUBSTITUTE_RULE_ID, substitutes.analysis_run),
+    )
 
     families = _families(requirements, inbounds, substitutes)
     groups = {group.reservation_context: group for group in substitutes.conservation_groups}
@@ -559,6 +590,7 @@ def compute_shortage(
 
     grains.sort(key=lambda item: _grain_key(item.grain))
     return ShortageCalculationResult(
+        analysis_run=construction.analysis_run,
         grains=tuple(grains),
         rule_issues=_deduplicate_issues(tuple(rule_issues)),
     )

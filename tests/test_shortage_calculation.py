@@ -406,6 +406,9 @@ class ShortageRuleTestCase(unittest.TestCase):
         target_quantities: dict[tuple[Any, Any], Any] | None = None,
         relationships: tuple[tuple[Any, Any, str], ...] = ((DEMAND, SOURCE, "APPROVED"),),
         substitute_present: bool = True,
+        analysis_run_id: str = "RUN-1",
+        analysis_date: Any = "2026-10-01",
+        package_id: str = "SIMULATED-PKG-0001",
         name: str | None = None,
     ) -> Built:
         """Assemble, accept, construct and run the whole deterministic chain.
@@ -606,10 +609,11 @@ class ShortageRuleTestCase(unittest.TestCase):
         built = build_package(
             self.boundary / (name or uuid.uuid4().hex[:8]),
             PackageSpec(
+                package_id=package_id,
                 datasets=[
                     DatasetSpec(role=role, artifact=f"{index}.json", records=records)
                     for index, (role, records) in enumerate(datasets)
-                ]
+                ],
             ),
             boundary_root=self.boundary,
         )
@@ -771,8 +775,8 @@ class ShortageRuleTestCase(unittest.TestCase):
         construction = construct_canonical_objects(
             accepted,
             PhaseAHandoff(
-                analysis_run_id="RUN-1",
-                analysis_date="2026-10-01",
+                analysis_run_id=analysis_run_id,
+                analysis_date=analysis_date,
                 bom_parent_context=tuple(bom_binding),
                 loss_rate=tuple(loss_handoffs),
                 inventory_scope=tuple(
@@ -1393,20 +1397,25 @@ class SubstituteCompletenessTests(ShortageRuleTestCase):
         self.assertIsNotNone(late.source_demand_context_reference)
 
     def test_ac15h_the_construction_is_never_read_at_runtime(self) -> None:
-        # Stronger than the source scan: any attribute access on the construction must be
-        # impossible -- including dunder lookups that ``__getattr__`` would not intercept.
-        class HostileConstruction:
-            def __getattribute__(self, name: str) -> Any:
-                raise AssertionError(
-                    f"compute_shortage read construction.{name}; the substitute value must come "
-                    "only from the BR-SUBSTITUTE-001 downstream result (S3-A)"
-                )
-
+        # Stronger than the source scan: the only construction attribute this rule may touch is the
+        # registered provenance binding (``analysis_run``, F3-RB1 / Option A'); every other access --
+        # including dunder lookups that ``__getattr__`` would not intercept -- must be impossible.
         rebuilt = self.build(
             demand=(Demand(DEMAND, DEMAND, "10"),),
             targets=((DEMAND, D2, "APPROVED"),),
             name="ac15h-hostile-construction",
         )
+
+        class HostileConstruction:
+            def __getattribute__(self, name: str) -> Any:
+                if name == "analysis_run":
+                    return rebuilt.construction.analysis_run
+                raise AssertionError(
+                    f"compute_shortage read construction.{name}; the only permitted construction "
+                    "read is the provenance binding construction.analysis_run (F3-RB1), so every "
+                    "business value must come from the consumed upstream results (S3-A)"
+                )
+
         result = compute_shortage(
             HostileConstruction(),
             rebuilt.requirements,
@@ -2355,7 +2364,7 @@ class NumericAndTraceTests(ShortageRuleTestCase):
         self.assertFalse(hasattr(built.shortage, "persist"))
         self.assertEqual(
             {field.name for field in dataclasses.fields(built.shortage)},
-            {"grains", "rule_issues"},
+            {"analysis_run", "grains", "rule_issues"},
         )
 
     def test_ac19e_an_exact_reservation_is_deducted_once_across_the_horizon(self) -> None:

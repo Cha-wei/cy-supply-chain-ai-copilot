@@ -72,15 +72,23 @@ from .canonical_objects import (
     construct_canonical_objects,
 )
 from .constants import (
+    CATEGORY_PROVENANCE,
     CONTRACT_VERSION_PROPERTY,
     DISPOSITION_ACCEPTED,
     DISPOSITION_REJECTED,
     DISPOSITION_UNUSABLE,
     MANIFEST_FILENAME,
+    REASON_PROVENANCE_MISMATCH,
+    REASON_PROVENANCE_UNRESOLVED,
     SUPPORTED_CONTRACT_VERSION,
     V02_CANONICAL_RECORD_PROPERTIES,
 )
 from .issues import Check, Issue
+from .result_binding import (
+    ANALYSIS_RUN_COMPONENTS,
+    AnalysisRunBindingError,
+    require_same_analysis_run,
+)
 from .exact_quantity import (
     ExactQuantity,
     parse_exact_quantity,
@@ -176,6 +184,12 @@ __all__ = [
     "BomParentContextHandoff",
     "CANONICALIZATION_ROLES",
     "CANONICALIZATION_ROLE_BY_LITERAL",
+    "ANALYSIS_RUN_COMPONENTS",
+    "AnalysisRunBindingError",
+    "CATEGORY_PROVENANCE",
+    "REASON_PROVENANCE_MISMATCH",
+    "REASON_PROVENANCE_UNRESOLVED",
+    "require_same_analysis_run",
     "CanonicalConstructionReport",
     "CanonicalObject",
     "CanonicalProperty",
