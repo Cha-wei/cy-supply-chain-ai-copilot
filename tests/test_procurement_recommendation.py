@@ -23,7 +23,9 @@ from typing import Any
 from snapshot_loader import (
     CLASSIFICATION_DATA_INCOMPLETE,
     AnalysisRunBindingError,
+    ExactQuantity,
     PROCUREMENT_POLICY_INPUT_STAGE,
+    ProcurementPolicyInputContext,
     compute_procurement_policy_input,
     compute_procurement_recommendation,
 )
@@ -802,6 +804,272 @@ class RecommendationTests(ProcurementRecommendationTestCase):
         ):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, module_identifiers(module))
+
+
+class PartitionValidationTests(ProcurementRecommendationTestCase):
+    """The Phase B family partition is validated against the consumed shortage result (review fix).
+
+    The authoritative universe is the set of families the consumed shortage result states, and valid
+    absence is legal only when that same result reliably states no ``FirstShortageDate`` for the family.
+    A same-run but internally inconsistent policy result therefore can never make a shortage family
+    disappear, never turns one into a valid absence, and never produces two recommendations.
+    """
+
+    def coherent(self, name: str):
+        """One triggered family plus one genuine never-short family, with coherent upstream results."""
+
+        built = self.build_family(
+            demands=((DEMAND, "130", D2),),
+            moq_policies=(moq_policy_record(DEMAND, moq="100"),),
+            include_valid_absence=True,
+            name=name,
+        )
+        return built, self.policy(built)
+
+    def test_a24_a_shortage_family_marked_valid_absence_is_not_a_valid_absence(self) -> None:
+        built, policy = self.coherent("a24-absence-claim")
+        # The partition claims valid absence for the SHORTAGE family and drops its context.
+        tampered = dataclasses.replace(
+            policy,
+            contexts=tuple(item for item in policy.contexts if item.material_code != DEMAND),
+            valid_absence_grains=policy.valid_absence_grains + ((PLANT, DEMAND),),
+        )
+        result = compute_procurement_recommendation(
+            built.construction, built.shortage, tampered
+        )
+        item = result.for_family(PLANT, DEMAND)
+        assert item is not None
+        self.assertTrue(item.data_incomplete)
+        self.assertIsNone(item.recommended_purchase_qty)
+        self.assertIsNone(result.recommended_purchase_qty_for(PLANT, DEMAND))
+        self.assertFalse(result.is_valid_absence(PLANT, DEMAND))
+        self.assertNotIn((PLANT, DEMAND), result.valid_absence_grains)
+        self.assertEqual(item.root_condition, "MOQ_POLICY_PARTITION_INCONSISTENT")
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in item.rule_issues],
+            [("CONSISTENCY", "CONSISTENCY_CONFLICT")],
+        )
+        # The genuine valid absence of the same result is untouched.
+        self.assertTrue(result.is_valid_absence(PLANT, OTHER))
+
+    def test_a25_a_shortage_family_omitted_by_the_policy_result_does_not_vanish(self) -> None:
+        built, policy = self.coherent("a25-omitted-family")
+        tampered = dataclasses.replace(
+            policy,
+            contexts=tuple(item for item in policy.contexts if item.material_code != DEMAND),
+            valid_absence_grains=tuple(
+                family for family in policy.valid_absence_grains if family[1] != DEMAND
+            ),
+        )
+        result = compute_procurement_recommendation(
+            built.construction, built.shortage, tampered
+        )
+        item = result.for_family(PLANT, DEMAND)
+        assert item is not None
+        self.assertTrue(item.data_incomplete)
+        self.assertIsNone(item.recommended_purchase_qty)
+        self.assertEqual(result.recommended_purchase_qty_for(PLANT, DEMAND), None)
+        # The family keeps the exact owner grain the consumed shortage result states for it.
+        self.assertEqual(item.recommendation_need_date, D2)
+        self.assertEqual(item.root_condition, "MOQ_POLICY_PARTITION_UNRESOLVED")
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in item.rule_issues],
+            [("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED")],
+        )
+        self.assertEqual(len(result.recommendations), 1)
+
+    def test_a26_duplicate_policy_contexts_never_produce_two_recommendations(self) -> None:
+        built, policy = self.coherent("a26-duplicate-contexts")
+        duplicated = dataclasses.replace(
+            policy, contexts=policy.contexts + policy.contexts
+        )
+        result = compute_procurement_recommendation(
+            built.construction, built.shortage, duplicated
+        )
+        matching = [
+            item for item in result.recommendations if item.material_code == DEMAND
+        ]
+        self.assertEqual(len(matching), 1)
+        item = matching[0]
+        self.assertTrue(item.data_incomplete)
+        self.assertIsNone(item.recommended_purchase_qty)
+        self.assertEqual(item.root_condition, "MOQ_POLICY_PARTITION_UNRESOLVED")
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in item.rule_issues],
+            [("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED")],
+        )
+        self.assertTrue(result.is_valid_absence(PLANT, OTHER))
+
+    def test_a27_a_family_in_both_representations_fails_closed(self) -> None:
+        built, policy = self.coherent("a27-both-representations")
+        both = dataclasses.replace(
+            policy, valid_absence_grains=policy.valid_absence_grains + ((PLANT, DEMAND),)
+        )
+        result = compute_procurement_recommendation(
+            built.construction, built.shortage, both
+        )
+        item = result.for_family(PLANT, DEMAND)
+        assert item is not None
+        self.assertTrue(item.data_incomplete)
+        self.assertIsNone(item.recommended_purchase_qty)
+        self.assertFalse(result.is_valid_absence(PLANT, DEMAND))
+        self.assertEqual(item.root_condition, "MOQ_POLICY_PARTITION_INCONSISTENT")
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in item.rule_issues],
+            [("CONSISTENCY", "CONSISTENCY_CONFLICT")],
+        )
+        self.assertEqual(len(result.recommendations), 1)
+
+    def test_a28_an_unresolved_family_is_never_valid_absence(self) -> None:
+        # The family's shortage state is unresolved (the registered fail-safe literal), while the
+        # partition claims valid absence for it: the claimed absence cannot be reliably established, so
+        # the family stays DATA_INCOMPLETE and is never accepted as a valid absence.
+        built = self.build_family(
+            demands=((DEMAND, "10", D1), (DEMAND, "10", D2)),
+            targets=((DEMAND, D1, "APPROVED"), (DEMAND, D2, "UNRESOLVED")),
+            include_valid_absence=True,
+            name="a28-unresolved-absence-claim",
+        )
+        policy = self.policy(built)
+        context = policy.for_family(PLANT, DEMAND)
+        assert context is not None
+        self.assertIsNone(context.recommendation_need_date)
+        tampered = dataclasses.replace(
+            policy,
+            contexts=tuple(item for item in policy.contexts if item.material_code != DEMAND),
+            valid_absence_grains=policy.valid_absence_grains + ((PLANT, DEMAND),),
+        )
+        result = compute_procurement_recommendation(
+            built.construction, built.shortage, tampered
+        )
+        item = result.for_family(PLANT, DEMAND)
+        assert item is not None
+        self.assertTrue(item.data_incomplete)
+        self.assertFalse(result.is_valid_absence(PLANT, DEMAND))
+        self.assertEqual(item.root_condition, "MOQ_POLICY_PARTITION_UNRESOLVED")
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in item.rule_issues],
+            [("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED")],
+        )
+
+    def test_a29_a_policy_family_the_shortage_result_does_not_state_is_never_accepted(self) -> None:
+        built, policy = self.coherent("a29-unsupported-family")
+        hand_made = ProcurementPolicyInputContext(
+            plant_id=PLANT,
+            material_code="M9",
+            recommendation_need_date=D2,
+            applicable_moq=ExactQuantity(50, 0),
+        )
+        claimed = dataclasses.replace(policy, contexts=policy.contexts + (hand_made,))
+        result = compute_procurement_recommendation(
+            built.construction, built.shortage, claimed
+        )
+        item = result.for_family(PLANT, "M9")
+        assert item is not None
+        self.assertTrue(item.data_incomplete)
+        self.assertIsNone(item.recommended_purchase_qty)
+        self.assertFalse(result.is_valid_absence(PLANT, "M9"))
+        self.assertEqual(item.root_condition, "MOQ_POLICY_PARTITION_UNRESOLVED")
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in item.rule_issues],
+            [("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED")],
+        )
+        # The coherent families of the same result are unaffected.
+        self.assertTrue(result.for_family(PLANT, DEMAND).has_numeric_result)
+        self.assertTrue(result.is_valid_absence(PLANT, OTHER))
+
+        # The same unsupported claim stated as a valid absence is equally never accepted.
+        claimed_absence = dataclasses.replace(
+            policy, valid_absence_grains=policy.valid_absence_grains + ((PLANT, "M9"),)
+        )
+        absence_result = compute_procurement_recommendation(
+            built.construction, built.shortage, claimed_absence
+        )
+        absence_item = absence_result.for_family(PLANT, "M9")
+        assert absence_item is not None
+        self.assertTrue(absence_item.data_incomplete)
+        self.assertFalse(absence_result.is_valid_absence(PLANT, "M9"))
+        self.assertEqual(len(absence_result.recommendations), 2)
+
+    def test_a30_a_duplicate_valid_absence_claim_stays_exactly_one_valid_absence(self) -> None:
+        built, policy = self.coherent("a30-duplicate-absence")
+        duplicated = dataclasses.replace(
+            policy,
+            valid_absence_grains=policy.valid_absence_grains + policy.valid_absence_grains,
+        )
+        result = compute_procurement_recommendation(
+            built.construction, built.shortage, duplicated
+        )
+        # A reliable never-short family's registered answer is valid absence -- never DATA_INCOMPLETE
+        # (§4.4.87) -- and the result states it exactly once, so a duplicate claim can neither
+        # double-count nor silently become a recommendation.
+        self.assertTrue(result.is_valid_absence(PLANT, OTHER))
+        self.assertIsNone(result.for_family(PLANT, OTHER))
+        self.assertEqual(result.valid_absence_grains, ((PLANT, OTHER),))
+        self.assertEqual(result.rule_issues, ())
+        self.assertTrue(result.for_family(PLANT, DEMAND).has_numeric_result)
+
+    def test_a31_an_omitted_valid_absence_family_stays_a_valid_absence(self) -> None:
+        built, policy = self.coherent("a31-omitted-absence")
+        tampered = dataclasses.replace(policy, valid_absence_grains=())
+        result = compute_procurement_recommendation(
+            built.construction, built.shortage, tampered
+        )
+        # Valid absence is decided by the consumed shortage result, not by the policy list: the family
+        # is reliably never short, so no recommendation applies and no issue is generated.
+        self.assertTrue(result.is_valid_absence(PLANT, OTHER))
+        self.assertIsNone(result.for_family(PLANT, OTHER))
+        self.assertEqual(result.rule_issues, ())
+        self.assertTrue(result.for_family(PLANT, DEMAND).has_numeric_result)
+
+    def test_a32_the_coherent_partition_and_the_numeric_path_are_unchanged(self) -> None:
+        built, policy = self.coherent("a32-coherent-partition")
+        result = self.recommend(built, policy)
+        item = result.for_family(PLANT, DEMAND)
+        assert item is not None
+        self.assertTrue(item.has_numeric_result)
+        self.assertEqual(item.recommended_purchase_qty, Fraction(100))
+        self.assertEqual(item.moq_adjustment_qty, Fraction(70))
+        self.assertTrue(result.is_valid_absence(PLANT, OTHER))
+        self.assertEqual(result.valid_absence_grains, ((PLANT, OTHER),))
+        self.assertEqual(result.rule_issues, ())
+        self.assertEqual(len(result.recommendations), 1)
+        self.assertEqual([entry.material_code for entry in result.recommendations], [DEMAND])
+
+
+    def test_a33_a_context_claimed_for_a_reliably_never_short_family_fails_closed(self) -> None:
+        built, policy = self.coherent("a33-unearned-context")
+        # The policy result claims an applicable policy input for the family the shortage result
+        # reliably states never went short: no purchase recommendation applies to it, so the unearned
+        # claim is never accepted as a numeric recommendation.
+        unearned = ProcurementPolicyInputContext(
+            plant_id=PLANT,
+            material_code=OTHER,
+            recommendation_need_date=D2,
+            applicable_moq=ExactQuantity(100, 0),
+        )
+        claimed = dataclasses.replace(
+            policy,
+            contexts=policy.contexts + (unearned,),
+            valid_absence_grains=tuple(
+                family for family in policy.valid_absence_grains if family[1] != OTHER
+            ),
+        )
+        result = compute_procurement_recommendation(
+            built.construction, built.shortage, claimed
+        )
+        item = result.for_family(PLANT, OTHER)
+        assert item is not None
+        self.assertTrue(item.data_incomplete)
+        self.assertIsNone(item.recommended_purchase_qty)
+        self.assertFalse(result.is_valid_absence(PLANT, OTHER))
+        self.assertEqual(item.root_condition, "MOQ_POLICY_PARTITION_INCONSISTENT")
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in item.rule_issues],
+            [("CONSISTENCY", "CONSISTENCY_CONFLICT")],
+        )
+        # The triggered family of the same result is unaffected.
+        self.assertTrue(result.for_family(PLANT, DEMAND).has_numeric_result)
 
 
 if __name__ == "__main__":  # pragma: no cover - direct invocation
