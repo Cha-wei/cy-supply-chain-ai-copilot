@@ -47,3 +47,34 @@ thin CLI 调用 application orchestration；orchestration 组合 snapshot loadin
 - §6 ～ §9 的 just-in-time gates 见 [POC Design §10.1](../design/poc-design-v0.2.md#implementation-ready-minimum)。本 ADR 不关闭这些章节，也不把 §10 整体标记 resolved。
 - **Option A approved ≠ production architecture approved ≠ §6 ～ §10 resolved ≠ POC SUCCESS**。
 - Code Start Gate、scoped implementation authorization 与验收边界由 POC Design §10.1 canonical 管理；本 ADR 本身不代替 Gate PASS。
+
+---
+
+## Clarification — CLI → orchestration wiring is not a first-tranche completion condition
+
+**Registration Status：`CLARIFICATION`（**非** amendment；**不改变**本 ADR 的 Approved Decision）**
+**Authority：** Human Decision（Issue #174，2026-09-28）
+
+- 本文 `Dependency and interaction boundary` 的 `thin CLI 调用 application orchestration` 登记的是
+  **dependency ／ interaction direction 与分层边界**（文件读取在外层；核心业务计算只消费明确输入；
+  核心不反向调用 CLI），**不是** first deterministic tranche 的 implementation acceptance condition。
+- 当前 tranche 的 orchestration execution surface = importable `run_first_tranche_pipeline*`
+  （[POC Design §10.2](../design/poc-design-v0.2.md) B）；已 merge 的 tranche closure
+  （`IMPLEMENTED + composed + SIMULATED integration / acceptance tested`）**保持有效**。
+- thin CLI 当前维持 **Layer-1** responsibility；CLI → orchestration wiring 属**后续 interaction
+  adaptation**，不在本 tranche 内强制接入（本 ADR Options 表 `Option A` 已登记「后续交互与部署需另行适配」）。
+- 在 `PhaseAHandoff` acquisition contract、Analysis Run identity ／ date authority 与 caller
+  responsibility 获得**独立 Human Approval** 前，**不实现** CLI → orchestration wiring；**不得**通过
+  CLI convenience、默认值或 package 自动推导方式补齐该 authority。
+- 本 clarification **不新增** input carrier ／ serialization ／ derivation，**不修改** `§4.3.31` E 的
+  in-process logical handoff 边界，也**不修改**本文 Approved Decision 的任何文字。
+
+### Revisit Conditions（本 clarification 新增）
+
+- **触发点：** 任何 CLI → orchestration wiring 的 implementation 之前。
+- **解锁条件：** 上述 acquisition contract ／ Analysis Run identity ／ date authority ／ caller
+  responsibility 取得独立 Human Approval；若该契约引入新的 input carrier ／ serialization 或
+  package-derived derivation，仍须按 `§4.3.31` E 走
+  `Architecture Decision → Human Approval → ADR ／ provenance contract synchronization`。
+- **在此之前：** CLI → orchestration wiring 保持未授权；`POC Design §10.1` 的 scoped authorization
+  与验收边界不变。
