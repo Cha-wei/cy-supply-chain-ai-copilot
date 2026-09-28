@@ -241,6 +241,18 @@ from .supplier_risk_input import (
     SupplierRiskInputResult,
     compute_supplier_risk_input,
 )
+from .supplier_risk_calculation import (
+    REQUIRED_RISK_DIMENSIONS,
+    RISK_DATA_INCOMPLETE,
+    RISK_HIGH,
+    RISK_LOW,
+    RISK_MEDIUM,
+    SEVERITY_ORDER,
+    SUPPLIER_RISK_STAGE,
+    SupplierRiskEvidenceCard,
+    SupplierRiskResult,
+    compute_supplier_risk,
+)
 from .trust import (
     AcceptedPackage,
     ContentView,
