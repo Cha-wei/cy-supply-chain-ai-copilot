@@ -7170,16 +7170,180 @@ responsibility / behavioral boundary 已定义
 
 ## 9. Test & AI Eval
 
-> 本章节只建立未来需要区分的测试层次。**不得创建测试代码。**
+> 本章节登记 POC 的 test ／ eval **分层与 evidence boundary**。它**不创建**任何测试代码、
+> eval harness、framework 选择或 KPI；已存在的 tests 由各自获授权的 implementation unit
+> （`§10.1` B ／ C）建立，本节只登记其 evidence 性质与边界。
+>
+> 本节原为占位状态表（四层均 `DESIGN PENDING`）；本次 closure（Issue #176）将
+> `deterministic unit tests` 与 `integration tests` 推进为 `DESIGN RESOLVED`，
+> 另两层保持 `DESIGN PENDING` ／ `JIT-BLOCKED`。
 
-未来需要区分：
+**Current Status（Issue #176 closure）：**
 
 | 层次 | Status |
 | --- | --- |
-| deterministic unit tests | `DESIGN PENDING` |
-| integration tests | `DESIGN PENDING` |
-| AI Eval | `DESIGN PENDING` |
-| HITL / business acceptance | `DESIGN PENDING` |
+| deterministic unit tests | **`DESIGN RESOLVED`**（见 §9.1） |
+| integration tests | **`DESIGN RESOLVED`**（见 §9.2） |
+| AI Eval | `DESIGN PENDING` ／ **`JIT-BLOCKED`**（见 §9.3） |
+| HITL / business acceptance | `DESIGN PENDING` ／ **`JIT-BLOCKED`**（见 §9.4） |
+
+```text
+§9 两层 design closure
+  ≠ implementation evidence 已被 validated
+  ≠ test 通过即 business accepted
+  ≠ POC VALIDATED ／ POC SUCCESS
+```
+
+#### 9.1 Deterministic unit tests — evidence boundary（`DESIGN RESOLVED`）
+
+**目的（Purpose）：** 在**单一确定性单元**（一个模块 ／ 一条 rule ／ 一个 seam 的明确输入 → 输出）
+上证明已登记的 canonical semantics 被精确实现；用于回归防护与行为等价性证明，
+**不**作为业务价值 ／ 真实企业集成 ／ 生产可用性的证据。
+
+**Evidence 类型：** 标准库 `unittest` 驱动的 SIMULATED fixture 断言；每条断言绑定一个已登记的
+expected output（`§2.x` 公式、`§4.4` validation 语义、`§4.3` import ／ acceptance 语义）。
+
+**Oracle ／ authority 来源：** oracle **只能**来自 current approved canonical authority ——
+`§2.1` ～ `§2.7`、`§4.1` ～ `§4.5` 各 standalone canonical spec、`§4.4` 的既有 issue taxonomy，
+以及已登记的 **SIMULATED** basis registry（例如 `§4.5.9` G5-A relation basis、
+`§4.5.12` Inventory scope basis、`§4.5.11` `sourcing_status`、Phase B role-12 policy）。
+**不得**以实现的当前行为、以库默认精度 context，或以测试本身作为 oracle。
+
+**Deterministic ／ exact semantics 要求：** 同一受控输入 ＋ 同一规则 ＋ 同一明确 context ⇒ 同一结果；
+exact numeric semantics 沿用 `§4.3.25` C-5（exact decimal string、禁止 binary floating-point、
+禁止 serializer round ／ quantize ／ truncate、不得把库默认精度 context 当作业务精度），
+断言使用 lossless 表示（例如 exact rational payload），**不得**以近似相等替代精确比较。
+
+**适用边界：**
+
+- **failure isolation：** 失败必须被证明限制在受影响 grain ／ capability ／ request 内，
+  不得升级为整体结论，也不得把部分可靠 evidence 提升为完整结论；
+- **provenance：** 断言必须能追溯到真实 accepted evidence，**不得** fabricate reference；
+- **repeatability：** 同一 fixture 重复执行结果稳定（不依赖 clock ／ randomness ／ locale ／ 执行顺序）；
+- **isolation ／ no side effects：** 核心可直接调用测试，不依赖 CLI ／ network ／ database ／ LLM；
+  测试不写回输入、不产生 persistent business state。
+
+**SIMULATED evidence 的含义与限制：** 全部 fixture 与业务数据均为 **`SIMULATED`**。
+其含义是「在受控合成输入上证明 deterministic 行为」；其限制是**不构成**真实企业数据、
+真实 source 字段、真实业务 baseline 的验证，**不得**作为 sender authenticity、
+真实集成、production readiness 或 business acceptance 的证据。
+
+**Existing evidence（引用，不复制）：** `main` 上已 merge 的 deterministic `unittest` 套件
+（当前 964 tests，含 2 个 pre-existing skips）与 CI（Foundation checks ＋ Python 3.11 ／ 3.12）。
+引用 existing evidence **不等于**任何 business acceptance 已 closure。
+
+#### 9.2 Integration tests — evidence boundary（`DESIGN RESOLVED`）
+
+**目的（Purpose）：** 证明**已实现模块之间的 handoff 与 binding** 在一条真实（受控）链路上成立，
+即 `§10.1` B 的 composition 顺序确实可执行，而不只是各自孤立的 unit 通过。
+
+**Integration evidence boundary：**
+
+```text
+Snapshot loader
+  → Layer-2 validation
+  → canonical object construction（Phase A）
+  → requirement ／ inventory ／ inbound ／ substitute
+  → shortage
+  → Phase B procurement policy input → procurement recommendation
+  → Supplier Risk runtime input seam（A′）→ Supplier Risk Evidence
+```
+
+**必须证明的性质：**
+
+- **same accepted package ／ accepted content view：** 整条链路只消费**同一个**
+  `AcceptedPackage` 及其 accepted content view；foreign ／ stale evidence 必须被拒绝；
+- **same Analysis Run binding：** 每个下游 result 携带并校验同一 `AnalysisRunContext`（`F3-RB1`）；
+  跨 run 组合必须被 seam 拒绝，**不得**被静默合并；
+- **provenance continuity：** 下游 result 的 reference 必须指向真实存在的上游 grain ／ context，
+  **不得**合成缺失 reference；
+- **repeatability：** 同一 package ＋ 同一 handoff ＋ 同一规则集 ⇒ 相同 payload（含 stable serialization）；
+- **isolation ／ no side effects：** 不写回输入、不产生 Analysis Run 之外的持久状态、
+  不依赖 CLI ／ network ／ LLM ／ database；非 `ACCEPTED` package 不进入任何下游 stage。
+
+**SIMULATED integration 的限制（不得越过）：** 本层是 **SIMULATED** 受控 package 上的
+**模块间集成验证**；它**不是**真实企业 integration validation，**不得**被表述为
+ERP ／ SRM ／ source-system 集成已验证，也**不得**作为生产链路证据。真实 Adapter ／ source
+集成属 `§4.6` 的 runtime realization，**未获授权**。
+
+**Existing evidence（引用，不复制）：** Issue #172 ／ PR #173 的 first-tranche integration ／
+acceptance closure（受控 SIMULATED package → procurement recommendation ＋ supplier risk evidence）。
+
+#### 9.3 AI Eval — `DESIGN PENDING` ／ `JIT-BLOCKED`
+
+**为何仍 `DESIGN PENDING`：**
+
+- `§5` 的 AI ／ Tool **behavioral boundary 已 `DESIGN RESOLVED`**（责任分层、evidence fidelity、
+  no unsupported fact、partial answer、tool failure、permission boundary）；
+- 但 **AI implementation ／ LLM ／ Agent ／ Tool architecture 尚未获得授权**
+  （`§5.19` 明确不选 framework ／ LLM model ／ Tool protocol；`§10` Explicit Non-Decisions 仍列
+  Agent framework ／ LangGraph ／ vector DB 等；ADR-001 明确首批不实现 LLM ／ Agent framework）；
+- 因此**当前不存在可被真实 eval 的 AI runtime**，本层无法 closure。
+
+**本 closure 只登记（未来 evidence category ＋ trigger boundary）：**
+
+- **未来需要覆盖的 evidence category**（对应 `§5` 已登记的 behavioral boundary）：
+  evidence fidelity（只陈述已取得的 structured deterministic result）、
+  unsupported fact（不得产生无来源事实）、partial answer（证据不足时的明确部分回答）、
+  tool failure（工具失败的 fail-closed 表现）、permission boundary（不得越过有效权限）、
+  deterministic ／ LLM boundary（deterministic 计算不得由 LLM 替代）；
+- **trigger boundary：** 在**任何** AI Eval closure ／ AI Explanation implementation 之前，
+  必须先完成 `§5` 的 Architecture Decision（framework ／ provider ／ model ／ Tool protocol）
+  与相应 Human 授权；在此之前本层保持 `DESIGN PENDING`。
+
+**本层不得（不得由本 closure 静默授权）：** 选择 eval framework ／ LLM judge ／ model ／ provider，
+定义 benchmark ／ KPI ／ threshold，创建 prompt ／ eval dataset ／ eval code，
+或声称任何 AI 行为已验证。
+
+#### 9.4 HITL / business acceptance — `DESIGN PENDING` ／ `JIT-BLOCKED`
+
+**为何仍 `DESIGN PENDING`：** 本层的 evidence 对象（Human `Review` ／ `Modify` ／ `Approve` ／
+`Reject` 与 business acceptance）**尚不存在**，其设计依赖**尚未 closure** 的章节：
+
+```text
+依赖 = §6 HITL state machine（DESIGN PENDING）
+     + §7 适用的 permission ／ identity boundary（RBAC ／ Data Scope ／ Tool Permission ／
+       Secret Handling，DESIGN PENDING）
+     + §8 适用的 audit ／ decision trace（DESIGN PENDING）
+```
+
+**本 closure 只登记（依赖 ＋ trigger boundary）：**
+
+- **未来需要覆盖的 evidence category：** approval 语义正确性（`Human Approval ≠ Production Execution`）、
+  重大变更后的重新审批要求、`Modify` ／ `Reject` 路径、decision trace 完整性与可追溯性；
+- **trigger boundary：** 在**任何** HITL ／ business acceptance evidence 主张之前，
+  必须先完成 §6 design gate 及其适用的 §7 ／ §8 依赖；
+- **不得**由本 closure 提前设计 §6 ／ §7 ／ §8 的实质内容，也**不得**把 §6 ～ §8 标记为已 closure。
+
+#### 9.5 Status vocabulary ／ claim discipline（必须区分）
+
+```text
+design resolved
+  ≠ implementation evidence exists
+  ≠ test passed
+  ≠ validated
+  ≠ business accepted
+  ≠ POC success
+```
+
+- `DESIGN RESOLVED`（本节两层）**只**表示 test ／ eval 的分层与 evidence boundary 已定义；
+- 已存在的 tests 通过（当前 964 tests）**只**表示 deterministic 行为在 SIMULATED fixtures 上
+  与已登记 oracle 一致；
+- 它**不**使 POC 变为 `VALIDATED`，**不**构成 business acceptance，**不**构成 `POC SUCCESS`；
+- 所有 fixtures ／ 业务数据继续明确标记 **`SIMULATED`**；
+- `POC success = NOT CLAIMED` 与 `Unrestricted implementation = NOT AUTHORIZED`
+  **不因本节 closure 改变**。
+
+#### 9.6 Boundary（本节 closure 不做什么）
+
+- **不**创建 code ／ tests ／ eval harness ／ prompt ／ eval dataset；已存在的 tests 由各自获授权的
+  implementation unit（`§10.1` B ／ C）建立，本节只登记其 evidence 边界；
+- **不**修改 `§6` ／ `§7` ／ `§8` 的实质设计，**不**修改 `§2` ～ `§5` 与 `§10` 的任何已登记语义；
+- **不**新增 canonical field ／ entity ／ grain ／ enum ／ status ／ business rule；
+- **不**选择 eval framework ／ KPI ／ benchmark ／ LLM judge ／ model ／ provider；
+- **不**修改 `ADR-001`，**不**回写任何历史 time-point record（`§1.x` Issue 记录、
+  `§2.x` 的 `Implementation Status` 快照、`§10.1` F、`§10.2` A ／ B、Adapter 各 Decision 时点记录）；
+- `§10.1 C` deterministic acceptance obligations 与 `§10.1 D` JIT blockers 保持权威不变。
 
 ---
 
