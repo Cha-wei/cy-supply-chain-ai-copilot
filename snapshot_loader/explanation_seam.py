@@ -14,11 +14,33 @@ Registered authority:
   credential never becomes a business-side parameter of this seam.  This module therefore
   contains **no** credential handling, **no** environment access and **no** network access.
 
-What this module deliberately is not: it selects no provider and no model, performs no HTTP
-or network call, adds no dependency, and defines no business status.  The
-:data:`OUTCOME_*` literals are **execution outcomes of the explanation runtime** (the same
-kind of fact as ``PipelineStage.entered``); they are never a business status and must never
-be presented as, or substituted for, the registered business ``DATA_INCOMPLETE`` literal.
+Evidence-fidelity protection (why this seam is a **selection** contract)
+-----------------------------------------------------------------------
+
+A structurally valid provider answer that *misstates* a deterministic quantity -- e.g.
+narrating ``ShortageQty = 100`` while the projection registers ``30`` -- would violate
+§5.3 Q3, §5.5 (Recommendation ≠ Approved Decision), §5.6, §5.7 and the ``LLM does not create
+business truth`` invariant.  Treating that as acceptable because the provider "should" be
+well behaved, or because a prompt or a future AI Eval will fix it, is not a guarantee.
+
+This seam therefore does not accept provider prose at all.  The provider may only **select**
+registered content:
+
+* ``answer_kind`` -- one literal from the closed :data:`ANSWER_KINDS` registry (``§5.3`` Q3
+  answer shapes); the runtime renders the sentence from the **projection's own values**;
+* ``evidence`` -- an ordered list of **projected fact names** whose runtime-rendered
+  ``"<name> = <value>"`` lines form the Evidence section;
+* ``uncertainty`` -- an ordered list of projected fact names for the Uncertainty / Missing
+  Data section (empty when the projection is complete);
+* ``human_decision_required`` -- the boolean ``True``: the provider must *assert* the
+  requirement, and the runtime renders the registered reminder sentence.  A procurement
+  recommendation is never an approved decision (§5.5), so ``False`` or any free text fails
+  closed.
+
+Every value in the assembled artifact therefore comes from the projection or from a
+registered literal, never from provider wording, so an unsupported fact, a mutated quantity,
+a swapped role or an invented approval cannot be expressed.  The validation is deliberately
+narrow and Q3-specific; it is **not** a general NLP fact checker and no AI Eval is involved.
 """
 
 from __future__ import annotations
@@ -26,6 +48,7 @@ from __future__ import annotations
 import copy
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from fractions import Fraction
 from typing import Protocol
 
 #: Execution outcome: the provider was called once and returned a usable response.
@@ -38,15 +61,20 @@ OUTCOME_RECOMMENDATION_UNAVAILABLE: str = "RECOMMENDATION_UNAVAILABLE"
 OUTCOME_RECOMMENDATION_INCOMPLETE: str = "RECOMMENDATION_INCOMPLETE"
 #: Execution outcome: the provider raised, so no explanation could be obtained.
 OUTCOME_PROVIDER_UNAVAILABLE: str = "PROVIDER_UNAVAILABLE"
-#: Execution outcome: the provider answered, but the answer is not a usable response.
+#: Execution outcome: the provider answered, but the answer is not usable.
 OUTCOME_RESPONSE_UNACCEPTABLE: str = "RESPONSE_UNACCEPTABLE"
 
-#: The exact keys a provider response may carry (``§5.5`` meanings only).
+#: The exact keys a provider selection may carry.
 RESPONSE_KEYS: tuple[str, ...] = (
-    "answer",
+    "answer_kind",
     "evidence",
     "uncertainty",
     "human_decision_required",
+)
+
+#: The registered reminder the runtime renders for a procurement recommendation (§5.5).
+HUMAN_DECISION_REQUIRED_TEXT: str = (
+    "需要 Human 决策：这是推荐采购量，不是已批准的采购量，也不构成采购订单或任何审批状态。"
 )
 
 #: The deterministic, provider-independent wording used when no explanation is available.
@@ -67,22 +95,74 @@ NOTE_PROVIDER_UNAVAILABLE: str = (
     "AI explanation unavailable: the explanation provider could not be reached"
 )
 NOTE_RESPONSE_UNACCEPTABLE: str = (
-    "AI explanation unavailable: the explanation provider returned a response that is not "
-    "usable as an explanation (§5.5)"
+    "AI explanation unavailable: the explanation provider returned a selection that is not "
+    "usable as a Q3 explanation (§5.5 / §5.6 / §5.7)"
 )
+
+
+@dataclass(frozen=True, slots=True)
+class AnswerKind:
+    """One registered Q3 answer shape.
+
+    ``required_evidence`` names the quantities the sentence rests on, so the provider cannot
+    hide a quantity it was supposed to explain.  ``precondition`` is the registered exact
+    relation the projection must satisfy for the sentence to be true; a selection whose
+    precondition does not hold is not usable.
+    """
+
+    literal: str
+    required_evidence: tuple[str, ...]
+    template: str
+    relation: str
+
+
+#: The closed Q3 answer-kind registry (``§5.3`` Q3).  The literals are runtime identifiers;
+#: the sentences are rendered by the runtime from the projection's own values.
+ANSWER_KINDS: Mapping[str, AnswerKind] = {
+    "MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE": AnswerKind(
+        literal="MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE",
+        required_evidence=(
+            "ShortageQty",
+            "BasePurchaseNeed",
+            "ApplicableMOQ",
+            "MOQAdjustmentQty",
+            "RecommendedPurchaseQty",
+        ),
+        template=(
+            "实际缺口为 {ShortageQty}；基础采购需求为 {BasePurchaseNeed}；"
+            "由于适用 MOQ 为 {ApplicableMOQ}，建议采购量被上调为 {RecommendedPurchaseQty}"
+            "（MOQ adjustment 为 {MOQAdjustmentQty}）。"
+        ),
+        relation="recommended_above_shortage",
+    ),
+    "RECOMMENDATION_EQUALS_SHORTAGE": AnswerKind(
+        literal="RECOMMENDATION_EQUALS_SHORTAGE",
+        required_evidence=("ShortageQty", "BasePurchaseNeed", "RecommendedPurchaseQty"),
+        template=(
+            "实际缺口为 {ShortageQty}；基础采购需求为 {BasePurchaseNeed}；"
+            "建议采购量为 {RecommendedPurchaseQty}，未因适用 MOQ {ApplicableMOQ} 上调。"
+        ),
+        relation="recommended_equals_shortage",
+    ),
+}
+
+#: The registered answer-kind literals, in registry order.
+ANSWER_KIND_LITERALS: tuple[str, ...] = tuple(ANSWER_KINDS)
 
 
 class ExplanationProvider(Protocol):
     """The provider-agnostic single-call seam (``ADR-002``).
 
-    The provider receives **only** the read-only explanation projection payload and returns
-    an object that :func:`validate_provider_response` must accept.  It is called at most
-    once per explanation request.  No credential is ever passed here (§7.1 ``S-4``): a real
-    hosted adapter obtains and uses its credential inside its own integration boundary.
+    The provider receives **only** the read-only explanation projection payload and returns a
+    **selection** that :func:`validate_provider_response` must accept: an ``answer_kind`` from
+    the closed registry, projected fact names for ``evidence`` ／ ``uncertainty`` and the
+    required-human-decision assertion.  It is called at most once per explanation request.
+    No credential is ever passed here (§7.1 ``S-4``): a real hosted adapter obtains and uses
+    its credential inside its own integration boundary.
     """
 
     def explain(self, projection: Mapping[str, object]) -> object:  # pragma: no cover
-        """Return a response carrying the four ``§5.5`` meanings."""
+        """Return a selection over the projection (never prose)."""
 
         ...
 
@@ -92,8 +172,10 @@ class ExplanationResponse:
     """The user-facing explanation artifact -- a **non-canonical runtime artifact**.
 
     It carries only the four ``§5.5`` response meanings (Answer ／ Evidence ／
-    Uncertainty・Missing Data ／ Human Decision Required).  It adds **no** business status,
-    no canonical entity ／ field ／ grain ／ enum and no approval state.
+    Uncertainty・Missing Data ／ Human Decision Required).  Every string in it is rendered by
+    the runtime from the projection's registered values or from a registered literal, so no
+    provider wording reaches the artifact.  It adds **no** business status, no canonical
+    entity ／ field ／ grain ／ enum and no approval state.
     """
 
     answer: str
@@ -149,62 +231,122 @@ class ExplanationResult:
         }
 
 
-def _non_empty_text(value: object) -> str | None:
-    if not isinstance(value, str):
-        return None
-    text = value.strip()
-    return text or None
+def render_fact_text(payload: object) -> str | None:
+    """Render one projected quantity exactly, or answer ``None`` when it is not renderable.
 
+    Registered payloads are exact rational payloads (``{"numerator", "denominator"}``) or
+    exact decimal text.  A rational renders as ``"30"`` when the denominator is ``1`` and as
+    ``"1/3"`` otherwise -- never as a rounded or floating-point number.
+    """
 
-def _text_sequence(value: object) -> tuple[str, ...] | None:
-    """Normalise a provider text field, or answer ``None`` when it is not usable."""
-
-    if isinstance(value, str):
-        text = _non_empty_text(value)
-        return None if text is None else (text,)
-    if isinstance(value, Sequence):
-        parts: list[str] = []
-        for item in value:
-            text = _non_empty_text(item)
-            if text is None:
-                return None
-            parts.append(text)
-        return tuple(parts)
+    if isinstance(payload, str):
+        return payload or None
+    if isinstance(payload, Mapping):
+        numerator = payload.get("numerator")
+        denominator = payload.get("denominator")
+        if isinstance(numerator, int) and isinstance(denominator, int) and denominator > 0:
+            return str(numerator) if denominator == 1 else f"{numerator}/{denominator}"
     return None
 
 
-def validate_provider_response(raw: object) -> ExplanationResponse | None:
-    """Accept an explanation response, or answer ``None`` so the caller fails closed.
+def _fact_values(projection: Mapping[str, object]) -> dict[str, str]:
+    facts = projection.get("facts")
+    if not isinstance(facts, Mapping):
+        return {}
+    values: dict[str, str] = {}
+    for name, payload in facts.items():
+        text = render_fact_text(payload)
+        if text is not None:
+            values[str(name)] = text
+    return values
 
-    The minimal validation registered by this slice (``§5.5``): the response must be a
-    mapping carrying **exactly** the four meaning keys, with a non-empty ``answer``, a
-    non-empty ``evidence`` sequence, an ``uncertainty`` sequence (which may be empty when
-    nothing is missing) and a non-empty ``human_decision_required``.  Anything else -- a
-    bare string, a mapping with extra or missing keys, empty text, non-text members -- is
-    **not** usable and is never surfaced as an explanation.
+
+def _exact_fraction(text: str) -> Fraction | None:
+    try:
+        return Fraction(text)
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
+def _relation_holds(relation: str, values: Mapping[str, str]) -> bool:
+    shortage = _exact_fraction(values.get("ShortageQty", ""))
+    recommended = _exact_fraction(values.get("RecommendedPurchaseQty", ""))
+    moq = _exact_fraction(values.get("ApplicableMOQ", ""))
+    if shortage is None or recommended is None or moq is None:
+        return False
+    if relation == "recommended_above_shortage":
+        return shortage < recommended and recommended == moq
+    if relation == "recommended_equals_shortage":
+        return recommended == shortage
+    return False
+
+
+def _name_list(value: object) -> tuple[str, ...] | None:
+    """A provider selection list of projected fact names, or ``None`` when unusable."""
+
+    if isinstance(value, str) or not isinstance(value, Sequence):
+        return None
+    names: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            return None
+        names.append(item)
+    return tuple(names)
+
+
+def validate_provider_response(
+    raw: object, projection: Mapping[str, object]
+) -> ExplanationResponse | None:
+    """Validate one provider selection and assemble the artifact, or fail closed.
+
+    The response is usable only when it is a mapping carrying **exactly** the four registered
+    keys, whose ``answer_kind`` is one of :data:`ANSWER_KINDS`, whose ``evidence`` is a
+    non-empty list of projected fact names covering that kind's required evidence, whose
+    ``uncertainty`` is a (possibly empty) list of projected fact names, whose
+    ``human_decision_required`` is the boolean ``True``, and whose registered relation
+    actually holds for this projection.
+
+    Everything else -- extra keys, an unregistered kind, a fact name that was not projected,
+    a value smuggled into a name, a mutated quantity, a missing required quantity, a relation
+    that contradicts the projection, or an attempt to state that no human decision is needed
+    -- is **not** usable, and the runtime then surfaces no explanation at all.  The artifact
+    itself is assembled here from the projection, so no provider wording can enter it.
     """
 
     if not isinstance(raw, Mapping):
         return None
     if set(raw.keys()) != set(RESPONSE_KEYS):
         return None
-    answer = _non_empty_text(raw["answer"])
-    if answer is None:
+
+    kind = ANSWER_KINDS.get(raw["answer_kind"]) if isinstance(raw["answer_kind"], str) else None
+    if kind is None:
         return None
-    evidence = _text_sequence(raw["evidence"])
+
+    values = _fact_values(projection)
+    evidence = _name_list(raw["evidence"])
     if evidence is None or not evidence:
         return None
-    uncertainty = _text_sequence(raw["uncertainty"])
+    uncertainty = _name_list(raw["uncertainty"])
     if uncertainty is None:
         return None
-    human = _non_empty_text(raw["human_decision_required"])
-    if human is None:
+    if raw["human_decision_required"] is not True:
         return None
+
+    for name in (*evidence, *uncertainty):
+        if name not in values:
+            return None
+    if len(set(evidence)) != len(evidence) or len(set(uncertainty)) != len(uncertainty):
+        return None
+    if not set(kind.required_evidence) <= set(evidence):
+        return None
+    if not _relation_holds(kind.relation, values):
+        return None
+
     return ExplanationResponse(
-        answer=answer,
-        evidence=evidence,
-        uncertainty=uncertainty,
-        human_decision_required=human,
+        answer=kind.template.format(**values),
+        evidence=tuple(f"{name} = {values[name]}" for name in evidence),
+        uncertainty=tuple(f"{name} = {values[name]}" for name in uncertainty),
+        human_decision_required=HUMAN_DECISION_REQUIRED_TEXT,
     )
 
 
@@ -219,9 +361,13 @@ def provider_payload(projection: Mapping[str, object]) -> dict[str, object]:
 
 
 __all__ = [
+    "ANSWER_KINDS",
+    "ANSWER_KIND_LITERALS",
+    "AnswerKind",
     "ExplanationProvider",
     "ExplanationResponse",
     "ExplanationResult",
+    "HUMAN_DECISION_REQUIRED_TEXT",
     "NOTE_AI_EXPLANATION_UNAVAILABLE",
     "NOTE_INCOMPLETE",
     "NOTE_NO_RECOMMENDATION_BY_DESIGN",
@@ -236,5 +382,6 @@ __all__ = [
     "OUTCOME_RESPONSE_UNACCEPTABLE",
     "RESPONSE_KEYS",
     "provider_payload",
+    "render_fact_text",
     "validate_provider_response",
 ]

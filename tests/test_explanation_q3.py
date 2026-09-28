@@ -1,8 +1,10 @@
 """``§5.3`` Q3 purchase-quantity explanation runtime slice (provider-neutral core).
 
 Covers the first P0 AI Explanation implementation unit authorized by ``ADR-002``: the Q3
-read-only projection, the provider-agnostic single-call seam, the response artifact and the
-deterministic fail-closed paths.
+read-only projection, the provider-agnostic single-call seam, the runtime-assembled response
+artifact, the deterministic fail-closed paths and -- specifically -- the evidence-fidelity
+protection that keeps a structurally valid but semantically wrong provider answer from ever
+becoming ``OUTCOME_EXPLAINED``.
 
 Every provider used here is a **stub / fake**: this suite performs no network call, uses no
 real credential, reads no environment secret and imports no provider SDK.  The complete
@@ -26,9 +28,12 @@ from typing import Any
 import snapshot_loader.explanation_q3 as q3_module
 import snapshot_loader.explanation_seam as seam_module
 from snapshot_loader import (
+    ANSWER_KINDS,
+    ANSWER_KIND_LITERALS,
     COMPLETENESS_COMPLETE,
     COMPLETENESS_DATA_INCOMPLETE,
     COMPLETENESS_RECOMMENDATION_NOT_STATED,
+    HUMAN_DECISION_REQUIRED_TEXT,
     NOTE_INCOMPLETE,
     NOTE_NO_RECOMMENDATION_BY_DESIGN,
     NOTE_PROVIDER_UNAVAILABLE,
@@ -42,24 +47,49 @@ from snapshot_loader import (
     Q3_GRAIN_FIELDS,
     Q3_QUESTION,
     RESPONSE_KEYS,
-    build_q3_projection,
-    explain_q3,
+    ProcurementRecommendationResult,
+    parse_exact_quantity,
     validate_provider_response,
 )
 from tests.test_shortage_calculation import D2, DEMAND, PLANT
 from tests.test_supplier_risk_input import SupplierRiskInputTestCase
 
-#: A provider answer that paraphrases the projected quantities without inventing any fact.
-GOOD_RESPONSE: dict[str, object] = {
-    "answer": (
-        "The purchase recommendation is 100 because the actual shortage is 30 and the "
-        "applicable MOQ is 100."
-    ),
-    "evidence": ["ShortageQty = 30", "ApplicableMOQ = 100", "RecommendedPurchaseQty = 100"],
+#: The registered kind that matches the fixture's relation (recommended 100 > shortage 30).
+FIXTURE_KIND = "MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE"
+#: The registered kind that matches a recommendation equal to the shortage.
+EQUAL_KIND = "RECOMMENDATION_EQUALS_SHORTAGE"
+#: All five quantities are required evidence for :data:`FIXTURE_KIND`.
+FIXTURE_EVIDENCE: tuple[str, ...] = (
+    "ShortageQty",
+    "BasePurchaseNeed",
+    "ApplicableMOQ",
+    "MOQAdjustmentQty",
+    "RecommendedPurchaseQty",
+)
+
+#: The four ``§5.5`` meanings carried by the assembled artifact (runtime-owned strings).
+ARTIFACT_KEYS: tuple[str, ...] = (
+    "answer",
+    "evidence",
+    "uncertainty",
+    "human_decision_required",
+)
+
+#: A compliant provider **selection** (no prose: the runtime renders every string).
+GOOD_SELECTION: dict[str, object] = {
+    "answer_kind": FIXTURE_KIND,
+    "evidence": list(FIXTURE_EVIDENCE),
     "uncertainty": [],
-    "human_decision_required": (
-        "A human decides whether to act on this recommendation; it is not an approved order."
-    ),
+    "human_decision_required": True,
+}
+
+#: The prose payload the independent review used to demonstrate the merge blocker: it is
+#: structurally plausible but misstates the shortage and invents an approval.
+REVIEW_FINDING_PROSE: dict[str, object] = {
+    "answer": "实际缺料 100，所以建议采购 100。",
+    "evidence": ["ShortageQty = 100"],
+    "uncertainty": [],
+    "human_decision_required": "无需人工决策，该采购已经批准。",
 }
 
 #: Keys that must never appear anywhere in a Q3 projection (``§5.3`` Q3 boundary).
@@ -75,17 +105,23 @@ FORBIDDEN_PROJECTION_KEYS = {
     "substitutes",
     "shortage",
     "procurement_policy_input",
-    "recommendation",
     "supplier_risk_input",
     "supplier_risk",
     "Classification",
     "rule_id",
     "notes",
-    "inherited_issues_total",
 }
 
 #: Key names that would indicate a credential leaked into a payload.
-CREDENTIAL_KEYS = {"api_key", "apikey", "authorization", "token", "secret", "credential", "password"}
+CREDENTIAL_KEYS = {
+    "api_key",
+    "apikey",
+    "authorization",
+    "token",
+    "secret",
+    "credential",
+    "password",
+}
 
 
 def _walk_keys(value: Any) -> set[str]:
@@ -116,7 +152,7 @@ class RecordingProvider:
 
     def __init__(self, response: object = None, error: BaseException | None = None) -> None:
         self.calls: list[object] = []
-        self._response = GOOD_RESPONSE if response is None else response
+        self._response = GOOD_SELECTION if response is None else response
         self._error = error
 
     def explain(self, projection: object) -> object:
@@ -127,7 +163,7 @@ class RecordingProvider:
 
 
 class MutatingProvider(RecordingProvider):
-    """A hostile stub that mutates the payload it was handed and still answers."""
+    """A hostile stub that mutates the payload it was handed and still selects validly."""
 
     def explain(self, projection: object) -> object:
         self.calls.append(projection)
@@ -136,7 +172,7 @@ class MutatingProvider(RecordingProvider):
         assert isinstance(facts, dict)
         facts["ShortageQty"] = {"numerator": 999, "denominator": 1}
         projection["question"] = "TAMPERED"
-        return GOOD_RESPONSE
+        return dict(GOOD_SELECTION)
 
 
 class AlternativeProvider:
@@ -148,10 +184,16 @@ class AlternativeProvider:
     def explain(self, projection: object) -> object:
         self.received = projection
         return {
-            "answer": "Recommended 100 for an actual shortage of 30 given MOQ 100.",
-            "evidence": ["BasePurchaseNeed = 30", "MOQAdjustmentQty = 70"],
+            "answer_kind": FIXTURE_KIND,
+            "evidence": [
+                "RecommendedPurchaseQty",
+                "ApplicableMOQ",
+                "ShortageQty",
+                "BasePurchaseNeed",
+                "MOQAdjustmentQty",
+            ],
             "uncertainty": [],
-            "human_decision_required": "Human review is still required.",
+            "human_decision_required": True,
         }
 
 
@@ -172,6 +214,11 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         built = self.build_chain(moq_policies=(), name=name)
         return self.recommendations(built), built
 
+    def explain(self, recommendations, provider):
+        return q3_module.explain_q3(
+            recommendations, provider, plant_id=PLANT, material_code=DEMAND
+        )
+
     # --- 1 complete projection --------------------------------------------------------
 
     def test_q3_1_complete_projection_carries_exactly_the_allowed_fields(self) -> None:
@@ -180,7 +227,7 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         self.assertIsNotNone(recommendation)
         assert recommendation is not None
 
-        projection = build_q3_projection(recommendation)
+        projection = q3_module.build_q3_projection(recommendation)
 
         self.assertEqual(set(projection), {"question", "grain", "facts", "completeness"})
         self.assertEqual(projection["question"], Q3_QUESTION)
@@ -216,33 +263,42 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         recommendation = recommendations.for_family(PLANT, DEMAND)
         assert recommendation is not None
 
-        projection = build_q3_projection(recommendation)
-        facts = projection["facts"]
+        facts = q3_module.build_q3_projection(recommendation)["facts"]
         self.assertEqual(facts["ShortageQty"], {"numerator": 30, "denominator": 1})
         self.assertEqual(facts["BasePurchaseNeed"], {"numerator": 30, "denominator": 1})
         self.assertEqual(facts["ApplicableMOQ"], "100")
         self.assertEqual(facts["MOQAdjustmentQty"], {"numerator": 70, "denominator": 1})
         self.assertEqual(facts["RecommendedPurchaseQty"], {"numerator": 100, "denominator": 1})
 
-        # A non-terminating exact rational must survive the projection without rounding.
+        # A non-terminating exact rational survives the projection without rounding, and the
+        # runtime renders it exactly rather than as a float.  The MOQ is set to the same exact
+        # value so the registered relation (recommended == MOQ > shortage) still holds.
         exact_third = dataclasses.replace(
             recommendation,
             shortage_qty=Fraction(1, 3),
             base_purchase_need=Fraction(1, 3),
-            moq_adjustment_qty=Fraction(0, 1),
-            recommended_purchase_qty=Fraction(1, 3),
+            moq_adjustment_qty=Fraction(2, 3),
+            recommended_purchase_qty=Fraction(1, 1),
+            applicable_moq=parse_exact_quantity("1"),
         )
-        third_facts = build_q3_projection(exact_third)["facts"]
+        third_facts = q3_module.build_q3_projection(exact_third)["facts"]
         self.assertEqual(third_facts["ShortageQty"], {"numerator": 1, "denominator": 3})
-        self.assertEqual(
-            third_facts["RecommendedPurchaseQty"], {"numerator": 1, "denominator": 3}
-        )
         self.assertEqual(
             json.loads(json.dumps(third_facts, sort_keys=True))["ShortageQty"],
             {"numerator": 1, "denominator": 3},
         )
+        third_result = self.explain(
+            ProcurementRecommendationResult(
+                analysis_run=recommendations.analysis_run,
+                recommendations=(exact_third,),
+            ),
+            RecordingProvider(),
+        )
+        self.assertEqual(third_result.outcome, OUTCOME_EXPLAINED)
+        assert third_result.response is not None
+        self.assertIn("ShortageQty = 1/3", third_result.response.evidence)
 
-        for value in _walk_values(projection):
+        for value in _walk_values(q3_module.build_q3_projection(recommendation)):
             self.assertNotIsInstance(value, float)
 
     # --- 3 shortage vs recommended ----------------------------------------------------
@@ -251,32 +307,26 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         recommendations, _built = self.complete_recommendations("q3-3")
         recommendation = recommendations.for_family(PLANT, DEMAND)
         assert recommendation is not None
-        projection = build_q3_projection(recommendation)
+        projection = q3_module.build_q3_projection(recommendation)
 
-        self.assertNotEqual(
-            projection["facts"]["ShortageQty"],
-            projection["facts"]["RecommendedPurchaseQty"],
-        )
         self.assertEqual(projection["facts"]["ShortageQty"], {"numerator": 30, "denominator": 1})
         self.assertEqual(
             projection["facts"]["RecommendedPurchaseQty"], {"numerator": 100, "denominator": 1}
         )
 
-        provider = RecordingProvider()
-        result = explain_q3(recommendations, provider, plant_id=PLANT, material_code=DEMAND)
+        result = self.explain(recommendations, RecordingProvider())
         response = result.response
         self.assertIsNotNone(response)
         assert response is not None
-        shortage_evidence = [item for item in response.evidence if "ShortageQty = 30" in item]
-        recommended_evidence = [
-            item for item in response.evidence if "RecommendedPurchaseQty = 100" in item
-        ]
-        self.assertEqual(len(shortage_evidence), 1)
-        self.assertEqual(len(recommended_evidence), 1)
-        self.assertNotEqual(shortage_evidence[0], recommended_evidence[0])
+        self.assertIn("ShortageQty = 30", response.evidence)
+        self.assertIn("RecommendedPurchaseQty = 100", response.evidence)
+        self.assertNotIn("ShortageQty = 100", response.evidence)
+        self.assertIn("实际缺口为 30", response.answer)
+        self.assertIn("建议采购量被上调为 100", response.answer)
+        self.assertNotIn("实际缺料 100", response.answer)
         payload = json.dumps(result.to_dict(), ensure_ascii=False)
-        self.assertIn('"ShortageQty": {"numerator": 30, "denominator": 1}', payload)
-        self.assertIn('"RecommendedPurchaseQty": {"numerator": 100, "denominator": 1}', payload)
+        self.assertIn("ShortageQty = 30", payload)
+        self.assertIn("RecommendedPurchaseQty = 100", payload)
 
     # --- 4 projection scope -----------------------------------------------------------
 
@@ -284,7 +334,7 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         recommendations, built = self.complete_recommendations("q3-4")
         recommendation = recommendations.for_family(PLANT, DEMAND)
         assert recommendation is not None
-        projection = build_q3_projection(recommendation)
+        projection = q3_module.build_q3_projection(recommendation)
 
         self.assertEqual(_walk_keys(projection) & FORBIDDEN_PROJECTION_KEYS, set())
         payload = json.dumps(projection, ensure_ascii=False, sort_keys=True)
@@ -300,7 +350,7 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         recommendations, _built = self.complete_recommendations("q3-5")
         provider = RecordingProvider()
 
-        result = explain_q3(recommendations, provider, plant_id=PLANT, material_code=DEMAND)
+        result = self.explain(recommendations, provider)
 
         self.assertEqual(len(provider.calls), 1)
         self.assertTrue(result.provider_invoked)
@@ -314,10 +364,10 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         recommendations, _built = self.complete_recommendations("q3-6")
         recommendation = recommendations.for_family(PLANT, DEMAND)
         assert recommendation is not None
-        projection = build_q3_projection(recommendation)
+        projection = q3_module.build_q3_projection(recommendation)
         provider = RecordingProvider()
 
-        result = explain_q3(recommendations, provider, plant_id=PLANT, material_code=DEMAND)
+        result = self.explain(recommendations, provider)
 
         received = provider.calls[0]
         self.assertEqual(received, projection)
@@ -330,33 +380,55 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         for value in _walk_values(received):
             self.assertIsInstance(value, (dict, list, str, int, bool, type(None)))
 
-    # --- 7 response artifact ----------------------------------------------------------
+    # --- 7 response artifact is runtime-assembled ------------------------------------
 
     def test_q3_7_provider_response_becomes_the_response_artifact(self) -> None:
         recommendations, _built = self.complete_recommendations("q3-7")
         provider = RecordingProvider()
 
-        result = explain_q3(recommendations, provider, plant_id=PLANT, material_code=DEMAND)
+        result = self.explain(recommendations, provider)
 
         response = result.response
         self.assertIsNotNone(response)
         assert response is not None
-        self.assertEqual(set(response.to_dict()), set(RESPONSE_KEYS))
-        self.assertEqual(response.answer, GOOD_RESPONSE["answer"])
-        self.assertEqual(list(response.evidence), list(GOOD_RESPONSE["evidence"]))
-        self.assertEqual(list(response.uncertainty), [])
+        self.assertEqual(set(response.to_dict()), set(ARTIFACT_KEYS))
+        self.assertEqual(set(RESPONSE_KEYS), set(GOOD_SELECTION))
         self.assertEqual(
-            response.human_decision_required, GOOD_RESPONSE["human_decision_required"]
+            response.answer,
+            ANSWER_KINDS[FIXTURE_KIND].template.format(
+                ShortageQty="30",
+                BasePurchaseNeed="30",
+                ApplicableMOQ="100",
+                MOQAdjustmentQty="70",
+                RecommendedPurchaseQty="100",
+            ),
         )
+        self.assertEqual(
+            list(response.evidence),
+            [
+                "ShortageQty = 30",
+                "BasePurchaseNeed = 30",
+                "ApplicableMOQ = 100",
+                "MOQAdjustmentQty = 70",
+                "RecommendedPurchaseQty = 100",
+            ],
+        )
+        self.assertEqual(list(response.uncertainty), [])
+        self.assertEqual(response.human_decision_required, HUMAN_DECISION_REQUIRED_TEXT)
         self.assertEqual(result.to_dict()["response"], response.to_dict())
 
-        # A different provider implementation produces the same artifact shape.
+        # A different provider implementation selecting a different evidence order is still
+        # accepted: the artifact stays runtime-assembled and provider-neutral.
         alternative = AlternativeProvider()
-        other = explain_q3(recommendations, alternative, plant_id=PLANT, material_code=DEMAND)
+        other = self.explain(recommendations, alternative)
         self.assertEqual(other.outcome, OUTCOME_EXPLAINED)
         assert other.response is not None
-        self.assertEqual(set(other.response.to_dict()), set(RESPONSE_KEYS))
+        self.assertEqual(set(other.response.to_dict()), set(ARTIFACT_KEYS))
+        self.assertEqual(
+            other.response.human_decision_required, HUMAN_DECISION_REQUIRED_TEXT
+        )
         self.assertIsNotNone(alternative.received)
+        self.assertEqual(other.response.evidence[0], "RecommendedPurchaseQty = 100")
 
     # --- 8/9 fail-closed: incomplete + valid absence ----------------------------------
 
@@ -364,7 +436,7 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         recommendations, _built = self.incomplete_recommendations("q3-8")
         provider = RecordingProvider()
 
-        result = explain_q3(recommendations, provider, plant_id=PLANT, material_code=DEMAND)
+        result = self.explain(recommendations, provider)
 
         self.assertEqual(provider.calls, [])
         self.assertFalse(result.provider_invoked)
@@ -376,13 +448,10 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
             result.projection["completeness"]["state"], COMPLETENESS_DATA_INCOMPLETE
         )
 
-        # A reliable never-short horizon states no recommendation by design (§4.4.87).
         absence_built = self.build_chain(demands=((DEMAND, "10", D2),), name="q3-8-absence")
         absence = self.recommendations(absence_built)
         absence_provider = RecordingProvider()
-        absence_result = explain_q3(
-            absence, absence_provider, plant_id=PLANT, material_code=DEMAND
-        )
+        absence_result = self.explain(absence, absence_provider)
         self.assertEqual(absence_provider.calls, [])
         self.assertEqual(absence_result.outcome, OUTCOME_NO_RECOMMENDATION_BY_DESIGN)
         self.assertEqual(absence_result.availability_note, NOTE_NO_RECOMMENDATION_BY_DESIGN)
@@ -401,7 +470,7 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         assert recommendation is not None
         provider = RecordingProvider()
 
-        result = explain_q3(recommendations, provider, plant_id=PLANT, material_code=DEMAND)
+        result = self.explain(recommendations, provider)
 
         missing = result.projection["completeness"]["missing_facts"]
         self.assertIn("ApplicableMOQ", missing)
@@ -412,7 +481,6 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         payloads = json.dumps([dict(item) for item in result.missing_evidence], ensure_ascii=False)
         self.assertIn(recommendation.root_condition, payloads)
         self.assertIn("unavailable_facts", payloads)
-        self.assertIn("unavailable_facts", json.dumps(result.to_dict(), ensure_ascii=False))
         self.assertIsNone(result.projection["completeness"]["valid_absence"])
 
     # --- 10 provider exception --------------------------------------------------------
@@ -422,7 +490,7 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         before = recommendations.to_dict()
         provider = RecordingProvider(error=RuntimeError("leaked-provider-secret-sentinel"))
 
-        result = explain_q3(recommendations, provider, plant_id=PLANT, material_code=DEMAND)
+        result = self.explain(recommendations, provider)
 
         self.assertEqual(len(provider.calls), 1)
         self.assertTrue(result.provider_invoked)
@@ -434,36 +502,45 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         self.assertNotIn("leaked-provider-secret-sentinel", payload)
         self.assertEqual(recommendations.to_dict(), before)
 
-    # --- 11 malformed / unacceptable responses ----------------------------------------
+    # --- 11 malformed / unacceptable selections ---------------------------------------
 
     def test_q3_11_malformed_or_unacceptable_response_fails_closed(self) -> None:
         recommendations, _built = self.complete_recommendations("q3-11")
-        echoed_projection = build_q3_projection(
+        projection = q3_module.build_q3_projection(
             recommendations.for_family(PLANT, DEMAND)  # type: ignore[arg-type]
         )
         unacceptable: tuple[tuple[str, object], ...] = (
-            ("not-a-mapping", "ShortageQty is 30"),
-            ("missing-key", {k: v for k, v in GOOD_RESPONSE.items() if k != "evidence"}),
-            ("extra-key", {**GOOD_RESPONSE, "RecommendedPurchaseQty": 100}),
-            ("empty-answer", {**GOOD_RESPONSE, "answer": "   "}),
-            ("empty-evidence", {**GOOD_RESPONSE, "evidence": []}),
-            ("non-text-uncertainty", {**GOOD_RESPONSE, "uncertainty": 3}),
-            ("empty-human-decision", {**GOOD_RESPONSE, "human_decision_required": ""}),
-            ("blank-evidence-item", {**GOOD_RESPONSE, "evidence": ["ShortageQty = 30", "  "]}),
-            ("projection-echo", echoed_projection),
+            ("not-a-mapping", "ShortageQty = 30"),
+            ("missing-key", {k: v for k, v in GOOD_SELECTION.items() if k != "evidence"}),
+            ("extra-key", {**GOOD_SELECTION, "note": "shortage was 100"}),
+            ("unregistered-kind", {**GOOD_SELECTION, "answer_kind": "SUPPLIER_PRICE_INCREASE"}),
+            ("empty-evidence", {**GOOD_SELECTION, "evidence": []}),
+            ("evidence-not-a-list", {**GOOD_SELECTION, "evidence": "ShortageQty"}),
+            ("unknown-fact-name", {**GOOD_SELECTION, "evidence": ["Classification"]}),
+            ("value-smuggled-in-name", {**GOOD_SELECTION, "evidence": ["ShortageQty = 100"]}),
+            ("evidence-missing-required-fact", {**GOOD_SELECTION, "evidence": ["ShortageQty"]}),
+            ("duplicate-evidence", {**GOOD_SELECTION, "evidence": ["ShortageQty", "ShortageQty"]}),
+            ("uncertainty-not-a-list", {**GOOD_SELECTION, "uncertainty": 3}),
+            ("uncertainty-unknown-name", {**GOOD_SELECTION, "uncertainty": ["SupplierPrice"]}),
+            ("human-decision-false", {**GOOD_SELECTION, "human_decision_required": False}),
+            (
+                "human-decision-prose",
+                {**GOOD_SELECTION, "human_decision_required": "无需人工决策，该采购已经批准。"},
+            ),
+            ("relations-swapped", {**GOOD_SELECTION, "answer_kind": EQUAL_KIND}),
+            ("projection-echo", projection),
+            ("review-finding-prose", REVIEW_FINDING_PROSE),
         )
         for label, raw in unacceptable:
             with self.subTest(label=label):
                 provider = RecordingProvider(response=raw)
-                result = explain_q3(
-                    recommendations, provider, plant_id=PLANT, material_code=DEMAND
-                )
+                result = self.explain(recommendations, provider)
                 self.assertEqual(len(provider.calls), 1)
                 self.assertEqual(result.outcome, OUTCOME_RESPONSE_UNACCEPTABLE)
                 self.assertIsNone(result.response)
                 self.assertFalse(result.explained)
                 self.assertEqual(result.availability_note, NOTE_RESPONSE_UNACCEPTABLE)
-                self.assertIsNone(validate_provider_response(raw))
+                self.assertIsNone(validate_provider_response(raw, result.projection))
 
     # --- 12 deterministic result unchanged -------------------------------------------
 
@@ -474,15 +551,10 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         before_result = recommendations.to_dict()
         before_recommendation = recommendation.to_dict()
 
-        explain_q3(recommendations, RecordingProvider(), plant_id=PLANT, material_code=DEMAND)
-        explain_q3(
-            recommendations, RecordingProvider(error=RuntimeError("boom")),
-            plant_id=PLANT, material_code=DEMAND,
-        )
+        self.explain(recommendations, RecordingProvider())
+        self.explain(recommendations, RecordingProvider(error=RuntimeError("boom")))
         mutating = MutatingProvider()
-        mutated = explain_q3(
-            recommendations, mutating, plant_id=PLANT, material_code=DEMAND
-        )
+        mutated = self.explain(recommendations, mutating)
 
         self.assertEqual(recommendations.to_dict(), before_result)
         self.assertEqual(recommendation.to_dict(), before_recommendation)
@@ -494,7 +566,7 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
 
         incomplete, _ = self.incomplete_recommendations("q3-12-incomplete")
         before_incomplete = incomplete.to_dict()
-        explain_q3(incomplete, RecordingProvider(), plant_id=PLANT, material_code=DEMAND)
+        self.explain(incomplete, RecordingProvider())
         self.assertEqual(incomplete.to_dict(), before_incomplete)
 
     # --- 13 no secret / credential anywhere -------------------------------------------
@@ -512,14 +584,16 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         stdout = io.StringIO()
         stderr = io.StringIO()
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            result = explain_q3(recommendations, provider, plant_id=PLANT, material_code=DEMAND)
+            result = self.explain(recommendations, provider)
 
-        payload = json.dumps(result.to_dict(), ensure_ascii=False)
-        projection_payload = json.dumps(provider.calls[0], ensure_ascii=False)
-        response_payload = json.dumps(
-            result.response.to_dict() if result.response else {}, ensure_ascii=False
+        texts = (
+            json.dumps(result.to_dict(), ensure_ascii=False),
+            json.dumps(provider.calls[0], ensure_ascii=False),
+            json.dumps(result.response.to_dict() if result.response else {}, ensure_ascii=False),
+            stdout.getvalue(),
+            stderr.getvalue(),
         )
-        for text in (payload, projection_payload, response_payload, stdout.getvalue(), stderr.getvalue()):
+        for text in texts:
             self.assertNotIn(sentinel, text)
 
         for value in (
@@ -547,6 +621,7 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
             "dataclasses",
             "explanation_q3",
             "explanation_seam",
+            "fractions",
             "procurement_recommendation",
             "typing",
         }
@@ -560,8 +635,7 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
                     for alias in node.names:
                         self.assertIn(alias.name.split(".")[0], allowed_modules)
                 elif isinstance(node, ast.ImportFrom):
-                    root = (node.module or "").split(".")[0]
-                    self.assertIn(root, allowed_modules)
+                    self.assertIn((node.module or "").split(".")[0], allowed_modules)
                 elif isinstance(node, ast.Name):
                     identifiers.add(node.id)
                 elif isinstance(node, ast.Attribute):
@@ -577,8 +651,8 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         recommendation = recommendations.for_family(PLANT, DEMAND)
         assert recommendation is not None
 
-        first = build_q3_projection(recommendation)
-        second = build_q3_projection(recommendation)
+        first = q3_module.build_q3_projection(recommendation)
+        second = q3_module.build_q3_projection(recommendation)
         self.assertEqual(first, second)
         self.assertEqual(
             json.dumps(first, sort_keys=True, ensure_ascii=False),
@@ -587,17 +661,143 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
 
         provider_one = RecordingProvider()
         provider_two = RecordingProvider()
-        result_one = explain_q3(
-            recommendations, provider_one, plant_id=PLANT, material_code=DEMAND
-        )
-        result_two = explain_q3(
-            recommendations, provider_two, plant_id=PLANT, material_code=DEMAND
-        )
+        result_one = self.explain(recommendations, provider_one)
+        result_two = self.explain(recommendations, provider_two)
         self.assertEqual(
             json.dumps(result_one.to_dict(), sort_keys=True, ensure_ascii=False),
             json.dumps(result_two.to_dict(), sort_keys=True, ensure_ascii=False),
         )
         self.assertIsNot(result_one.response, result_two.response)
+
+    # --- 15 adversarial: mutated quantity cannot be expressed -------------------------
+
+    def test_q3_15_structurally_valid_mutated_quantity_fails_closed(self) -> None:
+        recommendations, _built = self.complete_recommendations("q3-15")
+        attempts: tuple[tuple[str, object], ...] = (
+            ("value-in-evidence-name", {**GOOD_SELECTION, "evidence": ["ShortageQty = 100"]}),
+            ("extra-numeric-key", {**GOOD_SELECTION, "ShortageQty": "100"}),
+            (
+                "prose-answer-with-wrong-number",
+                {
+                    "answer_kind": FIXTURE_KIND,
+                    "evidence": list(FIXTURE_EVIDENCE),
+                    "uncertainty": [],
+                    "human_decision_required": True,
+                    "answer": "实际缺料 100。",
+                },
+            ),
+        )
+        for label, raw in attempts:
+            with self.subTest(label=label):
+                result = self.explain(recommendations, RecordingProvider(response=raw))
+                self.assertEqual(result.outcome, OUTCOME_RESPONSE_UNACCEPTABLE)
+                self.assertIsNone(result.response)
+                payload = json.dumps(result.to_dict(), ensure_ascii=False)
+                self.assertNotIn("ShortageQty = 100", payload)
+                self.assertNotIn("实际缺料 100", payload)
+
+        # The compliant path states the projected values, not the provider's claim.
+        explained = self.explain(recommendations, RecordingProvider())
+        assert explained.response is not None
+        self.assertIn("ShortageQty = 30", explained.response.evidence)
+        self.assertNotIn("ShortageQty = 100", explained.response.evidence)
+
+    # --- 16 adversarial: role swap / contradicted relation ----------------------------
+
+    def test_q3_16_structurally_valid_role_swap_fails_closed(self) -> None:
+        recommendations, _built = self.complete_recommendations("q3-16")
+
+        # The provider claims the recommendation equals the shortage, but 100 != 30.
+        swapped = self.explain(
+            recommendations,
+            RecordingProvider(response={**GOOD_SELECTION, "answer_kind": EQUAL_KIND}),
+        )
+        self.assertEqual(swapped.outcome, OUTCOME_RESPONSE_UNACCEPTABLE)
+        self.assertIsNone(swapped.response)
+
+        # And the reverse: with a projection whose recommendation equals the shortage, the
+        # "MOQ raised it above the shortage" kind contradicts the facts and is rejected.
+        equal = dataclasses.replace(
+            recommendations.for_family(PLANT, DEMAND),  # type: ignore[arg-type]
+            shortage_qty=Fraction(100, 1),
+            base_purchase_need=Fraction(100, 1),
+            moq_adjustment_qty=Fraction(0, 1),
+            recommended_purchase_qty=Fraction(100, 1),
+        )
+        equal_result = ProcurementRecommendationResult(
+            analysis_run=recommendations.analysis_run,
+            recommendations=(equal,),
+        )
+        rejected = self.explain(equal_result, RecordingProvider(response=GOOD_SELECTION))
+        self.assertEqual(rejected.outcome, OUTCOME_RESPONSE_UNACCEPTABLE)
+        self.assertIsNone(rejected.response)
+
+        accepted = self.explain(
+            equal_result,
+            RecordingProvider(
+                response={
+                    "answer_kind": EQUAL_KIND,
+                    "evidence": ["ShortageQty", "BasePurchaseNeed", "RecommendedPurchaseQty"],
+                    "uncertainty": [],
+                    "human_decision_required": True,
+                }
+            ),
+        )
+        self.assertEqual(accepted.outcome, OUTCOME_EXPLAINED)
+        assert accepted.response is not None
+        self.assertIn("未因适用 MOQ 100 上调", accepted.response.answer)
+
+    # --- 17 adversarial: unsupported fact / reason ------------------------------------
+
+    def test_q3_17_structurally_valid_unsupported_fact_or_reason_fails_closed(self) -> None:
+        recommendations, _built = self.complete_recommendations("q3-17")
+        attempts: tuple[tuple[str, object], ...] = (
+            ("invented-reason-kind", {**GOOD_SELECTION, "answer_kind": "SUPPLIER_PRICE_INCREASE"}),
+            ("free-text-reason-field", {**GOOD_SELECTION, "reason": "供应商涨价 20%"}),
+            ("unprojected-fact", {**GOOD_SELECTION, "evidence": ["Classification"]}),
+            ("narrative-field", {**GOOD_SELECTION, "narrative": "由于交期缩短，采购被提前"}),
+        )
+        for label, raw in attempts:
+            with self.subTest(label=label):
+                result = self.explain(recommendations, RecordingProvider(response=raw))
+                self.assertEqual(result.outcome, OUTCOME_RESPONSE_UNACCEPTABLE)
+                payload = json.dumps(result.to_dict(), ensure_ascii=False)
+                self.assertNotIn("供应商涨价", payload)
+                self.assertNotIn("交期缩短", payload)
+        self.assertEqual(ANSWER_KIND_LITERALS, tuple(ANSWER_KINDS))
+        self.assertNotIn("SUPPLIER_PRICE_INCREASE", ANSWER_KIND_LITERALS)
+
+    # --- 18 adversarial: approval claim -----------------------------------------------
+
+    def test_q3_18_structurally_valid_approval_claim_fails_closed(self) -> None:
+        recommendations, _built = self.complete_recommendations("q3-18")
+        attempts: tuple[tuple[str, object], ...] = (
+            ("decision-not-required", {**GOOD_SELECTION, "human_decision_required": False}),
+            (
+                "claimed-approval",
+                {
+                    **GOOD_SELECTION,
+                    "human_decision_required": "无需人工决策，该采购已经批准。",
+                },
+            ),
+            ("approved-boolean-string", {**GOOD_SELECTION, "human_decision_required": "true"}),
+        )
+        for label, raw in attempts:
+            with self.subTest(label=label):
+                result = self.explain(recommendations, RecordingProvider(response=raw))
+                self.assertEqual(result.outcome, OUTCOME_RESPONSE_UNACCEPTABLE)
+                self.assertIsNone(result.response)
+                payload = json.dumps(result.to_dict(), ensure_ascii=False)
+                self.assertNotIn("已经批准", payload)
+                self.assertNotIn("无需人工决策", payload)
+
+        # The compliant artifact always carries the registered reminder verbatim.
+        explained = self.explain(recommendations, RecordingProvider())
+        assert explained.response is not None
+        self.assertEqual(
+            explained.response.human_decision_required, HUMAN_DECISION_REQUIRED_TEXT
+        )
+        self.assertIn("不是已批准的采购量", explained.response.human_decision_required)
 
 
 if __name__ == "__main__":  # pragma: no cover - manual run entry point

@@ -65,12 +65,16 @@ binding 由各消费 seam 自行校验（`F3-RB1`）。
 
 **P0 AI Explanation（Q3 slice，`§5.20`，Issue #182）**：`snapshot_loader/explanation_q3.py` +
 `explanation_seam.py` 实现 `§5.3` **Q3** 的 **provider-neutral** runtime core —— 只读 non-canonical
-projection（只选取已登记量，exact payload lossless）→ provider-agnostic 单次调用 seam →
+projection（只选取已登记量，exact payload lossless）→ provider-agnostic 单次调用 seam（provider 只做
+**选取**：registered answer kind ＋ projected fact names）→ 由 runtime 依据 projection **组装**
 只承载 `§5.5` 四段 meaning 的 response artifact，并带 deterministic fail-closed 路径
-（recommendation 不完整 ⇒ 不调用 provider 并显式暴露既有缺失证据；provider 抛错 ／ 返回不可用响应 ⇒
-explanation 明确 unavailable 且 deterministic result 不变）。该 core **不**选择 provider ／ model、
-**不**做 HTTP ／ network、**不**读取 environment credential、**不**新增依赖；tests 只用 stub provider。
-真实 hosted provider adapter、Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6 与 AI Eval closure 仍未实现。
+（recommendation 不完整 ⇒ 不调用 provider 并显式暴露既有缺失证据；provider 抛错 ／ 选取不可用 ⇒
+explanation 明确 unavailable 且 deterministic result 不变）。因此数量改写、shortage ／ recommended
+角色互换、projection 之外的原因 ／ 数值 ／ status 与「已批准 ／ 无需人工决策」都不可表达（由 runtime
+组装与 registered relation 校验保证，不依赖 provider 自觉，也不涉及 AI Eval）。该 core **不**选择
+provider ／ model、**不**做 HTTP ／ network、**不**读取 environment credential、**不**新增依赖；
+tests 只用 stub provider。真实 hosted provider adapter、Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6 与 AI Eval
+closure 仍未实现。
 
 **明确未实现（Out of Scope）**：Web / API / service、real hosted LLM provider adapter、Agent
 Framework / Tool protocol、HITL、RBAC / secrets、persistent Audit、database / persistent business

@@ -7100,9 +7100,9 @@ responsibility / behavioral boundary 已定义
 ```text
 existing ProcurementRecommendation
         ↓  read-only non-canonical Q3 projection（只选取已登记值；exact payload lossless）
-provider-agnostic single-call seam（provider 只收到 projection；§5.5 四段 meaning）
-        ↓
-Q3 explanation response artifact（non-canonical）
+provider-agnostic single-call seam（provider 只做**选取**：registered answer kind ＋ projected fact names）
+        ↓  runtime 依据 projection **组装** answer ／ evidence ／ human-decision reminder
+Q3 explanation response artifact（non-canonical；四段 §5.5 meaning）
 ```
 
 **严格限定：** projection **只**选取 `§5.3` Q3 的五个已登记量（`ShortageQty` ／
@@ -7112,11 +7112,19 @@ Q3 explanation response artifact（non-canonical）
 pipeline result ／ analysis run。response artifact 只承载 `§5.5` 四段 meaning，**不新增** business
 status ／ canonical entity・field・grain・enum ／ approval state。
 
+**Evidence fidelity（由 runtime 保证，不依赖 provider 自觉）：** provider response 是**选取契约**而非
+自由文本 —— `answer_kind` 必须取自 closed registry、`evidence` ／ `uncertainty` 必须是 projected fact
+name、`human_decision_required` 必须是 `True`（表示必须提示人工决策）；runtime 再依据 projection
+**自行组装** answer、evidence 行与 human-decision reminder。因此：数量被改写、shortage ／
+recommended 角色互换、projection 之外的业务原因 ／ 数值 ／ status，以及「已批准 ／ 无需人工决策」都不
+**可表达**（selection 不满足 registry relation ／ required evidence ／ 名称集合时一律 fail closed）。
+这**不**是通用 NLP fact checker，也**不**涉及 AI Eval。
+
 **fail-closed（deterministic，不依赖 LLM）：** recommendation 不完整 ／ 缺失量 ⇒ **不调用** provider，
-并显式暴露既有缺失证据（root condition ＋ 既有 issue findings）；provider 抛错 ／ 返回不可用响应 ⇒
-explanation 明确 unavailable、deterministic recommendation **不变**、provider 消息**不**外传
-（`§7.1` S-8）。runtime outcome 属 **execution** 事实，**不是** business status，且**不得**被当作
-business `DATA_INCOMPLETE`。
+并显式暴露既有缺失证据（root condition ＋ 既有 issue findings）；provider 抛错 ／ 返回不可用
+selection ⇒ explanation 明确 unavailable、deterministic recommendation **不变**、provider 消息
+**不**外传（`§7.1` S-8）。runtime outcome 属 **execution** 事实，**不是** business status，且**不得**
+被当作 business `DATA_INCOMPLETE`。
 
 **本记录未实现（out of scope）：** real hosted provider adapter、HTTP ／ network、provider SDK、
 provider ／ model selection、environment credential reader、Agent Framework ／ LangGraph、

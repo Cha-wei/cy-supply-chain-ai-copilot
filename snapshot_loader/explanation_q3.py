@@ -22,6 +22,12 @@ five quantities are taken from the recommendation's **own registered serializati
 rational payloads ／ exact decimal text), so nothing is recomputed, rounded, repaired,
 defaulted or re-classified.  The projection never carries the accepted package, the pipeline
 result, the analysis run or any unrelated pipeline field.
+
+Evidence fidelity is enforced by construction rather than trusted: the provider may only
+*select* a registered answer kind and projected fact names, and the runtime assembles the
+answer, the evidence lines and the human-decision reminder from the projection itself, so a
+mutated quantity, a swapped role, an unsupported business reason or an invented approval
+cannot be expressed at all (see :mod:`snapshot_loader.explanation_seam`).
 """
 
 from __future__ import annotations
@@ -256,7 +262,7 @@ def explain_q3(
             ),
         )
 
-    response = validate_provider_response(raw)
+    response = validate_provider_response(raw, projection)
     if response is None:
         return ExplanationResult(
             question=Q3_QUESTION,
@@ -265,8 +271,10 @@ def explain_q3(
             provider_invoked=True,
             availability_note=NOTE_RESPONSE_UNACCEPTABLE,
             notes=(
-                "the provider response is not a usable explanation and is never surfaced "
-                "(§5.5 / §5.7); the deterministic recommendation is unchanged",
+                "the provider selection is not a usable Q3 explanation and is never surfaced "
+                "(§5.3 / §5.5 / §5.6 / §5.7): only a registered answer kind over the projected "
+                "facts, covering that kind's required evidence and asserting the required "
+                "human decision, is accepted; the deterministic recommendation is unchanged",
             ),
         )
 
@@ -277,8 +285,9 @@ def explain_q3(
         provider_invoked=True,
         response=response,
         notes=(
-            "the explanation paraphrases the projected deterministic quantities and adds no "
-            "business fact (§5.6 / §5.7)",
+            "the provider selected a registered answer kind and projected fact names only; the "
+            "answer, evidence and human-decision reminder were rendered by the runtime from the "
+            "projection, so no provider wording enters the artifact (§5.6 / §5.7)",
         ),
     )
 

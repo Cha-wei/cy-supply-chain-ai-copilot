@@ -22,8 +22,11 @@ Deterministic tranches delivered here:
 
     P0 AI Explanation -- Q3 slice (:func:`explain_q3`)
       an existing ``ProcurementRecommendation`` -> a read-only non-canonical Q3 projection
-      -> one provider-agnostic call -> a response artifact carrying only the four §5.5
-      meanings, plus a deterministic fail-closed path.  The provider is injected as a plain
+      -> one provider-agnostic call whose response is a **selection** (a registered answer
+      kind plus projected fact names) -> a response artifact the runtime itself assembles
+      from the projection, plus a deterministic fail-closed path.  Because the provider
+      supplies no prose, a mutated quantity, a swapped role, an unsupported business reason
+      and an invented approval are not expressible.  The provider is injected as a plain
       protocol; this package performs no network call, reads no credential or environment
       secret and selects no provider, model, framework or tool protocol.
 
@@ -133,6 +136,9 @@ from .explanation_q3 import (
     explain_q3,
 )
 from .explanation_seam import (
+    ANSWER_KINDS,
+    ANSWER_KIND_LITERALS,
+    HUMAN_DECISION_REQUIRED_TEXT,
     NOTE_AI_EXPLANATION_UNAVAILABLE,
     NOTE_INCOMPLETE,
     NOTE_NO_RECOMMENDATION_BY_DESIGN,
@@ -146,10 +152,12 @@ from .explanation_seam import (
     OUTCOME_RECOMMENDATION_UNAVAILABLE,
     OUTCOME_RESPONSE_UNACCEPTABLE,
     RESPONSE_KEYS,
+    AnswerKind,
     ExplanationProvider,
     ExplanationResponse,
     ExplanationResult,
     provider_payload,
+    render_fact_text,
     validate_provider_response,
 )
 from .inbound_calculation import (
@@ -521,9 +529,14 @@ __all__ = [
     "Q3_GRAIN_FIELDS",
     "Q3_QUESTION",
     "RESPONSE_KEYS",
+    "ANSWER_KINDS",
+    "ANSWER_KIND_LITERALS",
+    "AnswerKind",
+    "HUMAN_DECISION_REQUIRED_TEXT",
     "build_q3_projection",
     "explain_q3",
     "provider_payload",
+    "render_fact_text",
     "validate_provider_response",
 ]
 
