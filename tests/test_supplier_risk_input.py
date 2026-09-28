@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import json
 import unittest
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,11 @@ from typing import Any
 from snapshot_loader import (
     ELIGIBILITY_ELIGIBLE,
     ELIGIBILITY_INELIGIBLE,
+    PERFORMANCE_OBSERVATION_FIELDS,
+    ROOT_PERFORMANCE_COMPETING_UNRESOLVED,
+    ROOT_PERFORMANCE_OBSERVATION_ABSENT,
+    ROOT_PERFORMANCE_OBSERVATION_MULTIPLE,
+    ROOT_PERFORMANCE_OBSERVATION_UNRESOLVED,
     AnalysisRunBindingError,
     SupplierRiskInputResult,
     compute_procurement_policy_input,
@@ -919,14 +925,25 @@ class PerformanceSurfaceTests(SupplierRiskInputTestCase):
         context = result.context_for(PLANT, SUPPLIER, DEMAND)
         assert context is not None
         # The record is supplied but its measurement period is unresolved: it stays visible on the
-        # unresolved surface so a future rule can fail the affected dimensions closed.
+        # unresolved surface so a future rule can fail the affected dimensions closed, and the approved
+        # Option A applicability boundary (``§2.7.26``) states that no applicable observation exists
+        # instead of reading a period-less record.
         self.assertEqual(context.performance, ())
         self.assertEqual(len(context.unresolved_performance), 1)
         unresolved = context.unresolved_performance[0]
         self.assertEqual(unresolved.value_of("DeliveryPerformance"), "97")
         self.assertEqual(unresolved.value_of("QualityPerformance"), "99")
         self.assertFalse(unresolved.has("PerformancePeriod"))
-        self.assertEqual(context.issues, ())
+        self.assertIsNone(context.applicable_performance)
+        self.assertTrue(context.performance_applicability_unresolved)
+        self.assertEqual(
+            context.performance_root_condition, ROOT_PERFORMANCE_OBSERVATION_UNRESOLVED
+        )
+        # The only finding is the registered semantic pair -- no risk value, no risk level.
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in context.issues],
+            [("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED")],
+        )
 
     def test_r3_performance_is_never_shared_across_materials(self) -> None:
         built = self.build_chain(
@@ -1010,6 +1027,466 @@ class PerformanceSurfaceTests(SupplierRiskInputTestCase):
                 "risk_level",
                 "score",
             }
+        )
+
+
+class PerformanceApplicabilityTests(SupplierRiskInputTestCase):
+    """Option A (Issue #164): exactly-one ``Supplier Performance`` observation applicability.
+
+    Covers ``§2.7.26``: a normal evaluation context consumes performance evidence only when exactly one
+    ``Supplier Performance`` observation is applicable to its exact ``supplier_id`` ＋ ``material_code``
+    -- exactly one resolved observation and no competing unresolved performance evidence -- and states
+    ``SEMANTIC_RESOLUTION`` ／ ``SEMANTIC_UNRESOLVED`` otherwise, never selecting an observation.
+    """
+
+    def context(self, built, *, plant: Any = PLANT, supplier: Any = SUPPLIER, material: Any = DEMAND):
+        """The evaluation context of one fixture, asserted to exist."""
+
+        context = self.supplier_input(built).context_for(plant, supplier, material)
+        assert context is not None
+        return context
+
+    def two_distinct_periods(self, name: str):
+        """One eligible relationship with two resolved observations of different periods."""
+
+        return self.build_chain(
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(
+                performance_record(period="2026-Q2"),
+                performance_record(period="2026-Q3"),
+            ),
+            name=name,
+        )
+
+    # --- 1 ／ 7 ／ 8: exactly one applicable observation, consumed as one unit ------------------
+
+    def test_a26_exactly_one_observation_is_applicable(self) -> None:
+        built = self.eligible_chain("a26-exactly-one")
+        result = self.supplier_input(built)
+        context = result.context_for(PLANT, SUPPLIER, DEMAND)
+        assert context is not None
+        observation = context.applicable_performance
+        assert observation is not None
+        self.assertFalse(context.performance_applicability_unresolved)
+        self.assertIsNone(context.performance_root_condition)
+        self.assertEqual(context.issues, ())
+        # The applicable observation **is** the accepted resolved object: one record, not a merge.
+        self.assertIs(observation.object, context.performance[0])
+        self.assertEqual(observation.canonical_target, "Supplier Performance")
+        self.assertEqual(observation.record_reference, context.performance[0].record_reference)
+        self.assertIs(observation.evidence_reference, context.performance[0].provenance)
+        # All five registered properties come from that same observation, as one coherent unit.
+        self.assertEqual(observation.performance_period, "2026-Q3")
+        self.assertEqual(observation.performance_updated_at, "2026-09-30T00:00:00Z")
+        self.assertEqual(observation.delivery_performance, "97")
+        self.assertEqual(observation.quality_performance, "99")
+        self.assertEqual(observation.standard_lead_time_days, "10")
+        self.assertEqual(
+            observation.values(),
+            {
+                "PerformancePeriod": "2026-Q3",
+                "PerformanceUpdatedAt": "2026-09-30T00:00:00Z",
+                "DeliveryPerformance": "97",
+                "QualityPerformance": "99",
+                "standard_lead_time_days": "10",
+            },
+        )
+        self.assertEqual(observation.absent_fields(), ())
+        self.assertEqual(context.performance_observed_for, "2026-Q3")
+        self.assertEqual(context.unresolved_performance, ())
+
+    def test_a27_no_field_is_ever_spliced_across_records(self) -> None:
+        # Two candidate observations whose fields are deliberately *complementary*: a splicer would
+        # combine 2026-Q2 with 2026-Q3 (for example the period of one and the lead time of the other).
+        built = self.build_chain(
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(
+                performance_record(period="2026-Q2", delivery="90", quality="91", lead_time="7"),
+                performance_record(period="2026-Q3", delivery="97", quality="99", lead_time="10"),
+            ),
+            name="a27-no-splicing",
+        )
+        context = self.context(built)
+        # No applicable unit exists, so no field of either record may be consumed at all.
+        self.assertIsNone(context.applicable_performance)
+        self.assertIsNone(context.performance_observed_for)
+        self.assertEqual(
+            [item.value_of("PerformancePeriod") for item in context.performance],
+            ["2026-Q2", "2026-Q3"],
+        )
+        self.assertEqual(
+            [item.value_of("standard_lead_time_days") for item in context.performance],
+            ["7", "10"],
+        )
+        payload = context.to_dict()
+        self.assertIsNone(payload["applicable_performance"])
+        self.assertTrue(payload["performance_applicability_unresolved"])
+        # Each record stays individually readable -- visible, never merged and never dropped.
+        self.assertEqual(len(payload["performance"]), 2)
+
+    # --- 2 ／ 6: multiple periods, and ``PerformanceUpdatedAt`` as a non-authority ----------------
+
+    def test_a28_two_resolved_periods_are_unresolved_without_precedence(self) -> None:
+        built = self.two_distinct_periods("a28-two-periods")
+        context = self.context(built)
+        self.assertIsNone(context.applicable_performance)
+        self.assertTrue(context.performance_applicability_unresolved)
+        self.assertEqual(
+            context.performance_root_condition, ROOT_PERFORMANCE_OBSERVATION_MULTIPLE
+        )
+        # Both reliable observations stay visible on the resolved surface.
+        self.assertEqual(len(context.performance), 2)
+        self.assertEqual(context.unresolved_performance, ())
+        # Exactly one finding, using only the registered taxonomy pair.
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in context.issues],
+            [("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED")],
+        )
+        issue = context.issues[0]
+        self.assertEqual(issue.layer, 2)
+        self.assertEqual(issue.affected_evidence, "Supplier Performance")
+        self.assertIn("performance_applicability", issue.location)
+        self.assertIn("§2.7.26", issue.design_reference)
+
+    def test_a29_a_newer_performance_updated_at_never_selects(self) -> None:
+        # The newest ``PerformanceUpdatedAt`` belongs to the *earlier* period, so neither "latest
+        # period" nor "newest updated_at" could be honoured -- and neither is.
+        built = self.build_chain(
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(
+                performance_record(period="2026-Q2", updated="2026-12-31T00:00:00Z"),
+                performance_record(period="2026-Q3", updated="2026-10-01T00:00:00Z"),
+            ),
+            name="a29-updated-at-is-not-an-authority",
+        )
+        context = self.context(built)
+        self.assertIsNone(context.applicable_performance)
+        self.assertEqual(
+            context.performance_root_condition, ROOT_PERFORMANCE_OBSERVATION_MULTIPLE
+        )
+        # Every record keeps its own ``PerformanceUpdatedAt`` verbatim and none is promoted.
+        self.assertEqual(
+            [item.value_of("PerformanceUpdatedAt") for item in context.performance],
+            ["2026-12-31T00:00:00Z", "2026-10-01T00:00:00Z"],
+        )
+
+    # --- 3 ／ 4 ／ 5: same-period duplicate, competing unresolved, missing period ---------------
+
+    def test_a30_a_same_period_duplicate_is_never_promoted(self) -> None:
+        built = self.build_chain(
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(
+                performance_record(period="2026-Q3"),
+                performance_record(period="2026-Q3", updated="2026-10-31T00:00:00Z"),
+            ),
+            name="a30-same-period-duplicate",
+        )
+        report = built.construction
+        # The canonicalization left both records unresolved on one (supplier, material, period) grain,
+        # and each of them still carries a grain ...
+        self.assertEqual(report.objects_for("Supplier Performance"), ())
+        unresolved_objects = report.unresolved_for("Supplier Performance")
+        self.assertEqual(len(unresolved_objects), 2)
+        self.assertTrue(all(item.grain is not None for item in unresolved_objects))
+        # ... so the seam reports that bucket verbatim: re-deriving "resolved" from ``grain is not
+        # None`` (the merged-bucket defect this test is the regression for) would have promoted both.
+        context = self.context(built)
+        self.assertEqual(context.performance, ())
+        self.assertEqual(len(context.unresolved_performance), 2)
+        self.assertIsNone(context.applicable_performance)
+        self.assertEqual(
+            context.performance_root_condition, ROOT_PERFORMANCE_OBSERVATION_UNRESOLVED
+        )
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in context.issues],
+            [("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED")],
+        )
+
+    def test_a31_one_resolved_observation_next_to_competing_unresolved_evidence(self) -> None:
+        built = self.build_chain(
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(
+                performance_record(period="2026-Q3"),
+                performance_record(period="2026-Q3", drop_period=True),
+            ),
+            name="a31-competing-unresolved",
+        )
+        context = self.context(built)
+        # One resolved observation is *not* adopted while same-grain competing evidence is unresolved.
+        self.assertEqual(len(context.performance), 1)
+        self.assertEqual(len(context.unresolved_performance), 1)
+        self.assertIsNone(context.applicable_performance)
+        self.assertEqual(
+            context.performance_root_condition, ROOT_PERFORMANCE_COMPETING_UNRESOLVED
+        )
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in context.issues],
+            [("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED")],
+        )
+
+    def test_a32_a_missing_period_and_absent_evidence_are_distinguishable(self) -> None:
+        missing_period = self.build_chain(
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(drop_period=True),),
+            name="a32-missing-period",
+        )
+        context = self.context(missing_period)
+        self.assertIsNone(context.applicable_performance)
+        self.assertEqual(
+            context.performance_root_condition, ROOT_PERFORMANCE_OBSERVATION_UNRESOLVED
+        )
+        self.assertEqual((context.performance, len(context.unresolved_performance)), ((), 1))
+
+        # The performance role **is** provided here, but no record claims this supplier + material.
+        absent = self.build_chain(
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(material=OTHER),),
+            name="a32-absent-for-this-pair",
+        )
+        result = self.supplier_input(absent)
+        self.assertTrue(result.capability_available)
+        absent_context = result.context_for(PLANT, SUPPLIER, DEMAND)
+        assert absent_context is not None
+        self.assertEqual(absent_context.performance, ())
+        self.assertEqual(absent_context.unresolved_performance, ())
+        self.assertIsNone(absent_context.applicable_performance)
+        self.assertEqual(
+            absent_context.performance_root_condition, ROOT_PERFORMANCE_OBSERVATION_ABSENT
+        )
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in absent_context.issues],
+            [("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED")],
+        )
+
+    # --- 9 ／ 11 ／ 12 ／ 13: isolation, eligibility, Plant ／ need date, capability ------------
+
+    def test_a33_another_supplier_or_material_never_participates(self) -> None:
+        built = self.build_chain(
+            supplier_relationships=(
+                relationship_record(),
+                relationship_record(SUPPLIER_B),
+            ),
+            supplier_performances=(
+                performance_record(),
+                performance_record(SUPPLIER_B, period="2026-Q1"),
+                performance_record(material=OTHER, period="2026-Q1"),
+            ),
+            name="a33-no-foreign-performance",
+        )
+        result = self.supplier_input(built)
+        first = result.context_for(PLANT, SUPPLIER, DEMAND)
+        second = result.context_for(PLANT, SUPPLIER_B, DEMAND)
+        assert first is not None and second is not None
+        # Neither context sees the other supplier's or another material's evidence -- so both stay
+        # exactly-one applicable rather than becoming "competing evidence".
+        for context, supplier, period in (
+            (first, SUPPLIER, "2026-Q3"),
+            (second, SUPPLIER_B, "2026-Q1"),
+        ):
+            with self.subTest(supplier=supplier):
+                observation = context.applicable_performance
+                assert observation is not None
+                self.assertEqual(observation.performance_period, period)
+                self.assertEqual(observation.object.value_of("supplier_id"), supplier)
+                self.assertEqual(observation.object.value_of("material_code"), DEMAND)
+                self.assertEqual(len(context.performance), 1)
+                self.assertEqual(context.unresolved_performance, ())
+        # The performance-only witness of another material is never shared into a DEMAND context.
+        self.assertIsNone(result.context_for(PLANT, SUPPLIER, OTHER))
+
+    def test_a34_eligibility_semantics_are_unchanged(self) -> None:
+        built = self.build_chain(
+            supplier_relationships=(
+                relationship_record(),
+                relationship_record(SUPPLIER_B, basis=INELIGIBLE_BASIS),
+            ),
+            supplier_performances=(
+                performance_record(),
+                performance_record(SUPPLIER_B),
+            ),
+            name="a34-eligibility-unchanged",
+        )
+        result = self.supplier_input(built)
+        eligible = result.eligibility_for(SUPPLIER, DEMAND)
+        ineligible = result.eligibility_for(SUPPLIER_B, DEMAND)
+        assert eligible is not None and ineligible is not None
+        self.assertEqual(eligible.outcome, ELIGIBILITY_ELIGIBLE)
+        self.assertEqual(ineligible.outcome, ELIGIBILITY_INELIGIBLE)
+        self.assertEqual(eligible.issues, ())
+        # An ineligible relationship is a valid exclusion: no issue and no evaluation context.
+        self.assertEqual(ineligible.issues, ())
+        self.assertEqual(
+            [item.supplier_id for item in result.evaluation_contexts], [SUPPLIER]
+        )
+        context = result.context_for(PLANT, SUPPLIER, DEMAND)
+        assert context is not None
+        self.assertIsNotNone(context.applicable_performance)
+
+    def test_a35_plant_and_need_date_isolation_is_unchanged(self) -> None:
+        built = self.build_chain(
+            extra_plant_families=((OTHER_PLANT, DEMAND, "120", D1),),
+            moq_policies=(
+                moq_policy_record(DEMAND, moq="100"),
+                moq_policy_record(
+                    DEMAND,
+                    moq="100",
+                    plant=OTHER_PLANT,
+                    locator="SIMULATED-SRC-MOQ-P2",
+                ),
+            ),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            name="a35-plant-isolation",
+        )
+        result = self.supplier_input(built)
+        first = result.context_for(PLANT, SUPPLIER, DEMAND)
+        second = result.context_for(OTHER_PLANT, SUPPLIER, DEMAND)
+        assert first is not None and second is not None
+        # The applicability boundary changes nothing about the Plant ／ need-date composition: each
+        # Plant keeps its own date and both consume their own single applicable observation.
+        self.assertEqual(first.recommendation_need_date, D2)
+        self.assertEqual(second.recommendation_need_date, D1)
+        for context in (first, second):
+            with self.subTest(plant=context.plant_id):
+                observation = context.applicable_performance
+                assert observation is not None
+                self.assertEqual(observation.performance_period, "2026-Q3")
+                self.assertEqual(context.grain, (SUPPLIER, DEMAND))
+        self.assertEqual(result.issues, ())
+
+    def test_a36_the_capability_boundary_is_unchanged(self) -> None:
+        built = self.build_chain(
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(),
+            name="a36-capability-unavailable",
+        )
+        result = self.supplier_input(built)
+        self.assertFalse(result.capability_available)
+        # A not-provided evidence role never becomes a business applicability finding: no context is
+        # formed at all and the registered capability pair stays the only finding.
+        self.assertEqual(result.evaluation_contexts, ())
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in result.issues],
+            [("EVIDENCE_AVAILABILITY", "EVIDENCE_ROLE_NOT_PROVIDED")],
+        )
+        self.assertIn("Supplier Performance", result.issues[0].detail)
+
+    # --- 10 ／ 14: determinism ／ serialization, and the scope guard ----------------------------
+
+    def test_a37_applicability_is_deterministic_frozen_and_serializable(self) -> None:
+        first = self.eligible_chain("a37-first")
+        second = self.eligible_chain("a37-second")
+        first_result = self.supplier_input(first)
+        second_result = self.supplier_input(second)
+        self.assertEqual(first_result.to_dict(), second_result.to_dict())
+        json.dumps(first_result.to_dict())
+
+        context = first_result.context_for(PLANT, SUPPLIER, DEMAND)
+        assert context is not None
+        observation = context.applicable_performance
+        assert observation is not None
+        payload = context.to_dict()
+        self.assertFalse(payload["performance_applicability_unresolved"])
+        self.assertIsNone(payload["performance_root_condition"])
+        self.assertEqual(
+            payload["applicable_performance"]["values"],
+            {
+                "PerformancePeriod": "2026-Q3",
+                "PerformanceUpdatedAt": "2026-09-30T00:00:00Z",
+                "DeliveryPerformance": "97",
+                "QualityPerformance": "99",
+                "standard_lead_time_days": "10",
+            },
+        )
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            context.applicable_performance = None  # type: ignore[misc]
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            observation.object = None  # type: ignore[misc]
+        # The named accessors are read-only views of the wrapped object, not settable seats.
+        with self.assertRaises((dataclasses.FrozenInstanceError, TypeError)):
+            observation.performance_period = "2026-Q4"  # type: ignore[misc]
+
+        # The unresolved case is equally deterministic and keeps both buckets in the payload.
+        unresolved_first = self.two_distinct_periods("a37-unresolved-first")
+        unresolved_second = self.two_distinct_periods("a37-unresolved-second")
+        self.assertEqual(
+            self.supplier_input(unresolved_first).to_dict(),
+            self.supplier_input(unresolved_second).to_dict(),
+        )
+        unresolved_payload = self.context(unresolved_first).to_dict()
+        self.assertTrue(unresolved_payload["performance_applicability_unresolved"])
+        self.assertEqual(
+            unresolved_payload["performance_root_condition"],
+            ROOT_PERFORMANCE_OBSERVATION_MULTIPLE,
+        )
+        self.assertEqual(len(unresolved_payload["performance"]), 2)
+
+    def test_a38_the_boundary_states_no_risk_and_no_threshold(self) -> None:
+        import snapshot_loader.supplier_risk_input as module
+
+        identifiers = module_identifiers(module)
+        for forbidden in (
+            "DaysUntilNeed",
+            "LeadTimeRisk",
+            "DeliveryRisk",
+            "QualityRisk",
+            "OverallSupplierRisk",
+            "risk_level",
+            "freshness",
+            "threshold",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, identifiers)
+        for forbidden in ("LOW", "MEDIUM", "HIGH"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, identifiers)
+        # The consumed unit is exactly the five registered properties -- no new canonical field.
+        self.assertEqual(
+            PERFORMANCE_OBSERVATION_FIELDS,
+            (
+                "PerformancePeriod",
+                "PerformanceUpdatedAt",
+                "DeliveryPerformance",
+                "QualityPerformance",
+                "standard_lead_time_days",
+            ),
+        )
+        self.assertEqual(
+            PERFORMANCE_OBSERVATION_FIELDS, tuple(module.PERFORMANCE_OBSERVATION_FIELDS)
+        )
+        # One coherence unit: the observation holds the accepted object itself, so a caller can never
+        # assemble one from separately supplied values.
+        self.assertEqual(
+            {field.name for field in dataclasses.fields(module.SupplierPerformanceObservation)},
+            {"object"},
+        )
+        # The new runtime surface is additive on the existing evaluation context.
+        context_fields = {
+            field.name
+            for field in dataclasses.fields(module.SupplierRiskEvaluationContext)
+        }
+        self.assertLessEqual(
+            {
+                "applicable_performance",
+                "performance_root_condition",
+                "performance",
+                "unresolved_performance",
+            },
+            context_fields,
+        )
+        self.assertEqual(
+            sorted(
+                name
+                for name in module.__all__
+                if isinstance(getattr(module, name), str)
+                and getattr(module, name).startswith("PERFORMANCE_")
+            ),
+            [
+                "ROOT_PERFORMANCE_COMPETING_UNRESOLVED",
+                "ROOT_PERFORMANCE_OBSERVATION_ABSENT",
+                "ROOT_PERFORMANCE_OBSERVATION_MULTIPLE",
+                "ROOT_PERFORMANCE_OBSERVATION_UNRESOLVED",
+            ],
         )
 
 
