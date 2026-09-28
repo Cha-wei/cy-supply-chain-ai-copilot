@@ -63,7 +63,9 @@ results 提供**。`§9` 的 `deterministic unit tests` 与 `integration tests` 
 - `§3` read ／ write boundary（business data 只能经 Controlled Export 进入；`WRITE = DENIED`；
   不得直连 source system、不得以「只读」为由扩大 source access）；
 - `ADR-001`（Python 本地单进程 core library、thin CLI 为外层入口、in-memory；首批不实现 Web ／
-  LLM ／ Agent ／ HITL ／ RBAC ／ persistent Audit ／ real ERP ／ write-back）；
+  LLM ／ Agent ／ HITL ／ RBAC ／ persistent Audit ／ real ERP ／ write-back）—— 该 ADR 的 authority
+  **仅限其 first deterministic tranche scope**；本 ADR 只**消费**其已登记的 in-process deterministic
+  result surface，**不**继承其 Python ／ thin CLI choice；
 - `§10.1` C deterministic acceptance obligations 与 `§10.1` D JIT blockers；`§9.3` trigger boundary；
 - 仓库当前 `dependencies = []`：引入任何依赖须按 CONTRIBUTING 的依赖与升级规则单独决定。
 
@@ -211,7 +213,16 @@ Q3 — Why is the recommended purchase quantity X?
 
 - 本决定只约束 P0 AI Explanation 的最小 runtime shape、数据边界、egress 边界与 fail-closed 行为；
   **不**选择完整生产技术栈，**不**覆盖 `§6` ～ `§8`。
-- `ADR-001` 的 Python ／ in-memory ／ thin CLI 约束继续有效；本 ADR 不引入 persistence 或 service 形态。
+- `ADR-001` 的 authority **继续仅限其 first deterministic tranche scope** —— 包括其自身已登记的
+  「Python 选择仅限本 tranche，**不是** whole-project Python lock-in」，以及 thin CLI 作为**该 tranche**
+  的 interaction boundary；本 ADR **不**把 `ADR-001` 的 Python ／ thin CLI choice 扩展到 AI Explanation
+  runtime。
+- 本 ADR **可以消费**该 tranche 已登记的 **in-process deterministic result surface** 作为唯一数据来源
+  （见 Data boundary）：这是对**已登记 runtime surface 的消费**，**不是**对 `ADR-001`
+  Architecture choice 的继承性扩展。
+- 本 ADR 的 **in-process** ／ **no Web ／ API** ／ **no database ／ persistence** ／ **no service shape**
+  是其**自身独立批准的 architecture boundary**（见 Approved decision），**不是**从 `ADR-001` 推导所得；
+  未来若需变更这些边界，按本 ADR 的 Revisit Conditions 与 CONTRIBUTING `§10` 另行决策。
 - **实现仍未授权**：实际 coding 之前必须先关闭 `§7 Secret Handling` JIT gate 并获得相应 Human Approval。
 
 ### Revisit Conditions
