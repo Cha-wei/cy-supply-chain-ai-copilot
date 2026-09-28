@@ -3211,6 +3211,61 @@ not a Risk classification ／ threshold or quantity calculation
 完整性要求，也**不修改** `adr-001-deterministic-core.md`。
 Runtime 实现登记见 `snapshot-import-contract.md` §4.3.31 G **I-10** 与 `poc-design-v0.2.md` §2.7.26。
 
+#### 4.4.105 Supplier Risk non-normal evidence outcome（Option A，Issue #168）
+
+**Registration Status：`REGISTERED`** —— 依据 **Human Decision
+`APPROVED — Option A: Request-bounded Fail-closed Supplier Risk Evidence Outcome`**（Issue #168）。
+本小节是 `§4.4.61` ／ `§4.4.62` ／ `§4.4.95` ／ `§4.4.26` ／ `§4.4.94` 在 **runtime output** 层面的
+落地登记：它**只**登记「哪些 request 会产生 Supplier Risk business result」、「relationship ／
+identity unresolved 时 business consequence 是什么」与「什么时候**不**产生结果」，
+**不新增** Validation Category ／ Reason，**不重定义** 既有 `DATA_INCOMPLETE` 语义，
+**不实现** risk classification。
+
+```text
+output universe   = 实际存在的 procurement evaluation request
+                    （plant_id ＋ material_code ＋ RecommendationNeedDate）
+                    由 request 驱动；**不得**由 evidence 扫描自行创建 request
+relationship      = 真实 relationship evidence ∧ pair grain 可可靠确定 ∧ eligibility unresolved
+  unresolved          ⇒ 每个 matching request 一个 fail-closed evidence outcome
+                        Risk Evidence Status = DATA_INCOMPLETE（既有 business literal）
+performance-only  = ROOT_RELATIONSHIP_ABSENT ⇒ **0** business outcome（与 performance record 数量无关）
+ineligible        = valid exclusion ⇒ no result ／ NO DATA_INCOMPLETE ／ NO issue
+exact identity    = F1 pair grain 可靠 ⇒ fail-closed outcome（root = SUPPLIER_RISK_IDENTITY_UNRESOLVED）
+  unresolved         F2 pair grain 不可靠 ⇒ NO keyed result；保留 IDENTITY_RESOLUTION ／ UNRESOLVED_IDENTITY
+role not provided = EVIDENCE_AVAILABILITY ／ EVIDENCE_ROLE_NOT_PROVIDED（capability unavailable，不变）
+cardinality       = one reliable pair × each matching Plant ／ material request = one outcome
+```
+
+- **不得**把 unresolved relationship 默认成 `eligible` ／ `ineligible`；**不得**由 `Supplier
+  Performance` 反证 relationship；**不得** fabricate relationship ／ identity ／ procurement ／
+  performance reference —— `ROOT_RELATIONSHIP_ABSENT` 保持 `relationship_reference = None`。
+- **Exact-identity finding（Issue #169 review finding）：** 对 request-bounded 且 pair grain 可靠的 pair，
+  F1 的 identity state 在 exact `Supplier` ／ `Material` identity 不可靠时**必须**携带具体的
+  `IDENTITY_RESOLUTION` ／ `UNRESOLVED_IDENTITY` finding：canonicalization 已给出的**逐字保留**；若
+  canonicalization 未给出（请求值无任何 canonical identity object，或仅 same-grain multiplicity
+  导致 unresolved），则由 Supplier Risk input seam 在**既有 taxonomy** 下产生 capability-scoped
+  finding（`§4.4.11` ／ `§4.4.26` ／ `§4.4.80` #4 ／ `§4.4.81` #7 ／ `§4.4.94`），指明 exact target、
+  exact requested value、affected pair ／ request 与 failure-isolated blast radius；**不得**新增
+  Category ／ Reason ／ enum ／ status，**不得**在没有 evidence 时 fabricate reference
+  （此 finding 不是 capability-unavailable：evidence role 已提供）。
+- **该 finding 按 exact evaluation request 定域（Issue #169 re-review）：** seam-raised finding 的
+  location ／ detail ／ blast radius 指向该 finding 影响的**那一个** `plant_id` ＋ `material_code` ＋
+  `supplier_id` request；同一 unresolved identity 参与多个 pair ／ 多个 Plant request ⇒ **多个可区分**
+  finding（不因 location ／ category ／ reason 相同而被 dedupe 成更宽 blast radius）。该定域只影响
+  Validation Issue ／ consequence 表述范围，**不改变** canonical Supplier identity grain、identity
+  resolution 语义、capability readiness 或任何其它已登记行为；construction 已给出的 finding 仍逐字保留。
+- fail-closed outcome **不是** Risk Card：**不得**计算 `DaysUntilNeed` ／ `LeadTimeRisk` ／
+  `DeliveryRisk` ／ `QualityRisk` ／ `OverallSupplierRisk` 的 `LOW` ／ `MEDIUM` ／ `HIGH`；
+  可靠 evidence 可保留用于 explainability。
+- F2 的 affected business consequence 是 `DATA_INCOMPLETE`（登记语义），但**不得**创建 placeholder
+  `supplier_id` ／ `material_code`、guessed pair、fuzzy match 或 synthetic card grain。
+- `RecommendationNeedDate` authority 不变（`§4.4.65` ／ I-4）：need date 本身 unresolved 时保持
+  unresolved，**不得**猜日期、**不得**跨 Plant 借用。
+
+**本小节未新增** canonical field ／ entity ／ grain、**未新增** business enum ／ status ／ Risk Level、
+**未新增** Validation Category ／ Reason，**未**修改任何 threshold ／ period policy ／ freshness policy。
+Runtime 实现登记见 `snapshot-import-contract.md` §4.3.31 G **I-10** 与 `poc-design-v0.2.md` §2.7.27。
+
 ---
 
 <!-- END MIGRATED LEGACY §4.4 BODY -->

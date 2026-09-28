@@ -61,7 +61,15 @@ Boundaries preserved by construction:
 * the two ``Supplier Performance`` buckets are the **construction's own** ``objects_for`` ／
   ``unresolved_for`` decision and are never merged and re-graded (``§2.7.26`` D ／ ``§4.4.102`` F): an
   object the canonicalization left unresolved is never promoted back to a resolved observation, and no
-  downstream consumer can recover a resolution the canonicalization refused.
+  downstream consumer can recover a resolution the canonicalization refused;
+* the runtime output universe is **request-bounded** and driven only by the procurement evaluation
+  requests that actually exist (``§2.7.27``, Issue #168 Option A).  Performance ／ identity ／
+  relationship evidence never creates a request, a request whose relationship eligibility is
+  unresolved produces a **fail-closed evidence outcome**
+  (:data:`SUPPLIER_RISK_EVIDENCE_STATUS_DATA_INCOMPLETE`, never a normal Risk Evidence Card), a pair
+  claimed only by performance evidence produces no business outcome at all, an explicitly
+  ``ineligible`` relationship stays a valid exclusion, and no existing request produces no result.
+  ``NORMAL`` ／ ``BUFFER_BREACH`` valid absence therefore never becomes ``DATA_INCOMPLETE``.
 
 ``ADR-001`` is unchanged: every value this seam carries is either an accepted canonical value copied
 verbatim or an existing runtime reference; no canonical entity ／ field ／ grain ／ business enum and no
@@ -85,19 +93,23 @@ from .canonical_objects import (
     read_provenance_associations,
 )
 from .constants import (
+    CATEGORY_IDENTITY_RESOLUTION,
     CATEGORY_PROVENANCE,
     CATEGORY_SEMANTIC_RESOLUTION,
     LAYER_2,
     REASON_PROVENANCE_MISMATCH,
     REASON_PROVENANCE_UNRESOLVED,
     REASON_SEMANTIC_UNRESOLVED,
+    REASON_UNRESOLVED_IDENTITY,
 )
 from .issues import Issue
 from .procurement_recommendation import (
     PROCUREMENT_RECOMMENDATION_RULE_ID,
     ProcurementRecommendation,
     ProcurementRecommendationResult,
+    UpstreamResultReference,
 )
+from .requirement_calculation import OUTCOME_DATA_INCOMPLETE
 from .result_binding import require_same_accepted_package, require_same_analysis_run
 from .shortage_calculation import SHORTAGE_RULE_ID
 
@@ -124,6 +136,47 @@ SUPPLIER_IDENTITY_ROLE: str = "Supplier identity"
 SUPPLIER_IDENTITY_TARGET: str = "Supplier"
 PLANT_MATERIAL_IDENTITY_ROLE: str = "Plant / Material identity context"
 PLANT_MATERIAL_IDENTITY_TARGET: str = "Plant + Material"
+
+#: The canonical entity target that carries **Material identity** evidence.  Note the two distinct
+#: literals: role 1's *role* target -- the one ``present_roles`` reports -- is
+#: :data:`PLANT_MATERIAL_IDENTITY_TARGET` (``Plant + Material``, ``§4.3.31`` B), while the constructed
+#: identity **objects** of that one evidence set are keyed under the canonical entities ``Plant`` and
+#: ``Material`` (``§4.1.4`` A ／ B ／ ``§4.2.18`` row 1).  ``objects_for`` ／ ``unresolved_for`` therefore
+#: answer under ``Material``.
+MATERIAL_IDENTITY_TARGET: str = "Material"
+
+#: The exact identity component each pair identity state is keyed by: canonical target → the property
+#: the relationship evidence states and the recognized role literal that carries the identity evidence
+#: (``§4.2.18`` rows 9 ／ 1).
+PAIR_IDENTITY_COMPONENTS: tuple[tuple[str, str, str], ...] = (
+    (SUPPLIER_IDENTITY_TARGET, "supplier_id", SUPPLIER_IDENTITY_ROLE),
+    (MATERIAL_IDENTITY_TARGET, "material_code", PLANT_MATERIAL_IDENTITY_ROLE),
+)
+
+#: The supplier-side canonical targets whose exact-identity findings this seam republishes so a
+#: consumer never has to re-read the construction: the two pair identities and the relationship pair
+#: grain itself (``§4.4.26`` ／ ``§4.4.94``).  Other identity targets (``Plant`` ／ ``Inbound Supply``)
+#: are outside this capability's pair grain and are deliberately not republished.
+IDENTITY_FINDING_TARGETS: tuple[str, ...] = (
+    SUPPLIER_IDENTITY_TARGET,
+    MATERIAL_IDENTITY_TARGET,
+    SUPPLIER_RELATIONSHIP_TARGET,
+)
+
+#: The existing business outcome literal this seam re-exports for a fail-closed evidence outcome.  It is
+#: the **same** ``DATA_INCOMPLETE`` literal the other first-tranche results alias (``SHORTAGE_DATA_INCOMPLETE``
+#: ／ ``PROCUREMENT_RECOMMENDATION_UNRESOLVED``): no new enum, no new status and no new Validation Reason.
+SUPPLIER_RISK_EVIDENCE_STATUS_DATA_INCOMPLETE: str = OUTCOME_DATA_INCOMPLETE
+
+#: Runtime trace label of a fail-closed evidence outcome (``§H`` of the Issue #168 Human Decision).  Trace
+#: only -- it is not a business status, canonical enum or persisted state; the business meaning is carried
+#: by :data:`SUPPLIER_RISK_EVIDENCE_STATUS_DATA_INCOMPLETE`.
+FAIL_CLOSED_EVIDENCE_OUTCOME: str = "FAIL_CLOSED_EVIDENCE_OUTCOME"
+
+#: Runtime trace label for **why** an otherwise eligible relationship's evidence outcome is fail-closed:
+#: the exact identity evidence of the pair is not reliably resolved while the pair grain itself is
+#: (``§4.4.26`` ／ ``§4.4.94``).  Trace only.
+ROOT_IDENTITY_UNRESOLVED: str = "SUPPLIER_RISK_IDENTITY_UNRESOLVED"
 
 #: The registered observation the relationship's eligibility evidence is registered under
 #: (``§4.2.8``: ``sourcing_status`` = Supplier-Material relationship eligibility context).
@@ -394,6 +447,95 @@ class SupplierPerformanceObservation:
 
 
 @dataclass(frozen=True, slots=True)
+class SupplierRiskIdentityState:
+    """The exact-identity readiness of **one** pair identity component (runtime-only handoff).
+
+    ``§4.4.6`` Capability C requires ``Supplier identity`` and ``Material identity`` evidence for the
+    evaluated ``supplier_id`` + ``material_code`` pair, and ``§4.4.26`` ／ ``§4.4.94`` define an identity
+    that cannot be reliably resolved.  This type states, for the exact component value the relationship
+    evidence carries, whether the canonicalization resolved **exactly one** identity object for that
+    value and whether competing unresolved identity evidence exists -- so a consumer never has to
+    re-read :class:`CanonicalConstructionReport` or any raw evidence to know it (Issue #168 ``§G``).
+
+    ``usable`` is the value-level readiness boundary (``§4.3.22`` C-10 ／ ``§4.4.26``): only a non-empty
+    exact JSON string can reliably form the pair grain.  ``reliable`` additionally requires exactly one
+    resolved identity object for that value and **no** unresolved identity evidence claiming it -- no
+    first ／ last wins, no same-value deduplication and no fuzzy match is ever applied here
+    (``§4.4.102`` C).
+
+    ``issues`` always carries a concrete exact-identity finding whenever ``reliable`` is ``False``, so
+    the approved Option A F1 contract can preserve the corresponding identity finding (``§2.7.27`` F1).
+    A finding the construction already raised for an unresolved identity record is republished
+    **verbatim** (same layer, category, reason, location, affected evidence, blast radius and design
+    reference) and ``unresolved_references`` ／ ``evidence_references`` name every identity record that
+    had to be considered.  When the construction leaves the capability-required exact identity
+    unresolved **without** a finding of its own -- no canonical identity object states the requested
+    value, or same-grain multiplicity alone left it unresolved -- this seam raises the narrow
+    capability-scoped ``IDENTITY_RESOLUTION`` ／ ``UNRESOLVED_IDENTITY`` Issue the capability needs
+    (``§4.4.11`` ／ ``§4.4.26`` ／ ``§4.4.80`` #4 ／ ``§4.4.81`` #7 ／ ``§4.4.94``).  That Issue identifies
+    the exact identity target, the exact requested value and the affected Supplier Risk pair, names the
+    accepted identity records it considered when they exist, and **never** fabricates an evidence
+    reference.  No new Category, Reason, enum or status is created either way.
+
+    This is a read-only runtime surface: no canonical field, entity or grain is created, and it is never
+    caller-injectable.
+    """
+
+    target: str
+    role: str
+    value: Any
+    resolved_references: tuple[str, ...] = ()
+    unresolved_references: tuple[str, ...] = ()
+    evidence_references: tuple[EvidenceReference, ...] = ()
+    issues: tuple[Issue, ...] = ()
+
+    @property
+    def usable(self) -> bool:
+        """Whether the exact value can reliably form the pair grain (``§4.3.22`` C-10)."""
+
+        return isinstance(self.value, str) and self.value != ""
+
+    @property
+    def reliable(self) -> bool:
+        """Whether exactly one resolved identity object states this value and no unresolved one claims it."""
+
+        return (
+            self.usable
+            and len(self.resolved_references) == 1
+            and not self.unresolved_references
+        )
+
+    @property
+    def identity_reference(self) -> str | None:
+        """The resolved identity object's record reference, or ``None`` (never synthesised)."""
+
+        if len(self.resolved_references) != 1:
+            return None
+        return self.resolved_references[0]
+
+    @property
+    def considered_references(self) -> tuple[str, ...]:
+        return self.resolved_references + self.unresolved_references
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "target": self.target,
+            "role": self.role,
+            "value": self.value,
+            "usable": self.usable,
+            "reliable": self.reliable,
+            "identity_reference": self.identity_reference,
+            "resolved_references": list(self.resolved_references),
+            "unresolved_references": list(self.unresolved_references),
+            "considered_references": list(self.considered_references),
+            "evidence_references": [
+                _evidence_payload(item) for item in self.evidence_references
+            ],
+            "issues": [issue.to_dict() for issue in self.issues],
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class SupplierRiskEvaluationContext:
     """One Supplier Risk evaluation context: an eligible relationship of a procurement context.
 
@@ -429,6 +571,11 @@ class SupplierRiskEvaluationContext:
     ``DeliveryRisk`` ／ ``QualityRisk`` ／ ``OverallSupplierRisk`` must fail closed for this context while
     the reliable evidence stays visible in the two buckets and no observation is ever selected by
     first ／ last ／ latest period, by ``PerformanceUpdatedAt``, by proximity or by aggregation.
+
+    ``identities`` states the exact-identity readiness of the pair's
+    :data:`PAIR_IDENTITY_COMPONENTS` (Issue #168 ``§G``).  A context is only formed when **both** are
+    ``reliable``; otherwise the composition produces a
+    :class:`SupplierRiskEvidenceOutcome` instead (``§B`` ／ ``§F1``).
     """
 
     plant_id: Any
@@ -441,6 +588,7 @@ class SupplierRiskEvaluationContext:
     applicable_performance: SupplierPerformanceObservation | None = None
     performance_root_condition: str | None = None
     root_condition: str | None = None
+    identities: tuple[SupplierRiskIdentityState, ...] = ()
     notes: tuple[str, ...] = ()
     inherited_issues: tuple[Issue, ...] = ()
     rule_issues: tuple[Issue, ...] = ()
@@ -480,6 +628,20 @@ class SupplierRiskEvaluationContext:
         return self.applicable_performance.performance_period
 
     @property
+    def identity_reliable(self) -> bool:
+        """Whether both pair identities are reliably resolved (a normal context always is)."""
+
+        return bool(self.identities) and all(item.reliable for item in self.identities)
+
+    @property
+    def identity_issues(self) -> tuple[Issue, ...]:
+        """The pair-scoped exact-identity findings of this context (empty when both are reliable)."""
+
+        return _deduplicate_issues(
+            issue for item in self.identities for issue in item.issues
+        )
+
+    @property
     def issues(self) -> tuple[Issue, ...]:
         return _deduplicate_issues(self.inherited_issues + self.rule_issues)
 
@@ -504,7 +666,140 @@ class SupplierRiskEvaluationContext:
             "performance_applicability_unresolved": self.performance_applicability_unresolved,
             "performance_root_condition": self.performance_root_condition,
             "root_condition": self.root_condition,
+            "identities": [item.to_dict() for item in self.identities],
             "notes": list(self.notes),
+            "inherited_issues": [issue.to_dict() for issue in self.inherited_issues],
+            "rule_issues": [issue.to_dict() for issue in self.rule_issues],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class SupplierRiskEvidenceOutcome:
+    """One request-bounded **fail-closed** Supplier Risk evidence outcome.
+
+    It is the registered runtime expression of the business consequence ``§2.7.16`` ／ ``§2.7.13``
+    Example D ／ ``§4.4.95`` require when the capability evaluates a pair whose relationship eligibility
+    is unresolved, or whose exact identity evidence is unresolved while the pair itself is reliable
+    (``§4.4.26`` ／ ``§4.4.94``): ``status`` =
+    :data:`SUPPLIER_RISK_EVIDENCE_STATUS_DATA_INCOMPLETE`, i.e. the **existing** ``DATA_INCOMPLETE``
+    business literal.  No new business enum, status or Validation Reason is created, and the outcome is
+    **not** a normal Risk Evidence Card: no ``DaysUntilNeed``, no ``LeadTimeRisk`` ／ ``DeliveryRisk`` ／
+    ``QualityRisk`` ／ ``OverallSupplierRisk`` and no ``LOW`` ／ ``MEDIUM`` ／ ``HIGH`` may ever be derived
+    from it (Issue #168 ``§C`` ／ ``§O``).
+
+    **Request-bounded**: one outcome exists per (reliably keyed relationship pair, matching
+    Procurement Recommendation evaluation request).  The seam never creates an outcome from
+    ``Supplier Performance`` ／ ``Supplier identity`` evidence alone, so a pair claimed only by
+    performance evidence (``ROOT_RELATIONSHIP_ABSENT``) or a pair with no matching request produces no
+    outcome at all (``§A`` ／ ``§D``).  The same pair under two Plants produces two independent outcomes
+    that never share a ``RecommendationNeedDate`` (``§I``).
+
+    ``outcome_root_condition`` names **why** the outcome is fail-closed -- the relationship's own
+    :attr:`SupplierRelationshipEligibility.root_condition` when the eligibility is unresolved, or
+    :data:`ROOT_IDENTITY_UNRESOLVED` when only the exact identity evidence is unreliable.
+    ``need_date_root_condition`` ／ ``need_date_reference`` ／ ``rule_issues`` preserve the upstream
+    need-date state exactly as the normal path does: an unresolved date stays ``None``, is never guessed
+    and is never borrowed across Plants (``§J``).
+
+    ``performance`` ／ ``unresolved_performance`` keep the reliable accepted ``Supplier Performance``
+    evidence for explainability only.  The outcome deliberately carries **no** ``applicable_performance``
+    unit: the approved Option A consumption boundary belongs to the normal path, and publishing it here
+    would invite a normal risk evaluation on evidence this outcome explicitly refuses to use (``§K``).
+
+    ``identities`` states the pair's exact-identity readiness (``§F1`` ／ ``§G``), and ``analysis_run_id``
+    repeats the Analysis Run binding so one outcome is auditable on its own (``§C`` ／ ``§L``).  Every
+    reference is truthful: an outcome is only built for a real relationship pair, and a pair with no
+    relationship evidence never reaches this type.
+    """
+
+    analysis_run_id: str
+    plant_id: Any
+    material_code: Any
+    supplier_id: Any
+    recommendation_need_date: Any
+    eligibility: SupplierRelationshipEligibility
+    status: str = SUPPLIER_RISK_EVIDENCE_STATUS_DATA_INCOMPLETE
+    identities: tuple[SupplierRiskIdentityState, ...] = ()
+    performance: tuple[CanonicalObject, ...] = ()
+    unresolved_performance: tuple[CanonicalObject, ...] = ()
+    need_date_reference: UpstreamResultReference | None = None
+    outcome_root_condition: str | None = None
+    need_date_root_condition: str | None = None
+    notes: tuple[str, ...] = ()
+    inherited_issues: tuple[Issue, ...] = ()
+    rule_issues: tuple[Issue, ...] = ()
+
+    @property
+    def grain(self) -> tuple[Any, Any]:
+        """The business grain of the outcome (``supplier_id`` + ``material_code``, ``§2.7.2``)."""
+
+        return (self.supplier_id, self.material_code)
+
+    @property
+    def evaluation_context(self) -> tuple[Any, Any, Any]:
+        """The evaluation context key ``plant_id`` + ``material_code`` + ``supplier_id``."""
+
+        return (self.plant_id, self.material_code, self.supplier_id)
+
+    @property
+    def recommendation_need_date_resolved(self) -> bool:
+        return self.recommendation_need_date is not None
+
+    @property
+    def identity_unreliable(self) -> bool:
+        """Whether any pair identity component is not reliably resolved (``§F1``)."""
+
+        return any(not item.reliable for item in self.identities)
+
+    @property
+    def data_incomplete(self) -> bool:
+        """Whether this outcome states the ``DATA_INCOMPLETE`` business status."""
+
+        return self.status == SUPPLIER_RISK_EVIDENCE_STATUS_DATA_INCOMPLETE
+
+    @property
+    def issues(self) -> tuple[Issue, ...]:
+        return _deduplicate_issues(
+            self.inherited_issues + self.rule_issues + self.identity_issues
+        )
+
+    @property
+    def identity_issues(self) -> tuple[Issue, ...]:
+        """The pair-scoped identity findings this outcome preserves (``§F1`` ／ ``§G``)."""
+
+        return _deduplicate_issues(
+            issue for item in self.identities for issue in item.issues
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "stage": SUPPLIER_RISK_INPUT_STAGE,
+            "outcome_kind": FAIL_CLOSED_EVIDENCE_OUTCOME,
+            "status": self.status,
+            "data_incomplete": self.data_incomplete,
+            "analysis_run_id": self.analysis_run_id,
+            "plant_id": self.plant_id,
+            "material_code": self.material_code,
+            "supplier_id": self.supplier_id,
+            "grain": list(self.grain),
+            "RecommendationNeedDate": self.recommendation_need_date,
+            "recommendation_need_date_resolved": self.recommendation_need_date_resolved,
+            "need_date_root_condition": self.need_date_root_condition,
+            "need_date_reference": (
+                None
+                if self.need_date_reference is None
+                else self.need_date_reference.to_dict()
+            ),
+            "outcome_root_condition": self.outcome_root_condition,
+            "eligibility": self.eligibility.to_dict(),
+            "identity_unreliable": self.identity_unreliable,
+            "identities": [item.to_dict() for item in self.identities],
+            "performance": [_object_payload(item) for item in self.performance],
+            "unresolved_performance": [
+                _object_payload(item) for item in self.unresolved_performance
+            ],
+            "notes": list(self.notes),
+            "identity_issues": [issue.to_dict() for issue in self.identity_issues],
             "inherited_issues": [issue.to_dict() for issue in self.inherited_issues],
             "rule_issues": [issue.to_dict() for issue in self.rule_issues],
         }
@@ -532,13 +827,42 @@ class SupplierRiskInputResult:
     ``analysis_run`` is the construction's existing :class:`AnalysisRunContext`, so a consumer can
     verify its own binding before consuming anything, and ``AnalysisDate`` -- the ``DaysUntilNeed``
     subtrahend of the future rule -- stays reachable without any re-read.
+
+    ``evidence_outcomes`` carries the request-bounded **fail-closed** evidence outcomes (Issue #168):
+    one per (reliably keyed relationship pair, matching Procurement Recommendation evaluation request)
+    whose relationship eligibility is unresolved, or whose exact identity evidence is unresolved while
+    the pair grain itself is reliable.  They are ordered deterministically and are **not** Risk Evidence
+    Cards -- no risk level may be derived from them.
+
+    ``identity_issues`` republishes, verbatim, the construction's own ``IDENTITY_RESOLUTION`` ／
+    ``UNRESOLVED_IDENTITY`` findings for the supplier-side identity targets this capability consumes
+    (:data:`IDENTITY_FINDING_TARGETS`), and adds the narrow capability-scoped finding this seam must
+    raise itself when the construction left the exact identity of an evaluated pair unresolved without
+    one (Issue #168 ``§F1`` ／ ``§G``), so a consumer never re-reads the construction to know which
+    exact identity evidence could not be resolved.  ``unkeyable_relationships`` names the relationship
+    entries whose ``supplier_id`` ／ ``material_code`` cannot reliably form an exact pair grain: they
+    produce **no** keyed outcome, their identity finding stays published, and no placeholder identity or
+    synthetic grain is ever created (``§F2``).
+
+    The five distinguishable runtime states of this surface are, exactly:
+
+    ==========================================  ====================================================
+    normal evaluation request                   :attr:`evaluation_contexts`
+    fail-closed evidence outcome                :attr:`evidence_outcomes`
+    valid exclusion                             :attr:`ineligible_relationships`
+    capability unavailable                      :attr:`capability_available` = ``False``
+    no request ／ valid absence                  no context, no outcome, :attr:`valid_absence_grains`
+    ==========================================  ====================================================
     """
 
     analysis_run: AnalysisRunContext
     relationships: tuple[SupplierRelationshipEligibility, ...] = ()
     evaluation_contexts: tuple[SupplierRiskEvaluationContext, ...] = ()
+    evidence_outcomes: tuple[SupplierRiskEvidenceOutcome, ...] = ()
     valid_absence_grains: tuple[tuple[Any, Any], ...] = ()
     capability_issues: tuple[Issue, ...] = ()
+    identity_issues: tuple[Issue, ...] = ()
+    unkeyable_relationships: tuple[SupplierRelationshipEligibility, ...] = ()
     inherited_issues: tuple[Issue, ...] = ()
     rule_issues: tuple[Issue, ...] = ()
     notes: tuple[str, ...] = ()
@@ -546,7 +870,10 @@ class SupplierRiskInputResult:
     @property
     def issues(self) -> tuple[Issue, ...]:
         return _deduplicate_issues(
-            self.capability_issues + self.inherited_issues + self.rule_issues
+            self.capability_issues
+            + self.identity_issues
+            + self.inherited_issues
+            + self.rule_issues
         )
 
     @property
@@ -611,6 +938,50 @@ class SupplierRiskInputResult:
                 return item
         return None
 
+    def outcomes_for(
+        self, supplier_id: Any, material_code: Any
+    ) -> tuple[SupplierRiskEvidenceOutcome, ...]:
+        """Every fail-closed evidence outcome of one exact supplier + material, deterministically ordered."""
+
+        return tuple(
+            item
+            for item in self.evidence_outcomes
+            if item.supplier_id == supplier_id and item.material_code == material_code
+        )
+
+    def outcome_for(
+        self, plant_id: Any, supplier_id: Any, material_code: Any
+    ) -> SupplierRiskEvidenceOutcome | None:
+        """The fail-closed evidence outcome of one exact plant + supplier + material, or ``None``."""
+
+        for item in self.evidence_outcomes:
+            if (
+                item.plant_id == plant_id
+                and item.supplier_id == supplier_id
+                and item.material_code == material_code
+            ):
+                return item
+        return None
+
+    def identity_state_for(
+        self, target: str, value: Any
+    ) -> SupplierRiskIdentityState | None:
+        """The first published identity state of one exact target + value, or ``None``.
+
+        Only the pairs actually evaluated by this seam publish an identity state (the normal contexts
+        and the fail-closed outcomes); an identity that no evaluated pair states is not published.
+        """
+
+        for item in self.evaluation_contexts:
+            for state in item.identities:
+                if state.target == target and state.value == value:
+                    return state
+        for item in self.evidence_outcomes:
+            for state in item.identities:
+                if state.target == target and state.value == value:
+                    return state
+        return None
+
     def is_valid_absence(self, plant_id: Any, material_code: Any) -> bool:
         """Whether the family is a reliable ``NORMAL`` ／ ``BUFFER_BREACH`` valid absence."""
 
@@ -634,11 +1005,16 @@ class SupplierRiskInputResult:
             "evaluation_contexts": [
                 item.to_dict() for item in self.evaluation_contexts
             ],
+            "evidence_outcomes": [item.to_dict() for item in self.evidence_outcomes],
             "valid_absence_grains": [
                 {"plant_id": plant_id, "material_code": material_code}
                 for plant_id, material_code in self.valid_absence_grains
             ],
             "capability_issues": [issue.to_dict() for issue in self.capability_issues],
+            "identity_issues": [issue.to_dict() for issue in self.identity_issues],
+            "unkeyable_relationships": [
+                item.to_dict() for item in self.unkeyable_relationships
+            ],
             "rule_issues": [issue.to_dict() for issue in self.rule_issues],
             "notes": list(self.notes),
         }
@@ -695,36 +1071,56 @@ def compute_supplier_risk_input(
     )
 
     evaluation_contexts: list[SupplierRiskEvaluationContext] = []
+    evidence_outcomes: list[SupplierRiskEvidenceOutcome] = []
     if not capability_issues:
-        evaluation_contexts.extend(
-            _composition(
-                relationships,
-                resolved_performance,
-                unresolved_performance,
-                recommendations,
-            )
+        composed_contexts, composed_outcomes = _composition(
+            construction,
+            relationships,
+            resolved_performance,
+            unresolved_performance,
+            recommendations,
         )
+        evaluation_contexts.extend(composed_contexts)
+        evidence_outcomes.extend(composed_outcomes)
 
     ordered_contexts = sorted(evaluation_contexts, key=_context_key)
+    ordered_outcomes = sorted(evidence_outcomes, key=_outcome_key)
     return SupplierRiskInputResult(
         analysis_run=construction.analysis_run,
         relationships=relationships,
         evaluation_contexts=tuple(ordered_contexts),
+        evidence_outcomes=tuple(ordered_outcomes),
         valid_absence_grains=tuple(
             sorted(recommendations.valid_absence_grains, key=_family_key)
         ),
         capability_issues=capability_issues,
+        identity_issues=_deduplicate_issues(
+            _identity_findings(construction)
+            + tuple(
+                issue
+                for item in tuple(ordered_contexts) + tuple(ordered_outcomes)
+                for issue in item.identity_issues
+            )
+        ),
+        unkeyable_relationships=tuple(
+            item for item in relationships if not _pair_keyable(item)
+        ),
         inherited_issues=_deduplicate_issues(
             tuple(issue for item in ordered_contexts for issue in item.inherited_issues)
+            + tuple(issue for item in ordered_outcomes for issue in item.inherited_issues)
         ),
         rule_issues=_deduplicate_issues(
             tuple(issue for item in relationships for issue in item.rule_issues)
             + tuple(issue for item in ordered_contexts for issue in item.rule_issues)
+            + tuple(issue for item in ordered_outcomes for issue in item.rule_issues)
         ),
         notes=(
             "the seam resolves Supplier-Material eligibility and the supplier-material evaluation "
-            "composition only; it computes no DaysUntilNeed and no risk level, applies no threshold "
-            "and performs no ranking ／ selection ／ recommendation (§2.7.25 / A′ scope)",
+            "composition only, bounded by the procurement evaluation requests that actually exist; it "
+            "computes no DaysUntilNeed and no risk level, applies no threshold and performs no ranking "
+            "／ selection ／ recommendation; a request whose relationship eligibility or exact identity "
+            "evidence is unresolved produces a fail-closed evidence outcome (DATA_INCOMPLETE), never a "
+            "normal Risk Evidence Card (§2.7.25 / §2.7.27 / A′ scope)",
         ),
     )
 
@@ -741,6 +1137,13 @@ def _resolve_evidence(
     value must be present as an exact JSON string and the association must register **exactly one**
     approved ``mapping_basis`` literal.  Everything else stays ``unresolved`` -- never defaulted to
     ``eligible`` or ``ineligible`` and never inferred from the relationship's mere existence.
+
+    The exact ``supplier_id`` + ``material_code`` pair grain is the first gate (``§4.4.26`` ／
+    ``§4.4.94``): a record that does not state a reliably established, keyable pair is ``unresolved``
+    with :data:`ROOT_RELATIONSHIP_IDENTITY_UNRESOLVED` **before** any mapping evidence is read, so an
+    unusable identity component can never be reported as an eligible relationship (Issue #168 ``§F2``).
+    A pair whose two identity components are reliable strings is unaffected by this gate, so genuine
+    evidence conflicts still resolve to the registered conflict finding.
     """
 
     supplier_id = obj.value_of("supplier_id", None)
@@ -749,7 +1152,7 @@ def _resolve_evidence(
     provenance = obj.provenance
     sourcing_status = obj.value_of(SUPPLIER_RISK_OBSERVATION, None)
 
-    if obj.grain is None:
+    if obj.grain is None or not _pair_values_keyable(supplier_id, material_code):
         return _unresolved_relationship(
             supplier_id=supplier_id,
             material_code=material_code,
@@ -758,9 +1161,11 @@ def _resolve_evidence(
             relationship_reference=reference,
             detail=(
                 "the accepted Supplier-Material Relationship record does not state a reliably "
-                "established supplier_id + material_code grain, so the relationship cannot be scoped "
-                "and its eligibility is unresolved; it is never accepted as a candidate and never "
-                "silently dropped (§2.7.24 / §4.4.61 / §4.4.26)"
+                "established, keyable supplier_id + material_code grain (an identity component is "
+                "absent, JSON null, empty, not an exact JSON string or unusable as a deterministic "
+                "grouping key), so the relationship cannot be scoped and its eligibility is unresolved; "
+                "it is never accepted as a candidate, never given a placeholder identity and never "
+                "silently dropped (§2.7.24 / §4.4.26 / §4.4.61 / §4.3.22 C-10)"
             ),
         )
     if not isinstance(sourcing_status, str) or sourcing_status == "":
@@ -996,12 +1401,13 @@ def _unresolved_relationship(
 
 
 def _composition(
+    construction: CanonicalConstructionReport,
     relationships: Sequence[SupplierRelationshipEligibility],
     resolved_performance: Sequence[CanonicalObject],
     unresolved_performance: Sequence[CanonicalObject],
     recommendations: ProcurementRecommendationResult,
-) -> list[SupplierRiskEvaluationContext]:
-    """One evaluation context per (Procurement Recommendation Context, eligible relationship).
+) -> tuple[list[SupplierRiskEvaluationContext], list[SupplierRiskEvidenceOutcome]]:
+    """Compose one runtime evaluation entry per (Procurement Recommendation Context, relationship).
 
     The registered context behaviour (``§2.7.25`` F) is applied exactly: a reliable
     ``RecommendationNeedDate`` forms the context; a `DATA_INCOMPLETE` procurement **quantity** does not
@@ -1019,46 +1425,139 @@ def _composition(
     The two ``Supplier Performance`` buckets are passed through **separately**, exactly as the
     construction reported them, and the approved Option A applicability boundary (``§2.7.26``) is
     applied per context from those two buckets only.
+
+    **Request-bounded outcome universe (Issue #168 ``§A`` ／ ``§C`` ／ ``§D`` ／ ``§E`` ／ ``§F``):** the
+    loop is driven by the procurement evaluation requests that actually exist, and every entry states
+    which of the registered runtime states it is:
+
+    * a **normal evaluation context** only when the relationship is ``eligible``, the pair grain is
+      reliably keyed and **both** exact identities are ``reliable`` (``§B``);
+    * a **fail-closed evidence outcome** when the pair grain is reliably keyed and either the
+      relationship eligibility is ``unresolved`` (``§C``) or only the exact identity evidence is
+      unresolved (``§F1``);
+    * **nothing** for an explicitly ``ineligible`` relationship (valid exclusion, ``§E``), for a pair
+      claimed only by performance evidence (``ROOT_RELATIONSHIP_ABSENT``, ``§D``), for a pair whose
+      grain cannot reliably be keyed (``§F2``) or for a request that does not exist (``§A``).
+
+    No relationship is ever defaulted to ``eligible`` or ``ineligible``, and no performance evidence is
+    ever used to establish a relationship or a request.
     """
 
-    eligible = [item for item in relationships if item.eligible]
     contexts: list[SupplierRiskEvaluationContext] = []
+    outcomes: list[SupplierRiskEvidenceOutcome] = []
     for entry in recommendations.recommendations:
         decision = _need_date_decision(entry)
-        for relationship in eligible:
+        for relationship in relationships:
             if relationship.material_code != entry.material_code:
+                # The evaluation request is the only source of a Plant ／ material family: a pair whose
+                # material no existing request names produces no business result at all.
                 continue
+            if relationship.ineligible:
+                # Valid exclusion: no outcome, no DATA_INCOMPLETE and no issue (§4.4.62 B).
+                continue
+            if relationship.root_condition == ROOT_RELATIONSHIP_ABSENT:
+                # Performance evidence claims this pair but no reliable relationship evidence states it:
+                # performance never establishes a relationship, so no Risk Evidence outcome is created.
+                continue
+            if not _pair_keyable(relationship):
+                # The pair grain itself is not reliably keyed: no keyed outcome, no placeholder identity
+                # and no synthetic grain; the identity finding stays published on the result.
+                continue
+
+            identities = _pair_identities(
+                construction,
+                plant_id=entry.plant_id,
+                supplier_id=relationship.supplier_id,
+                material_code=entry.material_code,
+            )
             performance, competing_unresolved = _performance_for(
                 resolved_performance,
                 unresolved_performance,
                 supplier_id=relationship.supplier_id,
                 material_code=entry.material_code,
             )
-            applicability = _performance_applicability(
-                plant_id=entry.plant_id,
-                material_code=entry.material_code,
-                supplier_id=relationship.supplier_id,
-                resolved=performance,
-                unresolved=competing_unresolved,
+            if relationship.eligible and all(item.reliable for item in identities):
+                applicability = _performance_applicability(
+                    plant_id=entry.plant_id,
+                    material_code=entry.material_code,
+                    supplier_id=relationship.supplier_id,
+                    resolved=performance,
+                    unresolved=competing_unresolved,
+                )
+                contexts.append(
+                    SupplierRiskEvaluationContext(
+                        plant_id=entry.plant_id,
+                        material_code=entry.material_code,
+                        supplier_id=relationship.supplier_id,
+                        recommendation_need_date=decision.need_date,
+                        eligibility=relationship,
+                        performance=performance,
+                        unresolved_performance=competing_unresolved,
+                        applicable_performance=applicability.observation,
+                        performance_root_condition=applicability.root_condition,
+                        root_condition=decision.root_condition,
+                        identities=identities,
+                        notes=(decision.note, applicability.note),
+                        inherited_issues=decision.inherited_issues,
+                        rule_issues=decision.rule_issues + applicability.issues,
+                    )
+                )
+                continue
+
+            outcome_root = (
+                relationship.root_condition
+                if relationship.unresolved
+                else ROOT_IDENTITY_UNRESOLVED
             )
-            contexts.append(
-                SupplierRiskEvaluationContext(
+            outcomes.append(
+                SupplierRiskEvidenceOutcome(
+                    analysis_run_id=construction.analysis_run.analysis_run_id,
                     plant_id=entry.plant_id,
                     material_code=entry.material_code,
                     supplier_id=relationship.supplier_id,
                     recommendation_need_date=decision.need_date,
                     eligibility=relationship,
+                    identities=identities,
                     performance=performance,
                     unresolved_performance=competing_unresolved,
-                    applicable_performance=applicability.observation,
-                    performance_root_condition=applicability.root_condition,
-                    root_condition=decision.root_condition,
-                    notes=(decision.note, applicability.note),
+                    need_date_reference=entry.shortage_reference,
+                    outcome_root_condition=outcome_root,
+                    need_date_root_condition=decision.root_condition,
+                    notes=(
+                        decision.note,
+                        _fail_closed_note(relationship, identities),
+                    ),
                     inherited_issues=decision.inherited_issues,
-                    rule_issues=decision.rule_issues + applicability.issues,
+                    rule_issues=decision.rule_issues,
                 )
             )
-    return contexts
+    return contexts, outcomes
+
+
+def _fail_closed_note(
+    relationship: SupplierRelationshipEligibility,
+    identities: Sequence[SupplierRiskIdentityState],
+) -> str:
+    """The registered explanation of one fail-closed evidence outcome (no risk value is stated)."""
+
+    if relationship.unresolved:
+        return (
+            "the Supplier-Material relationship eligibility of this exact supplier_id + material_code "
+            "pair is unresolved, so this evaluation request produces a fail-closed Supplier Risk "
+            "evidence outcome: Risk Evidence Status = DATA_INCOMPLETE, never a normal Risk Evidence "
+            "Card and never a defaulted eligible ／ ineligible relationship; no DaysUntilNeed, no "
+            "LeadTimeRisk ／ DeliveryRisk ／ QualityRisk ／ OverallSupplierRisk and no LOW ／ MEDIUM ／ "
+            "HIGH is produced from it (§2.7.16 / §4.4.95 / Issue #168 §C)"
+        )
+    unreliable = tuple(item for item in identities if not item.reliable)
+    targets = ", ".join(sorted({item.target for item in unreliable}))
+    return (
+        "the relationship is eligible, but the exact identity evidence of this pair is not reliably "
+        f"resolved ({targets}), so this evaluation request produces a fail-closed Supplier Risk "
+        "evidence outcome: Risk Evidence Status = DATA_INCOMPLETE, never a normal Risk Evidence Card; "
+        "no DaysUntilNeed, no LeadTimeRisk ／ DeliveryRisk ／ QualityRisk ／ OverallSupplierRisk and no "
+        "LOW ／ MEDIUM ／ HIGH is produced from it (§4.4.26 / §4.4.94 / Issue #168 §F1)"
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1489,6 +1988,251 @@ def _performance_evidence(
     )
 
 
+def _usable_identifier(value: Any) -> bool:
+    """Whether one identity component can reliably key a pair grain (``§4.3.22`` C-10 ／ ``§4.4.26``).
+
+    Only a non-empty exact JSON string is a reliable canonical identifier: JSON ``null`` (``C-2``
+    explicit missing ／ unavailable), an empty string, a number, an array or an object cannot form an
+    exact ``supplier_id`` + ``material_code`` pair grain and must never be replaced by a placeholder or a
+    fuzzy match.  This is the same identity-readiness boundary the Phase B seam registers
+    (``§4.4.67`` runtime record, Issue #158).
+    """
+
+    return isinstance(value, str) and value != ""
+
+
+def _pair_keyable(relationship: SupplierRelationshipEligibility) -> bool:
+    """Whether the relationship entry states an exact, reliably keyable pair grain (``§F2``)."""
+
+    return _pair_values_keyable(relationship.supplier_id, relationship.material_code)
+
+
+def _pair_values_keyable(supplier_id: Any, material_code: Any) -> bool:
+    """Whether two identity component values can reliably form an exact pair grain (``§F2``)."""
+
+    return _usable_identifier(supplier_id) and _usable_identifier(material_code)
+
+
+def _identity_state(
+    construction: CanonicalConstructionReport,
+    *,
+    target: str,
+    role: str,
+    key: str,
+    value: Any,
+    evaluation_context: tuple[Any, Any, Any],
+) -> SupplierRiskIdentityState:
+    """The exact-identity readiness of one pair identity component (``§4.4.26`` ／ ``§4.4.94``).
+
+    ``canonicalization`` owns the resolution decision: exactly one resolved identity object for the
+    value with **no** unresolved identity evidence claiming it is the only reliable state.  Competing
+    unresolved evidence is never reconciled by a first ／ last win, a same-value deduplication or any
+    other precedence (``§4.4.102`` C); a value no identity record states is equally not reliably
+    resolved.
+
+    A finding the construction already raised for exactly those unresolved identity records is
+    republished verbatim.  When the capability-required exact identity is unresolved but the
+    construction raised **no** finding -- the requested value has no canonical identity object at all,
+    or same-grain multiplicity alone left the identity unresolved -- the seam raises the narrow
+    capability-scoped ``IDENTITY_RESOLUTION`` ／ ``UNRESOLVED_IDENTITY`` Issue described on
+    :class:`SupplierRiskIdentityState`, because ``§4.4.80`` allows a finding exactly when the current
+    capability needs the identity and cannot reliably resolve it (``§4.4.11``: dependent evidence must
+    resolve to its canonical identity, and the affected grain must not obtain a normal result).
+
+    ``evaluation_context`` is the exact ``plant_id`` + ``material_code`` + ``supplier_id`` request this
+    state is built for.  It scopes the seam-raised finding, whose declared blast radius is exactly that
+    request: the same unresolved identity participating in several pairs ／ Plants therefore produces
+    several distinguishable findings instead of one finding with an untruthfully wider scope
+    (``§2.7.27`` F1 ／ ``§2.7.2``: the business grain stays ``supplier_id`` + ``material_code`` and
+    ``plant_id`` stays evaluation context).
+    """
+
+    resolved = tuple(
+        obj
+        for obj in construction.objects_for(target)
+        if obj.value_of(key, None) == value
+    )
+    unresolved = tuple(
+        obj
+        for obj in construction.unresolved_for(target)
+        if obj.value_of(key, None) == value
+    )
+    findings = tuple(
+        issue
+        for issue in construction.issues
+        if issue.category == CATEGORY_IDENTITY_RESOLUTION
+        and issue.reason == REASON_UNRESOLVED_IDENTITY
+        and issue.location
+        in {f"{obj.provenance.artifact}[{obj.provenance.record_ordinal}]" for obj in unresolved}
+    )
+    resolved_references = tuple(sorted({obj.record_reference for obj in resolved}))
+    unresolved_references = tuple(sorted({obj.record_reference for obj in unresolved}))
+    issues = _deduplicate_issues(findings)
+    reliable = (
+        _usable_identifier(value)
+        and len(resolved_references) == 1
+        and not unresolved_references
+    )
+    if not reliable and not issues:
+        issues = (
+            _capability_identity_issue(
+                target=target,
+                role=role,
+                key=key,
+                value=value,
+                unresolved_references=unresolved_references,
+                evaluation_context=evaluation_context,
+            ),
+        )
+    return SupplierRiskIdentityState(
+        target=target,
+        role=role,
+        value=value,
+        resolved_references=resolved_references,
+        unresolved_references=unresolved_references,
+        evidence_references=tuple(obj.provenance for obj in unresolved + resolved),
+        issues=issues,
+    )
+
+
+def _capability_identity_issue(
+    *,
+    target: str,
+    role: str,
+    key: str,
+    value: Any,
+    unresolved_references: tuple[str, ...],
+    evaluation_context: tuple[Any, Any, Any],
+) -> Issue:
+    """The narrow capability-scoped exact-identity finding this seam must raise itself.
+
+    Raised only when the current Supplier Risk capability needs the exact identity of a
+    request-bounded, reliably keyed pair and cannot reliably resolve it, while the construction raised
+    no finding of its own: either the accepted package states the evidence role but no canonical
+    identity evidence states the requested value at all, or matching evidence exists and same-grain
+    multiplicity left it unresolved.  The registered taxonomy is reused unchanged
+    (``IDENTITY_RESOLUTION`` ／ ``UNRESOLVED_IDENTITY``, ``§4.4.80`` #4 ／ ``§4.4.81`` #7); no new
+    Category, Reason, enum or status is created, and every field is truthful:
+
+    * ``location`` names the seam, the exact affected evaluation request
+      (``plant_id`` ／ ``material_code`` ／ ``supplier_id``), the canonical identity ``target`` and the
+      exact requested ``value`` -- so two requests affected by the same unresolved identity never
+      collapse into one finding with a broader declared scope;
+    * ``affected_evidence`` names the **logical evidence role** whose exact identity is unresolved --
+      never a record reference, and never a synthesised one when no record exists;
+    * the detail names the exact affected request and the accepted identity records that were
+      considered **when they exist**;
+    * ``blast_radius`` claims exactly that one request and nothing wider.
+    """
+
+    plant_id, material_code, supplier_id = evaluation_context
+    considered = ", ".join(unresolved_references)
+    if unresolved_references:
+        condition = (
+            f"{len(unresolved_references)} accepted {role} record(s) state this exact value but "
+            "canonicalization left the identity unresolved without raising a finding of its own "
+            "(same-grain multiplicity is never reconciled by first ／ last wins or same-value "
+            f"deduplication); considered identity records: {considered}"
+        )
+    else:
+        condition = (
+            f"the accepted package provides the {role} evidence role but no canonical identity "
+            "evidence states this exact value, so no identity record could be considered"
+        )
+    request = (
+        f"plant_id = {plant_id!r} + material_code = {material_code!r} + "
+        f"supplier_id = {supplier_id!r}"
+    )
+    return Issue(
+        location=(
+            "supplier_risk_input.identity["
+            f"{_sort_text(plant_id)}/{_sort_text(material_code)}/{_sort_text(supplier_id)}/"
+            f"{target}/{_sort_text(value)}]"
+        ),
+        detail=(
+            f"the Supplier Risk capability requires the exact {target} identity "
+            f"({key} = {value!r}) of the evaluation request {request}, but {condition}; the required "
+            "exact identity therefore cannot be resolved, so this request's evaluation fails closed "
+            "with Risk Evidence Status = DATA_INCOMPLETE and no risk level is produced; no placeholder "
+            "identity, fuzzy match, guessed pair or fabricated evidence reference is created "
+            "(§4.4.11 / §4.4.26 / §4.4.80 #4 / §4.4.81 #7 / §4.4.94 / §2.7.27 F1)"
+        ),
+        category=CATEGORY_IDENTITY_RESOLUTION,
+        reason=REASON_UNRESOLVED_IDENTITY,
+        layer=LAYER_2,
+        affected_evidence=role,
+        blast_radius=(
+            f"the Supplier Risk evidence evaluation of the request {request} only"
+        ),
+        design_reference=(
+            "§4.4.11 / §4.4.26 / §4.4.80 #4 / §4.4.81 #7 / §4.4.94 / §2.7.27 F1 / §4.4.6 Capability C"
+        ),
+        consequence_context=(
+            "the exact identity evidence of this pair cannot be reliably resolved, so the affected "
+            "Supplier Risk evaluations fail closed (DATA_INCOMPLETE, never a normal Risk Evidence "
+            "Card); this is an exact-identity finding and never a capability-readiness condition -- "
+            "the evidence role is provided"
+        ),
+    )
+
+
+def _pair_identities(
+    construction: CanonicalConstructionReport,
+    *,
+    plant_id: Any,
+    supplier_id: Any,
+    material_code: Any,
+) -> tuple[SupplierRiskIdentityState, ...]:
+    """The two pair identity states of one exact evaluation request.
+
+    ``plant_id`` ／ ``supplier_id`` ／ ``material_code`` are the exact request these states are built
+    for, and they scope the seam-raised exact-identity finding (``§2.7.27`` F1).
+    """
+
+    values = {SUPPLIER_IDENTITY_TARGET: supplier_id, MATERIAL_IDENTITY_TARGET: material_code}
+    evaluation_context = (plant_id, material_code, supplier_id)
+    return tuple(
+        _identity_state(
+            construction,
+            target=target,
+            role=role,
+            key=key,
+            value=values[target],
+            evaluation_context=evaluation_context,
+        )
+        for target, key, role in PAIR_IDENTITY_COMPONENTS
+    )
+
+
+def _identity_findings(
+    construction: CanonicalConstructionReport,
+) -> tuple[Issue, ...]:
+    """The construction's exact-identity findings for the consumed supplier-side pair targets.
+
+    Only :data:`IDENTITY_FINDING_TARGETS` are republished -- the two pair identities and the
+    relationship pair grain itself -- so a consumer learns which exact identity evidence could not be
+    resolved without re-reading the construction and without inheriting identity findings that belong to
+    unrelated targets.  The findings are carried verbatim (same layer, category, reason, location,
+    affected evidence, blast radius and design reference); this seam raises no new Category ／ Reason.
+    """
+
+    locations: set[str] = set()
+    for target in IDENTITY_FINDING_TARGETS:
+        for obj in tuple(construction.objects_for(target)) + tuple(
+            construction.unresolved_for(target)
+        ):
+            locations.add(
+                f"{obj.provenance.artifact}[{obj.provenance.record_ordinal}]"
+            )
+    return _deduplicate_issues(
+        issue
+        for issue in construction.issues
+        if issue.category == CATEGORY_IDENTITY_RESOLUTION
+        and issue.reason == REASON_UNRESOLVED_IDENTITY
+        and issue.location in locations
+    )
+
+
 def _supplier_records(accepted: AcceptedPackage) -> dict[str, JsonObject]:
     """``<artifact>#<ordinal> -> accepted record`` for the two supplier-side datasets only.
 
@@ -1567,6 +2311,14 @@ def _context_key(item: SupplierRiskEvaluationContext) -> tuple[str, str, str]:
     )
 
 
+def _outcome_key(item: SupplierRiskEvidenceOutcome) -> tuple[str, str, str]:
+    return (
+        _sort_text(item.plant_id),
+        _sort_text(item.material_code),
+        _sort_text(item.supplier_id),
+    )
+
+
 def _family_key(family: tuple[Any, Any]) -> tuple[str, str]:
     return (_sort_text(family[0]), _sort_text(family[1]))
 
@@ -1586,10 +2338,15 @@ __all__ = [
     "ELIGIBILITY_ELIGIBLE",
     "ELIGIBILITY_INELIGIBLE",
     "ELIGIBILITY_UNRESOLVED",
+    "FAIL_CLOSED_EVIDENCE_OUTCOME",
+    "IDENTITY_FINDING_TARGETS",
+    "MATERIAL_IDENTITY_TARGET",
+    "PAIR_IDENTITY_COMPONENTS",
     "PERFORMANCE_OBSERVATION_FIELDS",
     "PLANT_MATERIAL_IDENTITY_ROLE",
     "PLANT_MATERIAL_IDENTITY_TARGET",
     "ROOT_CONFLICTING_RELATIONSHIP_EVIDENCE",
+    "ROOT_IDENTITY_UNRESOLVED",
     "ROOT_MAPPING_AMBIGUOUS",
     "ROOT_NEED_DATE_LINKAGE_ABSENT",
     "ROOT_NEED_DATE_LINKAGE_MISMATCH",
@@ -1609,12 +2366,15 @@ __all__ = [
     "SUPPLIER_IDENTITY_TARGET",
     "SUPPLIER_PERFORMANCE_TARGET",
     "SUPPLIER_RELATIONSHIP_TARGET",
+    "SUPPLIER_RISK_EVIDENCE_STATUS_DATA_INCOMPLETE",
     "SUPPLIER_RISK_INPUT_STAGE",
     "SUPPLIER_RISK_OBSERVATION",
     "SupplierEligibilityBasis",
     "SupplierPerformanceObservation",
     "SupplierRelationshipEligibility",
     "SupplierRiskEvaluationContext",
+    "SupplierRiskEvidenceOutcome",
+    "SupplierRiskIdentityState",
     "SupplierRiskInputResult",
     "compute_supplier_risk_input",
 ]

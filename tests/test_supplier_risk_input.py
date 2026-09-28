@@ -21,16 +21,23 @@ from typing import Any
 from snapshot_loader import (
     ELIGIBILITY_ELIGIBLE,
     ELIGIBILITY_INELIGIBLE,
+    FAIL_CLOSED_EVIDENCE_OUTCOME,
+    MATERIAL_IDENTITY_TARGET,
     PERFORMANCE_OBSERVATION_FIELDS,
     PLANT_MATERIAL_IDENTITY_ROLE,
     PLANT_MATERIAL_IDENTITY_TARGET,
+    ROOT_IDENTITY_UNRESOLVED,
     ROOT_PERFORMANCE_COMPETING_UNRESOLVED,
     ROOT_PERFORMANCE_OBSERVATION_ABSENT,
     ROOT_PERFORMANCE_OBSERVATION_MULTIPLE,
     ROOT_PERFORMANCE_OBSERVATION_UNRESOLVED,
+    ROOT_RELATIONSHIP_ABSENT,
     SUPPLIER_IDENTITY_ROLE,
     SUPPLIER_IDENTITY_TARGET,
+    SUPPLIER_RISK_EVIDENCE_STATUS_DATA_INCOMPLETE,
     AnalysisRunBindingError,
+    SupplierRiskEvidenceOutcome,
+    SupplierRiskIdentityState,
     SupplierRiskInputResult,
     compute_procurement_policy_input,
     compute_procurement_recommendation,
@@ -127,6 +134,20 @@ def performance_record(
     )
 
 
+def identity_issue_location(
+    plant: Any, material: Any, supplier: Any, target: str, value: Any
+) -> str:
+    """The location of a seam-raised capability identity finding of one exact evaluation request.
+
+    PR #169 re-review: the seam-raised finding is scoped to the exact affected request
+    (``plant_id`` ／ ``material_code`` ／ ``supplier_id``) plus the canonical identity target and the
+    exact requested value, so two requests affected by the same unresolved identity stay
+    distinguishable and are never collapsed by issue deduplication.
+    """
+
+    return f"supplier_risk_input.identity[{plant}/{material}/{supplier}/{target}/{value}]"
+
+
 def module_identifiers(module) -> set[str]:
     """Every code identifier of one module: a docstring may explain, code may not name."""
 
@@ -172,6 +193,7 @@ class SupplierRiskInputTestCase(ProcurementRecommendationTestCase):
         supplier_relationships: tuple[dict[str, Any], ...] = (),
         supplier_performances: tuple[dict[str, Any], ...] = (),
         identity_evidence: bool = True,
+        identity_contexts: tuple[dict[str, Any], ...] | None = None,
         extra_plant_families: tuple[tuple[Any, Any, Any, Any], ...] = (),
         analysis_run_id: str = "RUN-1",
         package_id: str = "SIMULATED-PKG-0001",
@@ -183,14 +205,20 @@ class SupplierRiskInputTestCase(ProcurementRecommendationTestCase):
         inside the *same* analysis run (``(plant_id, material_code, quantity, required_date)``), so a
         Plant-isolation test consumes genuinely formed upstream results instead of a fabricated one.
 
-        ``supplier_identities`` ／ ``identity_evidence`` state the **identity** evidence roles
-        ``§4.4.6`` Capability C requires (``Supplier identity`` ／ ``Plant / Material identity context``).
-        The default declares them for what the fixture itself describes -- one ``Supplier identity``
-        record per supplier named by its own role 10 ／ 11 records (``None``), and one
-        ``Plant / Material identity context`` record per Plant ／ material family it states
-        (``identity_evidence=True``) -- so the canonical fixture is capability-conformant.  Passing an
-        explicit empty tuple ／ ``identity_evidence=False`` is how a test states *"the role was never
-        provided"*, which is exactly the capability-readiness case and **not** the same thing as a
+        ``supplier_identities`` ／ ``identity_evidence`` ／ ``identity_contexts`` state the **identity**
+        evidence roles ``§4.4.6`` Capability C requires (``Supplier identity`` ／
+        ``Plant / Material identity context``).  The defaults declare them for what the fixture itself
+        describes -- one ``Supplier identity`` record per supplier named by its own role 10 ／ 11 records
+        (``None``) and one ``Plant / Material identity context`` record per distinct **material**
+        (``identity_evidence=True``) -- so the canonical fixture is capability-conformant **and** its
+        exact identity evidence resolves: the ``Material`` canonical grain is ``material_code`` alone
+        (``§4.1.4`` B), so stating one material under two Plants would leave the material identity
+        unresolved (``§4.4.102`` C forbids same-value deduplication) and make the evaluation fail closed.
+        ``identity_contexts`` overrides the derived records verbatim, which is how a test states
+        ambiguous material identity evidence.
+
+        Passing an explicit empty tuple ／ ``identity_evidence=False`` is how a test states *"the role
+        was never provided"* -- the capability-readiness case -- which is **not** the same thing as a
         role-10 ／ 11 record carrying ``supplier_id`` ／ ``material_code``.
         """
 
@@ -201,7 +229,7 @@ class SupplierRiskInputTestCase(ProcurementRecommendationTestCase):
             named_suppliers = {
                 record["supplier_id"]
                 for record in relationships + performances
-                if record.get("supplier_id") is not None
+                if isinstance(record.get("supplier_id"), str) and record["supplier_id"] != ""
             }
             identities = tuple(
                 {"supplier_id": supplier_id}
@@ -210,25 +238,27 @@ class SupplierRiskInputTestCase(ProcurementRecommendationTestCase):
         else:
             identities = tuple(supplier_identities)
 
-        if identity_evidence:
-            families = {(PLANT, material) for material, _quantity, _date in demands}
-            families |= {
-                (record.get("plant_id", PLANT), record["material_code"])
+        if identity_contexts is not None:
+            identity_records = tuple(identity_contexts)
+        elif identity_evidence:
+            materials = {material for material, _quantity, _date in demands}
+            materials |= {
+                record["material_code"]
                 for record in relationships + performances
-                if record.get("material_code") is not None
+                if isinstance(record.get("material_code"), str)
+                and record["material_code"] != ""
             }
-            families |= {
-                (plant_id, material_code)
-                for plant_id, material_code, _quantity, _date in extra_plant_families
+            materials |= {
+                material_code
+                for _plant, material_code, _quantity, _date in extra_plant_families
+                if isinstance(material_code, str) and material_code != ""
             }
-            identity_contexts = tuple(
-                {"plant_id": plant_id, "material_code": material_code}
-                for plant_id, material_code in sorted(
-                    families, key=lambda pair: (str(pair[0]), str(pair[1]))
-                )
+            identity_records = tuple(
+                {"plant_id": PLANT, "material_code": material_code}
+                for material_code in sorted(materials, key=str)
             )
         else:
-            identity_contexts = ()
+            identity_records = ()
 
         demand = [
             Demand(material, material, quantity, date)
@@ -250,7 +280,7 @@ class SupplierRiskInputTestCase(ProcurementRecommendationTestCase):
             supplier_identities=identities,
             supplier_relationships=relationships,
             supplier_performances=performances,
-            identity_contexts=identity_contexts,
+            identity_contexts=identity_records,
             extra_plant_families=extra_plant_families,
             analysis_run_id=analysis_run_id,
             package_id=package_id,
@@ -1677,7 +1707,9 @@ class CapabilityIdentityTests(SupplierRiskInputTestCase):
     def test_a43_role_provision_is_gated_not_the_identity_value(self) -> None:
         # A **declared** identity role whose record carries no usable identity value stays a
         # canonicalization ／ field-level matter (``§4.4.26`` ／ ``§4.4.94``): the evidence role *was*
-        # provided, so the capability gate does not fire and no capability finding is fabricated.
+        # provided, so the capability gate does not fire and no capability finding is fabricated.  The
+        # exact identity of the evaluated pair is then **not** reliably resolved, which is the
+        # registered fail-closed evidence-outcome case (Issue #168 ``§F1``) -- never a normal context.
         null_identity = self.build_chain(
             supplier_identities=({"supplier_id": None},),
             supplier_relationships=(relationship_record(),),
@@ -1688,7 +1720,12 @@ class CapabilityIdentityTests(SupplierRiskInputTestCase):
         null_result = self.supplier_input(null_identity)
         self.assertTrue(null_result.capability_available)
         self.assertEqual(null_result.capability_issues, ())
-        self.assertIsNotNone(null_result.context_for(PLANT, SUPPLIER, DEMAND))
+        self.assertEqual(null_result.evaluation_contexts, ())
+        null_outcome = null_result.outcome_for(PLANT, SUPPLIER, DEMAND)
+        assert null_outcome is not None
+        self.assertTrue(null_outcome.data_incomplete)
+        self.assertTrue(null_outcome.identity_unreliable)
+        self.assertEqual(null_outcome.outcome_root_condition, ROOT_IDENTITY_UNRESOLVED)
 
         # An identity value the deterministic grouping key cannot use leaves the *identity* unresolved
         # at canonicalization; the role is still provided and the gate still does not fire.
@@ -1708,13 +1745,888 @@ class CapabilityIdentityTests(SupplierRiskInputTestCase):
         unresolved_result = self.supplier_input(unresolved_identity)
         self.assertTrue(unresolved_result.capability_available)
         self.assertEqual(unresolved_result.capability_issues, ())
+        # The canonicalization's own identity finding is reachable through the seam (Issue #168 ``§G``),
+        # and the requested exact value (``SUP-A``) has no matching identity evidence at all, so the seam
+        # raises its own capability-scoped UNRESOLVED_IDENTITY finding for it (PR #169 review finding).
+        # Neither is a capability finding: the evidence role *was* provided.
         self.assertEqual(
+            {(issue.category, issue.reason) for issue in unresolved_result.issues},
+            {("IDENTITY_RESOLUTION", "UNRESOLVED_IDENTITY")},
+        )
+        self.assertEqual(
+            [issue.category for issue in unresolved_result.identity_issues],
+            ["IDENTITY_RESOLUTION", "IDENTITY_RESOLUTION"],
+        )
+        construction_issue = next(
+            issue
+            for issue in unresolved_identity.construction.issues
+            if issue.category == "IDENTITY_RESOLUTION"
+        )
+        self.assertEqual(
+            {issue.location for issue in unresolved_result.identity_issues},
             {
-                (issue.category, issue.reason)
-                for issue in unresolved_result.issues
+                construction_issue.location,
+                identity_issue_location(
+                    PLANT, DEMAND, SUPPLIER, SUPPLIER_IDENTITY_TARGET, SUPPLIER
+                ),
             },
+        )
+
+
+class NonNormalEvidenceOutcomeTests(SupplierRiskInputTestCase):
+    """Issue #168 Option A: the request-bounded fail-closed Supplier Risk evidence outcome.
+
+    Every runtime entry is driven by a procurement evaluation request that actually exists; the seam
+    never derives a request from performance ／ identity ／ relationship evidence, never runs a normal
+    risk evaluation on a fail-closed outcome and never produces a keyed result it cannot truthfully key.
+    """
+
+    def outcomes(self, built, *, plant: Any = PLANT, supplier: Any = SUPPLIER, material: Any = DEMAND):
+        """The single fail-closed outcome of one exact plant ／ supplier ／ material, asserted to exist."""
+
+        result = self.supplier_input(built)
+        outcome = result.outcome_for(plant, supplier, material)
+        assert outcome is not None
+        return result, outcome
+
+    def unresolved_pair(self, name: str, **kwargs):
+        """One claimed pair whose relationship eligibility is unresolved (no approved basis)."""
+
+        return self.build_chain(
+            supplier_relationships=(relationship_record(basis=UNREGISTERED_BASIS),),
+            supplier_performances=(performance_record(),),
+            name=name,
+            **kwargs,
+        )
+
+    def test_a44_the_normal_path_stays_a_context_and_creates_no_outcome(self) -> None:
+        built = self.eligible_chain("a44-normal-path")
+        result = self.supplier_input(built)
+        self.assertTrue(result.capability_available)
+        self.assertEqual(result.evidence_outcomes, ())
+        self.assertEqual(result.unkeyable_relationships, ())
+        context = result.context_for(PLANT, SUPPLIER, DEMAND)
+        assert context is not None
+        self.assertEqual(context.grain, (SUPPLIER, DEMAND))
+        self.assertEqual(context.recommendation_need_date, D2)
+        observation = context.applicable_performance
+        assert observation is not None
+        self.assertEqual(observation.standard_lead_time_days, "10")
+        # The pair identities are published on the normal context (Issue #168 §G) and both resolve.
+        self.assertTrue(context.identity_reliable)
+        self.assertEqual(
+            [item.target for item in context.identities],
+            [SUPPLIER_IDENTITY_TARGET, MATERIAL_IDENTITY_TARGET],
+        )
+        for state in context.identities:
+            with self.subTest(target=state.target):
+                self.assertTrue(state.reliable)
+                self.assertIsNotNone(state.identity_reference)
+                self.assertEqual(state.unresolved_references, ())
+        self.assertEqual(result.issues, ())
+
+    def test_a45_an_ineligible_relationship_is_a_valid_exclusion(self) -> None:
+        built = self.build_chain(
+            supplier_relationships=(relationship_record(basis=INELIGIBLE_BASIS),),
+            supplier_performances=(performance_record(),),
+            name="a45-ineligible-exclusion",
+        )
+        result = self.supplier_input(built)
+        self.assertTrue(result.capability_available)
+        # Valid exclusion: no context, no fail-closed outcome, no DATA_INCOMPLETE and no issue.
+        self.assertEqual(result.evaluation_contexts, ())
+        self.assertEqual(result.evidence_outcomes, ())
+        self.assertEqual(result.issues, ())
+        relationship = result.eligibility_for(SUPPLIER, DEMAND)
+        assert relationship is not None
+        self.assertTrue(relationship.ineligible)
+        self.assertEqual(relationship.issues, ())
+
+    def test_a46_an_unresolved_relationship_yields_one_fail_closed_outcome(self) -> None:
+        built = self.unresolved_pair("a46-unresolved-one-request")
+        result, outcome = self.outcomes(built)
+        # Exactly one evaluated request ／ pair entry, and it is fail-closed -- never a normal context.
+        self.assertEqual(result.evaluation_contexts, ())
+        self.assertEqual(len(result.evidence_outcomes), 1)
+        self.assertEqual(outcome.status, SUPPLIER_RISK_EVIDENCE_STATUS_DATA_INCOMPLETE)
+        self.assertTrue(outcome.data_incomplete)
+        self.assertEqual(outcome.grain, (SUPPLIER, DEMAND))
+        self.assertEqual(outcome.evaluation_context, (PLANT, DEMAND, SUPPLIER))
+        self.assertEqual(outcome.recommendation_need_date, D2)
+        self.assertEqual(outcome.analysis_run_id, built.construction.analysis_run.analysis_run_id)
+        # The relationship state, its root condition and its finding are preserved.
+        self.assertTrue(outcome.eligibility.unresolved)
+        self.assertEqual(
+            outcome.outcome_root_condition, outcome.eligibility.root_condition
+        )
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in outcome.eligibility.issues],
+            [("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED")],
+        )
+        # Not a card: no risk vocabulary and no applicable-performance unit on a fail-closed outcome.
+        payload = outcome.to_dict()
+        self.assertEqual(payload["outcome_kind"], FAIL_CLOSED_EVIDENCE_OUTCOME)
+        self.assertNotIn("applicable_performance", payload)
+        for forbidden in (
+            "DaysUntilNeed",
+            "LeadTimeRisk",
+            "DeliveryRisk",
+            "QualityRisk",
+            "OverallSupplierRisk",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, payload)
+
+    def test_a47_the_same_pair_under_two_plants_yields_two_isolated_outcomes(self) -> None:
+        built = self.unresolved_pair(
+            "a47-two-plants",
+            extra_plant_families=((OTHER_PLANT, DEMAND, "120", D1),),
+            moq_policies=(
+                moq_policy_record(DEMAND, moq="100"),
+                moq_policy_record(
+                    DEMAND,
+                    moq="100",
+                    plant=OTHER_PLANT,
+                    locator="SIMULATED-SRC-MOQ-P2",
+                ),
+            ),
+        )
+        result = self.supplier_input(built)
+        self.assertEqual(result.evaluation_contexts, ())
+        self.assertEqual(len(result.evidence_outcomes), 2)
+        first = result.outcome_for(PLANT, SUPPLIER, DEMAND)
+        second = result.outcome_for(OTHER_PLANT, SUPPLIER, DEMAND)
+        assert first is not None and second is not None
+        # Two independent Plant-scoped outcomes, each with its own upstream need date.
+        self.assertEqual(first.recommendation_need_date, D2)
+        self.assertEqual(second.recommendation_need_date, D1)
+        self.assertNotEqual(first.recommendation_need_date, second.recommendation_need_date)
+        self.assertEqual(first.evaluation_context, (PLANT, DEMAND, SUPPLIER))
+        self.assertEqual(second.evaluation_context, (OTHER_PLANT, DEMAND, SUPPLIER))
+        for outcome in (first, second):
+            with self.subTest(plant=outcome.plant_id):
+                self.assertTrue(outcome.data_incomplete)
+                # The business grain never absorbs plant_id (§2.7.2): only the context differs.
+                self.assertEqual(outcome.grain, (SUPPLIER, DEMAND))
+                self.assertEqual(
+                    outcome.need_date_reference.grain if outcome.need_date_reference else None,
+                    (outcome.plant_id, DEMAND, outcome.recommendation_need_date),
+                )
+
+    def test_a48_a_pair_without_a_request_yields_no_outcome(self) -> None:
+        # The claim exists and is unresolved, but no procurement evaluation request names its material.
+        built = self.build_chain(
+            demands=((DEMAND, "130", D2),),
+            supplier_relationships=(relationship_record(material=OTHER, basis=UNREGISTERED_BASIS),),
+            supplier_performances=(performance_record(material=OTHER),),
+            name="a48-no-request",
+        )
+        result = self.supplier_input(built)
+        self.assertTrue(result.capability_available)
+        relationship = result.eligibility_for(SUPPLIER, OTHER)
+        assert relationship is not None
+        self.assertTrue(relationship.unresolved)
+        # No request for OTHER ⇒ no business outcome at all, and the finding stays visible.
+        self.assertEqual(result.evidence_outcomes, ())
+        self.assertEqual(result.evaluation_contexts, ())
+        self.assertEqual(result.outcomes_for(SUPPLIER, OTHER), ())
+        self.assertEqual(relationship.issues[0].reason, "SEMANTIC_UNRESOLVED")
+
+    def test_a49_performance_evidence_alone_never_creates_an_outcome(self) -> None:
+        # Supplier Performance claims (SUPPLIER, DEMAND) but the relationship role states another pair:
+        # performance evidence never establishes a relationship, so no Risk Evidence outcome exists.
+        built = self.build_chain(
+            supplier_relationships=(relationship_record(SUPPLIER, OTHER, basis=ELIGIBLE_BASIS),),
+            supplier_performances=(performance_record(SUPPLIER, DEMAND),),
+            name="a49-performance-only-pair",
+        )
+        result = self.supplier_input(built)
+        self.assertEqual(result.evidence_outcomes, ())
+        self.assertEqual(result.outcomes_for(SUPPLIER, DEMAND), ())
+        claimed = result.eligibility_for(SUPPLIER, DEMAND)
+        assert claimed is not None
+        self.assertTrue(claimed.unresolved)
+        self.assertEqual(claimed.root_condition, ROOT_RELATIONSHIP_ABSENT)
+        # The semantic finding is preserved and no relationship ／ evidence reference is fabricated.
+        self.assertIsNone(claimed.relationship_reference)
+        self.assertIsNone(claimed.evidence_reference)
+        self.assertEqual(len(claimed.considered_references), 1)
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in claimed.issues],
+            [("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED")],
+        )
+        # The eligible OTHER pair has no request, so the whole result stays outcome-free.
+        self.assertEqual(result.outcomes_for(SUPPLIER, OTHER), ())
+
+    def test_a50_an_unresolved_supplier_identity_is_a_fail_closed_outcome(self) -> None:
+        # Role 9 is provided (capability available) but the exact identity of SUP-A is unresolved:
+        # two identity records share the ``supplier_id`` grain, and no same-value dedup applies.
+        built = self.build_chain(
+            supplier_identities=(
+                {"supplier_id": SUPPLIER},
+                {"supplier_id": SUPPLIER},
+            ),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            name="a50-supplier-identity-unresolved",
+        )
+        self.assertEqual(len(built.construction.unresolved_for(SUPPLIER_IDENTITY_TARGET)), 2)
+        result, outcome = self.outcomes(built)
+        self.assertTrue(result.capability_available)
+        self.assertEqual(result.capability_issues, ())
+        self.assertTrue(outcome.data_incomplete)
+        self.assertEqual(outcome.outcome_root_condition, ROOT_IDENTITY_UNRESOLVED)
+        self.assertTrue(outcome.identity_unreliable)
+        supplier_state = next(
+            item for item in outcome.identities if item.target == SUPPLIER_IDENTITY_TARGET
+        )
+        material_state = next(
+            item for item in outcome.identities if item.target == MATERIAL_IDENTITY_TARGET
+        )
+        self.assertFalse(supplier_state.reliable)
+        self.assertEqual(supplier_state.resolved_references, ())
+        self.assertEqual(len(supplier_state.unresolved_references), 2)
+        self.assertTrue(material_state.reliable)
+        # The exact pair and the request context are preserved, and no level is produced.
+        self.assertEqual(outcome.grain, (SUPPLIER, DEMAND))
+        self.assertEqual(outcome.recommendation_need_date, D2)
+        self.assertEqual(result.evaluation_contexts, ())
+
+    def test_a51_an_unresolved_material_identity_is_a_fail_closed_outcome(self) -> None:
+        # Role 1 is provided but states the same material under two Plants: the ``Material`` canonical
+        # grain is ``material_code`` alone, so the material identity stays unresolved.
+        built = self.build_chain(
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            identity_contexts=(
+                {"plant_id": PLANT, "material_code": DEMAND},
+                {"plant_id": OTHER_PLANT, "material_code": DEMAND},
+            ),
+            name="a51-material-identity-unresolved",
+        )
+        self.assertEqual(len(built.construction.unresolved_for(MATERIAL_IDENTITY_TARGET)), 2)
+        result, outcome = self.outcomes(built)
+        self.assertTrue(result.capability_available)
+        self.assertTrue(outcome.data_incomplete)
+        self.assertEqual(outcome.outcome_root_condition, ROOT_IDENTITY_UNRESOLVED)
+        material_state = next(
+            item for item in outcome.identities if item.target == MATERIAL_IDENTITY_TARGET
+        )
+        supplier_state = next(
+            item for item in outcome.identities if item.target == SUPPLIER_IDENTITY_TARGET
+        )
+        self.assertFalse(material_state.reliable)
+        self.assertEqual(len(material_state.unresolved_references), 2)
+        self.assertTrue(supplier_state.reliable)
+        self.assertEqual(outcome.grain, (SUPPLIER, DEMAND))
+
+    def test_a52_an_unkeyable_pair_yields_no_keyed_outcome(self) -> None:
+        # The relationship evidence states no reliable pair grain: an unhashable identity component and
+        # a JSON null one both leave the pair unkeyable -- no keyed outcome, no placeholder grain.
+        unhashable = self.build_chain(
+            supplier_relationships=(relationship_record(supplier=[]),),
+            supplier_performances=(performance_record(),),
+            name="a52-unhashable-pair",
+        )
+        result = self.supplier_input(unhashable)
+        self.assertEqual(result.evidence_outcomes, ())
+        self.assertEqual(result.outcomes_for([], DEMAND), ())
+        self.assertEqual(len(result.unkeyable_relationships), 1)
+        self.assertEqual(
+            result.unkeyable_relationships[0].root_condition,
+            "SUPPLIER_RELATIONSHIP_IDENTITY_UNRESOLVED",
+        )
+        # The canonicalization's IDENTITY_RESOLUTION ／ UNRESOLVED_IDENTITY finding survives verbatim.
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in result.identity_issues],
+            [("IDENTITY_RESOLUTION", "UNRESOLVED_IDENTITY")],
+        )
+
+        null_identity = self.build_chain(
+            supplier_relationships=(relationship_record(supplier=None),),
+            supplier_performances=(performance_record(),),
+            name="a52-null-pair",
+        )
+        null_result = self.supplier_input(null_identity)
+        # No keyed outcome is invented for a null identity component (no fuzzy match, no placeholder).
+        self.assertEqual(null_result.evidence_outcomes, ())
+        self.assertEqual(len(null_result.unkeyable_relationships), 1)
+        self.assertIsNone(null_result.unkeyable_relationships[0].supplier_id)
+
+    def test_a53_a_not_provided_role_still_makes_the_capability_unavailable(self) -> None:
+        built = self.unresolved_pair("a53-role-not-provided")
+        missing = dataclasses.replace(built.accepted, ) if False else None  # noqa: F841
+        # Role 9 not provided at all: capability unavailable, no outcome, and never DATA_INCOMPLETE.
+        unavailable = self.build_chain(
+            supplier_identities=(),
+            supplier_relationships=(relationship_record(basis=UNREGISTERED_BASIS),),
+            supplier_performances=(performance_record(),),
+            name="a53-no-supplier-identity-role",
+        )
+        result = self.supplier_input(unavailable)
+        self.assertFalse(result.capability_available)
+        self.assertEqual(result.evaluation_contexts, ())
+        self.assertEqual(result.evidence_outcomes, ())
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in result.capability_issues],
+            [("EVIDENCE_AVAILABILITY", "EVIDENCE_ROLE_NOT_PROVIDED")],
+        )
+        self.assertFalse(result.is_valid_absence(PLANT, DEMAND))
+
+    def test_a54_an_unresolved_need_date_is_preserved_without_guessing(self) -> None:
+        built = self.build_chain(
+            demands=((DEMAND, "10", D1), (DEMAND, "10", D2)),
+            targets=((DEMAND, D1, "APPROVED"), (DEMAND, D2, "UNRESOLVED")),
+            supplier_relationships=(relationship_record(basis=UNREGISTERED_BASIS),),
+            supplier_performances=(performance_record(),),
+            name="a54-unresolved-need-date",
+        )
+        result, outcome = self.outcomes(built)
+        self.assertIsNone(outcome.recommendation_need_date)
+        self.assertFalse(outcome.recommendation_need_date_resolved)
+        self.assertEqual(outcome.need_date_root_condition, "RECOMMENDATION_NEED_DATE_UNRESOLVED")
+        self.assertIsNone(outcome.need_date_reference)
+        # The registered upstream reason is preserved and no date is guessed.
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in outcome.inherited_issues],
+            [("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED")],
+        )
+        self.assertTrue(outcome.data_incomplete)
+
+    def test_a55_performance_evidence_is_preserved_for_explainability(self) -> None:
+        # Two resolved periods plus a period-less record: the Option A contract is unchanged on the
+        # normal path, and a fail-closed outcome still keeps the reliable evidence visible.
+        normal = self.build_chain(
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(
+                performance_record(period="2026-Q2"),
+                performance_record(period="2026-Q3"),
+            ),
+            name="a55-normal-applicability",
+        )
+        normal_result = self.supplier_input(normal)
+        normal_context = normal_result.context_for(PLANT, SUPPLIER, DEMAND)
+        assert normal_context is not None
+        self.assertIsNone(normal_context.applicable_performance)
+        self.assertEqual(
+            normal_context.performance_root_condition, ROOT_PERFORMANCE_OBSERVATION_MULTIPLE
+        )
+        self.assertEqual(normal_result.evidence_outcomes, ())
+
+        fail_closed = self.build_chain(
+            supplier_relationships=(relationship_record(basis=UNREGISTERED_BASIS),),
+            supplier_performances=(
+                performance_record(),
+                performance_record(period="2026-Q3", drop_period=True),
+            ),
+            name="a55-fail-closed-performance",
+        )
+        _, outcome = self.outcomes(fail_closed)
+        self.assertEqual(len(outcome.performance), 1)
+        self.assertEqual(len(outcome.unresolved_performance), 1)
+        self.assertEqual(outcome.performance[0].value_of("PerformancePeriod"), "2026-Q3")
+        payload = outcome.to_dict()
+        self.assertEqual(len(payload["performance"]), 1)
+        self.assertEqual(len(payload["unresolved_performance"]), 1)
+
+    def test_a56_only_truthful_references_are_published(self) -> None:
+        built = self.unresolved_pair("a56-truthful-references")
+        _, outcome = self.outcomes(built)
+        reference = outcome.eligibility.relationship_reference
+        assert reference is not None
+        # The relationship reference names the real accepted record and its provenance agrees.
+        provenance = outcome.eligibility.evidence_reference
+        assert provenance is not None
+        self.assertIn(provenance.artifact, reference)
+        self.assertEqual(provenance.logical_dataset_role, "Supplier-Material Relationship")
+        # The upstream need-date reference is the consumed shortage result, never a synthesised one.
+        need_date_reference = outcome.need_date_reference
+        assert need_date_reference is not None
+        self.assertEqual(need_date_reference.rule, "BR-SHORTAGE-001")
+        self.assertEqual(need_date_reference.grain, (PLANT, DEMAND, D2))
+        # Each identity state's reference is a real record reference, not a fabricated one.
+        for state in outcome.identities:
+            for published in state.considered_references:
+                with self.subTest(published=published):
+                    self.assertIn("|", published)
+        # A performance-only pair never reaches an outcome, so no performance reference can be
+        # mistaken for a relationship reference.
+        self.assertIsNone(
+            self.supplier_input(
+                self.build_chain(
+                    supplier_relationships=(
+                        relationship_record(SUPPLIER, OTHER, basis=ELIGIBLE_BASIS),
+                    ),
+                    supplier_performances=(performance_record(SUPPLIER, DEMAND),),
+                    name="a56-performance-only",
+                )
+            )
+            .eligibility_for(SUPPLIER, DEMAND)
+            .relationship_reference
+        )
+
+    def test_a57_outcomes_are_deterministic_frozen_and_serializable(self) -> None:
+        def build(name: str):
+            return self.unresolved_pair(
+                name,
+                extra_plant_families=((OTHER_PLANT, DEMAND, "120", D1),),
+                moq_policies=(
+                    moq_policy_record(DEMAND, moq="100"),
+                    moq_policy_record(
+                        DEMAND,
+                        moq="100",
+                        plant=OTHER_PLANT,
+                        locator="SIMULATED-SRC-MOQ-P2",
+                    ),
+                ),
+            )
+
+        first_result = self.supplier_input(build("a57-first"))
+        second_result = self.supplier_input(build("a57-second"))
+        self.assertEqual(first_result.to_dict(), second_result.to_dict())
+        json.dumps(first_result.to_dict())
+        # Deterministic ordering: by plant, then material, then supplier.
+        self.assertEqual(
+            [item.evaluation_context for item in first_result.evidence_outcomes],
+            [(PLANT, DEMAND, SUPPLIER), (OTHER_PLANT, DEMAND, SUPPLIER)],
+        )
+        outcome = first_result.evidence_outcomes[0]
+        self.assertIsInstance(outcome, SupplierRiskEvidenceOutcome)
+        self.assertIsInstance(outcome.identities[0], SupplierRiskIdentityState)
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            first_result.evidence_outcomes = ()  # type: ignore[misc]
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            outcome.status = "HIGH"  # type: ignore[misc]
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            outcome.identities[0].value = "SUP-B"  # type: ignore[misc]
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            first_result.identity_issues = ()  # type: ignore[misc]
+
+    def test_a58_the_outcome_surface_adds_no_risk_vocabulary(self) -> None:
+        import snapshot_loader.supplier_risk_input as module
+
+        identifiers = module_identifiers(module)
+        for forbidden in (
+            "DaysUntilNeed",
+            "LeadTimeRisk",
+            "DeliveryRisk",
+            "QualityRisk",
+            "OverallSupplierRisk",
+            "risk_level",
+            "severity",
+            "threshold",
+            "rank",
+            "ranking",
+            "winner",
+            "selection",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, identifiers)
+        for forbidden in ("LOW", "MEDIUM", "HIGH"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, identifiers)
+        # The outcome's business status is the existing DATA_INCOMPLETE literal, not a new enum.
+        self.assertEqual(SUPPLIER_RISK_EVIDENCE_STATUS_DATA_INCOMPLETE, "DATA_INCOMPLETE")
+        self.assertEqual(
+            {field.name for field in dataclasses.fields(SupplierRiskEvidenceOutcome)}
+            & {"days_until_need", "lead_time_risk", "delivery_risk", "quality_risk",
+               "overall_supplier_risk", "risk_level"},
             set(),
         )
+
+
+class IdentityIssueHandoffTests(SupplierRiskInputTestCase):
+    """PR #169 review finding: an unreliable exact identity always carries a concrete finding.
+
+    ``SupplierRiskIdentityState.reliable is False`` must never be paired with ``issues == ()`` for a
+    request-bounded, reliably keyed pair: the approved Option A F1 contract requires the corresponding
+    ``IDENTITY_RESOLUTION`` ／ ``UNRESOLVED_IDENTITY`` finding to be preserved.  A finding the
+    construction already raised is republished verbatim; otherwise the seam raises the narrow
+    capability-scoped one (``§4.4.11`` ／ ``§4.4.26`` ／ ``§4.4.80`` #4 ／ ``§4.4.81`` #7 ／ ``§4.4.94``).
+    """
+
+    def outcomes(self, built, *, plant: Any = PLANT, supplier: Any = SUPPLIER, material: Any = DEMAND):
+        """The single fail-closed outcome of one exact plant ／ supplier ／ material, asserted to exist."""
+
+        result = self.supplier_input(built)
+        outcome = result.outcome_for(plant, supplier, material)
+        assert outcome is not None
+        return result, outcome
+
+    def state(self, result, target: str, value: Any) -> SupplierRiskIdentityState:
+        state = result.identity_state_for(target, value)
+        assert state is not None
+        return state
+
+    def test_a59_no_matching_supplier_identity_raises_the_capability_finding(self) -> None:
+        # Role 9 IS provided -- but only for another supplier, so the requested pair's exact supplier
+        # identity (SUP-A) has no canonical identity evidence at all.
+        built = self.build_chain(
+            supplier_identities=({"supplier_id": SUPPLIER_B},),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            name="a59-no-matching-supplier-identity",
+        )
+        result, outcome = self.outcomes(built)
+        self.assertTrue(result.capability_available)
+        self.assertEqual(result.capability_issues, ())
+        self.assertTrue(outcome.data_incomplete)
+        self.assertEqual(outcome.outcome_root_condition, ROOT_IDENTITY_UNRESOLVED)
+        self.assertTrue(outcome.identity_unreliable)
+
+        state = self.state(result, SUPPLIER_IDENTITY_TARGET, SUPPLIER)
+        self.assertFalse(state.reliable)
+        self.assertEqual(state.resolved_references, ())
+        self.assertEqual(state.unresolved_references, ())
+        # The finding is concrete, uses the existing taxonomy, and names target + exact requested value.
+        self.assertEqual(len(state.issues), 1)
+        issue = state.issues[0]
+        self.assertEqual((issue.category, issue.reason), ("IDENTITY_RESOLUTION", "UNRESOLVED_IDENTITY"))
+        self.assertEqual(issue.layer, 2)
+        self.assertEqual(
+            issue.location,
+            identity_issue_location(PLANT, DEMAND, SUPPLIER, "Supplier", SUPPLIER),
+        )
+        self.assertIn(SUPPLIER, issue.detail)
+        self.assertIn("Supplier", issue.detail)
+        self.assertIn("no canonical identity evidence states this exact value", issue.detail)
+        self.assertEqual(issue.affected_evidence, SUPPLIER_IDENTITY_ROLE)
+        self.assertIn("§4.4.26", issue.design_reference)
+        self.assertIn("§4.4.81 #7", issue.design_reference)
+        self.assertIn("plant_id = 'P1' + material_code = 'M2' + supplier_id = 'SUP-A'", issue.blast_radius)
+        self.assertIn("only", issue.blast_radius)
+        # The material half of the pair stays reliable and carries no finding.
+        material_state = self.state(result, MATERIAL_IDENTITY_TARGET, DEMAND)
+        self.assertTrue(material_state.reliable)
+        self.assertEqual(material_state.issues, ())
+        # The outcome and the result both publish it.
+        self.assertEqual([item.category for item in outcome.identity_issues], ["IDENTITY_RESOLUTION"])
+        self.assertEqual([item.category for item in result.identity_issues], ["IDENTITY_RESOLUTION"])
+        self.assertEqual(
+            [(item.category, item.reason) for item in result.issues],
+            [("IDENTITY_RESOLUTION", "UNRESOLVED_IDENTITY")],
+        )
+
+    def test_a60_same_value_multiplicity_raises_the_capability_finding(self) -> None:
+        # Two identity records share the ``supplier_id`` grain: canonicalization leaves them unresolved
+        # without raising an Issue of its own (only a not_evaluable check), so the seam must raise it.
+        built = self.build_chain(
+            supplier_identities=(
+                {"supplier_id": SUPPLIER},
+                {"supplier_id": SUPPLIER},
+            ),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            name="a60-supplier-identity-multiplicity",
+        )
+        self.assertEqual(
+            built.construction.issues, (), "canonicalization raises no Issue for multiplicity"
+        )
+        result, outcome = self.outcomes(built)
+        state = self.state(result, SUPPLIER_IDENTITY_TARGET, SUPPLIER)
+        self.assertFalse(state.reliable)
+        self.assertEqual(state.resolved_references, ())
+        self.assertEqual(len(state.unresolved_references), 2)
+        self.assertEqual(len(state.issues), 1)
+        issue = state.issues[0]
+        self.assertEqual((issue.category, issue.reason), ("IDENTITY_RESOLUTION", "UNRESOLVED_IDENTITY"))
+        self.assertEqual(issue.affected_evidence, SUPPLIER_IDENTITY_ROLE)
+        self.assertIn("same-grain multiplicity", issue.detail)
+        # The considered identity records are named -- they exist, so they are identified truthfully.
+        for reference in state.unresolved_references:
+            with self.subTest(reference=reference):
+                self.assertIn(reference, issue.detail)
+        self.assertEqual(len(state.evidence_references), 2)
+        self.assertTrue(outcome.data_incomplete)
+        self.assertEqual(
+            [item.category for item in result.identity_issues], ["IDENTITY_RESOLUTION"]
+        )
+
+    def test_a61_the_material_half_needs_the_same_handoff(self) -> None:
+        # C1: the identity role is provided but states another material only.
+        missing = self.build_chain(
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            identity_contexts=({"plant_id": PLANT, "material_code": OTHER},),
+            name="a61-no-matching-material-identity",
+        )
+        missing_result, missing_outcome = self.outcomes(missing)
+        missing_state = self.state(missing_result, MATERIAL_IDENTITY_TARGET, DEMAND)
+        self.assertFalse(missing_state.reliable)
+        self.assertEqual(len(missing_state.issues), 1)
+        self.assertEqual(
+            (missing_state.issues[0].category, missing_state.issues[0].reason),
+            ("IDENTITY_RESOLUTION", "UNRESOLVED_IDENTITY"),
+        )
+        self.assertEqual(
+            missing_state.issues[0].location,
+            identity_issue_location(PLANT, DEMAND, SUPPLIER, "Material", DEMAND),
+        )
+        self.assertEqual(missing_state.issues[0].affected_evidence, PLANT_MATERIAL_IDENTITY_ROLE)
+        self.assertTrue(missing_outcome.data_incomplete)
+        self.assertTrue(
+            self.state(missing_result, SUPPLIER_IDENTITY_TARGET, SUPPLIER).reliable
+        )
+
+        # C2: the identity role states the same material under two Plants (multiplicity, no Issue).
+        duplicated = self.build_chain(
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            identity_contexts=(
+                {"plant_id": PLANT, "material_code": DEMAND},
+                {"plant_id": OTHER_PLANT, "material_code": DEMAND},
+            ),
+            name="a61-material-identity-multiplicity",
+        )
+        duplicated_result, duplicated_outcome = self.outcomes(duplicated)
+        duplicated_state = self.state(duplicated_result, MATERIAL_IDENTITY_TARGET, DEMAND)
+        self.assertFalse(duplicated_state.reliable)
+        self.assertEqual(len(duplicated_state.unresolved_references), 2)
+        self.assertEqual(len(duplicated_state.issues), 1)
+        self.assertIn("same-grain multiplicity", duplicated_state.issues[0].detail)
+        self.assertEqual(
+            duplicated_state.issues[0].affected_evidence, PLANT_MATERIAL_IDENTITY_ROLE
+        )
+        self.assertTrue(duplicated_outcome.data_incomplete)
+        self.assertEqual(
+            [item.category for item in duplicated_result.identity_issues],
+            ["IDENTITY_RESOLUTION"],
+        )
+
+    def test_a62_a_normal_exactly_one_identity_carries_no_identity_issue(self) -> None:
+        built = self.eligible_chain("a62-exactly-one-identity")
+        result = self.supplier_input(built)
+        context = result.context_for(PLANT, SUPPLIER, DEMAND)
+        assert context is not None
+        self.assertTrue(context.identity_reliable)
+        self.assertEqual(context.identity_issues, ())
+        for state in context.identities:
+            with self.subTest(target=state.target):
+                self.assertTrue(state.reliable)
+                self.assertEqual(state.issues, ())
+                self.assertEqual(len(state.resolved_references), 1)
+        self.assertEqual(result.identity_issues, ())
+        self.assertEqual(result.issues, ())
+        payload = context.to_dict()
+        self.assertEqual(payload["identities"][0]["issues"], [])
+        self.assertEqual(payload["identities"][1]["issues"], [])
+
+    def test_a63_no_matching_evidence_never_fabricates_a_reference(self) -> None:
+        built = self.build_chain(
+            supplier_identities=({"supplier_id": SUPPLIER_B},),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            name="a63-no-fabricated-identity-reference",
+        )
+        result, outcome = self.outcomes(built)
+        state = self.state(result, SUPPLIER_IDENTITY_TARGET, SUPPLIER)
+        # No identity record exists for the requested value: nothing may be invented for it.
+        self.assertEqual(state.resolved_references, ())
+        self.assertEqual(state.unresolved_references, ())
+        self.assertEqual(state.considered_references, ())
+        self.assertEqual(state.evidence_references, ())
+        self.assertIsNone(state.identity_reference)
+        issue = state.issues[0]
+        # The finding points at the logical evidence role, never at a record that does not exist.
+        self.assertEqual(issue.affected_evidence, SUPPLIER_IDENTITY_ROLE)
+        self.assertNotIn("|", issue.location)
+        self.assertNotIn("|", issue.affected_evidence)
+        self.assertIn("no identity record could be considered", issue.detail)
+        # The relationship evidence that really exists is still published truthfully.
+        relationship_reference = outcome.eligibility.relationship_reference
+        assert relationship_reference is not None
+        self.assertIn("|", relationship_reference)
+        # The other supplier's identity evidence is never borrowed for this pair, and it publishes no
+        # pair state of its own because no evaluation request names it.
+        other_objects = built.construction.objects_for(SUPPLIER_IDENTITY_TARGET)
+        self.assertEqual(
+            [obj.value_of("supplier_id") for obj in other_objects], [SUPPLIER_B]
+        )
+        self.assertIsNone(result.identity_state_for(SUPPLIER_IDENTITY_TARGET, SUPPLIER_B))
+
+
+    def test_a64_one_supplier_identity_across_two_material_pairs_is_scoped(self) -> None:
+        # The same unresolved Supplier identity (SUP-A) participates in two request-bounded pairs:
+        # both fail closed, and each pair keeps its own finding scoped to its own request.
+        built = self.build_chain(
+            demands=((DEMAND, "130", D2), (OTHER, "130", D2)),
+            moq_policies=(
+                moq_policy_record(DEMAND, moq="100"),
+                moq_policy_record(OTHER, moq="100"),
+            ),
+            supplier_identities=({"supplier_id": SUPPLIER}, {"supplier_id": SUPPLIER}),
+            supplier_relationships=(
+                relationship_record(material=DEMAND),
+                relationship_record(material=OTHER),
+            ),
+            supplier_performances=(
+                performance_record(material=DEMAND),
+                performance_record(material=OTHER),
+            ),
+            name="a64-one-supplier-identity-two-materials",
+        )
+        result = self.supplier_input(built)
+        self.assertEqual(result.evaluation_contexts, ())
+        self.assertEqual(len(result.evidence_outcomes), 2)
+        expected = {
+            identity_issue_location(PLANT, DEMAND, SUPPLIER, SUPPLIER_IDENTITY_TARGET, SUPPLIER),
+            identity_issue_location(PLANT, OTHER, SUPPLIER, SUPPLIER_IDENTITY_TARGET, SUPPLIER),
+        }
+        # The two affected pairs are not collapsed into one finding with a wider declared scope.
+        self.assertEqual(
+            [issue.location for issue in result.identity_issues], sorted(expected)
+        )
+        for material in (DEMAND, OTHER):
+            outcome = result.outcome_for(PLANT, SUPPLIER, material)
+            assert outcome is not None
+            self.assertTrue(outcome.data_incomplete)
+            self.assertEqual(
+                [issue.location for issue in outcome.identity_issues],
+                [
+                    identity_issue_location(
+                        PLANT, material, SUPPLIER, SUPPLIER_IDENTITY_TARGET, SUPPLIER
+                    )
+                ],
+            )
+            issue = outcome.identity_issues[0]
+            self.assertIn(f"material_code = {material!r}", issue.blast_radius)
+            self.assertIn(f"material_code = {material!r}", issue.detail)
+            self.assertIn("only", issue.blast_radius)
+            self.assertEqual(issue.affected_evidence, SUPPLIER_IDENTITY_ROLE)
+
+    def test_a65_one_pair_across_two_plants_keeps_two_distinct_findings(self) -> None:
+        # The registered blast radius is per evaluation request, so the same pair under two Plants must
+        # keep two distinguishable findings instead of being deduplicated across Plants.
+        built = self.build_chain(
+            extra_plant_families=((OTHER_PLANT, DEMAND, "120", D1),),
+            moq_policies=(
+                moq_policy_record(DEMAND, moq="100"),
+                moq_policy_record(
+                    DEMAND,
+                    moq="100",
+                    plant=OTHER_PLANT,
+                    locator="SIMULATED-SRC-MOQ-P2",
+                ),
+            ),
+            supplier_identities=({"supplier_id": SUPPLIER}, {"supplier_id": SUPPLIER}),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            name="a65-one-pair-two-plants",
+        )
+        result = self.supplier_input(built)
+        self.assertEqual(result.evaluation_contexts, ())
+        self.assertEqual(len(result.evidence_outcomes), 2)
+        self.assertEqual(
+            [issue.location for issue in result.identity_issues],
+            sorted(
+                {
+                    identity_issue_location(
+                        PLANT, DEMAND, SUPPLIER, SUPPLIER_IDENTITY_TARGET, SUPPLIER
+                    ),
+                    identity_issue_location(
+                        OTHER_PLANT, DEMAND, SUPPLIER, SUPPLIER_IDENTITY_TARGET, SUPPLIER
+                    ),
+                }
+            ),
+        )
+        for plant in (PLANT, OTHER_PLANT):
+            outcome = result.outcome_for(plant, SUPPLIER, DEMAND)
+            assert outcome is not None
+            self.assertTrue(outcome.data_incomplete)
+            self.assertEqual(
+                [issue.location for issue in outcome.identity_issues],
+                [
+                    identity_issue_location(
+                        plant, DEMAND, SUPPLIER, SUPPLIER_IDENTITY_TARGET, SUPPLIER
+                    )
+                ],
+            )
+            issue = outcome.identity_issues[0]
+            # Each finding declares exactly its own Plant request and nothing wider.
+            self.assertIn(f"plant_id = {plant!r}", issue.blast_radius)
+            self.assertIn(f"plant_id = {plant!r}", issue.detail)
+            self.assertNotIn(
+                f"plant_id = {OTHER_PLANT if plant == PLANT else PLANT!r}", issue.blast_radius
+            )
+
+    def test_a66_one_material_identity_across_two_supplier_pairs_is_scoped(self) -> None:
+        # Material equivalent: the same unresolved Material identity (MAT-A) participates in two
+        # supplier pairs, each keeping its own request-scoped finding.
+        built = self.build_chain(
+            supplier_identities=({"supplier_id": SUPPLIER}, {"supplier_id": SUPPLIER_B}),
+            supplier_relationships=(relationship_record(), relationship_record(SUPPLIER_B)),
+            supplier_performances=(performance_record(), performance_record(SUPPLIER_B)),
+            identity_contexts=(
+                {"plant_id": PLANT, "material_code": DEMAND},
+                {"plant_id": OTHER_PLANT, "material_code": DEMAND},
+            ),
+            name="a66-one-material-identity-two-suppliers",
+        )
+        result = self.supplier_input(built)
+        self.assertEqual(result.evaluation_contexts, ())
+        self.assertEqual(len(result.evidence_outcomes), 2)
+        self.assertEqual(
+            [issue.location for issue in result.identity_issues],
+            sorted(
+                {
+                    identity_issue_location(
+                        PLANT, DEMAND, SUPPLIER, MATERIAL_IDENTITY_TARGET, DEMAND
+                    ),
+                    identity_issue_location(
+                        PLANT, DEMAND, SUPPLIER_B, MATERIAL_IDENTITY_TARGET, DEMAND
+                    ),
+                }
+            ),
+        )
+        for supplier in (SUPPLIER, SUPPLIER_B):
+            outcome = result.outcome_for(PLANT, supplier, DEMAND)
+            assert outcome is not None
+            self.assertTrue(outcome.data_incomplete)
+            self.assertEqual(
+                [issue.location for issue in outcome.identity_issues],
+                [
+                    identity_issue_location(
+                        PLANT, DEMAND, supplier, MATERIAL_IDENTITY_TARGET, DEMAND
+                    )
+                ],
+            )
+            issue = outcome.identity_issues[0]
+            self.assertEqual(issue.affected_evidence, PLANT_MATERIAL_IDENTITY_ROLE)
+            self.assertIn(f"supplier_id = {supplier!r}", issue.blast_radius)
+            self.assertIn(f"supplier_id = {supplier!r}", issue.detail)
+            # The supplier identity of the evaluated pair stays reliable and unfindable.
+            supplier_state = self.state(result, SUPPLIER_IDENTITY_TARGET, supplier)
+            self.assertTrue(supplier_state.reliable)
+            self.assertEqual(supplier_state.issues, ())
+
+    def test_a67_reliable_identities_across_several_requests_carry_no_finding(self) -> None:
+        built = self.build_chain(
+            demands=((DEMAND, "130", D2), (OTHER, "130", D2)),
+            moq_policies=(
+                moq_policy_record(DEMAND, moq="100"),
+                moq_policy_record(OTHER, moq="100"),
+            ),
+            supplier_identities=({"supplier_id": SUPPLIER},),
+            supplier_relationships=(
+                relationship_record(material=DEMAND),
+                relationship_record(material=OTHER),
+            ),
+            supplier_performances=(
+                performance_record(material=DEMAND),
+                performance_record(material=OTHER),
+            ),
+            name="a67-reliable-identities-several-requests",
+        )
+        result = self.supplier_input(built)
+        self.assertEqual(len(result.evaluation_contexts), 2)
+        self.assertEqual(result.evidence_outcomes, ())
+        self.assertEqual(result.identity_issues, ())
+        self.assertEqual(result.issues, ())
+        for material in (DEMAND, OTHER):
+            context = result.context_for(PLANT, SUPPLIER, material)
+            assert context is not None
+            self.assertTrue(context.identity_reliable)
+            self.assertEqual(context.identity_issues, ())
 
 
 if __name__ == "__main__":  # pragma: no cover - direct invocation

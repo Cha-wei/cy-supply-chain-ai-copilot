@@ -5182,6 +5182,9 @@ SupplierRisk = HIGH
 - 默认 100
 - 让 LLM 补值
 
+> 本表的 runtime 落地边界（request-bounded output universe、fail-closed evidence outcome、
+> `ROOT_RELATIONSHIP_ABSENT` 与 exact identity unresolved 的处置、cardinality）见 **§2.7.27**。
+
 #### 2.7.17 Deterministic Logic Boundary
 
 以下**必须由 deterministic logic 产生**：
@@ -5679,6 +5682,166 @@ not a physical carrier ／ Adapter ／ ERP ／ SRM mapping
 `PerformancePeriod` 完整性要求，也**不修改** `adr-001-deterministic-core.md`。
 Runtime 实现登记：`snapshot-import-contract.md` §4.3.31 G **I-10**；
 applicability runtime record：`data-validation.md` §4.4.104。
+
+---
+
+#### 2.7.27 Supplier Risk non-normal evidence outcome（Option A，Human Decision，Issue #168）
+
+**Registration Status：`REGISTERED`** —— 依据 **Human Decision
+`APPROVED — Option A: Request-bounded Fail-closed Supplier Risk Evidence Outcome`**（Issue #168）。
+
+本小节登记 `BR-SUPPLIER-RISK-001` 的 **output universe** 与其 **non-normal evidence outcome**：
+即「哪些 request 会产生 Supplier Risk business result」、「relationship ／ identity unresolved 时产生
+什么」，以及「什么时候**不**产生任何结果」。它**不实现**任何 risk classification
+（`DaysUntilNeed` ／ `LeadTimeRisk` ／ `DeliveryRisk` ／ `QualityRisk` ／ `OverallSupplierRisk` 及各
+threshold 仍属后续实现），**不新增** business enum ／ status ／ canonical field ／ entity ／ grain ／
+Validation Category ／ Reason，也**不**定义 normal Risk Card 的数值语义。
+
+**A. Output universe = request-bounded**
+
+```text
+universe 驱动 = 实际存在的 procurement evaluation request
+                （plant_id ＋ material_code ＋ RecommendationNeedDate）
+```
+
+- **不得**扫描 `Supplier Performance` ／ `Supplier identity` ／ `Supplier-Material Relationship`
+  evidence 来**自行创建** business evaluation request；
+- `Supplier Performance` 中的 `supplier_id` ＋ `material_code` **永远不能**反向证明
+  `Supplier-Material Relationship`，因此**不得**由此自动建立 relationship、自动产生 Risk Card；
+- 没有 matching procurement family ／ 没有 request ⇒ **不产生**任何 Supplier Risk business result／card；
+- reliable `NORMAL` ／ `BUFFER_BREACH`（valid absence，`§4.4.87`）⇒ no request ⇒ no result，
+  **不是** `DATA_INCOMPLETE`。
+
+**B. 五种可区分 runtime state**
+
+| # | state | runtime 表达 |
+| --- | --- | --- |
+| 1 | normal evaluation request | normal evaluation context（`§2.7.25` C） |
+| 2 | fail-closed evidence outcome | 本小节 C ／ F1 的 outcome（`DATA_INCOMPLETE`，**不是** Risk Card） |
+| 3 | valid exclusion | `ineligible` relationship：no context、no outcome、no issue（`§2.7.25` B） |
+| 4 | capability unavailable | `EVIDENCE_AVAILABILITY` ／ `EVIDENCE_ROLE_NOT_PROVIDED`（`§2.7.25` F ／ Issue #166） |
+| 5 | no request ／ valid absence | 既无 context 亦无 outcome；valid absence 仍为 valid absence |
+
+**C. Fail-closed evidence outcome（relationship eligibility unresolved）**
+
+触发：存在**真实** relationship evidence、`supplier_id` ＋ `material_code` grain **可可靠确定**、
+eligibility = `unresolved`（sourcing_status mapping unresolved ／ conflicting relationship evidence ／
+eligibility basis unresolved）、且存在 matching `plant_id` ＋ `material_code` ＋ `RecommendationNeedDate`
+request。此时形成 **fail-closed Supplier Risk evidence outcome**：
+
+```text
+Risk Evidence Status = DATA_INCOMPLETE（既有 business outcome literal；非新 enum）
+```
+
+- **至少保留**：`supplier_id`、`material_code`、`plant_id`（evaluation context）、
+  `RecommendationNeedDate`（**仅当** upstream 本身可靠）、Analysis Run binding、relationship
+  eligibility state、relationship root condition、exact Validation Issues、truthful relationship
+  reference ／ provenance、upstream need-date state ／ reference、以及**已经存在**的可靠 evidence；
+- **不得**计算 `DaysUntilNeed` ／ `LeadTimeRisk` ／ `DeliveryRisk` ／ `QualityRisk` ／
+  `OverallSupplierRisk` 的 `LOW` ／ `MEDIUM` ／ `HIGH`；
+- **不得**把 unresolved relationship 默认成 `eligible` 或 `ineligible`；
+- outcome 是 runtime-only 表示：frozen ／ deterministic ／ serializable ／ read-only。
+
+**D. `ROOT_RELATIONSHIP_ABSENT`（performance-only pair）**
+
+若只有 `Supplier Performance` 声称某 `supplier_id` ＋ `material_code`，而**没有**可靠的
+`Supplier-Material Relationship` evidence：
+
+```text
+NO Supplier Risk business result/card row（performance records 数量无关）
+```
+
+只保留既有 relationship-resolution finding（`SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`）与真实
+considered evidence ／ provenance。**不得** fabricate relationship reference、`eligible` state、
+Risk Card grain 或 supplier candidate status。
+
+**E. Explicitly `ineligible`**
+
+```text
+ineligible ⇒ valid exclusion ⇒ no Supplier Risk result/card
+           ⇒ NO DATA_INCOMPLETE ⇒ NO issue
+```
+
+（`§2.7.25` B ／ `§4.4.62` B 语义不变。）
+
+**F. Identity role provided 但 exact identity unresolved**
+
+必须区分 **role NOT PROVIDED**（`EVIDENCE_AVAILABILITY` ／ `EVIDENCE_ROLE_NOT_PROVIDED`；capability
+unavailable；**Issue #166 ／ #167 语义不变**）与 **role PROVIDED but exact identity unresolved**：
+
+- **F1 — pair grain 仍可靠**（relationship evidence 自身可靠声明 `supplier_id` ＋ `material_code`，且
+  能与真实 request 关联）：对**每一个** matching request 形成 fail-closed evidence outcome
+  （`DATA_INCOMPLETE`），保留 exact pair、identity issue(s)、relationship evidence、request context 与
+  truthful references；outcome root condition = `SUPPLIER_RISK_IDENTITY_UNRESOLVED`。
+  **不得**产生 normal risk level，也**不得**因此产生 normal Risk Card；
+  **Exact-identity finding 必须具体存在（Issue #169 review finding）：** 对 request-bounded 且 pair grain
+  可靠的 pair，若 exact `Supplier` ／ `Material` identity 不可靠，则 identity state **必须**携带具体的
+  `IDENTITY_RESOLUTION` ／ `UNRESOLVED_IDENTITY` finding：canonicalization 已给出该 finding 时**逐字保留
+  复用**；若 canonicalization 让该 capability-required identity 处于 unresolved 而**未**给出 finding
+  （请求值没有任何 canonical identity object，或仅 same-grain multiplicity 导致 unresolved），则由
+  Supplier Risk input seam 在**既有 taxonomy**下产生 narrow capability-scoped finding
+  （`§4.4.11` ／ `§4.4.26` ／ `§4.4.80` #4 ／ `§4.4.81` #7 ／ `§4.4.94`），须指明 exact identity target、
+  exact requested value、affected pair ／ request、failure-isolated blast radius 与当前 design reference，
+  并在存在时指明相关 accepted evidence reference；**不得**新增 Category ／ Reason ／ enum ／ status，
+  也**不得**在没有任何 evidence 时 fabricate evidence reference；
+  **该 seam-raised finding 必须按 exact evaluation request 定域（Issue #169 re-review）：** 其
+  location ／ detail ／ blast radius 必须指向该 finding 所影响的**那一个** `plant_id` ＋
+  `material_code` ＋ `supplier_id` request（并含 identity target 与 exact requested value）。同一个
+  unresolved identity 参与多个 pair ／ 多个 Plant request 时，必须产生**多个可区分的** finding，
+  **不得**因 location ／ category ／ reason 相同而被 dedupe 成一个声明了更宽 blast radius 的 finding；
+  此定域仅改变 Validation Issue ／ consequence 的表述范围，**不改变** canonical Supplier identity grain，
+  也**不改变**任何 identity resolution 语义；construction 已给出的 finding 仍**逐字保留**（不重新定域）；
+- **F2 — pair grain 本身不可靠**（`supplier_id` 或 `material_code` 缺失 ／ JSON `null` ／ empty ／ 非
+  exact JSON string ／ 无法作为确定性 grouping key）：**NO keyed** Supplier Risk result／card；保留
+  `IDENTITY_RESOLUTION` ／ `UNRESOLVED_IDENTITY` 以及 affected Supplier Risk business consequence
+  = `DATA_INCOMPLETE`（登记语义）；**不得**创建 placeholder `supplier_id` ／ placeholder
+  `material_code` ／ guessed pair ／ fuzzy match ／ synthetic card grain ／ fabricated Risk Card row。
+
+**G. Cardinality**
+
+```text
+one reliable pair × each matching Plant ／ material request = one fail-closed evidence outcome
+```
+
+同一 supplier ／ material 在两个 Plant（`P1 + MAT-A`、`P2 + MAT-A`）⇒ **两个独立** outcome；
+**不得**跨 Plant 共享 `RecommendationNeedDate`；同一 Plant ／ material 无 request ⇒ 无 outcome；
+`ROOT_RELATIONSHIP_ABSENT` ⇒ 与该 pair 无关的 performance records 数量如何，**0** business outcome。
+
+**H. RecommendationNeedDate boundary**
+
+继续使用唯一 authority：`BR-SHORTAGE-001` `FirstShortageDate` → Procurement Recommendation handoff →
+本 composition（`§2.7.25` D ／ `§4.4.65` ／ I-4）。**不得**重算、**不得** caller override、**不得**跨
+Plant 借用、**不得**建立第二个 date authority。need date 本身 unresolved 时，fail-closed outcome
+保留 `RecommendationNeedDate = unresolved ／ None` 与既有 root condition ／ issues，**不得**猜日期。
+
+**I. Performance evidence boundary**
+
+对 fail-closed relationship ／ identity outcome，可靠 `Supplier Performance` evidence **可以**保留用于
+explainability，但**不得**据此继续执行 normal risk classification；Option A applicability contract
+（exactly one resolved observation ∧ 无 competing unresolved evidence；无 latest ／ first ／ last ／
+aggregation ／ `updated_at` precedence ／ cross-record splicing，`§2.7.26`）**不变**。
+
+**J. Provenance**
+
+所有 reference 必须 truthful：**不得** fabricate relationship reference ／ identity reference ／
+procurement reference ／ performance reference。`ROOT_RELATIONSHIP_ABSENT` **必须**继续保持
+`relationship_reference = None`；performance reference **不得**冒充 relationship reference。
+
+**严格限定：**
+
+```text
+not a new canonical entity ／ field ／ grain ／ business enum ／ status
+not a new Validation Category ／ Reason
+not a supplier ranking ／ selection ／ recommendation capability
+not a Risk classification ／ threshold or quantity calculation
+not a real period policy ／ freshness policy ／ maximum age
+not a physical carrier ／ Adapter ／ ERP ／ SRM mapping
+```
+
+本登记**不修改** canonical Supplier-Material grain、`§2.7.4` ～ `§2.7.8` 的 business thresholds、
+`§2.7.23` 的 `PerformancePeriod` 完整性要求与 `adr-001-deterministic-core.md`。
+Runtime 实现登记：`snapshot-import-contract.md` §4.3.31 G **I-10**；
+business outcome record：`data-validation.md` §4.4.105。
 
 ---
 
