@@ -7089,6 +7089,40 @@ responsibility / behavioral boundary 已定义
 - database
 - deployment stack
 
+#### 5.20 Q3 explanation runtime core — implementation record（Issue #182）
+
+**Registration Status：`IMPLEMENTED`（provider-neutral runtime core only）**
+**Authority：** [ADR-002](../architecture/adr-002-p0-ai-explanation-minimum-runtime.md)
+（P0 AI Explanation minimum runtime，`ACCEPTED`）＋ `§7.1` Secret Handling minimum contract
+（Issue #180）。本记录是第一个 P0 AI Explanation implementation slice 的 current-state record；
+`§5` header 的 `Implementation Status` 是该节 design-phase 快照，**不回写**。
+
+```text
+existing ProcurementRecommendation
+        ↓  read-only non-canonical Q3 projection（只选取已登记值；exact payload lossless）
+provider-agnostic single-call seam（provider 只收到 projection；§5.5 四段 meaning）
+        ↓
+Q3 explanation response artifact（non-canonical）
+```
+
+**严格限定：** projection **只**选取 `§5.3` Q3 的五个已登记量（`ShortageQty` ／
+`BasePurchaseNeed` ／ `ApplicableMOQ` ／ `MOQAdjustmentQty` ／ `RecommendedPurchaseQty`）＋ grain
+／ outcome ／ 既有 root condition ／ 既有 references ／ 既有 issue findings；**不**重算、**不**补值、
+**不** invent classification ／ status、**不**改变 provenance，且**不**携带 accepted package ／
+pipeline result ／ analysis run。response artifact 只承载 `§5.5` 四段 meaning，**不新增** business
+status ／ canonical entity・field・grain・enum ／ approval state。
+
+**fail-closed（deterministic，不依赖 LLM）：** recommendation 不完整 ／ 缺失量 ⇒ **不调用** provider，
+并显式暴露既有缺失证据（root condition ＋ 既有 issue findings）；provider 抛错 ／ 返回不可用响应 ⇒
+explanation 明确 unavailable、deterministic recommendation **不变**、provider 消息**不**外传
+（`§7.1` S-8）。runtime outcome 属 **execution** 事实，**不是** business status，且**不得**被当作
+business `DATA_INCOMPLETE`。
+
+**本记录未实现（out of scope）：** real hosted provider adapter、HTTP ／ network、provider SDK、
+provider ／ model selection、environment credential reader、Agent Framework ／ LangGraph、
+Tool Protocol ／ MCP、RAG ／ Vector DB、Web ／ API、persistence、HITL、Draft generation、
+Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6、AI Eval closure。
+
 ---
 
 ## 6. HITL Workflow

@@ -33,6 +33,8 @@ Deterministic business rules    = IMPLEMENTED（BR-REQUIREMENT-001 / BR-INVENTOR
                                   BR-PROCUREMENT-001 / BR-SUPPLIER-RISK-001）
 Recommendation result           = IMPLEMENTED（procurement recommendation + supplier risk evidence）
 Integration / acceptance closure= IMPLEMENTED（Issue #172；thin composition，无业务语义）
+P0 AI Explanation（Q3 slice）   = IMPLEMENTED（provider-neutral runtime core；§5.20，Issue #182；
+                                  无 hosted provider adapter / 无 network / 无 credential handling）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：
@@ -61,10 +63,19 @@ Integration / acceptance closure= IMPLEMENTED（Issue #172；thin composition，
 不重读 raw evidence、不新增 business status。上游 Analysis Run ／ exactly-one accepted package
 binding 由各消费 seam 自行校验（`F3-RB1`）。
 
-**明确未实现（Out of Scope）**：Web / API / service、LLM / Agent / Tool protocol、HITL、
-RBAC / secrets、persistent Audit、database / persistent business state、real ERP / SRM
-Adapter / source connectivity、production write-back、P1，以及 `§6` ～ `§9` 各项
-just-in-time gate。
+**P0 AI Explanation（Q3 slice，`§5.20`，Issue #182）**：`snapshot_loader/explanation_q3.py` +
+`explanation_seam.py` 实现 `§5.3` **Q3** 的 **provider-neutral** runtime core —— 只读 non-canonical
+projection（只选取已登记量，exact payload lossless）→ provider-agnostic 单次调用 seam →
+只承载 `§5.5` 四段 meaning 的 response artifact，并带 deterministic fail-closed 路径
+（recommendation 不完整 ⇒ 不调用 provider 并显式暴露既有缺失证据；provider 抛错 ／ 返回不可用响应 ⇒
+explanation 明确 unavailable 且 deterministic result 不变）。该 core **不**选择 provider ／ model、
+**不**做 HTTP ／ network、**不**读取 environment credential、**不**新增依赖；tests 只用 stub provider。
+真实 hosted provider adapter、Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6 与 AI Eval closure 仍未实现。
+
+**明确未实现（Out of Scope）**：Web / API / service、real hosted LLM provider adapter、Agent
+Framework / Tool protocol、HITL、RBAC / secrets、persistent Audit、database / persistent business
+state、real ERP / SRM Adapter / source connectivity、production write-back、P1，以及 `§6` ～ `§9`
+各项 just-in-time gate。
 
 **状态纪律**：`DESIGN RESOLVED` ≠ `IMPLEMENTED` ≠ `TESTED`；`IMPLEMENTED` ≠ `VALIDATED`
 ≠ `POC SUCCESS`。全部验证仅覆盖 **SIMULATED** fixtures，不构成真实企业集成证据。
