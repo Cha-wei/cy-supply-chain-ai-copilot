@@ -7374,6 +7374,22 @@ POC success                    = NOT CLAIMED
 composition 与 acceptance closure 覆盖）；`IMPLEMENTED` ≠ `VALIDATED` ≠ `POC SUCCESS`，
 也不构成真实企业集成证据。
 
+**D. CLI → orchestration wiring current-state clarification（Human Decision，Option A，Issue #174）**
+
+- `ADR-001` 的 `thin CLI calls application orchestration` 是已登记的 **dependency ／ interaction
+  direction**，**不构成**本 tranche 的 completion condition（见
+  `adr-001-deterministic-core.md` 的 clarification note）。
+- 本 tranche 的 orchestration execution surface = 本节 B 的 importable
+  `run_first_tranche_pipeline*`；已 merge 的 closure
+  （`IMPLEMENTED + composed + SIMULATED integration / acceptance tested`）**保持有效**。
+- thin CLI 维持 **Layer-1** responsibility；CLI → orchestration wiring 属后续 interaction
+  adaptation，不在本 tranche 内强制接入。
+- `PhaseAHandoff` acquisition contract、Analysis Run identity ／ date authority 与 caller
+  responsibility 获得独立 Human Approval 前**不实现** wiring；**不得**以 CLI convenience、默认值或
+  package 自动推导方式补齐该 authority。
+- 本 bullet **不新增** carrier ／ serialization ／ derivation，**不修改** `§10.1`、`§4.3.31` 与
+  ADR-001 的 Approved Decision。
+
 ---
 
 ## 11. Open Design Backlog
