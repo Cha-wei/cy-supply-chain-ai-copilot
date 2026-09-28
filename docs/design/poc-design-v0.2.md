@@ -5774,6 +5774,16 @@ unavailable；**Issue #166 ／ #167 语义不变**）与 **role PROVIDED but exa
   （`DATA_INCOMPLETE`），保留 exact pair、identity issue(s)、relationship evidence、request context 与
   truthful references；outcome root condition = `SUPPLIER_RISK_IDENTITY_UNRESOLVED`。
   **不得**产生 normal risk level，也**不得**因此产生 normal Risk Card；
+  **Exact-identity finding 必须具体存在（Issue #169 review finding）：** 对 request-bounded 且 pair grain
+  可靠的 pair，若 exact `Supplier` ／ `Material` identity 不可靠，则 identity state **必须**携带具体的
+  `IDENTITY_RESOLUTION` ／ `UNRESOLVED_IDENTITY` finding：canonicalization 已给出该 finding 时**逐字保留
+  复用**；若 canonicalization 让该 capability-required identity 处于 unresolved 而**未**给出 finding
+  （请求值没有任何 canonical identity object，或仅 same-grain multiplicity 导致 unresolved），则由
+  Supplier Risk input seam 在**既有 taxonomy**下产生 narrow capability-scoped finding
+  （`§4.4.11` ／ `§4.4.26` ／ `§4.4.80` #4 ／ `§4.4.81` #7 ／ `§4.4.94`），须指明 exact identity target、
+  exact requested value、affected pair ／ request、failure-isolated blast radius 与当前 design reference，
+  并在存在时指明相关 accepted evidence reference；**不得**新增 Category ／ Reason ／ enum ／ status，
+  也**不得**在没有任何 evidence 时 fabricate evidence reference；
 - **F2 — pair grain 本身不可靠**（`supplier_id` 或 `material_code` 缺失 ／ JSON `null` ／ empty ／ 非
   exact JSON string ／ 无法作为确定性 grouping key）：**NO keyed** Supplier Risk result／card；保留
   `IDENTITY_RESOLUTION` ／ `UNRESOLVED_IDENTITY` 以及 affected Supplier Risk business consequence

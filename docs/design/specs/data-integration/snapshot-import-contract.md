@@ -7028,6 +7028,11 @@ relationship absent       = ROOT_RELATIONSHIP_ABSENT（仅 performance 声称的
                             **不得** fabricate relationship ／ eligible state ／ card grain ／ candidate
 ineligible                = valid exclusion ⇒ no result ／ NO DATA_INCOMPLETE ／ NO issue
 exact identity unresolved = F1 pair grain 可靠 ⇒ fail-closed outcome（root SUPPLIER_RISK_IDENTITY_UNRESOLVED）；
+                            该 identity state **必须**携带具体 `IDENTITY_RESOLUTION` ／
+                            `UNRESOLVED_IDENTITY` finding：canonicalization 已给出的逐字保留；
+                            否则由 seam 在既有 taxonomy 下产生 capability-scoped finding（指明 exact
+                            target ／ exact requested value ／ affected pair；**不得** fabricate
+                            reference ／ 新增 Category ／ Reason）；
                             F2 pair grain 不可靠 ⇒ **NO keyed** result；保留 IDENTITY_RESOLUTION ／
                             UNRESOLVED_IDENTITY；**不得** placeholder identity ／ guessed pair ／
                             fuzzy match ／ synthetic grain
@@ -7038,9 +7043,11 @@ read-only surface         = per-relationship eligibility ＋ considered referenc
                             accepted Supplier Performance objects（resolved ／ unresolved）＋
                             applicable performance observation（或显式 applicability unresolved）＋
                             per-pair exact identity readiness（target ／ value ／ usable ／ reliable ／
-                            references ／ identity issues）＋ fail-closed evidence outcomes ＋
-                            identity issues ＋ unkeyable relationship entries ＋
-                            Analysis Run binding ＋ valid-absence families
+                            references ／ identity issues：construction findings 逐字保留 ＋ seam 在
+                            canonicalization 未给出时的 capability-scoped
+                            `IDENTITY_RESOLUTION` ／ `UNRESOLVED_IDENTITY` finding）＋
+                            fail-closed evidence outcomes ＋ identity issues ＋ unkeyable relationship
+                            entries ＋ Analysis Run binding ＋ valid-absence families
 ```
 
 **严格限定：**

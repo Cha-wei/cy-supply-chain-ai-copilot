@@ -1731,16 +1731,29 @@ class CapabilityIdentityTests(SupplierRiskInputTestCase):
         unresolved_result = self.supplier_input(unresolved_identity)
         self.assertTrue(unresolved_result.capability_available)
         self.assertEqual(unresolved_result.capability_issues, ())
-        # The canonicalization's own identity finding is now reachable through the seam (Issue #168
-        # ``§G``): the consumer learns the exact identity could not be resolved without re-reading the
-        # construction, and no capability finding is invented for it.
+        # The canonicalization's own identity finding is reachable through the seam (Issue #168 ``§G``),
+        # and the requested exact value (``SUP-A``) has no matching identity evidence at all, so the seam
+        # raises its own capability-scoped UNRESOLVED_IDENTITY finding for it (PR #169 review finding).
+        # Neither is a capability finding: the evidence role *was* provided.
         self.assertEqual(
             {(issue.category, issue.reason) for issue in unresolved_result.issues},
             {("IDENTITY_RESOLUTION", "UNRESOLVED_IDENTITY")},
         )
         self.assertEqual(
             [issue.category for issue in unresolved_result.identity_issues],
-            ["IDENTITY_RESOLUTION"],
+            ["IDENTITY_RESOLUTION", "IDENTITY_RESOLUTION"],
+        )
+        construction_issue = next(
+            issue
+            for issue in unresolved_identity.construction.issues
+            if issue.category == "IDENTITY_RESOLUTION"
+        )
+        self.assertEqual(
+            {issue.location for issue in unresolved_result.identity_issues},
+            {
+                construction_issue.location,
+                f"supplier_risk_input.identity[{SUPPLIER_IDENTITY_TARGET}/{SUPPLIER}]",
+            },
         )
 
 
@@ -2204,6 +2217,214 @@ class NonNormalEvidenceOutcomeTests(SupplierRiskInputTestCase):
                "overall_supplier_risk", "risk_level"},
             set(),
         )
+
+
+class IdentityIssueHandoffTests(SupplierRiskInputTestCase):
+    """PR #169 review finding: an unreliable exact identity always carries a concrete finding.
+
+    ``SupplierRiskIdentityState.reliable is False`` must never be paired with ``issues == ()`` for a
+    request-bounded, reliably keyed pair: the approved Option A F1 contract requires the corresponding
+    ``IDENTITY_RESOLUTION`` ／ ``UNRESOLVED_IDENTITY`` finding to be preserved.  A finding the
+    construction already raised is republished verbatim; otherwise the seam raises the narrow
+    capability-scoped one (``§4.4.11`` ／ ``§4.4.26`` ／ ``§4.4.80`` #4 ／ ``§4.4.81`` #7 ／ ``§4.4.94``).
+    """
+
+    def outcomes(self, built, *, plant: Any = PLANT, supplier: Any = SUPPLIER, material: Any = DEMAND):
+        """The single fail-closed outcome of one exact plant ／ supplier ／ material, asserted to exist."""
+
+        result = self.supplier_input(built)
+        outcome = result.outcome_for(plant, supplier, material)
+        assert outcome is not None
+        return result, outcome
+
+    def state(self, result, target: str, value: Any) -> SupplierRiskIdentityState:
+        state = result.identity_state_for(target, value)
+        assert state is not None
+        return state
+
+    def test_a59_no_matching_supplier_identity_raises_the_capability_finding(self) -> None:
+        # Role 9 IS provided -- but only for another supplier, so the requested pair's exact supplier
+        # identity (SUP-A) has no canonical identity evidence at all.
+        built = self.build_chain(
+            supplier_identities=({"supplier_id": SUPPLIER_B},),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            name="a59-no-matching-supplier-identity",
+        )
+        result, outcome = self.outcomes(built)
+        self.assertTrue(result.capability_available)
+        self.assertEqual(result.capability_issues, ())
+        self.assertTrue(outcome.data_incomplete)
+        self.assertEqual(outcome.outcome_root_condition, ROOT_IDENTITY_UNRESOLVED)
+        self.assertTrue(outcome.identity_unreliable)
+
+        state = self.state(result, SUPPLIER_IDENTITY_TARGET, SUPPLIER)
+        self.assertFalse(state.reliable)
+        self.assertEqual(state.resolved_references, ())
+        self.assertEqual(state.unresolved_references, ())
+        # The finding is concrete, uses the existing taxonomy, and names target + exact requested value.
+        self.assertEqual(len(state.issues), 1)
+        issue = state.issues[0]
+        self.assertEqual((issue.category, issue.reason), ("IDENTITY_RESOLUTION", "UNRESOLVED_IDENTITY"))
+        self.assertEqual(issue.layer, 2)
+        self.assertEqual(
+            issue.location, f"supplier_risk_input.identity[Supplier/{SUPPLIER}]"
+        )
+        self.assertIn(SUPPLIER, issue.detail)
+        self.assertIn("Supplier", issue.detail)
+        self.assertIn("no canonical identity evidence states this exact value", issue.detail)
+        self.assertEqual(issue.affected_evidence, SUPPLIER_IDENTITY_ROLE)
+        self.assertIn("§4.4.26", issue.design_reference)
+        self.assertIn("§4.4.81 #7", issue.design_reference)
+        self.assertIn("this exact supplier_id + material_code pair only", issue.blast_radius)
+        # The material half of the pair stays reliable and carries no finding.
+        material_state = self.state(result, MATERIAL_IDENTITY_TARGET, DEMAND)
+        self.assertTrue(material_state.reliable)
+        self.assertEqual(material_state.issues, ())
+        # The outcome and the result both publish it.
+        self.assertEqual([item.category for item in outcome.identity_issues], ["IDENTITY_RESOLUTION"])
+        self.assertEqual([item.category for item in result.identity_issues], ["IDENTITY_RESOLUTION"])
+        self.assertEqual(
+            [(item.category, item.reason) for item in result.issues],
+            [("IDENTITY_RESOLUTION", "UNRESOLVED_IDENTITY")],
+        )
+
+    def test_a60_same_value_multiplicity_raises_the_capability_finding(self) -> None:
+        # Two identity records share the ``supplier_id`` grain: canonicalization leaves them unresolved
+        # without raising an Issue of its own (only a not_evaluable check), so the seam must raise it.
+        built = self.build_chain(
+            supplier_identities=(
+                {"supplier_id": SUPPLIER},
+                {"supplier_id": SUPPLIER},
+            ),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            name="a60-supplier-identity-multiplicity",
+        )
+        self.assertEqual(
+            built.construction.issues, (), "canonicalization raises no Issue for multiplicity"
+        )
+        result, outcome = self.outcomes(built)
+        state = self.state(result, SUPPLIER_IDENTITY_TARGET, SUPPLIER)
+        self.assertFalse(state.reliable)
+        self.assertEqual(state.resolved_references, ())
+        self.assertEqual(len(state.unresolved_references), 2)
+        self.assertEqual(len(state.issues), 1)
+        issue = state.issues[0]
+        self.assertEqual((issue.category, issue.reason), ("IDENTITY_RESOLUTION", "UNRESOLVED_IDENTITY"))
+        self.assertEqual(issue.affected_evidence, SUPPLIER_IDENTITY_ROLE)
+        self.assertIn("same-grain multiplicity", issue.detail)
+        # The considered identity records are named -- they exist, so they are identified truthfully.
+        for reference in state.unresolved_references:
+            with self.subTest(reference=reference):
+                self.assertIn(reference, issue.detail)
+        self.assertEqual(len(state.evidence_references), 2)
+        self.assertTrue(outcome.data_incomplete)
+        self.assertEqual(
+            [item.category for item in result.identity_issues], ["IDENTITY_RESOLUTION"]
+        )
+
+    def test_a61_the_material_half_needs_the_same_handoff(self) -> None:
+        # C1: the identity role is provided but states another material only.
+        missing = self.build_chain(
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            identity_contexts=({"plant_id": PLANT, "material_code": OTHER},),
+            name="a61-no-matching-material-identity",
+        )
+        missing_result, missing_outcome = self.outcomes(missing)
+        missing_state = self.state(missing_result, MATERIAL_IDENTITY_TARGET, DEMAND)
+        self.assertFalse(missing_state.reliable)
+        self.assertEqual(len(missing_state.issues), 1)
+        self.assertEqual(
+            (missing_state.issues[0].category, missing_state.issues[0].reason),
+            ("IDENTITY_RESOLUTION", "UNRESOLVED_IDENTITY"),
+        )
+        self.assertEqual(
+            missing_state.issues[0].location,
+            f"supplier_risk_input.identity[Material/{DEMAND}]",
+        )
+        self.assertEqual(missing_state.issues[0].affected_evidence, PLANT_MATERIAL_IDENTITY_ROLE)
+        self.assertTrue(missing_outcome.data_incomplete)
+        self.assertTrue(
+            self.state(missing_result, SUPPLIER_IDENTITY_TARGET, SUPPLIER).reliable
+        )
+
+        # C2: the identity role states the same material under two Plants (multiplicity, no Issue).
+        duplicated = self.build_chain(
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            identity_contexts=(
+                {"plant_id": PLANT, "material_code": DEMAND},
+                {"plant_id": OTHER_PLANT, "material_code": DEMAND},
+            ),
+            name="a61-material-identity-multiplicity",
+        )
+        duplicated_result, duplicated_outcome = self.outcomes(duplicated)
+        duplicated_state = self.state(duplicated_result, MATERIAL_IDENTITY_TARGET, DEMAND)
+        self.assertFalse(duplicated_state.reliable)
+        self.assertEqual(len(duplicated_state.unresolved_references), 2)
+        self.assertEqual(len(duplicated_state.issues), 1)
+        self.assertIn("same-grain multiplicity", duplicated_state.issues[0].detail)
+        self.assertEqual(
+            duplicated_state.issues[0].affected_evidence, PLANT_MATERIAL_IDENTITY_ROLE
+        )
+        self.assertTrue(duplicated_outcome.data_incomplete)
+        self.assertEqual(
+            [item.category for item in duplicated_result.identity_issues],
+            ["IDENTITY_RESOLUTION"],
+        )
+
+    def test_a62_a_normal_exactly_one_identity_carries_no_identity_issue(self) -> None:
+        built = self.eligible_chain("a62-exactly-one-identity")
+        result = self.supplier_input(built)
+        context = result.context_for(PLANT, SUPPLIER, DEMAND)
+        assert context is not None
+        self.assertTrue(context.identity_reliable)
+        self.assertEqual(context.identity_issues, ())
+        for state in context.identities:
+            with self.subTest(target=state.target):
+                self.assertTrue(state.reliable)
+                self.assertEqual(state.issues, ())
+                self.assertEqual(len(state.resolved_references), 1)
+        self.assertEqual(result.identity_issues, ())
+        self.assertEqual(result.issues, ())
+        payload = context.to_dict()
+        self.assertEqual(payload["identities"][0]["issues"], [])
+        self.assertEqual(payload["identities"][1]["issues"], [])
+
+    def test_a63_no_matching_evidence_never_fabricates_a_reference(self) -> None:
+        built = self.build_chain(
+            supplier_identities=({"supplier_id": SUPPLIER_B},),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            name="a63-no-fabricated-identity-reference",
+        )
+        result, outcome = self.outcomes(built)
+        state = self.state(result, SUPPLIER_IDENTITY_TARGET, SUPPLIER)
+        # No identity record exists for the requested value: nothing may be invented for it.
+        self.assertEqual(state.resolved_references, ())
+        self.assertEqual(state.unresolved_references, ())
+        self.assertEqual(state.considered_references, ())
+        self.assertEqual(state.evidence_references, ())
+        self.assertIsNone(state.identity_reference)
+        issue = state.issues[0]
+        # The finding points at the logical evidence role, never at a record that does not exist.
+        self.assertEqual(issue.affected_evidence, SUPPLIER_IDENTITY_ROLE)
+        self.assertNotIn("|", issue.location)
+        self.assertNotIn("|", issue.affected_evidence)
+        self.assertIn("no identity record could be considered", issue.detail)
+        # The relationship evidence that really exists is still published truthfully.
+        relationship_reference = outcome.eligibility.relationship_reference
+        assert relationship_reference is not None
+        self.assertIn("|", relationship_reference)
+        # The other supplier's identity evidence is never borrowed for this pair, and it publishes no
+        # pair state of its own because no evaluation request names it.
+        other_objects = built.construction.objects_for(SUPPLIER_IDENTITY_TARGET)
+        self.assertEqual(
+            [obj.value_of("supplier_id") for obj in other_objects], [SUPPLIER_B]
+        )
+        self.assertIsNone(result.identity_state_for(SUPPLIER_IDENTITY_TARGET, SUPPLIER_B))
 
 
 if __name__ == "__main__":  # pragma: no cover - direct invocation

@@ -3239,6 +3239,15 @@ cardinality       = one reliable pair × each matching Plant ／ material reques
 - **不得**把 unresolved relationship 默认成 `eligible` ／ `ineligible`；**不得**由 `Supplier
   Performance` 反证 relationship；**不得** fabricate relationship ／ identity ／ procurement ／
   performance reference —— `ROOT_RELATIONSHIP_ABSENT` 保持 `relationship_reference = None`。
+- **Exact-identity finding（Issue #169 review finding）：** 对 request-bounded 且 pair grain 可靠的 pair，
+  F1 的 identity state 在 exact `Supplier` ／ `Material` identity 不可靠时**必须**携带具体的
+  `IDENTITY_RESOLUTION` ／ `UNRESOLVED_IDENTITY` finding：canonicalization 已给出的**逐字保留**；若
+  canonicalization 未给出（请求值无任何 canonical identity object，或仅 same-grain multiplicity
+  导致 unresolved），则由 Supplier Risk input seam 在**既有 taxonomy** 下产生 capability-scoped
+  finding（`§4.4.11` ／ `§4.4.26` ／ `§4.4.80` #4 ／ `§4.4.81` #7 ／ `§4.4.94`），指明 exact target、
+  exact requested value、affected pair ／ request 与 failure-isolated blast radius；**不得**新增
+  Category ／ Reason ／ enum ／ status，**不得**在没有 evidence 时 fabricate reference
+  （此 finding 不是 capability-unavailable：evidence role 已提供）。
 - fail-closed outcome **不是** Risk Card：**不得**计算 `DaysUntilNeed` ／ `LeadTimeRisk` ／
   `DeliveryRisk` ／ `QualityRisk` ／ `OverallSupplierRisk` 的 `LOW` ／ `MEDIUM` ／ `HIGH`；
   可靠 evidence 可保留用于 explainability。

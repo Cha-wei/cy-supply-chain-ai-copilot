@@ -463,12 +463,19 @@ class SupplierRiskIdentityState:
     first ／ last wins, no same-value deduplication and no fuzzy match is ever applied here
     (``§4.4.102`` C).
 
-    ``issues`` carries the construction's own ``IDENTITY_RESOLUTION`` ／ ``UNRESOLVED_IDENTITY`` findings
-    for exactly those unresolved identity records, verbatim (same layer, category, reason, location,
-    affected evidence and design reference); ``unresolved_references`` names every identity record that
-    had to be considered.  A ``resolved``-but-unreliable state (for example the value has no identity
-    record at all) carries no issue, because the construction raised none -- this seam never manufactures
-    a finding.
+    ``issues`` always carries a concrete exact-identity finding whenever ``reliable`` is ``False``, so
+    the approved Option A F1 contract can preserve the corresponding identity finding (``§2.7.27`` F1).
+    A finding the construction already raised for an unresolved identity record is republished
+    **verbatim** (same layer, category, reason, location, affected evidence, blast radius and design
+    reference) and ``unresolved_references`` ／ ``evidence_references`` name every identity record that
+    had to be considered.  When the construction leaves the capability-required exact identity
+    unresolved **without** a finding of its own -- no canonical identity object states the requested
+    value, or same-grain multiplicity alone left it unresolved -- this seam raises the narrow
+    capability-scoped ``IDENTITY_RESOLUTION`` ／ ``UNRESOLVED_IDENTITY`` Issue the capability needs
+    (``§4.4.11`` ／ ``§4.4.26`` ／ ``§4.4.80`` #4 ／ ``§4.4.81`` #7 ／ ``§4.4.94``).  That Issue identifies
+    the exact identity target, the exact requested value and the affected Supplier Risk pair, names the
+    accepted identity records it considered when they exist, and **never** fabricates an evidence
+    reference.  No new Category, Reason, enum or status is created either way.
 
     This is a read-only runtime surface: no canonical field, entity or grain is created, and it is never
     caller-injectable.
@@ -625,6 +632,14 @@ class SupplierRiskEvaluationContext:
         """Whether both pair identities are reliably resolved (a normal context always is)."""
 
         return bool(self.identities) and all(item.reliable for item in self.identities)
+
+    @property
+    def identity_issues(self) -> tuple[Issue, ...]:
+        """The pair-scoped exact-identity findings of this context (empty when both are reliable)."""
+
+        return _deduplicate_issues(
+            issue for item in self.identities for issue in item.issues
+        )
 
     @property
     def issues(self) -> tuple[Issue, ...]:
@@ -821,11 +836,13 @@ class SupplierRiskInputResult:
 
     ``identity_issues`` republishes, verbatim, the construction's own ``IDENTITY_RESOLUTION`` ／
     ``UNRESOLVED_IDENTITY`` findings for the supplier-side identity targets this capability consumes
-    (:data:`IDENTITY_FINDING_TARGETS`), so a consumer never re-reads the construction to know which
-    exact identity evidence could not be resolved (``§G``).  ``unkeyable_relationships`` names the
-    relationship entries whose ``supplier_id`` ／ ``material_code`` cannot reliably form an exact pair
-    grain: they produce **no** keyed outcome, their identity finding stays published, and no placeholder
-    identity or synthetic grain is ever created (``§F2``).
+    (:data:`IDENTITY_FINDING_TARGETS`), and adds the narrow capability-scoped finding this seam must
+    raise itself when the construction left the exact identity of an evaluated pair unresolved without
+    one (Issue #168 ``§F1`` ／ ``§G``), so a consumer never re-reads the construction to know which
+    exact identity evidence could not be resolved.  ``unkeyable_relationships`` names the relationship
+    entries whose ``supplier_id`` ／ ``material_code`` cannot reliably form an exact pair grain: they
+    produce **no** keyed outcome, their identity finding stays published, and no placeholder identity or
+    synthetic grain is ever created (``§F2``).
 
     The five distinguishable runtime states of this surface are, exactly:
 
@@ -1077,7 +1094,14 @@ def compute_supplier_risk_input(
             sorted(recommendations.valid_absence_grains, key=_family_key)
         ),
         capability_issues=capability_issues,
-        identity_issues=_identity_findings(construction),
+        identity_issues=_deduplicate_issues(
+            _identity_findings(construction)
+            + tuple(
+                issue
+                for item in tuple(ordered_contexts) + tuple(ordered_outcomes)
+                for issue in item.identity_issues
+            )
+        ),
         unkeyable_relationships=tuple(
             item for item in relationships if not _pair_keyable(item)
         ),
@@ -2002,8 +2026,16 @@ def _identity_state(
     value with **no** unresolved identity evidence claiming it is the only reliable state.  Competing
     unresolved evidence is never reconciled by a first ／ last win, a same-value deduplication or any
     other precedence (``§4.4.102`` C); a value no identity record states is equally not reliably
-    resolved.  The findings are the construction's own ``IDENTITY_RESOLUTION`` ／
-    ``UNRESOLVED_IDENTITY`` issues for exactly those unresolved records, republished verbatim.
+    resolved.
+
+    A finding the construction already raised for exactly those unresolved identity records is
+    republished verbatim.  When the capability-required exact identity is unresolved but the
+    construction raised **no** finding -- the requested value has no canonical identity object at all,
+    or same-grain multiplicity alone left the identity unresolved -- the seam raises the narrow
+    capability-scoped ``IDENTITY_RESOLUTION`` ／ ``UNRESOLVED_IDENTITY`` Issue described on
+    :class:`SupplierRiskIdentityState`, because ``§4.4.80`` allows a finding exactly when the current
+    capability needs the identity and cannot reliably resolve it (``§4.4.11``: dependent evidence must
+    resolve to its canonical identity, and the affected grain must not obtain a normal result).
     """
 
     resolved = tuple(
@@ -2024,20 +2056,102 @@ def _identity_state(
         and issue.location
         in {f"{obj.provenance.artifact}[{obj.provenance.record_ordinal}]" for obj in unresolved}
     )
+    resolved_references = tuple(sorted({obj.record_reference for obj in resolved}))
+    unresolved_references = tuple(sorted({obj.record_reference for obj in unresolved}))
+    issues = _deduplicate_issues(findings)
+    reliable = (
+        _usable_identifier(value)
+        and len(resolved_references) == 1
+        and not unresolved_references
+    )
+    if not reliable and not issues:
+        issues = (
+            _capability_identity_issue(
+                target=target,
+                role=role,
+                key=key,
+                value=value,
+                unresolved_references=unresolved_references,
+            ),
+        )
     return SupplierRiskIdentityState(
         target=target,
         role=role,
         value=value,
-        resolved_references=tuple(
-            sorted({obj.record_reference for obj in resolved})
+        resolved_references=resolved_references,
+        unresolved_references=unresolved_references,
+        evidence_references=tuple(obj.provenance for obj in unresolved + resolved),
+        issues=issues,
+    )
+
+
+def _capability_identity_issue(
+    *,
+    target: str,
+    role: str,
+    key: str,
+    value: Any,
+    unresolved_references: tuple[str, ...],
+) -> Issue:
+    """The narrow capability-scoped exact-identity finding this seam must raise itself.
+
+    Raised only when the current Supplier Risk capability needs the exact identity of a
+    request-bounded, reliably keyed pair and cannot reliably resolve it, while the construction raised
+    no finding of its own: either the accepted package states the evidence role but no canonical
+    identity evidence states the requested value at all, or matching evidence exists and same-grain
+    multiplicity left it unresolved.  The registered taxonomy is reused unchanged
+    (``IDENTITY_RESOLUTION`` ／ ``UNRESOLVED_IDENTITY``, ``§4.4.80`` #4 ／ ``§4.4.81`` #7); no new
+    Category, Reason, enum or status is created, and every field is truthful:
+
+    * ``location`` names the seam, the exact canonical identity target and the exact requested value;
+    * ``affected_evidence`` names the **logical evidence role** whose exact identity is unresolved --
+      never a record reference, and never a synthesised one when no record exists;
+    * the detail names the accepted identity records that were considered **when they exist**.
+    """
+
+    considered = ", ".join(unresolved_references)
+    if unresolved_references:
+        condition = (
+            f"{len(unresolved_references)} accepted {role} record(s) state this exact value but "
+            "canonicalization left the identity unresolved without raising a finding of its own "
+            "(same-grain multiplicity is never reconciled by first ／ last wins or same-value "
+            f"deduplication); considered identity records: {considered}"
+        )
+    else:
+        condition = (
+            f"the accepted package provides the {role} evidence role but no canonical identity "
+            "evidence states this exact value, so no identity record could be considered"
+        )
+    return Issue(
+        location=(
+            f"supplier_risk_input.identity[{target}/{_sort_text(value)}]"
         ),
-        unresolved_references=tuple(
-            sorted({obj.record_reference for obj in unresolved})
+        detail=(
+            f"the Supplier Risk capability requires the exact {target} identity "
+            f"({key} = {value!r}) of the request-bounded supplier_id + material_code pair it "
+            f"evaluates, but {condition}; the required exact identity therefore cannot be resolved, "
+            "so every evaluation request of this pair fails closed with Risk Evidence Status = "
+            "DATA_INCOMPLETE and no risk level is produced; no placeholder identity, fuzzy match, "
+            "guessed pair or fabricated evidence reference is created "
+            "(§4.4.11 / §4.4.26 / §4.4.80 #4 / §4.4.81 #7 / §4.4.94 / §2.7.27 F1)"
         ),
-        evidence_references=tuple(
-            obj.provenance for obj in unresolved + resolved
+        category=CATEGORY_IDENTITY_RESOLUTION,
+        reason=REASON_UNRESOLVED_IDENTITY,
+        layer=LAYER_2,
+        affected_evidence=role,
+        blast_radius=(
+            "the Supplier Risk evidence evaluation of this exact supplier_id + material_code pair "
+            "only, per Plant evaluation request"
         ),
-        issues=_deduplicate_issues(findings),
+        design_reference=(
+            "§4.4.11 / §4.4.26 / §4.4.80 #4 / §4.4.81 #7 / §4.4.94 / §2.7.27 F1 / §4.4.6 Capability C"
+        ),
+        consequence_context=(
+            "the exact identity evidence of this pair cannot be reliably resolved, so the affected "
+            "Supplier Risk evaluations fail closed (DATA_INCOMPLETE, never a normal Risk Evidence "
+            "Card); this is an exact-identity finding and never a capability-readiness condition -- "
+            "the evidence role is provided"
+        ),
     )
 
 
