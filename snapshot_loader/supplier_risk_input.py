@@ -50,10 +50,14 @@ Boundaries preserved by construction:
   never repaired -- the context keeps the reliable supplier-side evidence with no need date and fails
   closed with the existing ``PROVENANCE`` ／ ``PROVENANCE_UNRESOLVED`` ／ ``PROVENANCE_MISMATCH``
   semantics (``§4.4.69`` ／ ``§4.4.93``);
-* an unavailable capability (a required supplier-side evidence role was **not provided**) stays the
-  registered ``EVIDENCE_AVAILABILITY`` ／ ``EVIDENCE_ROLE_NOT_PROVIDED`` condition and is never faked
-  into a business ``DATA_INCOMPLETE`` Risk Card (``§4.4.6`` Capability C ／ ``§4.4.80`` #2 ／
-  ``§4.4.81`` #2 ／ ``§4.4.84``);
+* an unavailable capability stays the registered ``EVIDENCE_AVAILABILITY`` ／
+  ``EVIDENCE_ROLE_NOT_PROVIDED`` condition and is never faked into a business ``DATA_INCOMPLETE`` Risk
+  Card (``§4.4.6`` Capability C ／ ``§4.4.80`` #2 ／ ``§4.4.81`` #2 ／ ``§4.4.84``).  Capability C's
+  **evidence roles** are gated as roles: the ``Supplier identity`` role, the
+  ``Plant / Material identity context`` role (the only registered carrier of **Material identity**
+  evidence), the ``Supplier-Material Relationship`` role and the ``Supplier Performance`` role must each
+  be **provided** by the accepted package -- a role 10 ／ 11 record merely carrying ``supplier_id`` ／
+  ``material_code`` is not the identity evidence role (``§4.3.30`` C.2 ／ ``§4.2.18``);
 * the two ``Supplier Performance`` buckets are the **construction's own** ``objects_for`` ／
   ``unresolved_for`` decision and are never merged and re-graded (``§2.7.26`` D ／ ``§4.4.102`` F): an
   object the canonicalization left unresolved is never promoted back to a resolved observation, and no
@@ -108,6 +112,18 @@ SUPPLIER_RISK_INPUT_STAGE: str = "SUPPLIER_RISK_INPUT"
 #: module introduces no new target, role or property name.
 SUPPLIER_RELATIONSHIP_TARGET: str = "Supplier-Material Relationship"
 SUPPLIER_PERFORMANCE_TARGET: str = "Supplier Performance"
+
+#: The two **identity** evidence roles ``§4.4.6`` Capability C requires (rows ``Supplier identity`` and
+#: ``Material identity``) together with the canonicalization target literal each recognized role is
+#: assigned to (``§4.3.31`` B role 9 ／ role 1).  ``Supplier identity`` is its own recognized role; there
+#: is no separate ``Material identity`` role literal, because role 1 states one
+#: ``Plant / Material identity context`` evidence set whose records are assigned to entity **Plant** ＋
+#: entity **Material** (``§4.2.18`` row 1 ／ ``§4.1.4`` B), so its target literal is
+#: ``Plant + Material``.
+SUPPLIER_IDENTITY_ROLE: str = "Supplier identity"
+SUPPLIER_IDENTITY_TARGET: str = "Supplier"
+PLANT_MATERIAL_IDENTITY_ROLE: str = "Plant / Material identity context"
+PLANT_MATERIAL_IDENTITY_TARGET: str = "Plant + Material"
 
 #: The registered observation the relationship's eligibility evidence is registered under
 #: (``§4.2.8``: ``sourcing_status`` = Supplier-Material relationship eligibility context).
@@ -1351,38 +1367,84 @@ def _performance_applicability(
 # --- capability --------------------------------------------------------------------
 
 
+@dataclass(frozen=True, slots=True)
+class _RequiredEvidenceRole:
+    """One Capability C required evidence role and the target literal that carries it.
+
+    ``role`` is the registered logical evidence role the accepted package must have **declared**
+    (``§4.4.6`` Capability C ／ ``§4.3.31`` B role literal); ``target`` is the canonical target literal
+    ``CanonicalConstructionReport.present_roles`` reports for that role.  The two differ only for role 1,
+    whose single evidence set is assigned to two canonical identities.
+    """
+
+    role: str
+    target: str
+
+
+#: The ``§4.4.6`` Capability C evidence roles this seam can observe as a **declared logical evidence
+#: role**, in deterministic report order.
+#:
+#: * ``Supplier identity`` (role 9) and ``Plant / Material identity context`` (role 1, the only
+#:   recognized carrier of **Material identity** evidence) are the two identity rows Capability C
+#:   requires;
+#: * ``Supplier-Material Relationship`` (role 10) carries the relationship evidence and its eligibility
+#:   context; ``Supplier Performance`` (role 11) carries the four performance property rows.
+#:
+#: The remaining Capability C rows are **not** dataset-declared roles: ``RecommendationNeedDate`` ／
+#: ``AnalysisDate`` arrive through the registered upstream results, and the four performance properties
+#: live inside role 11.  Their absence is therefore the registered composition ／ field-level fail-safe
+#: (``§2.7.25`` D ／ E ／ ``§2.7.16``), never "evidence role not provided".
+_CAPABILITY_REQUIRED_ROLES: tuple[_RequiredEvidenceRole, ...] = (
+    _RequiredEvidenceRole(SUPPLIER_IDENTITY_ROLE, SUPPLIER_IDENTITY_TARGET),
+    _RequiredEvidenceRole(PLANT_MATERIAL_IDENTITY_ROLE, PLANT_MATERIAL_IDENTITY_TARGET),
+    _RequiredEvidenceRole(SUPPLIER_RELATIONSHIP_TARGET, SUPPLIER_RELATIONSHIP_TARGET),
+    _RequiredEvidenceRole(SUPPLIER_PERFORMANCE_TARGET, SUPPLIER_PERFORMANCE_TARGET),
+)
+
+
 def _capability_issues(
     construction: CanonicalConstructionReport,
 ) -> tuple[Issue, ...]:
-    """The registered capability-readiness finding for a supplier-side evidence role not provided.
+    """The registered capability-readiness finding for a required evidence role not provided.
 
-    A required logical evidence role the accepted package never provided is
-    ``EVIDENCE_AVAILABILITY`` ／ ``EVIDENCE_ROLE_NOT_PROVIDED`` -- the capability cannot execute
-    reliably -- and it must never be reported as a business ``DATA_INCOMPLETE`` Risk Card
-    (``§4.4.6`` Capability C ／ ``§4.4.80`` #2 ／ ``§4.4.81`` #2 ／ ``§4.4.84``).  Supplier and material
-    identity are carried by the relationship ／ performance records' own assignable properties, so the
-    roles checked here are exactly the two datasets this seam consumes.
+    ``§4.4.6`` Capability C requires, for an explicit ``supplier_id`` + ``material_code``: **Supplier
+    identity**, **Material identity**, the ``Supplier-Material Relationship`` evidence and its eligibility
+    context, the four ``Supplier Performance`` inputs, ``RecommendationNeedDate`` and ``AnalysisDate``.
+    A required role the accepted package never provided is ``EVIDENCE_AVAILABILITY`` ／
+    ``EVIDENCE_ROLE_NOT_PROVIDED`` -- the capability cannot execute reliably -- and it must never be
+    reported as a business ``DATA_INCOMPLETE`` Risk Card (``§4.4.6`` Capability C ／ ``§4.4.80`` #2 ／
+    ``§4.4.81`` #2 ／ ``§4.4.84``).
+
+    **Identity is gated by the evidence role, not by a value.**  A role 10 ／ 11 record that happens to
+    carry ``supplier_id`` ／ ``material_code`` is *not* the identity evidence role: a property being
+    assignable on a record never makes the required role provided (``§4.3.30`` C.2 ／ ``§4.2.18``:
+    "可被指派" ≠ "必须存在"), and ``present_roles`` is exactly the surface that distinguishes "the role was
+    never supplied" from "supplied with no record" (``§4.4.4`` ／ ``§4.4.5``).  Conversely, a **declared**
+    role whose record carries an unusable identity value stays a canonicalization ／ field-level matter
+    (``§4.4.26`` ／ ``§4.4.94``) and never becomes a capability finding here.
     """
 
     issues: list[Issue] = []
-    for target in (SUPPLIER_RELATIONSHIP_TARGET, SUPPLIER_PERFORMANCE_TARGET):
-        if target in construction.present_roles:
+    for required in _CAPABILITY_REQUIRED_ROLES:
+        if required.target in construction.present_roles:
             continue
         issues.append(
             Issue(
-                location=f"supplier_risk_input.capability[{target}]",
+                location=f"supplier_risk_input.capability[{required.role}]",
                 detail=(
-                    f"the accepted package states no {target} logical evidence role, so the Supplier "
-                    "Risk capability cannot execute reliably for this analysis run; this is a "
-                    "capability-readiness condition and never a business DATA_INCOMPLETE outcome"
+                    f"the accepted package states no {required.role} logical evidence role, so the "
+                    "Supplier Risk capability cannot execute reliably for this analysis run; this is a "
+                    "capability-readiness condition and never a business DATA_INCOMPLETE outcome "
+                    "(§4.4.6 Capability C)"
                 ),
                 category=_CATEGORY_EVIDENCE_AVAILABILITY,
                 reason=_REASON_EVIDENCE_ROLE_NOT_PROVIDED,
                 layer=LAYER_2,
-                affected_evidence=target,
+                affected_evidence=required.role,
                 blast_radius="the Supplier Risk capability of this analysis run only",
                 design_reference=(
-                    "§2.7.25 G / §4.4.6 Capability C / §4.4.80 #2 / §4.4.81 #2 / §4.4.84"
+                    "§2.7.25 F / §4.4.3 B / §4.4.4 / §4.4.6 Capability C / §4.4.80 #2 / §4.4.81 #2 / "
+                    "§4.4.84 / §4.3.31 B"
                 ),
                 consequence_context=(
                     "the capability is unavailable; no Supplier Risk evaluation context is formed and "
@@ -1525,6 +1587,8 @@ __all__ = [
     "ELIGIBILITY_INELIGIBLE",
     "ELIGIBILITY_UNRESOLVED",
     "PERFORMANCE_OBSERVATION_FIELDS",
+    "PLANT_MATERIAL_IDENTITY_ROLE",
+    "PLANT_MATERIAL_IDENTITY_TARGET",
     "ROOT_CONFLICTING_RELATIONSHIP_EVIDENCE",
     "ROOT_MAPPING_AMBIGUOUS",
     "ROOT_NEED_DATE_LINKAGE_ABSENT",
@@ -1541,6 +1605,8 @@ __all__ = [
     "SUPPLIER_ELIGIBILITY_BASIS_BY_LITERAL",
     "SUPPLIER_ELIGIBILITY_OUTCOMES",
     "SUPPLIER_ELIGIBILITY_REGISTRY",
+    "SUPPLIER_IDENTITY_ROLE",
+    "SUPPLIER_IDENTITY_TARGET",
     "SUPPLIER_PERFORMANCE_TARGET",
     "SUPPLIER_RELATIONSHIP_TARGET",
     "SUPPLIER_RISK_INPUT_STAGE",

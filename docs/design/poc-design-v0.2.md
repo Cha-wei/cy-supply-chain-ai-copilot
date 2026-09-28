@@ -5549,6 +5549,15 @@ required supplier-side evidence role NOT PROVIDED
 该 seam **不得**把 capability unavailable 伪造成 Risk Card `DATA_INCOMPLETE`
 （`§4.4.6` Capability C ／ `§4.4.80` #2 ／ `§4.4.81` #2 ／ `§4.4.84`）。
 
+**Identity evidence role（Issue #166，既有 `§4.4.6` Capability C 的 runtime 落地）：**
+Capability C 的 **`Supplier identity`**（recognized role 9）与 **`Material identity`**（recognized role 1
+`Plant / Material identity context`，唯一携带 Material identity evidence 的 role）**必须已被提供**：
+gate 依据是 `CanonicalConstructionReport.present_roles`（role **是否被提供**，`§4.4.4` ／ `§4.4.5`），
+**不是** role 10 ／ 11 record 上恰好携带的 `supplier_id` ／ `material_code`
+（property 可被指派 ≠ role 已提供；`§4.3.30` C.2 ／ `§4.2.18`）。role 未提供 ⇒ capability unavailable
+⇒ **不形成** evaluation context ／ Risk Card，且**不是** business `DATA_INCOMPLETE`；**已声明** role 的
+identity value 不可用仍属 canonicalization ／ field-level 语义（`§4.4.26` ／ `§4.4.94`）。
+
 **G. Preserved upstream surfaces（本 seam 只表达，不计算）**
 
 relationship ／ `sourcing_status` evidence ／ eligibility resolution ／ Supplier Performance ／

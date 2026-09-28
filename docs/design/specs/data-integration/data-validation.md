@@ -3121,6 +3121,27 @@ RecommendationNeedDate authority = BR-SHORTAGE-001 FirstShortageDate → registe
 **not provided** = `EVIDENCE_AVAILABILITY` ／ `EVIDENCE_ROLE_NOT_PROVIDED`（capability
 unavailable），**不得**表达为 Risk Card `OverallSupplierRisk = DATA_INCOMPLETE`。
 
+**Identity evidence role（Issue #166，既有 `§4.4.6` Capability C 的 runtime 落地）：**
+Capability C 的 **`Supplier identity`** 与 **`Material identity`** 是**必须提供**的 evidence role，
+与 relationship ／ performance dataset 一样是 capability-readiness gate：
+
+```text
+Supplier identity       = recognized role 9 literal，target literal = Supplier
+Material identity       = recognized role 1 literal `Plant / Material identity context`，
+                          target literal = Plant + Material（唯一携带 Material identity 的 role）
+gate 依据               = CanonicalConstructionReport.present_roles（role **是否被提供**）
+role 未提供             → EVIDENCE_AVAILABILITY ／ EVIDENCE_ROLE_NOT_PROVIDED
+                          → capability unavailable → **不形成** evaluation context ／ Risk Card
+```
+
+- role 10 ／ 11 的 record **恰好携带** `supplier_id` ／ `material_code` **不等于** identity evidence
+  role 已提供：property 可被指派 ≠ 该 role 已提供（`§4.3.30` C.2 ／ `§4.2.18`）；`present_roles`
+  正是区分「role 从未提供」与「提供但 0 record」的既有 surface（`§4.4.4` ／ `§4.4.5`）。
+- **已声明**的 role 若其 record 的 identity value 不可用，仍属 canonicalization ／ field-level 语义
+  （`§4.4.26` ／ `§4.4.94`），**不得**被改写成 capability finding。
+- `RecommendationNeedDate` ／ `AnalysisDate` 及四个 performance property **不是** dataset-declared
+  role：其缺失是既有 composition ／ field-level fail-safe（`§2.7.25` D ／ E ／ `§2.7.16`）。
+
 **本小节未新增** canonical field ／ entity ／ grain、**未新增** business enum ／ status、
 **未新增** Validation Category ／ Reason，**未**定义任何真实 source vocabulary
 （`APPROVED` ／ `ACTIVE` ／ `QUALIFIED` ／ `BLOCKED` ／ `INACTIVE` 仍**不得**出现），

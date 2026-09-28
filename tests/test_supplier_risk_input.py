@@ -22,10 +22,14 @@ from snapshot_loader import (
     ELIGIBILITY_ELIGIBLE,
     ELIGIBILITY_INELIGIBLE,
     PERFORMANCE_OBSERVATION_FIELDS,
+    PLANT_MATERIAL_IDENTITY_ROLE,
+    PLANT_MATERIAL_IDENTITY_TARGET,
     ROOT_PERFORMANCE_COMPETING_UNRESOLVED,
     ROOT_PERFORMANCE_OBSERVATION_ABSENT,
     ROOT_PERFORMANCE_OBSERVATION_MULTIPLE,
     ROOT_PERFORMANCE_OBSERVATION_UNRESOLVED,
+    SUPPLIER_IDENTITY_ROLE,
+    SUPPLIER_IDENTITY_TARGET,
     AnalysisRunBindingError,
     SupplierRiskInputResult,
     compute_procurement_policy_input,
@@ -164,9 +168,10 @@ class SupplierRiskInputTestCase(ProcurementRecommendationTestCase):
         moq_policies: tuple[dict[str, Any], ...] = (
             moq_policy_record(DEMAND, moq="100"),
         ),
-        supplier_identities: tuple[dict[str, Any], ...] = (),
+        supplier_identities: tuple[dict[str, Any], ...] | None = None,
         supplier_relationships: tuple[dict[str, Any], ...] = (),
         supplier_performances: tuple[dict[str, Any], ...] = (),
+        identity_evidence: bool = True,
         extra_plant_families: tuple[tuple[Any, Any, Any, Any], ...] = (),
         analysis_run_id: str = "RUN-1",
         package_id: str = "SIMULATED-PKG-0001",
@@ -177,7 +182,53 @@ class SupplierRiskInputTestCase(ProcurementRecommendationTestCase):
         ``extra_plant_families`` states additional Plant-scoped demand families of the same materials
         inside the *same* analysis run (``(plant_id, material_code, quantity, required_date)``), so a
         Plant-isolation test consumes genuinely formed upstream results instead of a fabricated one.
+
+        ``supplier_identities`` ／ ``identity_evidence`` state the **identity** evidence roles
+        ``§4.4.6`` Capability C requires (``Supplier identity`` ／ ``Plant / Material identity context``).
+        The default declares them for what the fixture itself describes -- one ``Supplier identity``
+        record per supplier named by its own role 10 ／ 11 records (``None``), and one
+        ``Plant / Material identity context`` record per Plant ／ material family it states
+        (``identity_evidence=True``) -- so the canonical fixture is capability-conformant.  Passing an
+        explicit empty tuple ／ ``identity_evidence=False`` is how a test states *"the role was never
+        provided"*, which is exactly the capability-readiness case and **not** the same thing as a
+        role-10 ／ 11 record carrying ``supplier_id`` ／ ``material_code``.
         """
+
+        relationships = tuple(supplier_relationships)
+        performances = tuple(supplier_performances)
+
+        if supplier_identities is None:
+            named_suppliers = {
+                record["supplier_id"]
+                for record in relationships + performances
+                if record.get("supplier_id") is not None
+            }
+            identities = tuple(
+                {"supplier_id": supplier_id}
+                for supplier_id in sorted(named_suppliers, key=str)
+            )
+        else:
+            identities = tuple(supplier_identities)
+
+        if identity_evidence:
+            families = {(PLANT, material) for material, _quantity, _date in demands}
+            families |= {
+                (record.get("plant_id", PLANT), record["material_code"])
+                for record in relationships + performances
+                if record.get("material_code") is not None
+            }
+            families |= {
+                (plant_id, material_code)
+                for plant_id, material_code, _quantity, _date in extra_plant_families
+            }
+            identity_contexts = tuple(
+                {"plant_id": plant_id, "material_code": material_code}
+                for plant_id, material_code in sorted(
+                    families, key=lambda pair: (str(pair[0]), str(pair[1]))
+                )
+            )
+        else:
+            identity_contexts = ()
 
         demand = [
             Demand(material, material, quantity, date)
@@ -196,9 +247,10 @@ class SupplierRiskInputTestCase(ProcurementRecommendationTestCase):
             safety_stock=safety,
             targets=tuple(context_targets),
             moq_policies=moq_policies,
-            supplier_identities=supplier_identities,
-            supplier_relationships=supplier_relationships,
-            supplier_performances=supplier_performances,
+            supplier_identities=identities,
+            supplier_relationships=relationships,
+            supplier_performances=performances,
+            identity_contexts=identity_contexts,
             extra_plant_families=extra_plant_families,
             analysis_run_id=analysis_run_id,
             package_id=package_id,
@@ -1487,6 +1539,181 @@ class PerformanceApplicabilityTests(SupplierRiskInputTestCase):
                 "ROOT_PERFORMANCE_OBSERVATION_MULTIPLE",
                 "ROOT_PERFORMANCE_OBSERVATION_UNRESOLVED",
             ],
+        )
+
+
+class CapabilityIdentityTests(SupplierRiskInputTestCase):
+    """``§4.4.6`` Capability C: the **identity** evidence roles are capability-readiness gates.
+
+    Capability C requires ``Supplier identity`` and ``Material identity`` evidence for an explicit
+    ``supplier_id`` + ``material_code``.  The gate is **role provision** -- reported by
+    ``CanonicalConstructionReport.present_roles`` -- and never a property that happens to be assignable
+    on a role 10 ／ 11 record (``§4.3.30`` C.2 ／ ``§4.2.18``: "可被指派" ≠ "必须存在").
+    """
+
+    def test_a39_a_missing_supplier_identity_role_is_capability_unavailable(self) -> None:
+        built = self.build_chain(
+            supplier_identities=(),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            name="a39-no-supplier-identity",
+        )
+        self.assertNotIn(SUPPLIER_IDENTITY_TARGET, built.construction.present_roles)
+        result = self.supplier_input(built)
+        self.assertFalse(result.capability_available)
+        # No evaluation context and therefore no Risk Card is formed.
+        self.assertEqual(result.evaluation_contexts, ())
+        self.assertIsNone(result.context_for(PLANT, SUPPLIER, DEMAND))
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in result.capability_issues],
+            [("EVIDENCE_AVAILABILITY", "EVIDENCE_ROLE_NOT_PROVIDED")],
+        )
+        issue = result.capability_issues[0]
+        self.assertEqual(issue.affected_evidence, SUPPLIER_IDENTITY_ROLE)
+        self.assertIn(SUPPLIER_IDENTITY_ROLE, issue.location)
+        self.assertIn(SUPPLIER_IDENTITY_ROLE, issue.detail)
+        self.assertEqual(issue.layer, 2)
+        self.assertIn("§4.4.6", issue.design_reference)
+        # The relationship decision itself is still resolved and nothing is dropped.
+        relationship = result.eligibility_for(SUPPLIER, DEMAND)
+        assert relationship is not None
+        self.assertEqual(relationship.outcome, ELIGIBILITY_ELIGIBLE)
+
+    def test_a40_all_required_identity_evidence_keeps_the_context_unchanged(self) -> None:
+        built = self.build_chain(
+            supplier_identities=({"supplier_id": SUPPLIER},),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            name="a40-all-required-evidence",
+        )
+        # Both identity evidence roles really are provided (not inferred from role 10 ／ 11 properties).
+        self.assertIn(SUPPLIER_IDENTITY_TARGET, built.construction.present_roles)
+        self.assertIn(PLANT_MATERIAL_IDENTITY_TARGET, built.construction.present_roles)
+        result = self.supplier_input(built)
+        self.assertTrue(result.capability_available)
+        self.assertEqual(result.capability_issues, ())
+        self.assertEqual(result.issues, ())
+        context = result.context_for(PLANT, SUPPLIER, DEMAND)
+        assert context is not None
+        self.assertEqual(context.grain, (SUPPLIER, DEMAND))
+        self.assertEqual(context.evaluation_context, (PLANT, DEMAND, SUPPLIER))
+        self.assertEqual(context.recommendation_need_date, D2)
+        observation = context.applicable_performance
+        assert observation is not None
+        self.assertEqual(observation.performance_period, "2026-Q3")
+        self.assertEqual(observation.standard_lead_time_days, "10")
+        self.assertEqual(context.issues, ())
+
+    def test_a41_a_missing_material_identity_role_is_capability_unavailable(self) -> None:
+        # Upstream does **not** make this construction impossible: the identity role is the only
+        # registered carrier of Material identity evidence and nothing in the canonicalization ／
+        # shortage ／ procurement chain requires it, so the same fixture still yields a complete
+        # procurement family.  It therefore has to be gated here.
+        built = self.build_chain(
+            supplier_identities=({"supplier_id": SUPPLIER},),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            identity_evidence=False,
+            name="a41-no-material-identity",
+        )
+        self.assertNotIn(PLANT_MATERIAL_IDENTITY_TARGET, built.construction.present_roles)
+        entry = self.recommendations(built).for_family(PLANT, DEMAND)
+        assert entry is not None
+        self.assertEqual(entry.recommendation_need_date, D2)
+        result = self.supplier_input(built)
+        self.assertFalse(result.capability_available)
+        self.assertEqual(result.evaluation_contexts, ())
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in result.capability_issues],
+            [("EVIDENCE_AVAILABILITY", "EVIDENCE_ROLE_NOT_PROVIDED")],
+        )
+        self.assertEqual(
+            result.capability_issues[0].affected_evidence, PLANT_MATERIAL_IDENTITY_ROLE
+        )
+        self.assertIn("§4.4.6", result.capability_issues[0].design_reference)
+
+    def test_a42_an_identity_capability_failure_is_not_a_business_outcome(self) -> None:
+        built = self.build_chain(
+            supplier_identities=(),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            identity_evidence=False,
+            name="a42-identity-capability-vs-business",
+        )
+        result = self.supplier_input(built)
+        self.assertFalse(result.capability_available)
+        self.assertEqual(result.evaluation_contexts, ())
+        # Both identity rows are reported, in deterministic order, using the existing taxonomy only.
+        self.assertEqual(
+            [issue.affected_evidence for issue in result.capability_issues],
+            [SUPPLIER_IDENTITY_ROLE, PLANT_MATERIAL_IDENTITY_ROLE],
+        )
+        self.assertEqual(
+            {(issue.category, issue.reason) for issue in result.issues},
+            {("EVIDENCE_AVAILABILITY", "EVIDENCE_ROLE_NOT_PROVIDED")},
+        )
+        # Not a semantic finding, not a business outcome and not a valid absence.
+        self.assertEqual(result.rule_issues, ())
+        self.assertEqual(result.inherited_issues, ())
+        self.assertFalse(result.is_valid_absence(PLANT, DEMAND))
+        payload = result.to_dict()
+        self.assertFalse(payload["capability_available"])
+        self.assertEqual(payload["evaluation_contexts"], [])
+        # The eligibility decision stays published: the capability gate drops no reliable evidence.
+        self.assertEqual(
+            [item["eligibility"] for item in payload["relationships"]],
+            [ELIGIBILITY_ELIGIBLE],
+        )
+        for forbidden in (
+            "DaysUntilNeed",
+            "LeadTimeRisk",
+            "DeliveryRisk",
+            "QualityRisk",
+            "OverallSupplierRisk",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, payload)
+
+    def test_a43_role_provision_is_gated_not_the_identity_value(self) -> None:
+        # A **declared** identity role whose record carries no usable identity value stays a
+        # canonicalization ／ field-level matter (``§4.4.26`` ／ ``§4.4.94``): the evidence role *was*
+        # provided, so the capability gate does not fire and no capability finding is fabricated.
+        null_identity = self.build_chain(
+            supplier_identities=({"supplier_id": None},),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            name="a43-null-identity-value",
+        )
+        self.assertIn(SUPPLIER_IDENTITY_TARGET, null_identity.construction.present_roles)
+        null_result = self.supplier_input(null_identity)
+        self.assertTrue(null_result.capability_available)
+        self.assertEqual(null_result.capability_issues, ())
+        self.assertIsNotNone(null_result.context_for(PLANT, SUPPLIER, DEMAND))
+
+        # An identity value the deterministic grouping key cannot use leaves the *identity* unresolved
+        # at canonicalization; the role is still provided and the gate still does not fire.
+        unresolved_identity = self.build_chain(
+            supplier_identities=({"supplier_id": []},),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            name="a43-unresolvable-identity-value",
+        )
+        self.assertIn(SUPPLIER_IDENTITY_TARGET, unresolved_identity.construction.present_roles)
+        self.assertEqual(
+            unresolved_identity.construction.objects_for(SUPPLIER_IDENTITY_TARGET), ()
+        )
+        self.assertEqual(
+            len(unresolved_identity.construction.unresolved_for(SUPPLIER_IDENTITY_TARGET)), 1
+        )
+        unresolved_result = self.supplier_input(unresolved_identity)
+        self.assertTrue(unresolved_result.capability_available)
+        self.assertEqual(unresolved_result.capability_issues, ())
+        self.assertEqual(
+            {
+                (issue.category, issue.reason)
+                for issue in unresolved_result.issues
+            },
+            set(),
         )
 
 
