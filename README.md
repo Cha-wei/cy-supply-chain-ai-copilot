@@ -137,7 +137,7 @@ CI 只运行标准库 `unittest` 套件与 thin CLI 检查，**不**运行 lint 
 
 当前验证证据：
 
-- **local**：`963 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures，本机
+- **local**：`964 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures，本机
   Python 3.14）；
 - **remote**：`main` push CI 在 **Python 3.11 与 3.12** 上运行同一 deterministic SIMULATED
   套件并通过，另有 Foundation checks 与 thin CLI 端到端检查。
