@@ -6642,7 +6642,7 @@ Phase B 不得阻塞 Phase A
 | I-7 | BOM parent ／ requirement context（G4-A） | A | `BOM Component` evidence → resolved Production Requirement context | context reference | required | n/a | exactly one context per evidence set | `UNRESOLVED_IDENTITY` | **Stage A**（§4.4.11）→ `UNRESOLVED_IDENTITY` |
 | I-8 | effective demand context relation outcomes（G5-A） | A | source substitute material ＋ target material ＋ allocation record | two independent relation outcomes（references） | required（same AcceptedPackage-scoped source provenance） | required | exactly one pair or unresolved | `SEMANTIC_UNRESOLVED` | **Stage A**（§4.4.60 path **B**）→ `SEMANTIC_UNRESOLVED` |
 | I-9 | Inventory ownership ／ POC Inventory Scope resolution（A′） | A | exact `Inventory Snapshot` evidence citation | runtime Inventory scope context（ownership ＋ scope membership），derived by the approved deterministic basis registry | required（same AcceptedPackage-scoped source provenance） | required（exact association `mapping_basis`） | exactly one applicable resolution per Inventory evidence or unresolved | ownership → `IDENTITY_RESOLUTION` ／ `UNRESOLVED_IDENTITY`；scope → `SCOPE_COVERAGE` ／ `UNRESOLVED_SCOPE` | **Stage A**（§4.4.102 C）→ unresolved；不得 first ／ last wins、不得同值去重、不得跨 association 借用 basis |
-| I-10 | Supplier-Material relationship eligibility ＋ supplier-material evaluation composition ＋ Supplier Performance observation applicability（`A′`，Issue #162；Option A，Issue #164） | A ／ B | exact `Supplier-Material Relationship` evidence citation ／ `supplier_id` ＋ `material_code`；composition 另加 `plant_id` ＋ `RecommendationNeedDate`；applicability 另加 exact `supplier_id` ＋ `material_code` 的 resolved ／ unresolved performance buckets | runtime eligibility outcome（`eligible` ／ `ineligible` ／ `unresolved`）＋ read-only evaluation context list（含 applicable performance observation 或显式 applicability unresolved） | required（same AcceptedPackage-scoped source provenance） | required（exact registered `mapping_basis` on the `sourcing_status` observation） | exactly one applicable eligibility resolution per relationship, or unresolved；one evaluation context per eligible relationship × its material's Procurement Recommendation Context；exactly one applicable Supplier Performance observation per context, or unresolved；Capability C 的 identity evidence role（`Supplier identity` ／ `Material identity` = role 1）亦为 required（Issue #166，按 role 是否被提供判定） | eligibility unresolved → `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`；relationship absent ／ 无可用 `sourcing_status` ／ 无 approved basis → unresolved；performance applicability unresolved（0 ／ ≥2 periods、same-period duplicate、competing unresolved）→ `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`；required supplier-side role not provided（含 identity evidence role 未提供）→ `EVIDENCE_AVAILABILITY` ／ `EVIDENCE_ROLE_NOT_PROVIDED`（capability unavailable） | **Stage A**（§4.4.61 ／ §4.4.62 ／ §4.4.103 ／ §4.4.104 ／ §2.7.26）→ unresolved；不得 first ／ last wins、不得 `relationship exists ⇒ eligible`、不得 `Supplier exists ⇒ eligible`、不得跨 Plant 借用 `RecommendationNeedDate`、不得用 record 自身 grain 重新推导 resolution、不得用 first ／ last ／ latest period 或 `PerformanceUpdatedAt` 选择 observation、不得把 record 上可指派的 property 当作 identity evidence role 已提供 |
+| I-10 | Supplier-Material relationship eligibility ＋ supplier-material evaluation composition ＋ Supplier Performance observation applicability ＋ non-normal evidence outcome（`A′`，Issue #162；Option A，Issue #164 ／ #168） | A ／ B | exact `Supplier-Material Relationship` evidence citation ／ `supplier_id` ＋ `material_code`；composition 另加 `plant_id` ＋ `RecommendationNeedDate`；applicability 另加 exact `supplier_id` ＋ `material_code` 的 resolved ／ unresolved performance buckets；outcome 另加 request-bounded universe ＋ per-pair exact identity readiness | runtime eligibility outcome（`eligible` ／ `ineligible` ／ `unresolved`）＋ read-only evaluation context list（含 applicable performance observation 或显式 applicability unresolved）＋ request-bounded fail-closed evidence outcomes ＋ identity issues ＋ unkeyable relationship entries | required（same AcceptedPackage-scoped source provenance） | required（exact registered `mapping_basis` on the `sourcing_status` observation） | exactly one applicable eligibility resolution per relationship, or unresolved；one evaluation context per eligible relationship × its material's Procurement Recommendation Context；exactly one applicable Supplier Performance observation per context, or unresolved；Capability C 的 identity evidence role（`Supplier identity` ／ `Material identity` = role 1）亦为 required（Issue #166，按 role 是否被提供判定）；one fail-closed outcome per reliably keyed unresolved pair × each matching request（Issue #168） | eligibility unresolved → `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`；relationship absent ／ 无可用 `sourcing_status` ／ 无 approved basis → unresolved；performance applicability unresolved（0 ／ ≥2 periods、same-period duplicate、competing unresolved）→ `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`；required supplier-side role not provided（含 identity evidence role 未提供）→ `EVIDENCE_AVAILABILITY` ／ `EVIDENCE_ROLE_NOT_PROVIDED`（capability unavailable）；reliably keyed unresolved pair ＋ matching request → fail-closed evidence outcome Risk Evidence Status = `DATA_INCOMPLETE`（既有 literal，**非** Risk Card）；`ROOT_RELATIONSHIP_ABSENT` ⇒ 0 business outcome；pair grain 不可靠 ⇒ no keyed result ＋ 保留 `IDENTITY_RESOLUTION` ／ `UNRESOLVED_IDENTITY` | **Stage A**（§4.4.61 ／ §4.4.62 ／ §4.4.103 ／ §4.4.104 ／ §4.4.105 ／ §2.7.26 ／ §2.7.27）→ unresolved；不得 first ／ last wins、不得 `relationship exists ⇒ eligible`、不得 `Supplier exists ⇒ eligible`、不得跨 Plant 借用 `RecommendationNeedDate`、不得用 record 自身 grain 重新推导 resolution、不得用 first ／ last ／ latest period 或 `PerformanceUpdatedAt` 选择 observation、不得把 record 上可指派的 property 当作 identity evidence role 已提供、不得由 performance evidence 反证 relationship ／ 自行建立 request、不得为 fail-closed outcome 计算任何 risk level |
 
 injection **不**决定任何真实 ERP ／ source file ／ ERP field physical carrier；`loss_rate` 的
 Entity ／ Dataset ／ Source Field 归属仍**不得**决定（§4.4.15）。
@@ -6941,7 +6941,9 @@ canonical field ／ grain ／ business enum ／ Validation Category ／ Reason�
 vocabulary，也**不实现**任何 risk classification（`§2.7.25` ／ `data-validation.md` §4.4.103）。
 Supplier Performance observation **applicability**（Option A）为该 seam 的第一个 runtime 消费边界，
 登记见 `§2.7.26` ／ `data-validation.md` §4.4.104；该边界同时修正了已合并 seam 的 performance bucket
-handling defect（Issue #164）。
+handling defect（Issue #164）。Capability C 的 identity evidence role gate 见 `§4.4.6` 登记
+（Issue #166 ／ #167）。该 seam 的 **output universe ／ non-normal evidence outcome**（Option A，
+Issue #168）登记见 `§2.7.27` ／ `data-validation.md` §4.4.105。
 
 ```text
 phase                     = A（supplier-side canonical objects ／ roles 9 ～ 11）
@@ -7005,10 +7007,39 @@ applicability               exact supplier_id + material_code ∧ exactly one **
                             max(updated_at)、closest period、aggregation、same-value dedup、caller 选择
 performance buckets       = objects_for ／ unresolved_for **保持分离**且为 authoritative；
                             **不得**按 `grain is not None` 等 record 自身字段重新推导 resolution
+output universe           = **request-bounded**（Option A，Issue #168；§2.7.27）：
+                            由实际存在的 procurement evaluation request
+                            （plant_id ＋ material_code ＋ RecommendationNeedDate）驱动；
+                            **不得**扫描 Supplier Performance ／ Supplier identity ／
+                            Supplier-Material Relationship evidence 自行创建 request；
+                            无 matching request ⇒ 无 business result；NORMAL ／ BUFFER_BREACH
+                            valid absence ⇒ no request ⇒ **不是** DATA_INCOMPLETE
+fail-closed outcome       = relationship evidence 真实 ∧ pair grain 可可靠确定 ∧ eligibility
+                            unresolved（**或** exact identity unresolved，F1）∧ matching request
+                            → 每个 matching request 一个 fail-closed evidence outcome：
+                              Risk Evidence Status = DATA_INCOMPLETE（既有 business literal；
+                              **不是** Risk Card，**不得**计算任何 risk level）
+                              保留 supplier_id ／ material_code ／ plant_id ／ RecommendationNeedDate
+                              （仅当 upstream 可靠）／ Analysis Run binding ／ eligibility state ＋
+                              root condition ／ exact Validation Issues ／ truthful references ／
+                              upstream need-date state ／ reliable evidence
+relationship absent       = ROOT_RELATIONSHIP_ABSENT（仅 performance 声称的 pair）⇒ **0** business
+                            outcome（与 performance record 数量无关）；relationship_reference = None；
+                            **不得** fabricate relationship ／ eligible state ／ card grain ／ candidate
+ineligible                = valid exclusion ⇒ no result ／ NO DATA_INCOMPLETE ／ NO issue
+exact identity unresolved = F1 pair grain 可靠 ⇒ fail-closed outcome（root SUPPLIER_RISK_IDENTITY_UNRESOLVED）；
+                            F2 pair grain 不可靠 ⇒ **NO keyed** result；保留 IDENTITY_RESOLUTION ／
+                            UNRESOLVED_IDENTITY；**不得** placeholder identity ／ guessed pair ／
+                            fuzzy match ／ synthetic grain
+cardinality               = one reliable pair × each matching Plant ／ material request = one
+                            fail-closed outcome；两个 Plant ⇒ 两个独立 outcome（不跨 Plant 借用 date）
 read-only surface         = per-relationship eligibility ＋ considered references ＋
                             per-context plant ／ material ／ supplier ／ RecommendationNeedDate ＋
                             accepted Supplier Performance objects（resolved ／ unresolved）＋
                             applicable performance observation（或显式 applicability unresolved）＋
+                            per-pair exact identity readiness（target ／ value ／ usable ／ reliable ／
+                            references ／ identity issues）＋ fail-closed evidence outcomes ＋
+                            identity issues ＋ unkeyable relationship entries ＋
                             Analysis Run binding ＋ valid-absence families
 ```
 
