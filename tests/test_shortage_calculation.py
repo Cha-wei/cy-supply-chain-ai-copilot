@@ -388,6 +388,13 @@ class Built:
     #: The accepted package the whole chain was built from, so a Phase B seam that must read accepted
     #: evidence (the procurement policy input) consumes exactly this package and no other.
     accepted: Any = None
+    #: The materialised package root and its configured trusted package-input boundary, so an
+    #: integration harness can re-run the registered chain over the very same accepted content view.
+    root: Any = None
+    boundary: Any = None
+    #: The registered Phase A in-process logical handoff (``§4.3.31`` E ／ G) this chain used, so an
+    #: integration harness composes the same accepted package with the same registered injection.
+    handoff: Any = None
 
 
 # --- scaffolding -------------------------------------------------------------------
@@ -915,26 +922,24 @@ class ShortageRuleTestCase(unittest.TestCase):
                         )
                     )
 
-        construction = construct_canonical_objects(
-            accepted,
-            PhaseAHandoff(
-                analysis_run_id=analysis_run_id,
-                analysis_date=analysis_date,
-                bom_parent_context=tuple(bom_binding),
-                loss_rate=tuple(loss_handoffs),
-                inventory_scope=tuple(
-                    InventoryScopeHandoff(
-                        inventory_evidence=cite(
-                            ROLE_INVENTORY, ARTIFACT_INVENTORY, ordinal
-                        ),
-                        scope_observation="plant_id",
-                        scope_resolution_basis=BASIS_SCOPE_IN,
-                    )
-                    for ordinal in range(len(inventory_records))
-                ),
-                effective_demand=tuple(demand_entries),
+        handoff = PhaseAHandoff(
+            analysis_run_id=analysis_run_id,
+            analysis_date=analysis_date,
+            bom_parent_context=tuple(bom_binding),
+            loss_rate=tuple(loss_handoffs),
+            inventory_scope=tuple(
+                InventoryScopeHandoff(
+                    inventory_evidence=cite(
+                        ROLE_INVENTORY, ARTIFACT_INVENTORY, ordinal
+                    ),
+                    scope_observation="plant_id",
+                    scope_resolution_basis=BASIS_SCOPE_IN,
+                )
+                for ordinal in range(len(inventory_records))
             ),
+            effective_demand=tuple(demand_entries),
         )
+        construction = construct_canonical_objects(accepted, handoff)
         requirements = compute_requirement_calculation(construction)
         inbounds = compute_effective_inbound(construction, requirements)
         inventory_result = compute_opening_usable_inventory(construction)
@@ -952,6 +957,9 @@ class ShortageRuleTestCase(unittest.TestCase):
             substitutes=substitutes,
             shortage=shortage,
             accepted=accepted,
+            root=built.root,
+            boundary=self.boundary,
+            handoff=handoff,
         )
 
     # --- assertion helpers -------------------------------------------------------------

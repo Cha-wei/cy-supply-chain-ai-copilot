@@ -7304,6 +7304,78 @@ POC success                   = NOT CLAIMED
 
 ---
 
+### 10.2 First-Tranche Integration ／ Acceptance Closure（Issue #172）
+
+**Registration Status：`REGISTERED`** —— 本小节是第一批 deterministic tranche 的 **current-state
+runtime 实现记录**（`§10.1` B ／ C 的落地状态）。它**不修改** `§10.1`：该小节的 A ～ F（含 F 的
+`Implementation status = NOT STARTED`）是 **Issue #116 时点记录**，**不回写**；本小节只登记其后
+各独立 implementation unit 已合入 `main` 的当前状态。
+
+**A. 已实现的 first-tranche 模块与 rules（current state）**
+
+| `§10.1` B module responsibility | Current state | Runtime surface |
+| --- | --- | --- |
+| Snapshot loader / import | `IMPLEMENTED`（Layer-1 package acceptance） | `load_package` ／ `load_package_from_paths` |
+| Validation | `IMPLEMENTED`（Layer-2 canonical evidence validation；Layer 3 capability readiness 由各 capability 的 runtime seam 承担） | `validate_layer2` |
+| Canonical data objects | `IMPLEMENTED`（Phase A construction；Phase B 的 role-12 policy channel 由 Phase B seam 打开） | `construct_canonical_objects` ／ `compute_procurement_policy_input` |
+| Deterministic business rules | `IMPLEMENTED`：`BR-REQUIREMENT-001`、`BR-INVENTORY-001`、`BR-INBOUND-001`、`BR-SUBSTITUTE-001`、`BR-SHORTAGE-001`、`BR-PROCUREMENT-001`、`BR-SUPPLIER-RISK-001` | 各 rule 的 `compute_*` entry point |
+| Procurement recommendation result | `IMPLEMENTED`（含 Phase B `ApplicableMOQ` 解析与 Phase B family partition 校验） | `compute_procurement_recommendation` |
+
+`BR-SUPPLIER-RISK-001` 的 runtime 上游边界见 `data-validation.md` `§4.4.103` ～ `§4.4.106`。
+
+**B. Integration ／ composition surface**
+
+```text
+入口   = snapshot_loader/first_tranche_pipeline.py
+         run_first_tranche_pipeline(import_report, handoff)
+         run_first_tranche_pipeline_from_paths(package_dir, trusted_root, handoff)
+串联   = Layer 1 -> Layer 2 -> Phase A canonical objects
+         -> Requirement ／ Inventory ／ Inbound ／ Substitute -> Shortage
+         -> Phase B procurement policy input -> Procurement Recommendation
+         -> Supplier Risk runtime input seam（A′）-> Supplier Risk Evidence
+```
+
+**严格限定（不得被后续实现放宽）：**
+
+- 只调用各 module 已登记的 public entry point；**不**重实现任何 rule、**不**重算任何上游 result、
+  **不**派生 ／ 修复 ／ 默认任何 business value；
+- **唯一** caller-supplied 语义是已登记 input：configured trusted package-input boundary
+  （`§4.3.28` D.3）与 in-process logical handoff（`PhaseAHandoff`，`§4.3.31` E ／ G I-1 ～ I-9）；
+  本 surface **不**自行创建 Analysis Run、**不**发明 handoff entry；
+- 文件读取只发生在 Layer 1（`§4.3.31` E：file reading 在外层）；business stage 只消费明确的
+  in-memory 结果；
+- Analysis Run ／ exactly-one accepted package binding 由**各消费 seam** 自行校验（`F3-RB1`）；
+  pipeline 不新增也不绕过该校验；
+- 不新增 aggregate business status：stage 记录只表达 **execution** 事实（是否进入、未进入原因），
+  每个 business outcome 仍留在其自身已登记的 result 内；
+- `REJECTED` ／ not-accepted package ⇒ 不建立 Analysis Run、不进入任何下游 deterministic stage
+  （`§4.4.2` Layer 1 ／ `IC-18`）。
+
+**C. Boundary**
+
+本记录**不新增** canonical field ／ entity ／ grain、business rule ／ status ／ enum、Validation
+Category ／ Reason 或 input carrier；**不修改** `§2.1` ～ `§2.7` 的语义、`§4.4` 的 validation
+语义与 taxonomy、`§4.3.31` 的 injection boundary；**不修改** `adr-001-deterministic-core.md`
+（orchestration 边界由 ADR-001 已登记）；**不**实现 Web ／ API ／ service、LLM ／ Agent ／ Tool
+protocol、HITL、RBAC ／ secrets、persistent Audit、database ／ persistence、real ERP ／ SRM
+Adapter、production write-back、P1。
+
+```text
+§10.1 F 的 Issue #116 时点记录 = 保持不变
+First deterministic tranche    = IMPLEMENTED + composed（本小节）
+Unrestricted implementation    = NOT AUTHORIZED
+§6 ～ §9 full closure           = NOT CLAIMED（JIT blockers 见 §10.1 D）
+§10 overall resolved           = NOT CLAIMED
+POC Design v0.2                = DRAFT
+POC success                    = NOT CLAIMED
+```
+
+本 tranche 的验证证据仅为 **SIMULATED** fixtures 上的 deterministic `unittest` 套件（含
+composition 与 acceptance closure 覆盖）；`IMPLEMENTED` ≠ `VALIDATED` ≠ `POC SUCCESS`，
+也不构成真实企业集成证据。
+
+---
+
 ## 11. Open Design Backlog
 
 > 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14`、`VB-15`、`VB-16`、`VB-17`、`VB-18`、`VB-27`、`VB-28`、`VB-29` 已获得 Human Approval。
