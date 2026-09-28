@@ -3266,6 +3266,69 @@ cardinality       = one reliable pair × each matching Plant ／ material reques
 **未新增** Validation Category ／ Reason，**未**修改任何 threshold ／ period policy ／ freshness policy。
 Runtime 实现登记见 `snapshot-import-contract.md` §4.3.31 G **I-10** 与 `poc-design-v0.2.md` §2.7.27。
 
+#### 4.4.106 Supplier Risk Evidence calculation runtime record（Issue #170）
+
+**Registration Status：`REGISTERED`** —— 本小节是 `§2.7.4` ～ `§2.7.16` 已批准 deterministic risk semantics 的
+**runtime 实现记录**（`snapshot_loader/supplier_risk_calculation.py`，入口
+`compute_supplier_risk(input_result)`）。它**不新增** canonical field ／ entity ／ grain、**不新增**
+business enum ／ status ／ Risk Level、**不新增** Validation Category ／ Reason，**不重定义**任何 threshold、
+period policy 或 freshness policy。
+
+```text
+input authority     = 只消费 SupplierRiskInputResult（evaluation context ／ fail-closed evidence
+                      outcome ／ AnalysisRunContext）；**不**重读 CanonicalConstructionReport、
+                      AcceptedPackage ／ raw evidence、shortage result、procurement internals、filesystem
+card universe       = input_result.evaluation_contexts 每项恰好一张 normal card
+                      evaluation key = plant_id + material_code + supplier_id
+                      business grain = supplier_id + material_code（未改变；不跨 Plant 合并）
+no normal card      = capability unavailable ／ ineligible ／ no request ／ valid absence ／
+                      ROOT_RELATIONSHIP_ABSENT ／ unkeyable pair ／ 既有 fail-closed outcome
+no-card 诊断保留     = input_result 的 relationships（含 root condition、exact Validation Issues、
+                      considered references、truthful references）／ identity_issues ／
+                      unkeyable_relationships **原样**传播，使 ROOT_RELATIONSHIP_ABSENT 的
+                      SEMANTIC_UNRESOLVED finding 与 unkeyable pair 的 IDENTITY_RESOLUTION ／
+                      UNRESOLVED_IDENTITY finding 可从最终 result 审计；**不得**新建 card ／ business
+                      result ／ grain ／ reference；ineligible 仍为 valid exclusion（无 issue），
+                      valid absence 仍为 valid absence，capability unavailable 保持可区分
+fail-closed 传播     = input_result.evidence_outcomes **原样**传播为 DATA_INCOMPLETE rows，
+                      不重算任何 risk dimension
+DaysUntilNeed       = RecommendationNeedDate - AnalysisDate（exact C-3 calendar date；无 clock ／
+                      timezone ／ clamp ／ 猜测；负值原样保留）
+LeadTimeRisk        = LT > DaysUntilNeed → HIGH；否则 LOW（**无** MEDIUM、无 buffer ／ grace）
+                      任一日期 missing ／ invalid、DaysUntilNeed < 0、applicability unresolved、
+                      LT missing ／ invalid ／ < 0 → DATA_INCOMPLETE
+DeliveryRisk        = >= 95 LOW ／ 90 – < 95 MEDIUM ／ < 90 HIGH
+QualityRisk         = >= 98 LOW ／ 95 – < 98 MEDIUM ／ < 95 HIGH
+                      missing ／ invalid ／ < 0 ／ > 100 → DATA_INCOMPLETE（0 为合法极值 → HIGH）
+PerformancePeriod   = 该二维度完整性所需；applicability unresolved ⇒ 四者全部 fail closed；
+                      observation 已确定但 period 不可用 ⇒ DeliveryRisk ／ QualityRisk = DATA_INCOMPLETE，
+                      LeadTimeRisk 依自身输入独立判定（`§4.4.64` 语义不变）
+                      本 tranche **只**应用已登记的 representation 规则：absent ／ JSON null → MISSING，
+                      非 string → INVALID_TYPE；period vocabulary ／ window 为 `DESIGN PENDING`、
+                      valid ／ invalid period policy 为 `NOT DEFINED`，故空 string 等**不得**被判为
+                      INVALID_TYPE（`§4.4.42` 禁止自行新增 text-length ／ stringency 规则）
+PerformanceUpdatedAt = `§4.4.34`「present 时必须是 valid temporal value」的 runtime 落地：
+                      present 且违反既有 C-4 representation（error ／ 不可能日期或时钟 ／ 缺 explicit
+                      offset ／ 非 string）⇒ 保留原值 ＋ FIELD_VALUE ／ INVALID_TYPE ＋ 真实
+                      observation reference ＋ request-scoped；**不改变**任何 risk dimension、
+                      completeness 或 Overall；absent ／ null 保持 non-blocking 且无 finding；
+                      不引入 timezone ／ freshness 业务策略，不用作 applicability ／ selection
+OverallSupplierRisk = 三个维度全部可靠时取 max severity（LOW < MEDIUM < HIGH，**非** weighted score）；
+                      任一维度不可靠 ⇒ DATA_INCOMPLETE，且可靠维度继续保留展示
+exact numeric       = existing ExactQuantity ／ parse helpers；无 binary float、无 Decimal arithmetic、
+                      无 rounding ／ quantize ／ truncate ／ clamp ／ default
+field findings      = 既有 taxonomy only：FIELD_VALUE ／ MISSING ／ INVALID_TYPE ／
+                      OUT_OF_DEFINED_RANGE（窄、failure-isolated、引用真实 provenance，
+                      不 fabricate reference；DATA_INCOMPLETE 仍为 business outcome，非 Reason）
+```
+
+**Boundary：** 本记录**不修改** `§2.7.4` ～ `§2.7.8` 的 business thresholds 与 `§2.7.19` 的 threshold
+governance，**不修改** `§2.7.23` 的 `PerformancePeriod` 完整性要求（period vocabulary ／ freshness 仍
+`DESIGN PENDING`），**不修改** `adr-001-deterministic-core.md`，也**不**实现 supplier ranking ／ selection ／
+winner、quantity ／ MOQ change、order split、Procurement Draft ／ HITL、LLM classification、real ERP ／ SRM
+mapping、persistence ／ service。Runtime 上游契约见 `§4.4.103` ／ `§4.4.104` ／ `§4.4.105` 与
+`poc-design-v0.2.md` §2.7.25 ～ §2.7.27。
+
 ---
 
 <!-- END MIGRATED LEGACY §4.4 BODY -->

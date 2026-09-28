@@ -5184,6 +5184,10 @@ SupplierRisk = HIGH
 
 > 本表的 runtime 落地边界（request-bounded output universe、fail-closed evidence outcome、
 > `ROOT_RELATIONSHIP_ABSENT` 与 exact identity unresolved 的处置、cardinality）见 **§2.7.27**。
+> 本表与 `§2.7.4` ～ `§2.7.9` 的 deterministic risk semantics 的 runtime 实现记录见
+> `data-validation.md` §4.4.106（Issue #170）：`DaysUntilNeed` ／ `LeadTimeRisk` ／ `DeliveryRisk` ／
+> `QualityRisk` ／ `OverallSupplierRisk` 的判定与 fail-safe 均按本表执行，**未**修改任何 threshold、
+> `PerformancePeriod` policy 或 freshness policy。
 
 #### 2.7.17 Deterministic Logic Boundary
 
