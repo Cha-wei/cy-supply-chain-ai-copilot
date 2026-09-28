@@ -52,7 +52,7 @@ thin CLI 调用 application orchestration；orchestration 组合 snapshot loadin
 
 ## Clarification — CLI → orchestration wiring is not a first-tranche completion condition
 
-**Registration Status：`CLARIFICATION`（**非** amendment；**不改变**本 ADR 的 Approved Decision）**
+**Registration Status：** `CLARIFICATION`（非 amendment；不改变本 ADR 的 Approved Decision）
 **Authority：** Human Decision（Issue #174，2026-09-28）
 
 - 本文 `Dependency and interaction boundary` 的 `thin CLI 调用 application orchestration` 登记的是
