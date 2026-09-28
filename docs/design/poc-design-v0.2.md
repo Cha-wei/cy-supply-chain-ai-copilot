@@ -5382,6 +5382,10 @@ QualityRisk = DATA_INCOMPLETE
 > 本 Task **不定义** performance freshness threshold / maximum age / rolling window。
 > 这些仍属于后续 Design。
 
+**Applicability 边界**（Issue #164 Human Decision，Option A）：当同一 `supplier_id` ＋ `material_code`
+存在**多个** `Supplier Performance` observation 时，「哪一个 observation 适用于本次 evaluation」属于
+**applicability** 问题，登记见 `§2.7.26`。本小节**不**选择 period，也**不**定义 period policy。
+
 #### 2.7.24 Supplier-Material Relationship Eligibility
 
 `VR-006` 已存在：
@@ -5567,6 +5571,105 @@ not a physical carrier ／ Adapter ／ ERP ／ SRM mapping
 `PerformancePeriod` 完整性要求，也**不修改** `adr-001-deterministic-core.md`。
 Runtime 实现登记：`snapshot-import-contract.md` §4.3.31 G **I-10**；
 eligibility runtime record：`data-validation.md` §4.4.103。
+
+---
+
+#### 2.7.26 Supplier Performance Observation Applicability（Option A，Human Decision，Issue #164）
+
+**Registration Status：`REGISTERED`** —— 依据 **Human Decision
+`APPROVED — Option A: Exactly-one Supplier Performance Observation Applicability`**（Issue #164）。
+
+本小节**只**登记 `BR-SUPPLIER-RISK-001` 的一个 runtime **applicability** 边界：在已经 canonicalize 的
+`Supplier Performance` evidence 中，**哪一个 observation 适用于一次 evaluation**。它**不实现**任何 risk
+calculation（`DaysUntilNeed` ／ `LeadTimeRisk` ／ `DeliveryRisk` ／ `QualityRisk` ／
+`OverallSupplierRisk` 及各 threshold 仍属后续实现），**不定义**真实 period policy ／ freshness policy，
+也**不**选择 ／ 排名 ／ 推荐 supplier。
+
+**A. Normal path：exactly one applicable observation**
+
+```text
+exact supplier_id + material_code
+  ∧ exactly one **resolved** Supplier Performance observation
+  ∧ 没有与之竞争的 unresolved performance evidence
+        ↓
+该 observation 是**唯一** applicable unit
+        ↓
+其五个已登记属性作为一个 coherent unit 被消费：
+  PerformancePeriod ／ PerformanceUpdatedAt ／ DeliveryPerformance ／
+  QualityPerformance ／ standard_lead_time_days
+```
+
+- **不得**跨 record ／ 跨 period 拼接字段：不允许「一个 record 取 period、另一个 record 取
+  `standard_lead_time_days`」这类组合（`§2.7.23` ／ `§4.4.63` ／ `§4.4.64`）。
+- 这是一个 **first-tranche runtime consumption boundary**：它**不**使 `standard_lead_time_days`
+  永久归 period 所有，也**不**改变 `§2.7.23` 的 period policy 状态（仍为后续 Design）。
+- 「exactly one」必须由 evidence 本身唯一确定；caller **不得**注入 selection，也**不得**注入 outcome。
+
+**B. Unresolved applicability（必须 fail closed）**
+
+以下情形一律为 applicability **unresolved**，taxonomy 为
+`SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`：
+
+| # | 情形 | 行为 |
+| --- | --- | --- |
+| 1 | 0 个 resolved observation（无 evidence，或 evidence 存在但无 resolved observation） | unresolved；evidence 保持可见，**不得**凭空补值 |
+| 2 | ≥2 个 resolved observation（不同 `PerformancePeriod`） | unresolved；**无** precedence |
+| 3 | 同一 period 的重复 record（canonicalization 已判为 unresolved grain） | **保持** unresolved；**不得**因同值而 dedup ／ 合并 |
+| 4 | 1 个 resolved ＋ 任意 competing unresolved performance evidence | unresolved；**不得**采用那个 resolved observation |
+| 5 | 任何其他无法唯一确定的组合 | unresolved |
+
+**明确禁止**作为 resolution 依据：first ／ last ／ latest period、newest `PerformanceUpdatedAt`、
+`max(updated_at)`、closest period、任何 aggregation ／ average、same-value deduplication、
+caller-selected evidence、LLM ／ heuristic 选择。`PerformanceUpdatedAt` **永远不是**
+selection authority（`§2.7.23` ／ `§4.4.64`）。
+
+future `LeadTimeRisk` ／ `DeliveryRisk` ／ `QualityRisk` ／ `OverallSupplierRisk` **必须**能够对
+applicability unresolved 的 context **fail closed**。可靠的 evidence **必须**保持可见、**不得**被静默丢弃。
+
+**C. Applicability 与 field-level fail-safe 分离**
+
+- applicability 无法唯一确定 → `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`；
+- 在**已经确定**的 observation **内部**出现的字段问题 → 仍按既有 `FIELD_VALUE` ／
+  `MISSING` ／ `INVALID_TYPE` ／ `OUT_OF_DEFINED_RANGE` 处理（`§2.7.23` ／ `§4.4.64`）。
+
+本边界**不**产生任何 risk value，也**不**自行宣布 business `DATA_INCOMPLETE`（`§4.4.102` F）。
+
+**D. Construction bucket authority（同时修正已合并 `A′` seam 的 defect）**
+
+```text
+objects_for(target)     = construction 自己判定的 resolved bucket（authoritative）
+unresolved_for(target)  = construction 自己判定的 unresolved bucket（authoritative）
+```
+
+- 两个 bucket **必须保持分离**，**不得**先合并再重新判定；
+- **不得**用 `obj.grain is not None` 之类方式重新推导 resolution：canonicalization 拒绝的 resolution
+  **不得**被下游恢复；因此 canonicalization 判为 unresolved 的 record（例如缺 `PerformancePeriod`、
+  或同一 `supplier_id` ＋ `material_code` ＋ `PerformancePeriod` grain 上的多条 record）**不得**被
+  seam 提升为 resolved observation；
+- Issue #164 前已合并的 `A′` seam 曾把两个 bucket 合并后按 `grain` 重新分类，使上述记录被当作
+  resolved 消费；该 defect 已在 Issue #164 中修正。
+
+**E. Context obligation**
+
+evaluation context 必须能够让 future rule **确定性**判断：恰好一个 applicable observation ／
+applicability unresolved（并说明原因）／ 存在 competing unresolved evidence ／ 精确的 evidence
+reference（**不得**伪造 reference）。允许 runtime-only 的窄表示；caller **不得**注入 selection 或 outcome。
+
+**严格限定：**
+
+```text
+not a new canonical entity ／ field ／ grain ／ business enum ／ status
+not a new Validation Category ／ Reason
+not a supplier ranking ／ selection ／ recommendation capability
+not a Risk classification ／ threshold or quantity calculation
+not a real period policy ／ freshness policy ／ maximum age
+not a physical carrier ／ Adapter ／ ERP ／ SRM mapping
+```
+
+本登记**不修改** `§2.7.4` ～ `§2.7.8` 的 business thresholds，**不修改** `§2.7.23` 的
+`PerformancePeriod` 完整性要求，也**不修改** `adr-001-deterministic-core.md`。
+Runtime 实现登记：`snapshot-import-contract.md` §4.3.31 G **I-10**；
+applicability runtime record：`data-validation.md` §4.4.104。
 
 ---
 

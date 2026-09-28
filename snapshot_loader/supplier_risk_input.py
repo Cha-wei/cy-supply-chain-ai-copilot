@@ -17,7 +17,13 @@ Risk Evidence Card.  This module is that seam and nothing else:
 * it preserves the real upstream surfaces a future rule needs (relationship evidence, eligibility
   resolution, Supplier Performance evidence, ``standard_lead_time_days``, ``DeliveryPerformance``,
   ``QualityPerformance``, ``PerformancePeriod``, ``PerformanceUpdatedAt``, ``RecommendationNeedDate``
-  and the Analysis Run's ``AnalysisDate``) as **read-only** objects and references.
+  and the Analysis Run's ``AnalysisDate``) as **read-only** objects and references;
+* it applies the approved **Option A** Supplier Performance **applicability** boundary (``§2.7.26``):
+  a context consumes performance evidence only when **exactly one** ``Supplier Performance``
+  observation is applicable to its exact supplier + material -- exactly one resolved observation and no
+  competing unresolved performance evidence -- and otherwise reports the applicability as
+  ``SEMANTIC_RESOLUTION`` ／ ``SEMANTIC_UNRESOLVED`` so a future dimension fails closed.  Thresholds,
+  the real period policy and the freshness policy stay out of scope entirely.
 
 It deliberately computes **no** risk: no ``DaysUntilNeed``, no ``LeadTimeRisk`` ／ ``DeliveryRisk`` ／
 ``QualityRisk`` ／ ``OverallSupplierRisk``, no threshold comparison, no ranking ／ selection ／
@@ -47,7 +53,11 @@ Boundaries preserved by construction:
 * an unavailable capability (a required supplier-side evidence role was **not provided**) stays the
   registered ``EVIDENCE_AVAILABILITY`` ／ ``EVIDENCE_ROLE_NOT_PROVIDED`` condition and is never faked
   into a business ``DATA_INCOMPLETE`` Risk Card (``§4.4.6`` Capability C ／ ``§4.4.80`` #2 ／
-  ``§4.4.81`` #2 ／ ``§4.4.84``).
+  ``§4.4.81`` #2 ／ ``§4.4.84``);
+* the two ``Supplier Performance`` buckets are the **construction's own** ``objects_for`` ／
+  ``unresolved_for`` decision and are never merged and re-graded (``§2.7.26`` D ／ ``§4.4.102`` F): an
+  object the canonicalization left unresolved is never promoted back to a resolved observation, and no
+  downstream consumer can recover a resolution the canonicalization refused.
 
 ``ADR-001`` is unchanged: every value this seam carries is either an accepted canonical value copied
 verbatim or an existing runtime reference; no canonical entity ／ field ／ grain ／ business enum and no
@@ -130,6 +140,29 @@ ROOT_NEED_DATE_UNRESOLVED: str = "RECOMMENDATION_NEED_DATE_UNRESOLVED"
 #: support it: the required linkage is either absent or points at another context.
 ROOT_NEED_DATE_LINKAGE_ABSENT: str = "RECOMMENDATION_NEED_DATE_LINKAGE_ABSENT"
 ROOT_NEED_DATE_LINKAGE_MISMATCH: str = "RECOMMENDATION_NEED_DATE_LINKAGE_MISMATCH"
+#: Runtime trace labels for **why** the applicable Supplier Performance observation is unresolved
+#: (``§2.7.26``, approved Option A).  They are trace only: the registered taxonomy stays the inherited
+#: ``SEMANTIC_RESOLUTION`` ／ ``SEMANTIC_UNRESOLVED`` and no new Category ／ Reason ／ status is created.
+#: ``absent``: no ``Supplier Performance`` evidence at all; ``unresolved``: evidence exists but the
+#: construction resolved **no** observation for this exact supplier + material (a missing
+#: ``PerformancePeriod``, or records the construction left unresolved on one grain);
+#: ``multiple``: **several** resolved observations (distinct measurement periods);
+#: ``competing``: exactly one resolved observation next to unresolved competing evidence.
+ROOT_PERFORMANCE_OBSERVATION_ABSENT: str = "PERFORMANCE_OBSERVATION_ABSENT"
+ROOT_PERFORMANCE_OBSERVATION_UNRESOLVED: str = "PERFORMANCE_OBSERVATION_UNRESOLVED"
+ROOT_PERFORMANCE_OBSERVATION_MULTIPLE: str = "PERFORMANCE_OBSERVATION_MULTIPLE"
+ROOT_PERFORMANCE_COMPETING_UNRESOLVED: str = "PERFORMANCE_OBSERVATION_COMPETING_UNRESOLVED"
+
+#: The five registered ``Supplier Performance`` properties consumed as **one coherent runtime evidence
+#: unit** by approved Option A (``§2.7.26`` A).  These are the existing canonical property names -- the
+#: registration creates no new field, and fields are never spliced across records ／ periods.
+PERFORMANCE_OBSERVATION_FIELDS: tuple[str, ...] = (
+    "PerformancePeriod",
+    "PerformanceUpdatedAt",
+    "DeliveryPerformance",
+    "QualityPerformance",
+    "standard_lead_time_days",
+)
 
 #: The **existing** registered capability-readiness pair for a required logical evidence role that the
 #: accepted package did not provide (``§4.4.80`` #2 ／ ``§4.4.81`` #2), used verbatim exactly as the
@@ -258,6 +291,93 @@ class SupplierRelationshipEligibility:
 
 
 @dataclass(frozen=True, slots=True)
+class SupplierPerformanceObservation:
+    """The **one** applicable ``Supplier Performance`` observation of an evaluation context.
+
+    Approved **Option A** (``§2.7.26``): a normal context consumes performance evidence only when
+    **exactly one** ``Supplier Performance`` observation is applicable to this exact ``supplier_id`` ＋
+    ``material_code`` -- exactly one resolved canonical object and no competing unresolved performance
+    evidence.  The five registered properties (``PerformancePeriod``, ``PerformanceUpdatedAt``,
+    ``DeliveryPerformance``, ``QualityPerformance``, ``standard_lead_time_days``) are then consumed as
+    **one coherent unit**: this type exposes only values of ``object``, so no caller can splice a value
+    from another record or another measurement period, and no aggregation ／ precedence exists.
+
+    This is a **runtime consumption boundary**, not a new canonical entity ／ grain: it wraps an
+    already-accepted, already-canonicalized ``Supplier Performance`` object.  It also does **not** make
+    ``standard_lead_time_days`` permanently period-owned -- the real period policy stays
+    ``DESIGN PENDING`` (``§2.7.23``).
+
+    The named accessors are conveniences that answer ``None`` for a property the accepted object does
+    not assign (never ``0``／ ``False`` and never a value from elsewhere); the wrapped ``object`` keeps
+    the exact ``ABSENT``-preserving surface (``CanonicalObject.value_of`` ／ ``has``) for a consumer that
+    must distinguish "not assigned" from a JSON ``null``.
+    """
+
+    object: CanonicalObject
+
+    @property
+    def canonical_target(self) -> str:
+        return self.object.canonical_target
+
+    @property
+    def record_reference(self) -> str:
+        return self.object.record_reference
+
+    @property
+    def evidence_reference(self) -> EvidenceReference:
+        """The accepted object's own package-scoped provenance (never re-derived)."""
+
+        return self.object.provenance
+
+    @property
+    def performance_period(self) -> Any:
+        return self.object.value_of("PerformancePeriod", None)
+
+    @property
+    def performance_updated_at(self) -> Any:
+        return self.object.value_of("PerformanceUpdatedAt", None)
+
+    @property
+    def delivery_performance(self) -> Any:
+        return self.object.value_of("DeliveryPerformance", None)
+
+    @property
+    def quality_performance(self) -> Any:
+        return self.object.value_of("QualityPerformance", None)
+
+    @property
+    def standard_lead_time_days(self) -> Any:
+        return self.object.value_of("standard_lead_time_days", None)
+
+    def values(self) -> dict[str, Any]:
+        """The five registered properties of **this** observation, as one unit (``None`` if absent)."""
+
+        return {name: self.object.value_of(name, None) for name in PERFORMANCE_OBSERVATION_FIELDS}
+
+    def absent_fields(self) -> tuple[str, ...]:
+        """The registered properties this observation's own accepted object does not assign."""
+
+        return tuple(
+            name for name in PERFORMANCE_OBSERVATION_FIELDS if not self.object.has(name)
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "canonical_target": self.object.canonical_target,
+            "canonicalization_role": self.object.canonicalization_role,
+            "record_reference": self.object.record_reference,
+            "evidence_reference": _evidence_payload(self.object.provenance),
+            "grain": (
+                None
+                if self.object.grain is None  # pragma: no cover - an applicable object is resolved
+                else [{"name": prop.name, "value": prop.value} for prop in self.object.grain]
+            ),
+            "values": self.values(),
+            "absent_fields": list(self.absent_fields()),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class SupplierRiskEvaluationContext:
     """One Supplier Risk evaluation context: an eligible relationship of a procurement context.
 
@@ -277,11 +397,22 @@ class SupplierRiskEvaluationContext:
     fail closed on it.  No date is guessed and no date is borrowed from another context.
 
     ``performance`` ／ ``unresolved_performance`` carry the real accepted ``Supplier Performance``
-    canonical objects of this exact supplier + material -- resolved and supplied-but-ungrainable (for
-    example a missing measurement period) -- so a future rule can read ``standard_lead_time_days``,
-    ``DeliveryPerformance``, ``QualityPerformance``, ``PerformancePeriod`` and
-    ``PerformanceUpdatedAt`` without re-reading any raw evidence and without this seam computing
+    canonical objects of this exact supplier + material -- **exactly** the construction's own resolved
+    and unresolved buckets, never re-graded by this seam -- so a future rule can read
+    ``standard_lead_time_days``, ``DeliveryPerformance``, ``QualityPerformance``, ``PerformancePeriod``
+    and ``PerformanceUpdatedAt`` without re-reading any raw evidence and without this seam computing
     anything.  This seam states no risk value at all.
+
+    ``applicable_performance`` is the approved **Option A** consumption boundary (``§2.7.26``): it is the
+    single applicable :class:`SupplierPerformanceObservation` of this context when **exactly one**
+    resolved observation exists and no unresolved performance evidence competes with it, and ``None``
+    when the applicable observation is not uniquely determinable.  ``performance_root_condition`` names
+    **why** (``ROOT_PERFORMANCE_*``) and the matching ``SEMANTIC_RESOLUTION`` ／
+    ``SEMANTIC_UNRESOLVED`` issue is carried in ``rule_issues``.  ``None`` never means "no performance
+    evidence is available" -- it means the applicability is unresolved, so a future ``LeadTimeRisk`` ／
+    ``DeliveryRisk`` ／ ``QualityRisk`` ／ ``OverallSupplierRisk`` must fail closed for this context while
+    the reliable evidence stays visible in the two buckets and no observation is ever selected by
+    first ／ last ／ latest period, by ``PerformanceUpdatedAt``, by proximity or by aggregation.
     """
 
     plant_id: Any
@@ -291,6 +422,8 @@ class SupplierRiskEvaluationContext:
     eligibility: SupplierRelationshipEligibility
     performance: tuple[CanonicalObject, ...] = ()
     unresolved_performance: tuple[CanonicalObject, ...] = ()
+    applicable_performance: SupplierPerformanceObservation | None = None
+    performance_root_condition: str | None = None
     root_condition: str | None = None
     notes: tuple[str, ...] = ()
     inherited_issues: tuple[Issue, ...] = ()
@@ -313,6 +446,24 @@ class SupplierRiskEvaluationContext:
         return self.recommendation_need_date is not None
 
     @property
+    def performance_applicability_unresolved(self) -> bool:
+        """Whether exactly one applicable ``Supplier Performance`` observation could be determined.
+
+        ``True`` means the applicability is unresolved -- **not** that no performance evidence exists:
+        the evidence of both buckets stays readable (``§2.7.26`` B).
+        """
+
+        return self.applicable_performance is None
+
+    @property
+    def performance_observed_for(self) -> Any:
+        """The measurement period the applicable observation belongs to, or ``None``."""
+
+        if self.applicable_performance is None:
+            return None
+        return self.applicable_performance.performance_period
+
+    @property
     def issues(self) -> tuple[Issue, ...]:
         return _deduplicate_issues(self.inherited_issues + self.rule_issues)
 
@@ -329,6 +480,13 @@ class SupplierRiskEvaluationContext:
             "unresolved_performance": [
                 _object_payload(item) for item in self.unresolved_performance
             ],
+            "applicable_performance": (
+                None
+                if self.applicable_performance is None
+                else self.applicable_performance.to_dict()
+            ),
+            "performance_applicability_unresolved": self.performance_applicability_unresolved,
+            "performance_root_condition": self.performance_root_condition,
             "root_condition": self.root_condition,
             "notes": list(self.notes),
             "inherited_issues": [issue.to_dict() for issue in self.inherited_issues],
@@ -505,7 +663,7 @@ def compute_supplier_risk_input(
 
     records = _supplier_records(accepted)
     relationship_evidence = _relationship_evidence(construction)
-    performance_evidence = _performance_evidence(construction)
+    resolved_performance, unresolved_performance = _performance_evidence(construction)
     relationship_role_present = SUPPLIER_RELATIONSHIP_TARGET in construction.present_roles
 
     capability_issues = _capability_issues(construction)
@@ -516,14 +674,19 @@ def compute_supplier_risk_input(
     )
     relationships = _relationships(
         evidence,
-        performance_evidence=performance_evidence,
+        claimed_performance=resolved_performance + unresolved_performance,
         relationship_role_present=relationship_role_present,
     )
 
     evaluation_contexts: list[SupplierRiskEvaluationContext] = []
     if not capability_issues:
         evaluation_contexts.extend(
-            _composition(relationships, performance_evidence, recommendations)
+            _composition(
+                relationships,
+                resolved_performance,
+                unresolved_performance,
+                recommendations,
+            )
         )
 
     ordered_contexts = sorted(evaluation_contexts, key=_context_key)
@@ -666,7 +829,7 @@ def _resolve_evidence(
 def _relationships(
     evidence: Sequence[SupplierRelationshipEligibility],
     *,
-    performance_evidence: Sequence[CanonicalObject],
+    claimed_performance: Sequence[CanonicalObject],
     relationship_role_present: bool,
 ) -> tuple[SupplierRelationshipEligibility, ...]:
     """One eligibility decision per claimed ``supplier_id`` + ``material_code`` pair.
@@ -677,6 +840,11 @@ def _relationships(
     ``Supplier-Material Relationship`` evidence **was** provided, is unresolved as well -- performance
     evidence never implies a relationship (``§4.4.61``), and no relationship reference is fabricated
     for it.
+
+    ``claimed_performance`` is used **only** to learn which pairs performance evidence claims and which
+    records had to be considered; it is not a resolution bucket.  Whether a performance object is
+    resolved or unresolved is decided by the construction alone and is never re-derived here
+    (``§2.7.26`` D).
     """
 
     pairs: list[tuple[Any, Any]] = []
@@ -684,7 +852,7 @@ def _relationships(
         (item.supplier_id, item.material_code) for item in evidence
     ] + [
         (obj.value_of("supplier_id", None), obj.value_of("material_code", None))
-        for obj in performance_evidence
+        for obj in claimed_performance
         if obj.value_of("supplier_id", None) is not None
         and obj.value_of("material_code", None) is not None
     ]:
@@ -732,7 +900,7 @@ def _relationships(
                 root=ROOT_RELATIONSHIP_ABSENT,
                 considered=tuple(
                     obj.record_reference
-                    for obj in performance_evidence
+                    for obj in claimed_performance
                     if (obj.value_of("supplier_id", None), obj.value_of("material_code", None))
                     == pair
                 ),
@@ -813,7 +981,8 @@ def _unresolved_relationship(
 
 def _composition(
     relationships: Sequence[SupplierRelationshipEligibility],
-    performance_evidence: Sequence[CanonicalObject],
+    resolved_performance: Sequence[CanonicalObject],
+    unresolved_performance: Sequence[CanonicalObject],
     recommendations: ProcurementRecommendationResult,
 ) -> list[SupplierRiskEvaluationContext]:
     """One evaluation context per (Procurement Recommendation Context, eligible relationship).
@@ -830,6 +999,10 @@ def _composition(
     points at another context never becomes a normal evaluation context and never has its claimed date
     trusted -- the context keeps the reliable supplier-side evidence with **no** need date, so a future
     ``LeadTimeRisk`` ／ ``OverallSupplierRisk`` must fail closed.
+
+    The two ``Supplier Performance`` buckets are passed through **separately**, exactly as the
+    construction reported them, and the approved Option A applicability boundary (``§2.7.26``) is
+    applied per context from those two buckets only.
     """
 
     eligible = [item for item in relationships if item.eligible]
@@ -839,10 +1012,18 @@ def _composition(
         for relationship in eligible:
             if relationship.material_code != entry.material_code:
                 continue
-            performance, unresolved_performance = _performance_for(
-                performance_evidence,
+            performance, competing_unresolved = _performance_for(
+                resolved_performance,
+                unresolved_performance,
                 supplier_id=relationship.supplier_id,
                 material_code=entry.material_code,
+            )
+            applicability = _performance_applicability(
+                plant_id=entry.plant_id,
+                material_code=entry.material_code,
+                supplier_id=relationship.supplier_id,
+                resolved=performance,
+                unresolved=competing_unresolved,
             )
             contexts.append(
                 SupplierRiskEvaluationContext(
@@ -852,11 +1033,13 @@ def _composition(
                     recommendation_need_date=decision.need_date,
                     eligibility=relationship,
                     performance=performance,
-                    unresolved_performance=unresolved_performance,
+                    unresolved_performance=competing_unresolved,
+                    applicable_performance=applicability.observation,
+                    performance_root_condition=applicability.root_condition,
                     root_condition=decision.root_condition,
-                    notes=(decision.note,),
+                    notes=(decision.note, applicability.note),
                     inherited_issues=decision.inherited_issues,
-                    rule_issues=decision.rule_issues,
+                    rule_issues=decision.rule_issues + applicability.issues,
                 )
             )
     return contexts
@@ -978,31 +1161,190 @@ def _need_date_decision(entry: ProcurementRecommendation) -> _NeedDateDecision:
 
 
 def _performance_for(
-    performance_evidence: Sequence[CanonicalObject],
+    resolved_evidence: Sequence[CanonicalObject],
+    unresolved_evidence: Sequence[CanonicalObject],
     *,
     supplier_id: Any,
     material_code: Any,
 ) -> tuple[tuple[CanonicalObject, ...], tuple[CanonicalObject, ...]]:
-    """The accepted ``Supplier Performance`` objects of one exact supplier + material.
+    """The accepted ``Supplier Performance`` objects of one exact supplier + material, per bucket.
 
-    ``§4.4.63``: performance evidence of another material is never shared, and ``§2.7.23``: the
-    measurement period is never replaced by ``updated_at``.  Objects whose grain could not be resolved
-    (for example a missing ``PerformancePeriod``) are returned separately so a future rule can fail the
-    affected dimensions closed while the record stays visible.
+    ``§4.4.63``: performance evidence of another material is never shared, and ``§2.7.23`` ／
+    ``§2.7.26`` B: the measurement period is never replaced by ``updated_at``.
+
+    Both buckets come from the canonicalization's **own** resolution decision -- ``objects_for`` ／
+    ``unresolved_for`` -- and are only *filtered* to this exact supplier + material.  Whether an
+    accepted object is resolved is **never** re-derived here from its own fields ／ grain: the
+    construction already decided it, so an object it left unresolved (a missing ``PerformancePeriod``,
+    or several records sharing one grain) is never silently promoted back into a resolved observation,
+    and no downstream consumer can recover a resolution the canonicalization refused (``§2.7.26`` D ／
+    ``§4.4.102`` F).
     """
 
-    resolved: list[CanonicalObject] = []
-    unresolved: list[CanonicalObject] = []
-    for obj in performance_evidence:
-        if (
-            obj.value_of("supplier_id", None) != supplier_id
-            or obj.value_of("material_code", None) != material_code
-        ):
-            continue
-        (resolved if obj.grain is not None else unresolved).append(obj)
-    return (
-        tuple(sorted(resolved, key=_record_key)),
-        tuple(sorted(unresolved, key=_record_key)),
+    def matching(evidence: Sequence[CanonicalObject]) -> tuple[CanonicalObject, ...]:
+        return tuple(
+            sorted(
+                (
+                    obj
+                    for obj in evidence
+                    if obj.value_of("supplier_id", None) == supplier_id
+                    and obj.value_of("material_code", None) == material_code
+                ),
+                key=_record_key,
+            )
+        )
+
+    return matching(resolved_evidence), matching(unresolved_evidence)
+
+
+@dataclass(frozen=True, slots=True)
+class _PerformanceApplicability:
+    """What one context's ``Supplier Performance`` evidence may contribute to a future rule."""
+
+    observation: SupplierPerformanceObservation | None
+    root_condition: str | None
+    note: str
+    issues: tuple[Issue, ...] = ()
+
+
+def _performance_applicability(
+    *,
+    plant_id: Any,
+    material_code: Any,
+    supplier_id: Any,
+    resolved: Sequence[CanonicalObject],
+    unresolved: Sequence[CanonicalObject],
+) -> _PerformanceApplicability:
+    """The approved **Option A** applicability decision: exactly one observation, or unresolved.
+
+    Exactly **one** applicable ``Supplier Performance`` observation requires all of (``§2.7.26`` A ／ B):
+
+    - exactly one **resolved** observation of this exact ``supplier_id`` ＋ ``material_code``; and
+    - **no** competing unresolved performance evidence of the same supplier ＋ material.
+
+    Anything else is **unresolved applicability** -- 0 resolved, several resolved observations
+    (distinct measurement periods), records the construction left unresolved on one grain (including a
+    same-period duplicate), exactly one resolved next to competing unresolved evidence, or any other
+    not-uniquely-determinable state -- and is reported as ``SEMANTIC_RESOLUTION`` ／
+    ``SEMANTIC_UNRESOLVED``.
+
+    **Forbidden** as a resolution: first ／ last ／ latest period, newest ``PerformanceUpdatedAt``,
+    ``max(updated_at)``, "closest" period, any aggregation ／ average, same-value deduplication,
+    caller-selected evidence, and any LLM ／ heuristic choice.  ``PerformanceUpdatedAt`` is **never** a
+    selection authority (``§2.7.23`` ／ ``§4.4.64``).  Reliable evidence is never dropped: both buckets
+    stay on the context regardless of this decision, and no risk value ／ ``DATA_INCOMPLETE`` is stated
+    here (``§4.4.102`` F): the future ``LeadTimeRisk`` ／ ``DeliveryRisk`` ／ ``QualityRisk`` ／
+    ``OverallSupplierRisk`` decides its own outcome and fails closed when the applicability is
+    unresolved.
+    """
+
+    if len(resolved) == 1 and not unresolved:
+        return _PerformanceApplicability(
+            observation=SupplierPerformanceObservation(resolved[0]),
+            root_condition=None,
+            note=(
+                "exactly one Supplier Performance observation is applicable to this exact supplier_id "
+                "+ material_code, so this context consumes its five registered properties -- "
+                "PerformancePeriod, PerformanceUpdatedAt, DeliveryPerformance, QualityPerformance and "
+                "standard_lead_time_days -- as one coherent unit; no value is taken from another record "
+                "or another measurement period (§2.7.26 A / §4.4.63 / §4.4.64)"
+            ),
+        )
+
+    if not resolved:
+        absent = not unresolved
+        root_condition = (
+            ROOT_PERFORMANCE_OBSERVATION_ABSENT
+            if absent
+            else ROOT_PERFORMANCE_OBSERVATION_UNRESOLVED
+        )
+        detail = (
+            "the accepted package provides no Supplier Performance evidence for this exact supplier_id "
+            "+ material_code, so no applicable performance observation exists"
+            if absent
+            else (
+                f"{len(unresolved)} Supplier Performance record(s) claim this exact supplier_id + "
+                "material_code, but the canonicalization resolved no observation for them (for example "
+                "an unreliable ／ missing PerformancePeriod, or several records on one grain), so no "
+                "applicable performance observation can be determined"
+            )
+        )
+        branch = (
+            "no performance evidence exists for this exact supplier + material"
+            if absent
+            else "the supplied performance evidence carries no reliably resolved observation"
+        )
+        note = (
+            "no applicable Supplier Performance observation: "
+            + branch
+            + ", so the performance-derived Risk dimensions must fail closed rather than read a "
+            "partial or unperiodised record; the evidence stays visible and no value is invented "
+            "(§2.7.26 B ／ §4.4.64 ／ §4.4.102 F)"
+        )
+    elif len(resolved) > 1:
+        root_condition = ROOT_PERFORMANCE_OBSERVATION_MULTIPLE
+        detail = (
+            f"{len(resolved)} resolved Supplier Performance observations are applicable to this exact "
+            "supplier_id + material_code (distinct measurement periods), so which single observation "
+            "governs this context cannot be determined: no precedence exists -- first ／ last ／ latest "
+            "period, newest PerformanceUpdatedAt, max(updated_at), the closest period and any "
+            "aggregation are all forbidden -- and PerformanceUpdatedAt is never a selection authority"
+        )
+        note = (
+            f"{len(resolved)} distinct resolved measurement periods compete for this context, so the "
+            "applicable Supplier Performance observation is unresolved: no period is preferred, no "
+            "value is averaged or spliced and PerformanceUpdatedAt decides nothing; every observation "
+            "stays visible (§2.7.26 B / §2.7.23 / §4.4.64)"
+        )
+    else:
+        root_condition = ROOT_PERFORMANCE_COMPETING_UNRESOLVED
+        detail = (
+            "exactly one resolved Supplier Performance observation exists for this exact supplier_id + "
+            f"material_code, but {len(unresolved)} further performance record(s) of the same supplier + "
+            "material stay unresolved (for example a competing record on the same grain or a "
+            "period-less record), so the resolved observation cannot be adopted as the applicable one: "
+            "unresolved competing evidence of the same grain defeats exactly-one applicability and is "
+            "never ignored, dropped or outweighed"
+        )
+        note = (
+            "one resolved Supplier Performance observation is accompanied by unresolved competing "
+            "performance evidence of the same supplier + material, so exactly-one applicability does "
+            "not hold and the applicable observation is unresolved: neither the resolved record nor the "
+            "unresolved ones are preferred, and all of them stay visible (§2.7.26 B)"
+        )
+
+    return _PerformanceApplicability(
+        observation=None,
+        root_condition=root_condition,
+        note=note,
+        issues=(
+            Issue(
+                location=(
+                    "supplier_risk_input.performance_applicability["
+                    f"{_sort_text(plant_id)}/{_sort_text(material_code)}/{_sort_text(supplier_id)}]"
+                ),
+                detail=detail + " (§2.7.26 A ／ B ／ §4.4.63 ／ §4.4.64)",
+                category=CATEGORY_SEMANTIC_RESOLUTION,
+                reason=REASON_SEMANTIC_UNRESOLVED,
+                layer=LAYER_2,
+                affected_evidence=SUPPLIER_PERFORMANCE_TARGET,
+                blast_radius=(
+                    "the performance-derived Supplier Risk dimensions (LeadTimeRisk ／ DeliveryRisk ／ "
+                    "QualityRisk ／ OverallSupplierRisk) of this evaluation context only"
+                ),
+                design_reference=(
+                    "§2.7.23 / §2.7.25 G / §2.7.26 / §4.4.63 / §4.4.64 / §4.4.102 F"
+                ),
+                consequence_context=(
+                    "the applicable Supplier Performance observation cannot be determined uniquely, so "
+                    "a future LeadTimeRisk ／ DeliveryRisk ／ QualityRisk ／ OverallSupplierRisk must "
+                    "fail closed for this context rather than select one: the reliable evidence stays "
+                    "visible in the resolved ／ unresolved performance surfaces, this seam computes no "
+                    "risk value and states no DATA_INCOMPLETE, and PerformanceUpdatedAt is never a "
+                    "selection authority"
+                ),
+            ),
+        ),
     )
 
 
@@ -1065,9 +1407,23 @@ def _relationship_evidence(
 
 def _performance_evidence(
     construction: CanonicalConstructionReport,
-) -> tuple[CanonicalObject, ...]:
-    return tuple(construction.objects_for(SUPPLIER_PERFORMANCE_TARGET)) + tuple(
-        construction.unresolved_for(SUPPLIER_PERFORMANCE_TARGET)
+) -> tuple[tuple[CanonicalObject, ...], tuple[CanonicalObject, ...]]:
+    """The construction's two authoritative ``Supplier Performance`` buckets, kept **separate**.
+
+    ``objects_for`` ／ ``unresolved_for`` are the canonicalization's own resolution decision
+    (``§4.4.102`` C ／ F): an accepted performance record it left unresolved -- a missing ／ unreliable
+    ``PerformancePeriod``, or several records on one ``supplier_id`` ＋ ``material_code`` ＋
+    ``PerformancePeriod`` grain -- must stay in the unresolved bucket.  The two buckets are therefore
+    never merged and re-graded downstream (``§2.7.26`` D): merging them and re-deriving "resolved" from
+    ``obj.grain is not None`` would let this seam promote a record the canonicalization explicitly
+    refused, and would hide exactly the competing evidence the applicability boundary must see.
+    """
+
+    return (
+        tuple(sorted(construction.objects_for(SUPPLIER_PERFORMANCE_TARGET), key=_record_key)),
+        tuple(
+            sorted(construction.unresolved_for(SUPPLIER_PERFORMANCE_TARGET), key=_record_key)
+        ),
     )
 
 
@@ -1168,12 +1524,17 @@ __all__ = [
     "ELIGIBILITY_ELIGIBLE",
     "ELIGIBILITY_INELIGIBLE",
     "ELIGIBILITY_UNRESOLVED",
+    "PERFORMANCE_OBSERVATION_FIELDS",
     "ROOT_CONFLICTING_RELATIONSHIP_EVIDENCE",
     "ROOT_MAPPING_AMBIGUOUS",
     "ROOT_NEED_DATE_LINKAGE_ABSENT",
     "ROOT_NEED_DATE_LINKAGE_MISMATCH",
     "ROOT_NEED_DATE_UNRESOLVED",
     "ROOT_NO_MAPPING_EVIDENCE",
+    "ROOT_PERFORMANCE_COMPETING_UNRESOLVED",
+    "ROOT_PERFORMANCE_OBSERVATION_ABSENT",
+    "ROOT_PERFORMANCE_OBSERVATION_MULTIPLE",
+    "ROOT_PERFORMANCE_OBSERVATION_UNRESOLVED",
     "ROOT_RELATIONSHIP_ABSENT",
     "ROOT_RELATIONSHIP_IDENTITY_UNRESOLVED",
     "ROOT_SOURCING_STATUS_UNRESOLVED",
@@ -1185,6 +1546,7 @@ __all__ = [
     "SUPPLIER_RISK_INPUT_STAGE",
     "SUPPLIER_RISK_OBSERVATION",
     "SupplierEligibilityBasis",
+    "SupplierPerformanceObservation",
     "SupplierRelationshipEligibility",
     "SupplierRiskEvaluationContext",
     "SupplierRiskInputResult",

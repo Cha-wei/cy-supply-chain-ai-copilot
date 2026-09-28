@@ -829,6 +829,23 @@ Source Reservation Overlap   （allocation reservation ↔ 哪些 Source Demand 
 > **必须保持：** `PerformancePeriod`（measurement period）**≠** `PerformanceUpdatedAt`。
 > `PerformanceUpdatedAt` **不能替代** measurement period。
 
+**Supplier Performance observation applicability（Issue #164 Human Decision，Option A）：**
+
+```
+consumer boundary  = exactly one applicable Supplier Performance observation
+                     （exact supplier_id + material_code；其五个既有属性作为一个 coherent unit 被消费）
+未唯一确定          = applicability unresolved → SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED
+selection authority = NONE：PerformanceUpdatedAt（及 first ／ last ／ latest period、
+                     max(updated_at)、closest period、aggregation、same-value dedup）**永远不是**
+                     「哪一个 observation 适用」的依据
+```
+
+- 本节**未新增** canonical field：applicability 是 runtime 消费边界，`PerformancePeriod` 的
+  period policy 仍为 `DESIGN PENDING`；`standard_lead_time_days` **不**因此永久归 period 所有。
+- 「哪些 record 是 resolved observation」**只**由 canonicalization 的
+  `objects_for` ／ `unresolved_for` 决定；**不得**由下游按 record 自身 grain 重新推导。
+- 登记见 `poc-design-v0.2.md` §2.7.26 ／ `data-validation.md` §4.4.104。
+
 **`sourcing_status` —— source vocabulary / mapping contract（PR #32 Human-approved Option B）**
 
 ```

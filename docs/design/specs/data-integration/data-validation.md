@@ -3127,6 +3127,69 @@ unavailable），**不得**表达为 Risk Card `OverallSupplierRisk = DATA_INCOM
 **未**定义 `PerformancePeriod` vocabulary 或 freshness threshold。
 Runtime 实现登记见 `snapshot-import-contract.md` §4.3.31 G **I-10** 与 `poc-design-v0.2.md` §2.7.25。
 
+#### 4.4.104 Supplier Performance observation applicability（Option A，Issue #164）
+
+**Registration Status：`REGISTERED`** —— 依据 **Human Decision
+`APPROVED — Option A: Exactly-one Supplier Performance Observation Applicability`**（Issue #164）。
+本小节是 `§4.4.63` ／ `§4.4.64` 在 **runtime applicability** 层面的落地登记：它**只**登记
+「哪一个已 canonicalize 的 `Supplier Performance` observation 适用于一次 evaluation」，
+**不新增** Validation Category ／ Reason，**不重定义** `§2.7` 的 business thresholds，
+**不实现** risk classification，也**不定义**真实 period ／ freshness policy。
+
+```text
+适用对象        = accepted package 中 exact supplier_id + material_code 的 Supplier Performance evidence
+应用前提        = exactly one **resolved** observation
+                  ∧ 无与之竞争的 unresolved performance evidence
+                  → 该 observation 的五个既有属性作为一个 coherent unit 被消费
+                  （PerformancePeriod ／ PerformanceUpdatedAt ／ DeliveryPerformance ／
+                    QualityPerformance ／ standard_lead_time_days）
+未唯一确定      = 0 resolved ／ ≥2 resolved（不同 PerformancePeriod）／ 同 period 重复 record ／
+                  1 resolved ＋ competing unresolved ／ 其他无法唯一确定的情形
+taxonomy        = SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED
+```
+
+- **禁止**作为 resolution 依据：first ／ last ／ latest period、newest `PerformanceUpdatedAt`、
+  `max(updated_at)`、closest period、aggregation ／ average、same-value deduplication、
+  caller-selected evidence、LLM ／ heuristic。`PerformanceUpdatedAt` **永远不是** selection authority
+  （`§4.4.64`）。
+- **不得**跨 record ／ 跨 period 拼接字段（`§4.4.63` ／ `§4.4.64`）。
+- reliable evidence **必须**保持可见；applicability unresolved **不得**被表达为「无 evidence」，
+  也**不得**被静默丢弃。future `LeadTimeRisk` ／ `DeliveryRisk` ／ `QualityRisk` ／
+  `OverallSupplierRisk` 必须能够据此 **fail closed**。
+- **Applicability ≠ field-level completeness**：applicability 无法唯一确定时使用上述 semantic pair；
+  在**已经确定**的 observation **内部**的字段问题仍按既有 `FIELD_VALUE` ／ `MISSING` ／
+  `INVALID_TYPE` ／ `OUT_OF_DEFINED_RANGE` 处理。本边界**不**产生 risk value，也**不**自行宣布
+  business `DATA_INCOMPLETE`（`§4.4.102` F）。
+
+**Bucket authority（runtime 记录）：**
+
+```text
+objects_for(target)     = canonicalization 自判的 resolved bucket（authoritative）
+unresolved_for(target)  = canonicalization 自判的 unresolved bucket（authoritative）
+两个 bucket             = **保持分离**；不得合并后重新判定
+```
+
+**不得**由下游用 `grain is not None` 等自身字段重新推导 resolution：canonicalization 判为
+unresolved 的 record（missing ／ unreliable `PerformancePeriod`，或同一 grain 上的多条 record）
+**不得**被提升为 resolved observation，也不得让下游「恢复」canonicalization 已拒绝的 resolution。
+Issue #164 前已合并的 `A′` runtime seam 曾合并两个 bucket 并按 grain 重新分类（使上述记录被当作
+resolved 消费、并使多 period 竞争对下游不可见）；该 defect 已在 Issue #164 中修正，
+本小节为该修正的登记。
+
+**严格限定：**
+
+```text
+not a new canonical field ／ entity ／ grain ／ business enum ／ status
+not a new Validation Category ／ Reason ／ severity ／ error code
+not a real PerformancePeriod vocabulary ／ period policy ／ freshness threshold
+not a supplier ranking ／ selection ／ recommendation
+not a Risk classification ／ threshold or quantity calculation
+```
+
+本登记**不修改** `§4.4.61` ～ `§4.4.65` 的既有结论，**不修改** `§2.7.23` 的 `PerformancePeriod`
+完整性要求，也**不修改** `adr-001-deterministic-core.md`。
+Runtime 实现登记见 `snapshot-import-contract.md` §4.3.31 G **I-10** 与 `poc-design-v0.2.md` §2.7.26。
+
 ---
 
 <!-- END MIGRATED LEGACY §4.4 BODY -->

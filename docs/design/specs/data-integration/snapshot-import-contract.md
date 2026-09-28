@@ -6642,7 +6642,7 @@ Phase B 不得阻塞 Phase A
 | I-7 | BOM parent ／ requirement context（G4-A） | A | `BOM Component` evidence → resolved Production Requirement context | context reference | required | n/a | exactly one context per evidence set | `UNRESOLVED_IDENTITY` | **Stage A**（§4.4.11）→ `UNRESOLVED_IDENTITY` |
 | I-8 | effective demand context relation outcomes（G5-A） | A | source substitute material ＋ target material ＋ allocation record | two independent relation outcomes（references） | required（same AcceptedPackage-scoped source provenance） | required | exactly one pair or unresolved | `SEMANTIC_UNRESOLVED` | **Stage A**（§4.4.60 path **B**）→ `SEMANTIC_UNRESOLVED` |
 | I-9 | Inventory ownership ／ POC Inventory Scope resolution（A′） | A | exact `Inventory Snapshot` evidence citation | runtime Inventory scope context（ownership ＋ scope membership），derived by the approved deterministic basis registry | required（same AcceptedPackage-scoped source provenance） | required（exact association `mapping_basis`） | exactly one applicable resolution per Inventory evidence or unresolved | ownership → `IDENTITY_RESOLUTION` ／ `UNRESOLVED_IDENTITY`；scope → `SCOPE_COVERAGE` ／ `UNRESOLVED_SCOPE` | **Stage A**（§4.4.102 C）→ unresolved；不得 first ／ last wins、不得同值去重、不得跨 association 借用 basis |
-| I-10 | Supplier-Material relationship eligibility ＋ supplier-material evaluation composition（`A′`，Issue #162） | A ／ B | exact `Supplier-Material Relationship` evidence citation ／ `supplier_id` ＋ `material_code`；composition 另加 `plant_id` ＋ `RecommendationNeedDate` | runtime eligibility outcome（`eligible` ／ `ineligible` ／ `unresolved`）＋ read-only evaluation context list | required（same AcceptedPackage-scoped source provenance） | required（exact registered `mapping_basis` on the `sourcing_status` observation） | exactly one applicable eligibility resolution per relationship, or unresolved；one evaluation context per eligible relationship × its material's Procurement Recommendation Context | eligibility unresolved → `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`；relationship absent ／ 无可用 `sourcing_status` ／ 无 approved basis → unresolved；required supplier-side role not provided → `EVIDENCE_AVAILABILITY` ／ `EVIDENCE_ROLE_NOT_PROVIDED`（capability unavailable） | **Stage A**（§4.4.61 ／ §4.4.62 ／ §4.4.103）→ unresolved；不得 first ／ last wins、不得 `relationship exists ⇒ eligible`、不得 `Supplier exists ⇒ eligible`、不得跨 Plant 借用 `RecommendationNeedDate` |
+| I-10 | Supplier-Material relationship eligibility ＋ supplier-material evaluation composition ＋ Supplier Performance observation applicability（`A′`，Issue #162；Option A，Issue #164） | A ／ B | exact `Supplier-Material Relationship` evidence citation ／ `supplier_id` ＋ `material_code`；composition 另加 `plant_id` ＋ `RecommendationNeedDate`；applicability 另加 exact `supplier_id` ＋ `material_code` 的 resolved ／ unresolved performance buckets | runtime eligibility outcome（`eligible` ／ `ineligible` ／ `unresolved`）＋ read-only evaluation context list（含 applicable performance observation 或显式 applicability unresolved） | required（same AcceptedPackage-scoped source provenance） | required（exact registered `mapping_basis` on the `sourcing_status` observation） | exactly one applicable eligibility resolution per relationship, or unresolved；one evaluation context per eligible relationship × its material's Procurement Recommendation Context；exactly one applicable Supplier Performance observation per context, or unresolved | eligibility unresolved → `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`；relationship absent ／ 无可用 `sourcing_status` ／ 无 approved basis → unresolved；performance applicability unresolved（0 ／ ≥2 periods、same-period duplicate、competing unresolved）→ `SEMANTIC_RESOLUTION` ／ `SEMANTIC_UNRESOLVED`；required supplier-side role not provided → `EVIDENCE_AVAILABILITY` ／ `EVIDENCE_ROLE_NOT_PROVIDED`（capability unavailable） | **Stage A**（§4.4.61 ／ §4.4.62 ／ §4.4.103 ／ §4.4.104 ／ §2.7.26）→ unresolved；不得 first ／ last wins、不得 `relationship exists ⇒ eligible`、不得 `Supplier exists ⇒ eligible`、不得跨 Plant 借用 `RecommendationNeedDate`、不得用 record 自身 grain 重新推导 resolution、不得用 first ／ last ／ latest period 或 `PerformanceUpdatedAt` 选择 observation |
 
 injection **不**决定任何真实 ERP ／ source file ／ ERP field physical carrier；`loss_rate` 的
 Entity ／ Dataset ／ Source Field 归属仍**不得**决定（§4.4.15）。
@@ -6939,6 +6939,9 @@ Runtime Input Seam，Issue #162）。
 本小节**只**登记 `BR-SUPPLIER-RISK-001` 的两个 runtime input 边界，**不新增** canonical entity ／
 canonical field ／ grain ／ business enum ／ Validation Category ／ Reason，**不定义**任何真实 source
 vocabulary，也**不实现**任何 risk classification（`§2.7.25` ／ `data-validation.md` §4.4.103）。
+Supplier Performance observation **applicability**（Option A）为该 seam 的第一个 runtime 消费边界，
+登记见 `§2.7.26` ／ `data-validation.md` §4.4.104；该边界同时修正了已合并 seam 的 performance bucket
+handling defect（Issue #164）。
 
 ```text
 phase                     = A（supplier-side canonical objects ／ roles 9 ～ 11）
@@ -6982,9 +6985,21 @@ capability boundary       = required supplier-side role not provided →
                             EVIDENCE_AVAILABILITY ／ EVIDENCE_ROLE_NOT_PROVIDED（capability
                             unavailable），**不得**伪造成 Risk Card DATA_INCOMPLETE（§4.4.84）
 caller-provided outcome   = FORBIDDEN
+Supplier Performance      = exactly one applicable observation（Option A，Issue #164；§2.7.26）：
+applicability               exact supplier_id + material_code ∧ exactly one **resolved** observation
+                            ∧ 无 competing unresolved performance evidence
+                            → 该 observation 的五个既有属性（PerformancePeriod ／ PerformanceUpdatedAt ／
+                              DeliveryPerformance ／ QualityPerformance ／ standard_lead_time_days）
+                              作为一个 coherent unit 被消费（**不得**跨 record ／ period 拼接）
+                            → 否则 SEMANTIC_RESOLUTION ／ SEMANTIC_UNRESOLVED（fail closed）
+                            禁止作为依据：first ／ last ／ latest period、newest PerformanceUpdatedAt、
+                            max(updated_at)、closest period、aggregation、same-value dedup、caller 选择
+performance buckets       = objects_for ／ unresolved_for **保持分离**且为 authoritative；
+                            **不得**按 `grain is not None` 等 record 自身字段重新推导 resolution
 read-only surface         = per-relationship eligibility ＋ considered references ＋
                             per-context plant ／ material ／ supplier ／ RecommendationNeedDate ＋
                             accepted Supplier Performance objects（resolved ／ unresolved）＋
+                            applicable performance observation（或显式 applicability unresolved）＋
                             Analysis Run binding ＋ valid-absence families
 ```
 
