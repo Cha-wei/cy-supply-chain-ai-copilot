@@ -7366,7 +7366,9 @@ Options
 
 **至少包含：** **Option 0 — keep current / do nothing**
 
-**当前：** [ADR-001 — First Deterministic Tranche Minimum Architecture](../architecture/adr-001-deterministic-core.md) 已获 Human Approval；仅适用于第一批 deterministic tranche，§10 不整体标记 `DESIGN RESOLVED`。
+**当前：** [ADR-001 — First Deterministic Tranche Minimum Architecture](../architecture/adr-001-deterministic-core.md) 已获 Human Approval；仅适用于第一批 deterministic tranche。
+另见 [ADR-002 — P0 AI Explanation Minimum Runtime Architecture](../architecture/adr-002-p0-ai-explanation-minimum-runtime.md)（P0 AI Explanation 的最小 runtime architecture，`ACCEPTED`，Issue #178）：只登记 architecture decision，**不**实现代码；其 implementation 仍受 `§7` Secret Handling JIT gate 阻塞。
+`§10` 整体仍**不**标记 `DESIGN RESOLVED`。
 
 ---
 
