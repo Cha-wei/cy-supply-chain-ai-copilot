@@ -3283,6 +3283,13 @@ card universe       = input_result.evaluation_contexts 每项恰好一张 normal
                       business grain = supplier_id + material_code（未改变；不跨 Plant 合并）
 no normal card      = capability unavailable ／ ineligible ／ no request ／ valid absence ／
                       ROOT_RELATIONSHIP_ABSENT ／ unkeyable pair ／ 既有 fail-closed outcome
+no-card 诊断保留     = input_result 的 relationships（含 root condition、exact Validation Issues、
+                      considered references、truthful references）／ identity_issues ／
+                      unkeyable_relationships **原样**传播，使 ROOT_RELATIONSHIP_ABSENT 的
+                      SEMANTIC_UNRESOLVED finding 与 unkeyable pair 的 IDENTITY_RESOLUTION ／
+                      UNRESOLVED_IDENTITY finding 可从最终 result 审计；**不得**新建 card ／ business
+                      result ／ grain ／ reference；ineligible 仍为 valid exclusion（无 issue），
+                      valid absence 仍为 valid absence，capability unavailable 保持可区分
 fail-closed 传播     = input_result.evidence_outcomes **原样**传播为 DATA_INCOMPLETE rows，
                       不重算任何 risk dimension
 DaysUntilNeed       = RecommendationNeedDate - AnalysisDate（exact C-3 calendar date；无 clock ／
@@ -3296,6 +3303,16 @@ QualityRisk         = >= 98 LOW ／ 95 – < 98 MEDIUM ／ < 95 HIGH
 PerformancePeriod   = 该二维度完整性所需；applicability unresolved ⇒ 四者全部 fail closed；
                       observation 已确定但 period 不可用 ⇒ DeliveryRisk ／ QualityRisk = DATA_INCOMPLETE，
                       LeadTimeRisk 依自身输入独立判定（`§4.4.64` 语义不变）
+                      本 tranche **只**应用已登记的 representation 规则：absent ／ JSON null → MISSING，
+                      非 string → INVALID_TYPE；period vocabulary ／ window 为 `DESIGN PENDING`、
+                      valid ／ invalid period policy 为 `NOT DEFINED`，故空 string 等**不得**被判为
+                      INVALID_TYPE（`§4.4.42` 禁止自行新增 text-length ／ stringency 规则）
+PerformanceUpdatedAt = `§4.4.34`「present 时必须是 valid temporal value」的 runtime 落地：
+                      present 且违反既有 C-4 representation（error ／ 不可能日期或时钟 ／ 缺 explicit
+                      offset ／ 非 string）⇒ 保留原值 ＋ FIELD_VALUE ／ INVALID_TYPE ＋ 真实
+                      observation reference ＋ request-scoped；**不改变**任何 risk dimension、
+                      completeness 或 Overall；absent ／ null 保持 non-blocking 且无 finding；
+                      不引入 timezone ／ freshness 业务策略，不用作 applicability ／ selection
 OverallSupplierRisk = 三个维度全部可靠时取 max severity（LOW < MEDIUM < HIGH，**非** weighted score）；
                       任一维度不可靠 ⇒ DATA_INCOMPLETE，且可靠维度继续保留展示
 exact numeric       = existing ExactQuantity ／ parse helpers；无 binary float、无 Decimal arithmetic、

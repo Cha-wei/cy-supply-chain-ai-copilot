@@ -37,6 +37,20 @@ reliably keyed pair grain, so capability-unavailable, explicitly ``ineligible``,
 absence, ``ROOT_RELATIONSHIP_ABSENT``, unkeyable-pair and already-fail-closed cases produce **no** normal
 card here by construction.
 
+No-card diagnostics
+-------------------
+
+The states that produce neither a card nor a fail-closed outcome must still be auditable from this result
+alone (``§2.7.27`` D ／ F2), so the consumed result's own read-only surfaces are propagated **verbatim**:
+``relationships`` (every eligibility decision with its root condition, exact Validation Issues, considered
+references and truthful relationship ／ evidence references), ``identity_issues`` (the exact-identity
+findings) and ``unkeyable_relationships``.  The semantic finding of a performance-only pair
+(``ROOT_RELATIONSHIP_ABSENT``) and the identity finding of an unkeyable pair therefore stay reachable
+without re-creating, re-scoping or re-deriving anything -- and without inventing a card, a business
+result, a grain or a reference for them.  An explicitly ``ineligible`` relationship stays a valid
+exclusion with no issue, valid absence stays valid absence, and capability unavailable stays distinct
+from all of them.
+
 Fail-closed propagation
 -----------------------
 
@@ -55,6 +69,15 @@ taxonomy -- ``FIELD_VALUE`` ／ ``MISSING`` ／ ``INVALID_TYPE`` ／ ``OUT_OF_DE
 context.  ``DATA_INCOMPLETE`` stays a **business outcome** and is never used as a reason (``§4.4.85``), no
 evidence reference is fabricated, and no new Category ／ Reason ／ enum ／ status is created.
 
+Only currently registered representation rules are applied.  ``PerformancePeriod`` is a ``TEXT_CONTEXT``
+whose real vocabulary ／ window length is ``DESIGN PENDING`` and whose valid ／ invalid policy is ``NOT
+DEFINED``, so an empty or otherwise unusual **string** is not classified as invalid (``§4.4.42`` forbids
+inventing text-length ／ stringency rules): only an absent ／ JSON ``null`` value and a present non-string
+value are defects.  ``PerformanceUpdatedAt`` must be a valid ``C-4`` ``TIMESTAMP`` **when present**
+(``§4.4.34``), so a malformed present value is stated as a narrow ``INVALID_TYPE`` finding -- while
+missing ／ ``null`` stays non-blocking and, in both cases, the property never decides completeness,
+applicability, selection or any risk dimension and no timezone ／ freshness policy is applied.
+
 Strict scope
 ------------
 
@@ -70,6 +93,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date as _date
+from datetime import datetime as _datetime
 import re
 from typing import Any, Iterable, Sequence
 
@@ -81,12 +105,14 @@ from .constants import (
     REASON_INVALID_TYPE,
     REASON_MISSING,
     REASON_OUT_OF_DEFINED_RANGE,
+    TIMESTAMP_PATTERN,
 )
 from .exact_quantity import ExactQuantity, parse_exact_quantity
 from .issues import Issue
 from .procurement_recommendation import PROCUREMENT_RECOMMENDATION_RULE_ID
 from .requirement_calculation import OUTCOME_DATA_INCOMPLETE
 from .supplier_risk_input import (
+    ROOT_RELATIONSHIP_ABSENT,
     SupplierPerformanceObservation,
     SupplierRelationshipEligibility,
     SupplierRiskEvaluationContext,
@@ -141,8 +167,10 @@ LEAD_TIME_PROPERTY: str = "standard_lead_time_days"
 DELIVERY_PROPERTY: str = "DeliveryPerformance"
 QUALITY_PROPERTY: str = "QualityPerformance"
 PERIOD_PROPERTY: str = "PerformancePeriod"
+UPDATED_AT_PROPERTY: str = "PerformanceUpdatedAt"
 
 _DATE_RE = re.compile(rf"^{DATE_PATTERN}$")
+_TIMESTAMP_RE = re.compile(rf"^{TIMESTAMP_PATTERN}$")
 
 
 # --- helpers -----------------------------------------------------------------------
@@ -162,6 +190,39 @@ def _as_date(value: Any) -> _date | None:
         return _date.fromisoformat(value)
     except ValueError:
         return None
+
+
+def _invalid_timestamp(value: Any) -> bool:
+    """Whether a **present** ``PerformanceUpdatedAt`` violates the registered ``C-4`` representation.
+
+    ``§4.4.34`` requires ``PerformanceUpdatedAt`` to be a *valid temporal value when present*, so a
+    present value must be an exact JSON string of the registered ``C-4`` lexical shape whose calendar ／
+    clock fields and offset denote a real instant -- ISO 8601 ／ RFC 3339 compatible with an explicit UTC
+    offset or ``Z``, because silent timezone inference is forbidden.
+
+    Missing and JSON ``null`` are **not** defects: the property is ``CONDITIONAL`` and never decides
+    completeness, applicability, selection or any risk dimension (``§4.4.34`` ／ ``§2.7.16``).  Nothing
+    is converted, normalised, compared or age-checked here: ``C-4`` registers
+    ``business timezone policy = NOT DEFINED`` and no freshness policy exists, so no timezone, locale or
+    freshness rule is invented.
+    """
+
+    if not isinstance(value, str):
+        return True
+    if not _TIMESTAMP_RE.match(value):
+        return True
+    # ``datetime`` requires a 'T' separator while the registered form accepts a space (RFC 3339 permits
+    # it when both sides agree on it), and the 'Z' designator may be lower case.
+    candidate = value
+    if len(candidate) > 10:
+        candidate = candidate[:10] + "T" + candidate[11:]
+    if candidate.endswith(("Z", "z")):
+        candidate = candidate[:-1] + "+00:00"
+    try:
+        parsed = _datetime.fromisoformat(candidate)
+    except ValueError:
+        return True
+    return parsed.tzinfo is None
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,15 +268,21 @@ def _read_quantity(
 def _read_period(value: Any) -> _FieldReading:
     """Read the ``PerformancePeriod`` readiness boundary of the applicable observation.
 
-    The first tranche only requires the measurement period to be **present as an exact, non-empty JSON
-    string** (``§4.2.8`` ``REQUIRED`` ／ ``§4.3.22`` C-10): the real period vocabulary ／ window length and
-    the freshness policy stay ``DESIGN PENDING`` (``§2.7.23``), so no format, length or age rule is added
-    here.  ``PerformanceUpdatedAt`` is never consulted as a substitute (``§4.4.64``).
+    The first tranche applies **only** the currently registered representation rules: the measurement
+    period must be present as an exact JSON string (``§4.2.8`` ``REQUIRED`` ／ ``§4.3.22`` C-10, the
+    ``TEXT_CONTEXT`` logical type).  An absent or JSON ``null`` value is ``MISSING`` (``C-2`` explicit
+    missing ／ unavailable) and a present non-string value is ``INVALID_TYPE`` (``C-10``).
+
+    Nothing further is decided here: the real period vocabulary ／ window length is ``DESIGN PENDING``,
+    the valid ／ invalid period policy is ``NOT DEFINED``, and ``§4.4.42`` forbids inventing mandatory text
+    length ／ stringency rules -- so an empty or otherwise unusual **string** is *not* classified as
+    invalid, exactly as Layer 2 leaves it.  ``PerformanceUpdatedAt`` is never consulted as a substitute
+    (``§4.4.64``).
     """
 
     if value is None:
         return _FieldReading(value, None, REASON_MISSING)
-    if not isinstance(value, str) or value == "":
+    if not isinstance(value, str):
         return _FieldReading(value, None, REASON_INVALID_TYPE)
     return _FieldReading(value, None, None)
 
@@ -458,6 +525,26 @@ class SupplierRiskResult:
     from the consumed input result so a consumer can distinguish capability-unavailable from a business
     outcome and valid absence from a missing request without re-reading anything upstream.
 
+    ``relationships``, ``identity_issues`` and ``unkeyable_relationships`` are propagated **verbatim**
+    from the consumed result as well, so the states that produce neither a normal card nor a fail-closed
+    outcome stay auditable from this result alone (``§2.7.27`` D ／ F2):
+
+    ==========================================  ====================================================
+    normal evaluation request                   :attr:`cards`
+    fail-closed evidence outcome                :attr:`fail_closed_outcomes`
+    valid exclusion (``ineligible``)             :attr:`excluded_relationships`
+    performance-only pair (``ROOT_RELATIONSHIP_ABSENT``)  :attr:`performance_only_relationships`
+    unkeyable pair                              :attr:`unkeyable_relationships`
+    capability unavailable                      :attr:`capability_available` = ``False``
+    no request ／ valid absence                  no entry, :attr:`valid_absence_grains`
+    ==========================================  ====================================================
+
+    Those propagated relationship decisions keep their own root condition, exact Validation Issues,
+    considered references and truthful relationship ／ evidence references, so the semantic finding of a
+    performance-only pair and the identity finding of an unkeyable pair stay reachable without
+    re-creating, re-scoping or re-deriving anything, and without inventing a card, a business result, a
+    grain or a reference for them.
+
     ``analysis_run`` is the consumed ``AnalysisRunContext``: the single Analysis Run ／ package binding
     authority, so every card and fail-closed row belongs to exactly that run.
     """
@@ -465,6 +552,9 @@ class SupplierRiskResult:
     analysis_run: AnalysisRunContext
     cards: tuple[SupplierRiskEvidenceCard, ...] = ()
     fail_closed_outcomes: tuple[SupplierRiskEvidenceOutcome, ...] = ()
+    relationships: tuple[SupplierRelationshipEligibility, ...] = ()
+    identity_issues: tuple[Issue, ...] = ()
+    unkeyable_relationships: tuple[SupplierRelationshipEligibility, ...] = ()
     capability_available: bool = True
     capability_issues: tuple[Issue, ...] = ()
     valid_absence_grains: tuple[tuple[Any, Any], ...] = ()
@@ -479,11 +569,37 @@ class SupplierRiskResult:
         return self.analysis_run.analysis_run_id
 
     @property
+    def relationship_issues(self) -> tuple[Issue, ...]:
+        """The consumed relationship decisions' own findings, verbatim and deterministically ordered."""
+
+        return _deduplicate_issues(
+            issue for item in self.relationships for issue in item.rule_issues
+        )
+
+    @property
+    def performance_only_relationships(self) -> tuple[SupplierRelationshipEligibility, ...]:
+        """Pairs claimed only by performance evidence, which produce no business result (``§2.7.27`` D)."""
+
+        return tuple(
+            item
+            for item in self.relationships
+            if item.root_condition == ROOT_RELATIONSHIP_ABSENT
+        )
+
+    @property
+    def excluded_relationships(self) -> tuple[SupplierRelationshipEligibility, ...]:
+        """Explicitly ``ineligible`` relationships: valid exclusions with no issue and no card."""
+
+        return tuple(item for item in self.relationships if item.ineligible)
+
+    @property
     def issues(self) -> tuple[Issue, ...]:
-        """Every finding of this rule, deterministically ordered and duplicate-free."""
+        """Every finding reachable from this result, deterministically ordered and duplicate-free."""
 
         return _deduplicate_issues(
             self.capability_issues
+            + self.identity_issues
+            + self.relationship_issues
             + tuple(issue for card in self.cards for issue in card.issues)
             + tuple(
                 issue for outcome in self.fail_closed_outcomes for issue in outcome.issues
@@ -534,6 +650,16 @@ class SupplierRiskResult:
             if outcome.supplier_id == supplier_id and outcome.material_code == material_code
         )
 
+    def relationship_for(
+        self, supplier_id: Any, material_code: Any
+    ) -> SupplierRelationshipEligibility | None:
+        """The consumed eligibility decision of one exact supplier + material, or ``None``."""
+
+        for item in self.relationships:
+            if item.supplier_id == supplier_id and item.material_code == material_code:
+                return item
+        return None
+
     def is_valid_absence(self, plant_id: Any, material_code: Any) -> bool:
         """Whether the family is a reliable ``NORMAL`` ／ ``BUFFER_BREACH`` valid absence (no card)."""
 
@@ -554,6 +680,11 @@ class SupplierRiskResult:
             "cards": [card.to_dict() for card in self.cards],
             "fail_closed_outcomes": [
                 outcome.to_dict() for outcome in self.fail_closed_outcomes
+            ],
+            "relationships": [item.to_dict() for item in self.relationships],
+            "identity_issues": [issue.to_dict() for issue in self.identity_issues],
+            "unkeyable_relationships": [
+                item.to_dict() for item in self.unkeyable_relationships
             ],
             "capability_issues": [issue.to_dict() for issue in self.capability_issues],
             "valid_absence_grains": [
@@ -600,6 +731,9 @@ def compute_supplier_risk(input_result: SupplierRiskInputResult) -> SupplierRisk
         analysis_run=input_result.analysis_run,
         cards=cards,
         fail_closed_outcomes=tuple(input_result.evidence_outcomes),
+        relationships=tuple(input_result.relationships),
+        identity_issues=tuple(input_result.identity_issues),
+        unkeyable_relationships=tuple(input_result.unkeyable_relationships),
         capability_available=input_result.capability_available,
         capability_issues=tuple(input_result.capability_issues),
         valid_absence_grains=tuple(input_result.valid_absence_grains),
@@ -717,6 +851,35 @@ def _evaluate_context(
             observation.quality_performance, maximum=PERCENTAGE_MAXIMUM
         )
         period_reading = _read_period(observation.performance_period)
+
+        # ``§4.4.34``: PerformanceUpdatedAt must be a valid temporal value *when present*.  A malformed
+        # present value is stated as a narrow representation finding and changes nothing else -- it never
+        # selects or invalidates an observation, never substitutes for PerformancePeriod and never alters
+        # a dimension, the completeness or the overall level (``§2.7.16`` ／ ``§4.4.64``).
+        updated_at_value = observation.performance_updated_at
+        if updated_at_value is not None and _invalid_timestamp(updated_at_value):
+            rule_issues.append(
+                _field_issue(
+                    location=location,
+                    property_name=UPDATED_AT_PROPERTY,
+                    defect=REASON_INVALID_TYPE,
+                    detail=(
+                        "the applicable Supplier Performance observation states a PerformanceUpdatedAt "
+                        f"({updated_at_value!r}) that is not a valid C-4 TIMESTAMP: an exact JSON string "
+                        "in the registered ISO 8601 / RFC 3339 form denoting a real instant with an "
+                        "explicit UTC offset or 'Z' is required; the raw value is preserved, no timezone "
+                        "is inferred, nothing is normalised and no freshness policy is applied "
+                        "(§4.4.34 / §4.3.22 C-4)"
+                    ),
+                    affected_evidence=observation.record_reference,
+                    consequence=(
+                        "no risk dimension changes: PerformanceUpdatedAt never decides completeness, "
+                        "never substitutes for PerformancePeriod, never selects or invalidates an "
+                        "observation and never affects OverallSupplierRisk (§2.7.16 / §4.4.34)"
+                    ),
+                    design_reference="§4.4.34 / §4.3.22 C-4 / §2.7.16 / §4.4.64",
+                )
+            )
 
     # --- LeadTimeRisk ---------------------------------------------------------------
     if observation is None:

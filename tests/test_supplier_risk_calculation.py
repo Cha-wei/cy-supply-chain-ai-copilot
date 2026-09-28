@@ -449,7 +449,6 @@ class SupplierRiskCalculationTests(SupplierRiskInputTestCase):
         for label, period, expected_reason in (
             ("json-null", None, "MISSING"),
             ("not-a-string", 20260301, "INVALID_TYPE"),
-            ("empty", "", "INVALID_TYPE"),
         ):
             with self.subTest(case=label):
                 card = self.card(
@@ -483,6 +482,29 @@ class SupplierRiskCalculationTests(SupplierRiskInputTestCase):
                 self.assertIn("DeliveryRisk", period_issues[0].consequence_context or "")
                 self.assertIn("QualityRisk", period_issues[0].consequence_context or "")
                 self.assertIn("|", period_issues[0].affected_evidence or "")
+
+        # Variant 3 (PR #171 review finding): an empty **string** is a present exact TEXT_CONTEXT value.
+        # The real period vocabulary ／ window length is DESIGN PENDING and the valid ／ invalid period
+        # policy is NOT DEFINED, so no invented text-length ／ stringency rule may classify it as invalid
+        # (§4.4.42); Layer 2 applies only the C-10 representation rule and leaves it valid.
+        empty_period = self.card(
+            self.chain(
+                "b11-period-empty-string",
+                performances=(
+                    performance_record(
+                        period="", delivery="97", quality="99", lead_time="5"
+                    ),
+                ),
+            )
+        )
+        self.assertIsNotNone(empty_period.performance)
+        self.assertEqual(empty_period.performance_period, "")
+        self.assertEqual(empty_period.rule_issues, ())
+        self.assertTrue(empty_period.evidence_complete)
+        self.assertEqual(empty_period.lead_time_risk, RISK_LOW)
+        self.assertEqual(empty_period.delivery_risk, RISK_LOW)
+        self.assertEqual(empty_period.quality_risk, RISK_LOW)
+        self.assertEqual(empty_period.overall_supplier_risk, RISK_LOW)
 
     def test_b12_applicability_unresolved_fails_every_dimension_closed(self) -> None:
         # Two distinct resolved periods: Option A applicability is unresolved, so the rule must not read
@@ -668,12 +690,10 @@ class SupplierRiskCalculationTests(SupplierRiskInputTestCase):
         unkeyable_result = self.risk(unkeyable)
         self.assertEqual(unkeyable_result.cards, ())
         self.assertEqual(unkeyable_result.fail_closed_outcomes, ())
-        self.assertEqual(len(self.supplier_input(unkeyable).unkeyable_relationships), 1)
+        # The no-card diagnostics are read from the final result itself, never from a second seam call.
+        self.assertEqual(len(unkeyable_result.unkeyable_relationships), 1)
         self.assertEqual(
-            [
-                (issue.category, issue.reason)
-                for issue in self.supplier_input(unkeyable).identity_issues
-            ],
+            [(issue.category, issue.reason) for issue in unkeyable_result.identity_issues],
             [("IDENTITY_RESOLUTION", "UNRESOLVED_IDENTITY")],
         )
 
@@ -879,6 +899,202 @@ class SupplierRiskCalculationTests(SupplierRiskInputTestCase):
         self.assertNotIn(
             RISK_DATA_INCOMPLETE, {RISK_LOW, RISK_MEDIUM, RISK_HIGH}
         )
+
+    # --- PR #171 review finding 1: no-card diagnostics on the final result -------------
+
+    def test_b27_performance_only_pair_keeps_its_finding_and_considered_evidence(self) -> None:
+        # Only Supplier Performance claims this pair: no relationship evidence states it, so no card and
+        # no fail-closed outcome exists -- and the registered finding must still be auditable from the
+        # final result, with the real considered evidence reachable and no fabricated reference.
+        built = self.build_chain(
+            supplier_relationships=(
+                relationship_record(SUPPLIER, OTHER, basis="SIMULATED-SOURCING-ELIGIBLE"),
+            ),
+            supplier_performances=(performance_record(SUPPLIER, DEMAND),),
+            name="b27-performance-only-diagnostics",
+        )
+        result = self.risk(built)
+        self.assertEqual(result.cards, ())
+        self.assertEqual(result.fail_closed_outcomes, ())
+        self.assertEqual(result.cards_for(SUPPLIER, DEMAND), ())
+        self.assertEqual(result.fail_closed_for(SUPPLIER, DEMAND), ())
+
+        claimed = result.relationship_for(SUPPLIER, DEMAND)
+        assert claimed is not None
+        self.assertTrue(claimed.unresolved)
+        self.assertEqual(claimed.root_condition, "SUPPLIER_RELATIONSHIP_ABSENT")
+        # The exact registered finding survives on the final result.
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in claimed.issues],
+            [("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED")],
+        )
+        self.assertIn(
+            ("SEMANTIC_RESOLUTION", "SEMANTIC_UNRESOLVED"),
+            {(issue.category, issue.reason) for issue in result.issues},
+        )
+        self.assertIn(claimed, result.performance_only_relationships)
+        # The truthful considered evidence of the claim remains reachable ...
+        self.assertEqual(len(claimed.considered_references), 1)
+        self.assertIn("|", claimed.considered_references[0])
+        # ... while no relationship reference and no business result are fabricated for it.
+        self.assertIsNone(claimed.relationship_reference)
+        self.assertIsNone(claimed.evidence_reference)
+        self.assertIsNone(result.card_for(PLANT, SUPPLIER, DEMAND))
+        # The eligible pair for the other material keeps its own decision (no request ⇒ no card either).
+        other = result.relationship_for(SUPPLIER, OTHER)
+        assert other is not None
+        self.assertTrue(other.eligible)
+        self.assertIsNone(result.card_for(PLANT, SUPPLIER, OTHER))
+
+    def test_b28_unkeyable_pair_keeps_its_identity_finding(self) -> None:
+        built = self.chain(
+            "b28-unkeyable-diagnostics",
+            relationships=(relationship_record(supplier=[]),),
+            performances=(performance_record(),),
+        )
+        result = self.risk(built)
+        self.assertEqual(result.cards, ())
+        self.assertEqual(result.fail_closed_outcomes, ())
+        self.assertEqual(len(result.unkeyable_relationships), 1)
+        unkeyable = result.unkeyable_relationships[0]
+        self.assertEqual(unkeyable.supplier_id, [])
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in result.identity_issues],
+            [("IDENTITY_RESOLUTION", "UNRESOLVED_IDENTITY")],
+        )
+        # No keyed result, no placeholder identity, no fabricated reference.
+        self.assertEqual(
+            [card.grain for card in result.cards], []
+        )
+        self.assertIn(
+            ("IDENTITY_RESOLUTION", "UNRESOLVED_IDENTITY"),
+            {(issue.category, issue.reason) for issue in result.issues},
+        )
+        payload = result.to_dict()
+        self.assertEqual(len(payload["unkeyable_relationships"]), 1)
+        self.assertEqual(len(payload["identity_issues"]), 1)
+
+    def test_b29_exclusions_and_valid_absence_gain_no_false_findings(self) -> None:
+        # ineligible: valid exclusion -- no card, no outcome, no issue anywhere on the final result.
+        ineligible = self.risk(
+            self.chain(
+                "b29-ineligible-diagnostics",
+                relationships=(relationship_record(basis=INELIGIBLE_BASIS),),
+                performances=(performance_record(),),
+            )
+        )
+        self.assertEqual(ineligible.cards, ())
+        self.assertEqual(ineligible.fail_closed_outcomes, ())
+        self.assertEqual(ineligible.issues, ())
+        self.assertEqual(ineligible.identity_issues, ())
+        self.assertEqual(ineligible.unkeyable_relationships, ())
+        self.assertEqual(ineligible.performance_only_relationships, ())
+        self.assertEqual(len(ineligible.excluded_relationships), 1)
+        self.assertTrue(ineligible.excluded_relationships[0].ineligible)
+        self.assertEqual(ineligible.excluded_relationships[0].issues, ())
+
+        # valid absence: no request at all, so nothing is reported and the family stays a valid absence.
+        absence = self.risk(
+            self.build_chain(
+                demands=((DEMAND, "10", D20),),
+                supplier_identities=({"supplier_id": SUPPLIER},),
+                supplier_relationships=(relationship_record(),),
+                supplier_performances=(performance_record(),),
+                name="b29-valid-absence-diagnostics",
+            )
+        )
+        self.assertEqual(absence.cards, ())
+        self.assertEqual(absence.fail_closed_outcomes, ())
+        self.assertEqual(absence.issues, ())
+        self.assertTrue(absence.is_valid_absence(PLANT, DEMAND))
+        # capability unavailable stays distinct from both of them.
+        unavailable = self.risk(
+            self.build_chain(
+                supplier_identities=(),
+                supplier_relationships=(relationship_record(),),
+                supplier_performances=(performance_record(),),
+                name="b29-capability-diagnostics",
+            )
+        )
+        self.assertFalse(unavailable.capability_available)
+        self.assertEqual(unavailable.cards, ())
+        self.assertFalse(unavailable.is_valid_absence(PLANT, DEMAND))
+        self.assertEqual(
+            [(issue.category, issue.reason) for issue in unavailable.capability_issues],
+            [("EVIDENCE_AVAILABILITY", "EVIDENCE_ROLE_NOT_PROVIDED")],
+        )
+
+    # --- PR #171 review finding 3: present-but-invalid PerformanceUpdatedAt ------------
+
+    def test_b30_a_present_invalid_performance_updated_at_is_a_narrow_finding(self) -> None:
+        invalid_cases = (
+            ("malformed", "not-a-timestamp"),
+            ("impossible-date", "2026-02-30T00:00:00Z"),
+            ("impossible-clock", "2026-09-30T25:00:00Z"),
+            ("no-offset", "2026-09-30T00:00:00"),
+            ("non-string", 20260930),
+        )
+        for label, updated in invalid_cases:
+            with self.subTest(case=label):
+                card = self.card(
+                    self.chain(
+                        f"b30-{label}",
+                        performances=(
+                            performance_record(
+                                updated=updated,
+                                delivery="97",
+                                quality="99",
+                                lead_time="5",
+                            ),
+                        ),
+                    )
+                )
+                # The raw value is preserved and the finding is narrow and request-scoped.
+                self.assertEqual(card.performance_updated_at, updated)
+                updated_issues = [
+                    issue
+                    for issue in card.rule_issues
+                    if issue.location.endswith(".PerformanceUpdatedAt")
+                ]
+                self.assertEqual(len(updated_issues), 1)
+                issue = updated_issues[0]
+                self.assertEqual((issue.category, issue.reason), ("FIELD_VALUE", "INVALID_TYPE"))
+                self.assertIn("|", issue.affected_evidence or "")
+                self.assertTrue(
+                    issue.location.startswith(
+                        f"supplier_risk[{PLANT}/{DEMAND}/{SUPPLIER}]"
+                    )
+                )
+                self.assertIn("this exact plant_id + material_code + supplier_id", issue.blast_radius)
+                # No risk dimension, completeness or overall level changes.
+                self.assertEqual(card.lead_time_risk, RISK_LOW)
+                self.assertEqual(card.delivery_risk, RISK_LOW)
+                self.assertEqual(card.quality_risk, RISK_LOW)
+                self.assertEqual(card.overall_supplier_risk, RISK_LOW)
+                self.assertTrue(card.evidence_complete)
+                self.assertIsNone(card.status)
+
+        # A valid registered timestamp produces no finding ...
+        valid = self.card(
+            self.chain(
+                "b30-valid",
+                performances=(
+                    performance_record(updated="2026-09-30T08:15:00+08:00", lead_time="5"),
+                ),
+            )
+        )
+        self.assertEqual(valid.rule_issues, ())
+        self.assertTrue(valid.evidence_complete)
+        # ... and a missing or JSON-null value stays non-blocking (b14 behaviour unchanged).
+        for label, record in (("absent", performance_record()), ("json-null", performance_record(updated=None))):
+            with self.subTest(case=label):
+                if label == "absent":
+                    record.pop("PerformanceUpdatedAt")
+                card = self.card(self.chain(f"b30-{label}", performances=(record,)))
+                self.assertIsNone(card.performance_updated_at)
+                self.assertEqual(card.rule_issues, ())
+                self.assertTrue(card.evidence_complete)
+                self.assertEqual(card.overall_supplier_risk, RISK_LOW)
 
 
 if __name__ == "__main__":  # pragma: no cover - direct invocation
