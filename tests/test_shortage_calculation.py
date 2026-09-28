@@ -90,6 +90,10 @@ ROLE_PROCUREMENT_POLICY_INPUT = "Procurement policy input"
 ROLE_SUPPLIER_IDENTITY = "Supplier identity"
 ROLE_SUPPLIER_RELATIONSHIP = "Supplier-Material Relationship"
 ROLE_SUPPLIER_PERFORMANCE = "Supplier Performance"
+#: The phase A recognized role literal (role 1) whose evidence is assigned to entity **Plant** ＋ entity
+#: **Material**.  It is the only registered carrier of **Material identity** evidence, so a capability
+#: that requires Material identity (``§4.4.6`` Capability C) needs this role to be provided.
+ROLE_IDENTITY_CONTEXT = "Plant / Material identity context"
 
 BASIS_SCOPE_IN = "SIMULATED-INV-SCOPE-A-IN"
 BASIS_LOSS = "SIMULATED-BASIS-LOSS-RATE"
@@ -421,6 +425,7 @@ class ShortageRuleTestCase(unittest.TestCase):
         supplier_identities: tuple[dict[str, Any], ...] = (),
         supplier_relationships: tuple[dict[str, Any], ...] = (),
         supplier_performances: tuple[dict[str, Any], ...] = (),
+        identity_contexts: tuple[dict[str, Any], ...] = (),
         extra_plant_families: tuple[tuple[Any, Any, Any, Any], ...] = (),
         analysis_run_id: str = "RUN-1",
         analysis_date: Any = "2026-10-01",
@@ -454,6 +459,11 @@ class ShortageRuleTestCase(unittest.TestCase):
         reservation's own ``target_material`` + ``substitute_material`` pair that also register the SRO
         basis, so they join the **same** exact Source Demand Context conservation sum; each one states
         its own quantity and its own Target Applicability claims.
+
+        ``identity_contexts`` states the ``Plant / Material identity context`` evidence role (role 1),
+        which is the only registered carrier of **Material identity** evidence.  It is appended after
+        every other dataset so no existing artifact ordinal moves, and it is empty by default because
+        the canonical rule fixtures of this module do not consume it.
         """
 
         stock = {DEMAND: "100", SOURCE: "100"} if inventory is None else dict(inventory)
@@ -697,6 +707,11 @@ class ShortageRuleTestCase(unittest.TestCase):
             datasets.append((ROLE_SUPPLIER_RELATIONSHIP, list(supplier_relationships)))
         if supplier_performances:
             datasets.append((ROLE_SUPPLIER_PERFORMANCE, list(supplier_performances)))
+        if identity_contexts:
+            # The ``Plant / Material identity context`` evidence role (role 1).  Appended **last**, after
+            # every existing dataset, so no earlier fixture's artifact ordinal moves.  A capability that
+            # requires Material identity evidence (``§4.4.6`` Capability C) states it here.
+            datasets.append((ROLE_IDENTITY_CONTEXT, list(identity_contexts)))
 
         built = build_package(
             self.boundary / (name or uuid.uuid4().hex[:8]),
