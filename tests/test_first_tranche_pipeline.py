@@ -28,9 +28,11 @@ from typing import Any
 
 import snapshot_loader.first_tranche_pipeline as pipeline_module
 from snapshot_loader import (
+    DISPOSITION_ACCEPTED,
     INBOUND_RULE_ID,
     INVENTORY_RULE_ID,
     LAYER1_NOT_ACCEPTED_REASON,
+    LAYER1_PACKAGE_MISSING_REASON,
     PIPELINE_STAGES,
     PROCUREMENT_POLICY_INPUT_STAGE,
     PROCUREMENT_RECOMMENDATION_RULE_ID,
@@ -55,6 +57,7 @@ from snapshot_loader import (
     SUPPLIER_RISK_STAGE,
     AnalysisRunBindingError,
     FirstTranchePipelineResult,
+    ImportReport,
     PhaseAHandoff,
     compute_procurement_recommendation,
     compute_shortage,
@@ -64,6 +67,7 @@ from snapshot_loader import (
     run_first_tranche_pipeline_from_paths,
     validate_layer2,
 )
+from snapshot_loader.issues import IssueCollector
 from tests.helpers import DatasetSpec, PackageSpec, build_package
 from tests.test_procurement_policy_input import moq_policy_record
 from tests.test_shortage_calculation import (
@@ -661,6 +665,35 @@ class FirstTranchePipelineTests(SupplierRiskInputTestCase):
                 "supplier_risk",
             },
         )
+
+    def test_g15_an_inconsistent_layer1_report_enters_no_downstream_stage(self) -> None:
+        """A report claiming ACCEPTED without an accepted package still fails closed."""
+
+        report = ImportReport(
+            disposition=DISPOSITION_ACCEPTED,
+            evaluable=True,
+            collector=IssueCollector(),
+            accepted_package=None,
+            content_view=None,
+            disposition_basis=(
+                "SIMULATED: an accepted report that carries no accepted package, so no "
+                "Analysis Run binding can be established"
+            ),
+        )
+        result = run_first_tranche_pipeline(
+            report, PhaseAHandoff(analysis_run_id="RUN-1", analysis_date="2026-10-01")
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertIsNone(result.analysis_run)
+        self.assertTrue(result.stage(STAGE_SNAPSHOT_LOADER).entered)
+        for entry in result.stages[1:]:
+            self.assertFalse(entry.entered, msg=entry.name)
+            self.assertEqual(entry.note, LAYER1_PACKAGE_MISSING_REASON, msg=entry.name)
+        for name, stage_result in self.stage_results(result).items():
+            if name == STAGE_SNAPSHOT_LOADER:
+                continue
+            self.assertIsNone(stage_result, msg=name)
 
     def test_g14_the_stage_table_carries_the_registered_rule_ids(self) -> None:
         """The composition order restates the registered rule ids and mints none."""
