@@ -23,6 +23,7 @@ import os
 import unittest
 from fractions import Fraction
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import snapshot_loader.explanation_q3 as q3_module
@@ -521,6 +522,7 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
             ("evidence-missing-required-fact", {**GOOD_SELECTION, "evidence": ["ShortageQty"]}),
             ("duplicate-evidence", {**GOOD_SELECTION, "evidence": ["ShortageQty", "ShortageQty"]}),
             ("uncertainty-not-a-list", {**GOOD_SELECTION, "uncertainty": 3}),
+            ("uncertainty-invented", {**GOOD_SELECTION, "uncertainty": ["ShortageQty"]}),
             ("uncertainty-unknown-name", {**GOOD_SELECTION, "uncertainty": ["SupplierPrice"]}),
             ("human-decision-false", {**GOOD_SELECTION, "human_decision_required": False}),
             (
@@ -623,6 +625,7 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
             "explanation_seam",
             "fractions",
             "procurement_recommendation",
+            "types",
             "typing",
         }
         forbidden_names = {"environ", "getenv", "open", "socket", "urlopen"}
@@ -737,7 +740,7 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
             RecordingProvider(
                 response={
                     "answer_kind": EQUAL_KIND,
-                    "evidence": ["ShortageQty", "BasePurchaseNeed", "RecommendedPurchaseQty"],
+                    "evidence": list(FIXTURE_EVIDENCE),
                     "uncertainty": [],
                     "human_decision_required": True,
                 }
@@ -745,7 +748,8 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
         )
         self.assertEqual(accepted.outcome, OUTCOME_EXPLAINED)
         assert accepted.response is not None
-        self.assertIn("未因适用 MOQ 100 上调", accepted.response.answer)
+        self.assertIn("未发生上调", accepted.response.answer)
+        self.assertIn("MOQAdjustmentQty 为 0", accepted.response.answer)
 
     # --- 17 adversarial: unsupported fact / reason ------------------------------------
 
@@ -798,6 +802,142 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
             explained.response.human_decision_required, HUMAN_DECISION_REQUIRED_TEXT
         )
         self.assertIn("不是已批准的采购量", explained.response.human_decision_required)
+
+
+    # --- 19 adversarial: provider cannot invent uncertainty ---------------------------
+
+    def test_q3_19_provider_cannot_invent_uncertainty(self) -> None:
+        recommendations, _built = self.complete_recommendations("q3-19")
+        attempts: tuple[tuple[str, object], ...] = (
+            ("relabel-shortage", {**GOOD_SELECTION, "uncertainty": ["ShortageQty"]}),
+            ("relabel-moq", {**GOOD_SELECTION, "uncertainty": ["ApplicableMOQ"]}),
+            (
+                "relabel-several",
+                {
+                    **GOOD_SELECTION,
+                    "uncertainty": ["ShortageQty", "RecommendedPurchaseQty"],
+                },
+            ),
+        )
+        for label, raw in attempts:
+            with self.subTest(label=label):
+                result = self.explain(recommendations, RecordingProvider(response=raw))
+                self.assertEqual(result.outcome, OUTCOME_RESPONSE_UNACCEPTABLE)
+                self.assertIsNone(result.response)
+                self.assertEqual(result.availability_note, NOTE_RESPONSE_UNACCEPTABLE)
+                payload = json.dumps(result.to_dict(), ensure_ascii=False)
+                self.assertNotIn('"uncertainty": ["ShortageQty"]', payload)
+
+        # The provider-called COMPLETE path keeps uncertainty runtime-owned and empty.
+        explained = self.explain(recommendations, RecordingProvider())
+        self.assertEqual(explained.outcome, OUTCOME_EXPLAINED)
+        assert explained.response is not None
+        self.assertEqual(list(explained.response.uncertainty), [])
+        self.assertEqual(explained.to_dict()["response"]["uncertainty"], [])
+
+    # --- 20 equality kind must cover all five Q3 quantities ---------------------------
+
+    def test_q3_20_equality_kind_covers_all_five_quantities(self) -> None:
+        recommendations, _built = self.complete_recommendations("q3-20")
+        equal = dataclasses.replace(
+            recommendations.for_family(PLANT, DEMAND),  # type: ignore[arg-type]
+            shortage_qty=Fraction(100, 1),
+            base_purchase_need=Fraction(100, 1),
+            moq_adjustment_qty=Fraction(0, 1),
+            recommended_purchase_qty=Fraction(100, 1),
+        )
+        equal_result = ProcurementRecommendationResult(
+            analysis_run=recommendations.analysis_run,
+            recommendations=(equal,),
+        )
+
+        incomplete_selections: tuple[tuple[str, list[str]], ...] = (
+            (
+                "missing-ApplicableMOQ",
+                ["ShortageQty", "BasePurchaseNeed", "MOQAdjustmentQty", "RecommendedPurchaseQty"],
+            ),
+            (
+                "missing-MOQAdjustmentQty",
+                ["ShortageQty", "BasePurchaseNeed", "ApplicableMOQ", "RecommendedPurchaseQty"],
+            ),
+            ("only-three", ["ShortageQty", "BasePurchaseNeed", "RecommendedPurchaseQty"]),
+        )
+        for label, evidence in incomplete_selections:
+            with self.subTest(label=label):
+                result = self.explain(
+                    equal_result,
+                    RecordingProvider(
+                        response={
+                            "answer_kind": EQUAL_KIND,
+                            "evidence": evidence,
+                            "uncertainty": [],
+                            "human_decision_required": True,
+                        }
+                    ),
+                )
+                self.assertEqual(result.outcome, OUTCOME_RESPONSE_UNACCEPTABLE)
+                self.assertIsNone(result.response)
+
+        explained = self.explain(
+            equal_result,
+            RecordingProvider(
+                response={
+                    "answer_kind": EQUAL_KIND,
+                    "evidence": list(FIXTURE_EVIDENCE),
+                    "uncertainty": [],
+                    "human_decision_required": True,
+                }
+            ),
+        )
+        self.assertEqual(explained.outcome, OUTCOME_EXPLAINED)
+        response = explained.response
+        assert response is not None
+        self.assertEqual(
+            list(response.evidence),
+            [
+                "ShortageQty = 100",
+                "BasePurchaseNeed = 100",
+                "ApplicableMOQ = 100",
+                "MOQAdjustmentQty = 0",
+                "RecommendedPurchaseQty = 100",
+            ],
+        )
+        self.assertIn("MOQAdjustmentQty 为 0", response.answer)
+        self.assertIn("100", response.answer)
+        # All five quantities stay explicit across the artifact: the answer carries the
+        # registered values and the evidence section names every one of them.
+        self.assertEqual(
+            [line.split(" = ")[0] for line in response.evidence], list(Q3_FACT_FIELDS)
+        )
+        self.assertEqual(
+            set(_walk_keys(response.to_dict())),
+            {"answer", "evidence", "uncertainty", "human_decision_required"},
+        )
+
+    # --- 21 the answer-kind registry is immutable -------------------------------------
+
+    def test_q3_21_answer_kind_registry_is_immutable(self) -> None:
+        self.assertIsInstance(ANSWER_KINDS, MappingProxyType)
+        self.assertEqual(ANSWER_KIND_LITERALS, tuple(ANSWER_KINDS))
+        self.assertEqual(set(ANSWER_KIND_LITERALS), {FIXTURE_KIND, EQUAL_KIND})
+        for kind in ANSWER_KINDS.values():
+            self.assertEqual(set(kind.required_evidence), set(Q3_FACT_FIELDS))
+
+        with self.assertRaises(TypeError):
+            ANSWER_KINDS["INVENTED_KIND"] = ANSWER_KINDS[FIXTURE_KIND]  # type: ignore[index]
+        with self.assertRaises(TypeError):
+            ANSWER_KINDS[FIXTURE_KIND] = ANSWER_KINDS[EQUAL_KIND]  # type: ignore[index]
+        with self.assertRaises(TypeError):
+            del ANSWER_KINDS[FIXTURE_KIND]  # type: ignore[attr-defined]
+        self.assertEqual(set(ANSWER_KINDS), {FIXTURE_KIND, EQUAL_KIND})
+
+        # The runtime therefore rejects a kind that no registry entry backs.
+        recommendations, _built = self.complete_recommendations("q3-21")
+        result = self.explain(
+            recommendations,
+            RecordingProvider(response={**GOOD_SELECTION, "answer_kind": "INVENTED_KIND"}),
+        )
+        self.assertEqual(result.outcome, OUTCOME_RESPONSE_UNACCEPTABLE)
 
 
 if __name__ == "__main__":  # pragma: no cover - manual run entry point

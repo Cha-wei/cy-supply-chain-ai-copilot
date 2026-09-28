@@ -27,11 +27,13 @@ This seam therefore does not accept provider prose at all.  The provider may onl
 registered content:
 
 * ``answer_kind`` -- one literal from the closed :data:`ANSWER_KINDS` registry (``§5.3`` Q3
-  answer shapes); the runtime renders the sentence from the **projection's own values**;
+  answer shapes); the registry is **read-only**, so a caller cannot widen the accepted
+  vocabulary; the runtime renders the sentence from the **projection's own values**;
 * ``evidence`` -- an ordered list of **projected fact names** whose runtime-rendered
-  ``"<name> = <value>"`` lines form the Evidence section;
-* ``uncertainty`` -- an ordered list of projected fact names for the Uncertainty / Missing
-  Data section (empty when the projection is complete);
+  ``"<name> = <value>"`` lines form the Evidence section; every Q3 kind requires all five
+  registered quantities, so no kind can silently drop one of them;
+* ``uncertainty`` -- must be **empty**: this seam is only called for a ``COMPLETE`` Q3
+  projection, and a deterministic fact is never relabelled as uncertain by the provider;
 * ``human_decision_required`` -- the boolean ``True``: the provider must *assert* the
   requirement, and the runtime renders the registered reminder sentence.  A procurement
   recommendation is never an approved decision (§5.5), so ``False`` or any free text fails
@@ -49,6 +51,7 @@ import copy
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
+from types import MappingProxyType
 from typing import Protocol
 
 #: Execution outcome: the provider was called once and returned a usable response.
@@ -118,33 +121,46 @@ class AnswerKind:
 
 #: The closed Q3 answer-kind registry (``§5.3`` Q3).  The literals are runtime identifiers;
 #: the sentences are rendered by the runtime from the projection's own values.
-ANSWER_KINDS: Mapping[str, AnswerKind] = {
-    "MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE": AnswerKind(
-        literal="MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE",
-        required_evidence=(
-            "ShortageQty",
-            "BasePurchaseNeed",
-            "ApplicableMOQ",
-            "MOQAdjustmentQty",
-            "RecommendedPurchaseQty",
+#:
+#: The registry is a read-only :class:`~types.MappingProxyType`, because the fidelity
+#: guarantee rests on ``answer_kind`` really belonging to a **closed** registry: if a caller
+#: could insert or replace an entry, the guarantee would not hold.
+ANSWER_KINDS: Mapping[str, AnswerKind] = MappingProxyType(
+    {
+        "MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE": AnswerKind(
+            literal="MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE",
+            required_evidence=(
+                "ShortageQty",
+                "BasePurchaseNeed",
+                "ApplicableMOQ",
+                "MOQAdjustmentQty",
+                "RecommendedPurchaseQty",
+            ),
+            template=(
+                "实际缺口为 {ShortageQty}；基础采购需求为 {BasePurchaseNeed}；"
+                "由于适用 MOQ 为 {ApplicableMOQ}，建议采购量被上调为 {RecommendedPurchaseQty}"
+                "（MOQAdjustmentQty 为 {MOQAdjustmentQty}）。"
+            ),
+            relation="recommended_above_shortage",
         ),
-        template=(
-            "实际缺口为 {ShortageQty}；基础采购需求为 {BasePurchaseNeed}；"
-            "由于适用 MOQ 为 {ApplicableMOQ}，建议采购量被上调为 {RecommendedPurchaseQty}"
-            "（MOQ adjustment 为 {MOQAdjustmentQty}）。"
+        "RECOMMENDATION_EQUALS_SHORTAGE": AnswerKind(
+            literal="RECOMMENDATION_EQUALS_SHORTAGE",
+            required_evidence=(
+                "ShortageQty",
+                "BasePurchaseNeed",
+                "ApplicableMOQ",
+                "MOQAdjustmentQty",
+                "RecommendedPurchaseQty",
+            ),
+            template=(
+                "实际缺口为 {ShortageQty}；基础采购需求为 {BasePurchaseNeed}；"
+                "适用 MOQ 为 {ApplicableMOQ}，建议采购量 {RecommendedPurchaseQty} "
+                "与缺口一致、未发生上调，MOQAdjustmentQty 为 {MOQAdjustmentQty}。"
+            ),
+            relation="recommended_equals_shortage",
         ),
-        relation="recommended_above_shortage",
-    ),
-    "RECOMMENDATION_EQUALS_SHORTAGE": AnswerKind(
-        literal="RECOMMENDATION_EQUALS_SHORTAGE",
-        required_evidence=("ShortageQty", "BasePurchaseNeed", "RecommendedPurchaseQty"),
-        template=(
-            "实际缺口为 {ShortageQty}；基础采购需求为 {BasePurchaseNeed}；"
-            "建议采购量为 {RecommendedPurchaseQty}，未因适用 MOQ {ApplicableMOQ} 上调。"
-        ),
-        relation="recommended_equals_shortage",
-    ),
-}
+    }
+)
 
 #: The registered answer-kind literals, in registry order.
 ANSWER_KIND_LITERALS: tuple[str, ...] = tuple(ANSWER_KINDS)
@@ -302,15 +318,17 @@ def validate_provider_response(
     The response is usable only when it is a mapping carrying **exactly** the four registered
     keys, whose ``answer_kind`` is one of :data:`ANSWER_KINDS`, whose ``evidence`` is a
     non-empty list of projected fact names covering that kind's required evidence, whose
-    ``uncertainty`` is a (possibly empty) list of projected fact names, whose
+    ``uncertainty`` is **empty** (this seam is only called for a ``COMPLETE`` Q3 projection,
+    so no deterministic fact may be relabelled as uncertain), whose
     ``human_decision_required`` is the boolean ``True``, and whose registered relation
     actually holds for this projection.
 
     Everything else -- extra keys, an unregistered kind, a fact name that was not projected,
     a value smuggled into a name, a mutated quantity, a missing required quantity, a relation
-    that contradicts the projection, or an attempt to state that no human decision is needed
-    -- is **not** usable, and the runtime then surfaces no explanation at all.  The artifact
-    itself is assembled here from the projection, so no provider wording can enter it.
+    that contradicts the projection, an invented uncertainty entry, or an attempt to state
+    that no human decision is needed -- is **not** usable, and the runtime then surfaces no
+    explanation at all.  The artifact itself is assembled here from the projection, so no
+    provider wording can enter it.
     """
 
     if not isinstance(raw, Mapping):
@@ -327,15 +345,15 @@ def validate_provider_response(
     if evidence is None or not evidence:
         return None
     uncertainty = _name_list(raw["uncertainty"])
-    if uncertainty is None:
+    if uncertainty is None or uncertainty:
         return None
     if raw["human_decision_required"] is not True:
         return None
 
-    for name in (*evidence, *uncertainty):
+    for name in evidence:
         if name not in values:
             return None
-    if len(set(evidence)) != len(evidence) or len(set(uncertainty)) != len(uncertainty):
+    if len(set(evidence)) != len(evidence):
         return None
     if not set(kind.required_evidence) <= set(evidence):
         return None
@@ -345,7 +363,7 @@ def validate_provider_response(
     return ExplanationResponse(
         answer=kind.template.format(**values),
         evidence=tuple(f"{name} = {values[name]}" for name in evidence),
-        uncertainty=tuple(f"{name} = {values[name]}" for name in uncertainty),
+        uncertainty=(),
         human_decision_required=HUMAN_DECISION_REQUIRED_TEXT,
     )
 
