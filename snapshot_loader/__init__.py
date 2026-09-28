@@ -12,26 +12,36 @@ Deterministic tranches delivered here:
       representation, approved numeric range, approved canonical status vocabulary,
       and identifier non-empty boundary
 
+    First deterministic tranche composition (:func:`run_first_tranche_pipeline`)
+      Layer 1 -> Layer 2 -> Phase A canonical objects -> ``BR-REQUIREMENT-001`` ／
+      ``BR-INVENTORY-001`` ／ ``BR-INBOUND-001`` ／ ``BR-SUBSTITUTE-001`` ->
+      ``BR-SHORTAGE-001`` -> Phase B procurement policy input ->
+      ``BR-PROCUREMENT-001`` -> Supplier Risk runtime input seam (``A′``) ->
+      ``BR-SUPPLIER-RISK-001``, end to end and in memory, over the registered public
+      entry points of each module.
+
 Canonical authority:
 
 * ``docs/design/specs/data-integration/snapshot-import-contract.md``
-  §4.3.22 -- §4.3.30 (implementation: §4.3.28 ``D4`` acceptance gate)
+  §4.3.22 -- §4.3.31 (implementation: §4.3.28 ``D4`` acceptance gate)
 * ``docs/design/specs/data-integration/data-validation.md``
   §4.4.2 / §4.4.24 -- §4.4.44 / §4.4.79 -- §4.4.83 (inherited taxonomy, reused unchanged)
+* ``docs/design/poc-design-v0.2.md`` §2.1 -- §2.7 (business rules) and §10.1 B ／ C
+  (first-tranche module responsibilities and acceptance boundary)
+* ``docs/architecture/adr-001-deterministic-core.md`` (minimum architecture: the thin CLI
+  calls this application orchestration; the core never calls back into the CLI)
 
 Scope boundary (deliberately narrow):
 
-* **in scope (Layer 1)** -- package structural acceptance: trusted input boundary,
-  strict JSON, contract version exact-match, unknown / undeclared content policy, role
-  and artifact cardinality, strict literal paths, declared artifact existence and
-  readability, raw-byte SHA-256 integrity, record carrier shape, canonical record
-  property membership, and ``"_meta"`` shape.
-* **in scope (Layer 2)** -- :func:`validate_layer2` over an :class:`AcceptedPackage`,
-  non-null present values only, reported against the inherited issue taxonomy with
-  ``not_evaluable`` used wherever the authority does not decide the question.
-* **out of scope** -- ``§4.4`` Layer 3 (capability readiness) and Layer 4 (business
-  rules), cross-field / cross-dataset consistency, ``§2`` business rules, procurement
-  recommendation, persistence, network, LLM, database.
+* **in scope** -- the first deterministic tranche of ``POC Design v0.2`` §10.1 B: Layer-1
+  package acceptance, Layer-2 canonical evidence validation, Phase A canonical object
+  construction, the §2.1 -- §2.7 deterministic business rules, the procurement
+  recommendation result, the Supplier Risk evidence result, and their in-process
+  composition.  Every one of those stages is the registered module entry point; the
+  composition adds no business semantics of its own.
+* **out of scope** -- Web ／ API ／ service, LLM ／ Agent ／ Tool protocol, HITL, RBAC ／
+  secrets, persistent Audit, database ／ persistent business state, real ERP ／ SRM
+  Adapter, production write-back, P1, and every §6 -- §9 just-in-time gate.
 
 The core is importable and directly testable and does not depend on the CLI
 (``POC Design v0.2`` §10.1 B; ADR-001).
@@ -253,6 +263,27 @@ from .supplier_risk_calculation import (
     SupplierRiskResult,
     compute_supplier_risk,
 )
+from .first_tranche_pipeline import (
+    LAYER1_NOT_ACCEPTED_REASON,
+    LAYER1_PACKAGE_MISSING_REASON,
+    PIPELINE_STAGES,
+    STAGE_CANONICAL_OBJECTS,
+    STAGE_INBOUND,
+    STAGE_INVENTORY,
+    STAGE_LAYER2,
+    STAGE_PROCUREMENT_POLICY_INPUT,
+    STAGE_PROCUREMENT_RECOMMENDATION,
+    STAGE_REQUIREMENT,
+    STAGE_SHORTAGE,
+    STAGE_SNAPSHOT_LOADER,
+    STAGE_SUBSTITUTE,
+    STAGE_SUPPLIER_RISK_EVIDENCE,
+    STAGE_SUPPLIER_RISK_INPUT_SEAM,
+    FirstTranchePipelineResult,
+    PipelineStage,
+    run_first_tranche_pipeline,
+    run_first_tranche_pipeline_from_paths,
+)
 from .trust import (
     AcceptedPackage,
     ContentView,
@@ -402,6 +433,25 @@ __all__ = [
     "remaining_inbound_qty",
     "validate_artifact_filename",
     "validate_layer2",
+    "FirstTranchePipelineResult",
+    "LAYER1_NOT_ACCEPTED_REASON",
+    "LAYER1_PACKAGE_MISSING_REASON",
+    "PIPELINE_STAGES",
+    "PipelineStage",
+    "STAGE_CANONICAL_OBJECTS",
+    "STAGE_INBOUND",
+    "STAGE_INVENTORY",
+    "STAGE_LAYER2",
+    "STAGE_PROCUREMENT_POLICY_INPUT",
+    "STAGE_PROCUREMENT_RECOMMENDATION",
+    "STAGE_REQUIREMENT",
+    "STAGE_SHORTAGE",
+    "STAGE_SNAPSHOT_LOADER",
+    "STAGE_SUBSTITUTE",
+    "STAGE_SUPPLIER_RISK_EVIDENCE",
+    "STAGE_SUPPLIER_RISK_INPUT_SEAM",
+    "run_first_tranche_pipeline",
+    "run_first_tranche_pipeline_from_paths",
 ]
 
 __version__ = "0.1.0"

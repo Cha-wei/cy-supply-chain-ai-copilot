@@ -4,29 +4,38 @@
 
 ## 项目状态
 
-**Project Foundation + 第一批 deterministic implementation tranche 的第 1 个模块。**
+**Project Foundation + 第一批 deterministic implementation tranche（`POC Design v0.2` §10.1 B）
+的模块实现与 integration 串联。**
 
 ```
 POC Design v0.2                 = DRAFT
 Code Start Gate                 = PASS（POC Design §10.1 E，CSG-1 ～ CSG-8）
 Architecture Option A           = HUMAN APPROVED / ADR-001 ACCEPTED
 First deterministic tranche     = IMPLEMENTATION AUTHORIZED（仅 POC Design §10.1 B）
+First deterministic tranche     = IMPLEMENTED + composed（§10.2 current-state record，Issue #172）
 Unrestricted implementation     = NOT AUTHORIZED
+§6 ～ §9 full closure            = NOT CLAIMED
 POC success                     = NOT CLAIMED
 ```
 
 `Snapshot loader → Validation → Canonical data objects → Deterministic business rules
-→ Procurement recommendation result` 五个模块中，**只有 Snapshot loader / import** 已实现：
+→ Procurement recommendation result` 五个模块职责**均已实现**，并由
+`run_first_tranche_pipeline` 按 canonical ordering 串联为一条 local / single-process /
+in-memory 的 deterministic pipeline：
 
 ```
-Snapshot loader / import  = IMPLEMENTED（Layer-1 package acceptance only）
-Validation                = NOT STARTED
-Canonical data objects    = NOT STARTED
-Deterministic rules       = NOT STARTED
-Recommendation result     = NOT STARTED
+Snapshot loader / import        = IMPLEMENTED（Layer-1 package acceptance）
+Validation                      = IMPLEMENTED（Layer-2 canonical evidence validation；
+                                  Layer 3 capability readiness 由各 runtime seam 承担）
+Canonical data objects          = IMPLEMENTED（Phase A construction + Phase B policy input seam）
+Deterministic business rules    = IMPLEMENTED（BR-REQUIREMENT-001 / BR-INVENTORY-001 /
+                                  BR-INBOUND-001 / BR-SUBSTITUTE-001 / BR-SHORTAGE-001 /
+                                  BR-PROCUREMENT-001 / BR-SUPPLIER-RISK-001）
+Recommendation result           = IMPLEMENTED（procurement recommendation + supplier risk evidence）
+Integration / acceptance closure= IMPLEMENTED（Issue #172；thin composition，无业务语义）
 ```
 
-**已实现范围（有意保持最小）** —— POC v0.2 **Layer-1 Package Structural Validation**：
+**Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：
 
 - configured trusted package-input boundary（`§4.3.28` D.3 `IG-self-C`）；
 - Manifest 可读性 + strict JSON parse（`IC-8`：拒绝 BOM / duplicate key / comment /
@@ -45,13 +54,20 @@ Recommendation result     = NOT STARTED
 - `FR-3` collect-all 与 `not evaluable due to prerequisite` 显式区分；
 - package disposition：`ACCEPTED` / `REJECTED` / `UNUSABLE`。
 
-**明确未实现（Out of Scope）**：`§4.4` Layer 2 ～ Layer 4 validation、canonical business
-object construction、`§2` business rules、procurement recommendation、Web / API、
-database / persistent business state、real ERP / source connectivity、LLM / Agent / Tool
-protocol、HITL、RBAC / secrets、persistent Audit、production write-back、P1。
+**Integration 串联（`§10.2`，Issue #172）**：`snapshot_loader/first_tranche_pipeline.py`
+的 `run_first_tranche_pipeline` / `run_first_tranche_pipeline_from_paths` 只调用各模块**已登记**
+的 public entry point，唯一 caller-supplied 语义是已登记的 in-process logical handoff
+（`PhaseAHandoff`，`§4.3.31` E ／ G I-1 ～ I-9）与 configured trusted boundary；不重实现任何 rule、
+不重读 raw evidence、不新增 business status。上游 Analysis Run ／ exactly-one accepted package
+binding 由各消费 seam 自行校验（`F3-RB1`）。
+
+**明确未实现（Out of Scope）**：Web / API / service、LLM / Agent / Tool protocol、HITL、
+RBAC / secrets、persistent Audit、database / persistent business state、real ERP / SRM
+Adapter / source connectivity、production write-back、P1，以及 `§6` ～ `§9` 各项
+just-in-time gate。
 
 **状态纪律**：`DESIGN RESOLVED` ≠ `IMPLEMENTED` ≠ `TESTED`；`IMPLEMENTED` ≠ `VALIDATED`
-≠ `POC SUCCESS`。本模块的验证仅覆盖 **SIMULATED** fixtures，不构成真实企业集成证据。
+≠ `POC SUCCESS`。全部验证仅覆盖 **SIMULATED** fixtures，不构成真实企业集成证据。
 
 ## 目录结构
 
@@ -61,16 +77,24 @@ protocol、HITL、RBAC / secrets、persistent Audit、production write-back、P1
 ├── AGENTS.md                     # AI 协作约定
 ├── CONTRIBUTING.md               # 工程协作规范
 ├── pyproject.toml                # Python package metadata（无第三方运行时依赖）
-├── .github/workflows/ci.yml      # Foundation checks；Layer-1 loader CI tests deferred to immediate follow-up
-├── snapshot_loader/              # Controlled Snapshot loader（本 tranche 唯一实现）
+├── .github/workflows/ci.yml      # Foundation checks + deterministic SIMULATED tests（Python 3.11 / 3.12）+ thin CLI check
+├── snapshot_loader/              # deterministic core（第一批 tranche）
 │   ├── constants.py              # 已登记的 exact literals（不 runtime 推导）
 │   ├── strict_json.py            # strict JSON parse（C-1 / C-9）
 │   ├── path_scope.py             # strict literal path semantics（PN-1）
 │   ├── trust.py                  # trusted boundary / stable view / trusted reuse
 │   ├── loader.py                 # Layer-1 acceptance gate（§4.3.28 D4）
-│   ├── issues.py                 # 继承的 Validation Taxonomy dimensions
-│   ├── report.py                 # disposition / issue 报告模型
-│   └── cli.py                    # thin CLI（outer entry point）
+│   ├── layer2.py                 # Layer-2 canonical evidence validation
+│   ├── canonical_objects.py      # Phase A canonical object construction（§4.3.31）
+│   ├── requirement_calculation.py / inventory_calculation.py / inbound_calculation.py
+│   ├── substitute_calculation.py / shortage_calculation.py
+│   ├── procurement_policy_input.py / procurement_recommendation.py
+│   ├── supplier_risk_input.py / supplier_risk_calculation.py
+│   ├── result_binding.py         # F3-RB1 Analysis Run binding（跨 result provenance）
+│   ├── exact_quantity.py         # exact numeric representation（§4.3.25 C-5）
+│   ├── first_tranche_pipeline.py # first-tranche composition（§10.2；无业务语义）
+│   ├── issues.py / report.py / cli.py
+│   └── __init__.py               # public runtime surface
 ├── tests/                        # deterministic SIMULATED unittest suite
 └── docs/
     ├── discovery/                # 需求调研与探索记录
@@ -103,21 +127,31 @@ python -m unittest tests.test_layer1_acceptance -v
 **CI 状态（必须准确表述）：**
 
 ```
-.github/workflows/ci.yml 当前只有 Foundation checks。
-Layer-1 loader CI test job = NOT PRESENT IN PR #119；已由 Human Decision
-拆出为 immediately-following mandatory change（Issue #120）。
+.github/workflows/ci.yml = Foundation checks
+                         + deterministic SIMULATED unit tests（含 first-tranche
+                           integration / acceptance tests；Python 3.11 / 3.12）
+                         + thin CLI entry-point verification
 ```
 
-因此：**不得**声称 GitHub CI 已运行本文的 deterministic tests、Layer-1 Python CI job PASS、
-或 CI extension 已完成。
+**CI 运行范围（必须准确表述）：**
 
-当前可声称的验证证据只有两类：
+- **运行**：标准库 `unittest` 套件 —— 包含 deterministic **SIMULATED first-tranche
+  integration / acceptance tests**（`tests/test_first_tranche_pipeline.py` 等同套件内
+  执行）—— 以及 Foundation checks 与 thin CLI entry-point 检查；
+- **不运行**：real-system / external integration（真实 ERP / SRM / source connectivity、
+  跨进程或服务级集成）、lint、AI Eval。
 
-- **local**：`185 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures）；
-- **remote**：PR #119 current-head `Foundation checks` = PASS。
+`§6` ～ `§9` 的 Required Gates 仍按各自 status boundary 处理。
+
+当前验证证据：
+
+- **local**：`964 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures，本机
+  Python 3.14）；
+- **remote**：`main` push CI 在 **Python 3.11 与 3.12** 上运行同一 deterministic SIMULATED
+  套件并通过，另有 Foundation checks 与 thin CLI 端到端检查。
 
 本文**不登记**动态的 PR head SHA 或 transient Actions run id —— 二者会随每次 push 变化；
-具体 current run evidence 以 **PR #119** 为准。
+具体 current run evidence 以对应 PR / Actions run 为准。
 
 ### Manifest carrier presence（Layer-1 requirement）
 
