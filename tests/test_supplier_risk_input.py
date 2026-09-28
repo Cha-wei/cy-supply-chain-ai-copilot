@@ -134,6 +134,20 @@ def performance_record(
     )
 
 
+def identity_issue_location(
+    plant: Any, material: Any, supplier: Any, target: str, value: Any
+) -> str:
+    """The location of a seam-raised capability identity finding of one exact evaluation request.
+
+    PR #169 re-review: the seam-raised finding is scoped to the exact affected request
+    (``plant_id`` ／ ``material_code`` ／ ``supplier_id``) plus the canonical identity target and the
+    exact requested value, so two requests affected by the same unresolved identity stay
+    distinguishable and are never collapsed by issue deduplication.
+    """
+
+    return f"supplier_risk_input.identity[{plant}/{material}/{supplier}/{target}/{value}]"
+
+
 def module_identifiers(module) -> set[str]:
     """Every code identifier of one module: a docstring may explain, code may not name."""
 
@@ -1752,7 +1766,9 @@ class CapabilityIdentityTests(SupplierRiskInputTestCase):
             {issue.location for issue in unresolved_result.identity_issues},
             {
                 construction_issue.location,
-                f"supplier_risk_input.identity[{SUPPLIER_IDENTITY_TARGET}/{SUPPLIER}]",
+                identity_issue_location(
+                    PLANT, DEMAND, SUPPLIER, SUPPLIER_IDENTITY_TARGET, SUPPLIER
+                ),
             },
         )
 
@@ -2268,7 +2284,8 @@ class IdentityIssueHandoffTests(SupplierRiskInputTestCase):
         self.assertEqual((issue.category, issue.reason), ("IDENTITY_RESOLUTION", "UNRESOLVED_IDENTITY"))
         self.assertEqual(issue.layer, 2)
         self.assertEqual(
-            issue.location, f"supplier_risk_input.identity[Supplier/{SUPPLIER}]"
+            issue.location,
+            identity_issue_location(PLANT, DEMAND, SUPPLIER, "Supplier", SUPPLIER),
         )
         self.assertIn(SUPPLIER, issue.detail)
         self.assertIn("Supplier", issue.detail)
@@ -2276,7 +2293,8 @@ class IdentityIssueHandoffTests(SupplierRiskInputTestCase):
         self.assertEqual(issue.affected_evidence, SUPPLIER_IDENTITY_ROLE)
         self.assertIn("§4.4.26", issue.design_reference)
         self.assertIn("§4.4.81 #7", issue.design_reference)
-        self.assertIn("this exact supplier_id + material_code pair only", issue.blast_radius)
+        self.assertIn("plant_id = 'P1' + material_code = 'M2' + supplier_id = 'SUP-A'", issue.blast_radius)
+        self.assertIn("only", issue.blast_radius)
         # The material half of the pair stays reliable and carries no finding.
         material_state = self.state(result, MATERIAL_IDENTITY_TARGET, DEMAND)
         self.assertTrue(material_state.reliable)
@@ -2342,7 +2360,7 @@ class IdentityIssueHandoffTests(SupplierRiskInputTestCase):
         )
         self.assertEqual(
             missing_state.issues[0].location,
-            f"supplier_risk_input.identity[Material/{DEMAND}]",
+            identity_issue_location(PLANT, DEMAND, SUPPLIER, "Material", DEMAND),
         )
         self.assertEqual(missing_state.issues[0].affected_evidence, PLANT_MATERIAL_IDENTITY_ROLE)
         self.assertTrue(missing_outcome.data_incomplete)
@@ -2425,6 +2443,190 @@ class IdentityIssueHandoffTests(SupplierRiskInputTestCase):
             [obj.value_of("supplier_id") for obj in other_objects], [SUPPLIER_B]
         )
         self.assertIsNone(result.identity_state_for(SUPPLIER_IDENTITY_TARGET, SUPPLIER_B))
+
+
+    def test_a64_one_supplier_identity_across_two_material_pairs_is_scoped(self) -> None:
+        # The same unresolved Supplier identity (SUP-A) participates in two request-bounded pairs:
+        # both fail closed, and each pair keeps its own finding scoped to its own request.
+        built = self.build_chain(
+            demands=((DEMAND, "130", D2), (OTHER, "130", D2)),
+            moq_policies=(
+                moq_policy_record(DEMAND, moq="100"),
+                moq_policy_record(OTHER, moq="100"),
+            ),
+            supplier_identities=({"supplier_id": SUPPLIER}, {"supplier_id": SUPPLIER}),
+            supplier_relationships=(
+                relationship_record(material=DEMAND),
+                relationship_record(material=OTHER),
+            ),
+            supplier_performances=(
+                performance_record(material=DEMAND),
+                performance_record(material=OTHER),
+            ),
+            name="a64-one-supplier-identity-two-materials",
+        )
+        result = self.supplier_input(built)
+        self.assertEqual(result.evaluation_contexts, ())
+        self.assertEqual(len(result.evidence_outcomes), 2)
+        expected = {
+            identity_issue_location(PLANT, DEMAND, SUPPLIER, SUPPLIER_IDENTITY_TARGET, SUPPLIER),
+            identity_issue_location(PLANT, OTHER, SUPPLIER, SUPPLIER_IDENTITY_TARGET, SUPPLIER),
+        }
+        # The two affected pairs are not collapsed into one finding with a wider declared scope.
+        self.assertEqual(
+            [issue.location for issue in result.identity_issues], sorted(expected)
+        )
+        for material in (DEMAND, OTHER):
+            outcome = result.outcome_for(PLANT, SUPPLIER, material)
+            assert outcome is not None
+            self.assertTrue(outcome.data_incomplete)
+            self.assertEqual(
+                [issue.location for issue in outcome.identity_issues],
+                [
+                    identity_issue_location(
+                        PLANT, material, SUPPLIER, SUPPLIER_IDENTITY_TARGET, SUPPLIER
+                    )
+                ],
+            )
+            issue = outcome.identity_issues[0]
+            self.assertIn(f"material_code = {material!r}", issue.blast_radius)
+            self.assertIn(f"material_code = {material!r}", issue.detail)
+            self.assertIn("only", issue.blast_radius)
+            self.assertEqual(issue.affected_evidence, SUPPLIER_IDENTITY_ROLE)
+
+    def test_a65_one_pair_across_two_plants_keeps_two_distinct_findings(self) -> None:
+        # The registered blast radius is per evaluation request, so the same pair under two Plants must
+        # keep two distinguishable findings instead of being deduplicated across Plants.
+        built = self.build_chain(
+            extra_plant_families=((OTHER_PLANT, DEMAND, "120", D1),),
+            moq_policies=(
+                moq_policy_record(DEMAND, moq="100"),
+                moq_policy_record(
+                    DEMAND,
+                    moq="100",
+                    plant=OTHER_PLANT,
+                    locator="SIMULATED-SRC-MOQ-P2",
+                ),
+            ),
+            supplier_identities=({"supplier_id": SUPPLIER}, {"supplier_id": SUPPLIER}),
+            supplier_relationships=(relationship_record(),),
+            supplier_performances=(performance_record(),),
+            name="a65-one-pair-two-plants",
+        )
+        result = self.supplier_input(built)
+        self.assertEqual(result.evaluation_contexts, ())
+        self.assertEqual(len(result.evidence_outcomes), 2)
+        self.assertEqual(
+            [issue.location for issue in result.identity_issues],
+            sorted(
+                {
+                    identity_issue_location(
+                        PLANT, DEMAND, SUPPLIER, SUPPLIER_IDENTITY_TARGET, SUPPLIER
+                    ),
+                    identity_issue_location(
+                        OTHER_PLANT, DEMAND, SUPPLIER, SUPPLIER_IDENTITY_TARGET, SUPPLIER
+                    ),
+                }
+            ),
+        )
+        for plant in (PLANT, OTHER_PLANT):
+            outcome = result.outcome_for(plant, SUPPLIER, DEMAND)
+            assert outcome is not None
+            self.assertTrue(outcome.data_incomplete)
+            self.assertEqual(
+                [issue.location for issue in outcome.identity_issues],
+                [
+                    identity_issue_location(
+                        plant, DEMAND, SUPPLIER, SUPPLIER_IDENTITY_TARGET, SUPPLIER
+                    )
+                ],
+            )
+            issue = outcome.identity_issues[0]
+            # Each finding declares exactly its own Plant request and nothing wider.
+            self.assertIn(f"plant_id = {plant!r}", issue.blast_radius)
+            self.assertIn(f"plant_id = {plant!r}", issue.detail)
+            self.assertNotIn(
+                f"plant_id = {OTHER_PLANT if plant == PLANT else PLANT!r}", issue.blast_radius
+            )
+
+    def test_a66_one_material_identity_across_two_supplier_pairs_is_scoped(self) -> None:
+        # Material equivalent: the same unresolved Material identity (MAT-A) participates in two
+        # supplier pairs, each keeping its own request-scoped finding.
+        built = self.build_chain(
+            supplier_identities=({"supplier_id": SUPPLIER}, {"supplier_id": SUPPLIER_B}),
+            supplier_relationships=(relationship_record(), relationship_record(SUPPLIER_B)),
+            supplier_performances=(performance_record(), performance_record(SUPPLIER_B)),
+            identity_contexts=(
+                {"plant_id": PLANT, "material_code": DEMAND},
+                {"plant_id": OTHER_PLANT, "material_code": DEMAND},
+            ),
+            name="a66-one-material-identity-two-suppliers",
+        )
+        result = self.supplier_input(built)
+        self.assertEqual(result.evaluation_contexts, ())
+        self.assertEqual(len(result.evidence_outcomes), 2)
+        self.assertEqual(
+            [issue.location for issue in result.identity_issues],
+            sorted(
+                {
+                    identity_issue_location(
+                        PLANT, DEMAND, SUPPLIER, MATERIAL_IDENTITY_TARGET, DEMAND
+                    ),
+                    identity_issue_location(
+                        PLANT, DEMAND, SUPPLIER_B, MATERIAL_IDENTITY_TARGET, DEMAND
+                    ),
+                }
+            ),
+        )
+        for supplier in (SUPPLIER, SUPPLIER_B):
+            outcome = result.outcome_for(PLANT, supplier, DEMAND)
+            assert outcome is not None
+            self.assertTrue(outcome.data_incomplete)
+            self.assertEqual(
+                [issue.location for issue in outcome.identity_issues],
+                [
+                    identity_issue_location(
+                        PLANT, DEMAND, supplier, MATERIAL_IDENTITY_TARGET, DEMAND
+                    )
+                ],
+            )
+            issue = outcome.identity_issues[0]
+            self.assertEqual(issue.affected_evidence, PLANT_MATERIAL_IDENTITY_ROLE)
+            self.assertIn(f"supplier_id = {supplier!r}", issue.blast_radius)
+            self.assertIn(f"supplier_id = {supplier!r}", issue.detail)
+            # The supplier identity of the evaluated pair stays reliable and unfindable.
+            supplier_state = self.state(result, SUPPLIER_IDENTITY_TARGET, supplier)
+            self.assertTrue(supplier_state.reliable)
+            self.assertEqual(supplier_state.issues, ())
+
+    def test_a67_reliable_identities_across_several_requests_carry_no_finding(self) -> None:
+        built = self.build_chain(
+            demands=((DEMAND, "130", D2), (OTHER, "130", D2)),
+            moq_policies=(
+                moq_policy_record(DEMAND, moq="100"),
+                moq_policy_record(OTHER, moq="100"),
+            ),
+            supplier_identities=({"supplier_id": SUPPLIER},),
+            supplier_relationships=(
+                relationship_record(material=DEMAND),
+                relationship_record(material=OTHER),
+            ),
+            supplier_performances=(
+                performance_record(material=DEMAND),
+                performance_record(material=OTHER),
+            ),
+            name="a67-reliable-identities-several-requests",
+        )
+        result = self.supplier_input(built)
+        self.assertEqual(len(result.evaluation_contexts), 2)
+        self.assertEqual(result.evidence_outcomes, ())
+        self.assertEqual(result.identity_issues, ())
+        self.assertEqual(result.issues, ())
+        for material in (DEMAND, OTHER):
+            context = result.context_for(PLANT, SUPPLIER, material)
+            assert context is not None
+            self.assertTrue(context.identity_reliable)
+            self.assertEqual(context.identity_issues, ())
 
 
 if __name__ == "__main__":  # pragma: no cover - direct invocation

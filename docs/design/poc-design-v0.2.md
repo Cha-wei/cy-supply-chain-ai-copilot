@@ -5784,6 +5784,13 @@ unavailable；**Issue #166 ／ #167 语义不变**）与 **role PROVIDED but exa
   exact requested value、affected pair ／ request、failure-isolated blast radius 与当前 design reference，
   并在存在时指明相关 accepted evidence reference；**不得**新增 Category ／ Reason ／ enum ／ status，
   也**不得**在没有任何 evidence 时 fabricate evidence reference；
+  **该 seam-raised finding 必须按 exact evaluation request 定域（Issue #169 re-review）：** 其
+  location ／ detail ／ blast radius 必须指向该 finding 所影响的**那一个** `plant_id` ＋
+  `material_code` ＋ `supplier_id` request（并含 identity target 与 exact requested value）。同一个
+  unresolved identity 参与多个 pair ／ 多个 Plant request 时，必须产生**多个可区分的** finding，
+  **不得**因 location ／ category ／ reason 相同而被 dedupe 成一个声明了更宽 blast radius 的 finding；
+  此定域仅改变 Validation Issue ／ consequence 的表述范围，**不改变** canonical Supplier identity grain，
+  也**不改变**任何 identity resolution 语义；construction 已给出的 finding 仍**逐字保留**（不重新定域）；
 - **F2 — pair grain 本身不可靠**（`supplier_id` 或 `material_code` 缺失 ／ JSON `null` ／ empty ／ 非
   exact JSON string ／ 无法作为确定性 grouping key）：**NO keyed** Supplier Risk result／card；保留
   `IDENTITY_RESOLUTION` ／ `UNRESOLVED_IDENTITY` 以及 affected Supplier Risk business consequence

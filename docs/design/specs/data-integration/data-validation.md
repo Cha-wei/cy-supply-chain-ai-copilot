@@ -3248,6 +3248,12 @@ cardinality       = one reliable pair × each matching Plant ／ material reques
   exact requested value、affected pair ／ request 与 failure-isolated blast radius；**不得**新增
   Category ／ Reason ／ enum ／ status，**不得**在没有 evidence 时 fabricate reference
   （此 finding 不是 capability-unavailable：evidence role 已提供）。
+- **该 finding 按 exact evaluation request 定域（Issue #169 re-review）：** seam-raised finding 的
+  location ／ detail ／ blast radius 指向该 finding 影响的**那一个** `plant_id` ＋ `material_code` ＋
+  `supplier_id` request；同一 unresolved identity 参与多个 pair ／ 多个 Plant request ⇒ **多个可区分**
+  finding（不因 location ／ category ／ reason 相同而被 dedupe 成更宽 blast radius）。该定域只影响
+  Validation Issue ／ consequence 表述范围，**不改变** canonical Supplier identity grain、identity
+  resolution 语义、capability readiness 或任何其它已登记行为；construction 已给出的 finding 仍逐字保留。
 - fail-closed outcome **不是** Risk Card：**不得**计算 `DaysUntilNeed` ／ `LeadTimeRisk` ／
   `DeliveryRisk` ／ `QualityRisk` ／ `OverallSupplierRisk` 的 `LOW` ／ `MEDIUM` ／ `HIGH`；
   可靠 evidence 可保留用于 explainability。

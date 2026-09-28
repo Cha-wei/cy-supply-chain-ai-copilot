@@ -7030,9 +7030,12 @@ ineligible                = valid exclusion ⇒ no result ／ NO DATA_INCOMPLETE
 exact identity unresolved = F1 pair grain 可靠 ⇒ fail-closed outcome（root SUPPLIER_RISK_IDENTITY_UNRESOLVED）；
                             该 identity state **必须**携带具体 `IDENTITY_RESOLUTION` ／
                             `UNRESOLVED_IDENTITY` finding：canonicalization 已给出的逐字保留；
-                            否则由 seam 在既有 taxonomy 下产生 capability-scoped finding（指明 exact
-                            target ／ exact requested value ／ affected pair；**不得** fabricate
-                            reference ／ 新增 Category ／ Reason）；
+                            否则由 seam 在既有 taxonomy 下产生 capability-scoped finding，**按 exact
+                            evaluation request 定域**（location ／ detail ／ blast radius 指向该
+                            plant_id ＋ material_code ＋ supplier_id request，并含 exact target ／
+                            exact requested value；同一 unresolved identity 影响多个 pair ／ Plant
+                            ⇒ 多个可区分 finding，不得 dedupe 成更宽 blast radius；**不得**
+                            fabricate reference ／ 新增 Category ／ Reason ／ 改变 identity grain）；
                             F2 pair grain 不可靠 ⇒ **NO keyed** result；保留 IDENTITY_RESOLUTION ／
                             UNRESOLVED_IDENTITY；**不得** placeholder identity ／ guessed pair ／
                             fuzzy match ／ synthetic grain

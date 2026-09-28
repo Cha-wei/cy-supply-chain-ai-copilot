@@ -1466,6 +1466,7 @@ def _composition(
 
             identities = _pair_identities(
                 construction,
+                plant_id=entry.plant_id,
                 supplier_id=relationship.supplier_id,
                 material_code=entry.material_code,
             )
@@ -2019,6 +2020,7 @@ def _identity_state(
     role: str,
     key: str,
     value: Any,
+    evaluation_context: tuple[Any, Any, Any],
 ) -> SupplierRiskIdentityState:
     """The exact-identity readiness of one pair identity component (``§4.4.26`` ／ ``§4.4.94``).
 
@@ -2036,6 +2038,13 @@ def _identity_state(
     :class:`SupplierRiskIdentityState`, because ``§4.4.80`` allows a finding exactly when the current
     capability needs the identity and cannot reliably resolve it (``§4.4.11``: dependent evidence must
     resolve to its canonical identity, and the affected grain must not obtain a normal result).
+
+    ``evaluation_context`` is the exact ``plant_id`` + ``material_code`` + ``supplier_id`` request this
+    state is built for.  It scopes the seam-raised finding, whose declared blast radius is exactly that
+    request: the same unresolved identity participating in several pairs ／ Plants therefore produces
+    several distinguishable findings instead of one finding with an untruthfully wider scope
+    (``§2.7.27`` F1 ／ ``§2.7.2``: the business grain stays ``supplier_id`` + ``material_code`` and
+    ``plant_id`` stays evaluation context).
     """
 
     resolved = tuple(
@@ -2072,6 +2081,7 @@ def _identity_state(
                 key=key,
                 value=value,
                 unresolved_references=unresolved_references,
+                evaluation_context=evaluation_context,
             ),
         )
     return SupplierRiskIdentityState(
@@ -2092,6 +2102,7 @@ def _capability_identity_issue(
     key: str,
     value: Any,
     unresolved_references: tuple[str, ...],
+    evaluation_context: tuple[Any, Any, Any],
 ) -> Issue:
     """The narrow capability-scoped exact-identity finding this seam must raise itself.
 
@@ -2103,12 +2114,18 @@ def _capability_identity_issue(
     (``IDENTITY_RESOLUTION`` ／ ``UNRESOLVED_IDENTITY``, ``§4.4.80`` #4 ／ ``§4.4.81`` #7); no new
     Category, Reason, enum or status is created, and every field is truthful:
 
-    * ``location`` names the seam, the exact canonical identity target and the exact requested value;
+    * ``location`` names the seam, the exact affected evaluation request
+      (``plant_id`` ／ ``material_code`` ／ ``supplier_id``), the canonical identity ``target`` and the
+      exact requested ``value`` -- so two requests affected by the same unresolved identity never
+      collapse into one finding with a broader declared scope;
     * ``affected_evidence`` names the **logical evidence role** whose exact identity is unresolved --
       never a record reference, and never a synthesised one when no record exists;
-    * the detail names the accepted identity records that were considered **when they exist**.
+    * the detail names the exact affected request and the accepted identity records that were
+      considered **when they exist**;
+    * ``blast_radius`` claims exactly that one request and nothing wider.
     """
 
+    plant_id, material_code, supplier_id = evaluation_context
     considered = ", ".join(unresolved_references)
     if unresolved_references:
         condition = (
@@ -2122,17 +2139,22 @@ def _capability_identity_issue(
             f"the accepted package provides the {role} evidence role but no canonical identity "
             "evidence states this exact value, so no identity record could be considered"
         )
+    request = (
+        f"plant_id = {plant_id!r} + material_code = {material_code!r} + "
+        f"supplier_id = {supplier_id!r}"
+    )
     return Issue(
         location=(
-            f"supplier_risk_input.identity[{target}/{_sort_text(value)}]"
+            "supplier_risk_input.identity["
+            f"{_sort_text(plant_id)}/{_sort_text(material_code)}/{_sort_text(supplier_id)}/"
+            f"{target}/{_sort_text(value)}]"
         ),
         detail=(
             f"the Supplier Risk capability requires the exact {target} identity "
-            f"({key} = {value!r}) of the request-bounded supplier_id + material_code pair it "
-            f"evaluates, but {condition}; the required exact identity therefore cannot be resolved, "
-            "so every evaluation request of this pair fails closed with Risk Evidence Status = "
-            "DATA_INCOMPLETE and no risk level is produced; no placeholder identity, fuzzy match, "
-            "guessed pair or fabricated evidence reference is created "
+            f"({key} = {value!r}) of the evaluation request {request}, but {condition}; the required "
+            "exact identity therefore cannot be resolved, so this request's evaluation fails closed "
+            "with Risk Evidence Status = DATA_INCOMPLETE and no risk level is produced; no placeholder "
+            "identity, fuzzy match, guessed pair or fabricated evidence reference is created "
             "(§4.4.11 / §4.4.26 / §4.4.80 #4 / §4.4.81 #7 / §4.4.94 / §2.7.27 F1)"
         ),
         category=CATEGORY_IDENTITY_RESOLUTION,
@@ -2140,8 +2162,7 @@ def _capability_identity_issue(
         layer=LAYER_2,
         affected_evidence=role,
         blast_radius=(
-            "the Supplier Risk evidence evaluation of this exact supplier_id + material_code pair "
-            "only, per Plant evaluation request"
+            f"the Supplier Risk evidence evaluation of the request {request} only"
         ),
         design_reference=(
             "§4.4.11 / §4.4.26 / §4.4.80 #4 / §4.4.81 #7 / §4.4.94 / §2.7.27 F1 / §4.4.6 Capability C"
@@ -2158,12 +2179,18 @@ def _capability_identity_issue(
 def _pair_identities(
     construction: CanonicalConstructionReport,
     *,
+    plant_id: Any,
     supplier_id: Any,
     material_code: Any,
 ) -> tuple[SupplierRiskIdentityState, ...]:
-    """The two pair identity states of one exact ``supplier_id`` + ``material_code`` pair."""
+    """The two pair identity states of one exact evaluation request.
+
+    ``plant_id`` ／ ``supplier_id`` ／ ``material_code`` are the exact request these states are built
+    for, and they scope the seam-raised exact-identity finding (``§2.7.27`` F1).
+    """
 
     values = {SUPPLIER_IDENTITY_TARGET: supplier_id, MATERIAL_IDENTITY_TARGET: material_code}
+    evaluation_context = (plant_id, material_code, supplier_id)
     return tuple(
         _identity_state(
             construction,
@@ -2171,6 +2198,7 @@ def _pair_identities(
             role=role,
             key=key,
             value=values[target],
+            evaluation_context=evaluation_context,
         )
         for target, key, role in PAIR_IDENTITY_COMPONENTS
     )
