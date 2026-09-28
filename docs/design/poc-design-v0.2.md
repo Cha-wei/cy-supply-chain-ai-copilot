@@ -7228,9 +7228,12 @@ exact numeric semantics 沿用 `§4.3.25` C-5（exact decimal string、禁止 bi
 真实 source 字段、真实业务 baseline 的验证，**不得**作为 sender authenticity、
 真实集成、production readiness 或 business acceptance 的证据。
 
-**Existing evidence（引用，不复制）：** `main` 上已 merge 的 deterministic `unittest` 套件
-（当前 964 tests，含 2 个 pre-existing skips）与 CI（Foundation checks ＋ Python 3.11 ／ 3.12）。
-引用 existing evidence **不等于**任何 business acceptance 已 closure。
+**Existing evidence（引用，不复制）：** Issue #176 review base
+`main @ 171df046f673f358784640418a212c0ab2d4f7c4` 上的 deterministic `unittest` 套件
+（**该时点** 964 tests，含 2 个 pre-existing skips）与 CI（Foundation checks ＋ Python 3.11 ／ 3.12）。
+该计数是 **Issue #176 时点 evidence**，并非持续有效的 canonical 事实；它不随本节文字更新，
+读者应以 `main` 上当前的 test ／ CI 结果为准。引用 existing evidence
+**不等于**任何 business acceptance 已 closure。
 
 #### 9.2 Integration tests — evidence boundary（`DESIGN RESOLVED`）
 
@@ -7288,8 +7291,10 @@ acceptance closure（受控 SIMULATED package → procurement recommendation ＋
   tool failure（工具失败的 fail-closed 表现）、permission boundary（不得越过有效权限）、
   deterministic ／ LLM boundary（deterministic 计算不得由 LLM 替代）；
 - **trigger boundary：** 在**任何** AI Eval closure ／ AI Explanation implementation 之前，
-  必须先完成 `§5` 的 Architecture Decision（framework ／ provider ／ model ／ Tool protocol）
-  与相应 Human 授权；在此之前本层保持 `DESIGN PENDING`。
+  必须完成**适用于该 implementation 的** Architecture Decision ＋ Human Approval；
+  **是否需要** Agent Framework ／ provider ／ model ／ Tool protocol 等具体技术选择，
+  由**该** Architecture Decision 自身决定 —— 本节**不预先选择**这些技术，
+  也**不强制**它们必须全部存在；在此之前本层保持 `DESIGN PENDING`（`JIT-BLOCKED` 状态不变）。
 
 **本层不得（不得由本 closure 静默授权）：** 选择 eval framework ／ LLM judge ／ model ／ provider，
 定义 benchmark ／ KPI ／ threshold，创建 prompt ／ eval dataset ／ eval code，
@@ -7327,7 +7332,7 @@ design resolved
 ```
 
 - `DESIGN RESOLVED`（本节两层）**只**表示 test ／ eval 的分层与 evidence boundary 已定义；
-- 已存在的 tests 通过（当前 964 tests）**只**表示 deterministic 行为在 SIMULATED fixtures 上
+- 已存在的 tests 通过（**Issue #176 时点** 964 tests）**只**表示 deterministic 行为在 SIMULATED fixtures 上
   与已登记 oracle 一致；
 - 它**不**使 POC 变为 `VALIDATED`，**不**构成 business acceptance，**不**构成 `POC SUCCESS`；
 - 所有 fixtures ／ 业务数据继续明确标记 **`SIMULATED`**；
