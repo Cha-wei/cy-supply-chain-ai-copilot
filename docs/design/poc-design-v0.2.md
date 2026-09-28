@@ -7129,7 +7129,7 @@ responsibility / behavioral boundary 已定义
 
 > 本章节只建立未来需要设计的内容。**不得本轮设计实现方案。**
 
-未来需要设计：
+**Current Status（`VB-29` ＋ Issue #180 scoped closure）：**
 
 | 项 | Status |
 | --- | --- |
@@ -7137,18 +7137,79 @@ responsibility / behavioral boundary 已定义
 | Data Scope | `DESIGN PENDING` |
 | Tool Permission | `DESIGN PENDING` |
 | Read / Write Boundary | **`DESIGN RESOLVED`** |
-| Secret Handling | `DESIGN PENDING` |
+| Secret Handling | **`DESIGN RESOLVED`（hosted P0 AI Explanation minimum only，见 §7.1）** |
 
 **继承：`Human Capability may be greater than Agent Capability`。**
 
 > 继承约束（不重新定义）：`AI Effective Permission = User Permission ∩ Data Scope ∩ Tool Permission ∩ Workflow State ∩ POC Policy`；不得将真实企业 credentials 放入 Git，不得将 secrets 写入 prompt / logs。
 
-> **`VB-29` 只解决 `Read / Write Boundary`（依据 `VR-007` ＋ `VB-29` Human Approval）** ——
+> **`VB-29` 只解决 `Read / Write Boundary`**（依据 `VR-007` ＋ `VB-29` Human Approval）——
 > 见 §3 Read / Write / Draft / Failure Boundary。
 >
-> **其余项仍为 `DESIGN PENDING`**：RBAC / Data Scope / Tool Permission / Secret Handling。
+> **Issue #180 只解决 `Secret Handling` 的 hosted P0 AI Explanation 最小范围** —— 见 §7.1。
 >
-> **不得因为 `VB-29` 完成就把整个 §7 标记为完成。**
+> **其余项仍为 `DESIGN PENDING`**：RBAC / Data Scope / Tool Permission。
+>
+> ```text
+> §7 overall                    = NOT RESOLVED
+> RBAC ／ Data Scope ／ Tool Permission = DESIGN PENDING（不得视为已完成）
+> production Secret Management  = NOT CLAIMED
+> ```
+>
+> **不得因为 `VB-29` 或 Issue #180 的 scoped closure 就把整个 §7 标记为完成。**
+
+<a id="secret-handling-minimum"></a>
+
+#### 7.1 Secret Handling — minimum POC contract（hosted P0 AI Explanation，Issue #180）
+
+**Registration Status：`DESIGN RESOLVED`（hosted P0 AI Explanation minimum only）**
+**Authority：** Human Decision（Issue #180）
+**Scope：** **仅** hosted P0 AI Explanation 的 **secret-bearing integration**。本小节**不**设计 §7 的其他项，
+**不**设计 §8，也**不**实现任何 runtime。
+
+> **命名澄清：** 本小节的 `S-1` ～ `S-11` 是 **Issue #180 Secret Handling contract** 的 item 标识
+> （沿用该 Human Decision 的编号），与 `§1.7` ／ `§1.19` 的 `§1` closure criteria `S-1` ～ `S-14`（`GSD-7`）
+> **无关**；在本小节内 `S-n` **只**表示 Secret Handling contract item。
+
+| # | 登记的 contract |
+| --- | --- |
+| `S-1` | **Secret scope** = configured hosted LLM provider 所需的**单一 secret credential value**。**不登记** `bearer-style` 等 provider-specific authentication 形态。**不得**引入 user-specific credential、tenant-specific credential 或第二套 secret mechanism。 |
+| `S-2` | **Credential source** = **process environment**，且为**唯一** approved acquisition source。**不得**从 CLI argument ／ tracked file ／ canonical record ／ provenance ／ `mapping_basis` ／ explanation projection ／ prompt 获取 secret。具体 environment variable name 属 **replaceable implementation configuration**，**不进入** canonical design。 |
+| `S-3` | **Ownership boundary** —— secret acquisition 只属于 **provider integration ／ composition boundary**。deterministic core、explanation projection、response artifact、业务侧 explanation logic **均不得**读取 environment 或持有 credential。 |
+| `S-4` | **Provider-agnostic seam** —— **raw credential 不得成为 provider-agnostic explanation seam 的业务侧调用参数**。业务侧 seam **只**消费 approved explanation projection；provider integration adapter 在其内部获得并使用 credential；provider-specific authentication concern **不得**泄漏到 deterministic business logic ／ projection ／ canonical semantics ／ response artifact。 |
+| `S-5` | **Lifetime ／ persistence** —— credential 只允许存在于 **runtime memory**；**不得**写入磁盘、进入 cache ／ persistent business state、进入 serialized runtime result，或**被业务对象长期持有**。具体 request-lifetime ／ process-local provider-client lifetime 属 **implementation detail**，只要满足上述边界即可。 |
+| `S-6` | **Missing credential** —— credential 缺失或为空 ⇒ **deterministic fail closed**；**不得发生 hosted egress**；用户侧明确 `AI explanation unavailable`；**不得**使用模型记忆、旧聊天或 guessed value 替代。 |
+| `S-7` | **Invalid ／ rejected credential** —— provider authentication 拒绝 ⇒ fail closed；**不**自动切换其它 credential，**不**自动切换 provider，**不得**伪装成 business `DATA_INCOMPLETE`，**不得**改变 deterministic result。 |
+| `S-8` | **Exposure boundary** —— credential **不得**进入 Git、canonical design value、canonical record、provenance、`mapping_basis`、projection、prompt、response artifact、stdout、log、exception ／ traceback、test fixture 或 serialized output。provider error ／ exception 在暴露给调用方前**必须**避免泄露 credential。 |
+| `S-9` | **Logging boundary** —— 当前 POC **不引入**新的 logging ／ secret-observability infrastructure；credential **永远**属**禁止记录**内容。本 unit **不**设计 §8。 |
+| `S-10` | **Process boundary** —— ADR-002 current runtime 为 **in-process**，本 contract **不引入** subprocess。若未来引入 subprocess 且可能传播 secret-bearing environment，**必须**重新进入 Secret Handling review；本次**不**提前设计 subprocess injection mechanism。 |
+| `S-11` | **Testing boundary** —— tests **只**使用 sentinel ／ stub secret；**不**调用真实 hosted provider、**不**使用真实 credential；CI 保持 **zero real secret**；必须验证 **missing secret fail closed 且无 egress**；必须验证 **sentinel 不出现在** projection ／ response ／ stdout ／ exception ／ serialized output；deterministic test suite 在**无 secret** 环境下继续正常运行。 |
+
+**Status transition（只允许该转换）：**
+
+```text
+Secret Handling = DESIGN RESOLVED（hosted P0 AI Explanation minimum only）
+RBAC            = DESIGN PENDING
+Data Scope      = DESIGN PENDING
+Tool Permission = DESIGN PENDING
+§7 overall      = NOT RESOLVED
+production Secret Management = NOT CLAIMED
+```
+
+**Explicitly deferred（本 scoped closure 不设计）：** RBAC；Data Scope；Tool Permission；
+authentication ／ OAuth；Vault ／ KMS ／ cloud secret manager；production rotation ／ revocation；
+per-user ／ per-tenant secrets；deployment platform secret injection；CI live-provider secret；
+production DLP ／ data residency；Web ／ API；provider ／ model selection。
+
+> `.env.example` 当前**不需要**创建；它**不是**本 Human Decision 的 canonical requirement。
+
+**与 ADR-002 的关系：** 本 scoped closure 满足
+[ADR-002](../architecture/adr-002-p0-ai-explanation-minimum-runtime.md) 对 hosted AI Explanation
+implementation 的 **Secret Handling JIT prerequisite**（该 ADR 的 `Implementation blocker` 与
+Revisit Condition 4）。**ADR-002 正文未被修改**；本小节**不实现** AI runtime，也**不**使 `§5` 或 §7
+整体变为 `IMPLEMENTED` ／ `TESTED`。ADR-002 的其余边界（egress 仅限 explanation projection、
+credential 不得进入 Git／canonical record／provenance／`mapping_basis`／prompt、failure boundary 等）
+保持不变，本小节只补充其**尚未回答的 runtime secret contract**。
 
 ---
 
