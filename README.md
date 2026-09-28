@@ -128,11 +128,19 @@ python -m unittest tests.test_layer1_acceptance -v
 
 ```
 .github/workflows/ci.yml = Foundation checks
-                         + deterministic SIMULATED unit tests（Python 3.11 / 3.12）
+                         + deterministic SIMULATED unit tests（含 first-tranche
+                           integration / acceptance tests；Python 3.11 / 3.12）
                          + thin CLI entry-point verification
 ```
 
-CI 只运行标准库 `unittest` 套件与 thin CLI 检查，**不**运行 lint / integration / AI Eval；
+**CI 运行范围（必须准确表述）：**
+
+- **运行**：标准库 `unittest` 套件 —— 包含 deterministic **SIMULATED first-tranche
+  integration / acceptance tests**（`tests/test_first_tranche_pipeline.py` 等同套件内
+  执行）—— 以及 Foundation checks 与 thin CLI entry-point 检查；
+- **不运行**：real-system / external integration（真实 ERP / SRM / source connectivity、
+  跨进程或服务级集成）、lint、AI Eval。
+
 `§6` ～ `§9` 的 Required Gates 仍按各自 status boundary 处理。
 
 当前验证证据：
