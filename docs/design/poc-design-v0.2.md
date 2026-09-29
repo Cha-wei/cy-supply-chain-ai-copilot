@@ -7213,8 +7213,10 @@ LIVE_SMOKE_PASS ／ LIVE_SMOKE_FAIL（sanitized）／ LIVE_SMOKE_NOT_RUN（crede
 - entry point 是 **`scripts/deepseek_q3_live_smoke.py`**，**thin**：直接复用已 merge 的 adapter 与已 merge 的
   `validate_provider_response(...)`；**不**复制 HTTP client ／ envelope parser ／ validator，**不**新增
   retry ／ backoff ／ provider 切换 ／ fallback，**不**新增 dependency；
-- **opt-in boundary**：import 该模块**不**发起任何 network I/O；automatic tests 一律注入 stub transport；
-  CI **不**执行该 entry point、**不**持有真实 secret；真实 hosted 调用只在 operator 显式运行时发生；
+- **opt-in boundary**：import 该模块**不**发起任何 network I/O；automatic tests **会覆盖** entry-point logic
+  （包括 CLI 路径），但一律使用 **stub ／ patched transport ＋ fake environment**，**不**使用真实 hosted
+  credential、**不**执行真实 DeepSeek network call；CI **不**执行 real live smoke、**不**持有真实 secret；
+  只有 operator 显式 real run 才可能产生 egress；
 - **data boundary**：唯一 business payload 是固定 **SIMULATED** projection —— 五个已登记 Q3 量、fake
   plant ／ material identity，**无** package identity ／ content-view digest ／ Analysis Run identity ／
   raw source evidence；其 key 集合与 exact payload 类型与 runtime `build_q3_projection(...)` 的 `COMPLETE`
@@ -7222,14 +7224,18 @@ LIVE_SMOKE_PASS ／ LIVE_SMOKE_FAIL（sanitized）／ LIVE_SMOKE_NOT_RUN（crede
   不同）；
 - **secret boundary**：credential 只由 merged composition boundary 从 **process environment** 解析；entry
   point **不**读取 credential value，**不**提供 `--api-key` ／ `.env` ／ file 输入，**不**构造 header；
-- **report boundary**：sanitized report 只承载 status ／ count ／ boolean ／ identifier（provider ／ model ／
-  endpoint ／ timestamp ／ commit SHA）与 **registered vocabulary**（`answer_kind` 必须属 closed registry，
-  evidence name 必须属已投影 fact name）；每次运行都校验“没有其它字符串进入 report”，一旦检出即
-  `LIVE_SMOKE_FAIL`（`UNSANITIZED_REPORT`）；raw provider body ／ `Authorization` header ／ exception message
-  ／ credential 一律不进入 report ／ stdout ／ log；
+- **report boundary**：sanitized report 只承载 status ／ count ／ boolean ／ identifier 与 **registered
+  vocabulary**；**provider ／ caller 提供的动态字符串必须先通过 narrow validation 才能进入 report**：
+  `answer_kind` 只有属 closed registry 时才记录（否则记为 `None`，provider-controlled 任意字符串**不**进入
+  report），commit identifier 必须为 `UNKNOWN` 或 hex Git SHA、timestamp 必须为固定 shape 的 ISO-8601 instant
+  （否则在任何 egress 之前以 `INVALID_METADATA` 拒绝，**不**记录、**不**回显原始输入、**不**解析 credential）；
+  sanitizer **不**把 report 自身的动态字段直接加入 allowlist，而是**重新校验**它们；一旦检出 permitted
+  vocabulary 之外的字符串即 `LIVE_SMOKE_FAIL`（`UNSANITIZED_REPORT`），且该 fallback report **只**由 fixed
+  vocabulary 重建（丢弃 provider ／ caller 动态字符串）；raw provider body ／ `Authorization` header ／
+  exception message ／ credential 一律不进入 report ／ stdout ／ log；
 - **status vocabulary**：`LIVE_SMOKE_PASS` ／ `LIVE_SMOKE_FAIL` ／ `LIVE_SMOKE_NOT_RUN`（exit code：PASS ／
   NOT_RUN = 0，FAIL = 1）。failure category 是固定 minimal 集：`CREDENTIAL_NOT_CONFIGURED` ／
-  `TRANSPORT_FAILURE` ／ `CREDENTIAL_REJECTED`（401 ／ 403）／ `RATE_LIMITED`（429）／
+  `INVALID_METADATA` ／ `TRANSPORT_FAILURE` ／ `CREDENTIAL_REJECTED`（401 ／ 403）／ `RATE_LIMITED`（429）／
   `PROVIDER_SERVER_ERROR`（≥ 500）／ `UNEXPECTED_HTTP_STATUS` ／ `UNEXPECTED_ENVELOPE` ／
   `VALIDATOR_REJECTED` ／ `CRITERION_FAILED` ／ `UNSANITIZED_REPORT`；
 - **PASS 需同时满足**：恰好 1 次 hosted request；HTTP success；真实 envelope 被 existing parser 接受；
@@ -7247,7 +7253,7 @@ LIVE_SMOKE_PASS ／ LIVE_SMOKE_FAIL（sanitized）／ LIVE_SMOKE_NOT_RUN（crede
   （`CREDENTIAL_NOT_CONFIGURED`，`requests = 0`，即**零 egress**）；因此 **真实 hosted 调用未执行**，
   live 结果**未**验证，`§5.21` 的 “envelope 语义一致性未经 live API 验证” 状态**不变**；
 - 未请求、未猜测、未创建、未写入任何 credential；CI 与全部 tests **未**调用 DeepSeek；
-- 离线证据：`python -m unittest discover -s tests` → **1025 tests OK**（2 个 pre-existing skips）。
+- 离线证据：`python -m unittest discover -s tests` → **1033 tests OK**（2 个 pre-existing skips）。
 
 **本记录未实现 ／ 未声称（out of scope）：** 未声称 AI Eval ready ／ passed、provider quality validated、
 business accepted、live API 已验证、`POC validated` 或 `POC success`；未实现 Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6、
