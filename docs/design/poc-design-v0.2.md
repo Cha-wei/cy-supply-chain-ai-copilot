@@ -7489,6 +7489,13 @@ AI cannot approve ／ submit ／ create PO ／ override Human decision；AI expl
 **12. 本记录不修改：** `§6` 原六行 `DESIGN PENDING` 表、`§3` ／ `§5` ／ `§7` ／ `§8` ／ `§9.4`、
 `ADR-001` ／ `ADR-002` 的 substantive decision、code ／ tests ／ runtime。本记录**不**回写任何历史时点记录。
 
+**Current-state implementation gate follow-up（Issue #200）：** 上述第 11 项所指的
+「future HITL runtime implementation 是否需要 ADR」已由 **Human 独立 Architecture disposition** 回答：
+**本 scoped technical choice 不新建 ADR**，且已批准一个 **reduced coding tranche**（read-only Review projection
+／ Approve-as-recommended ／ Reject ／ AnalysisRun stale detection；**quantity override 不在其中**）。
+authoritative 登记见 [POC Design §10.3](#minimal-hitl-tranche-gate)。本 follow-up **不**修改上述第 1 ～ 12 项，
+**不**使 `§6` overall 离开 `DESIGN PENDING`，也**不**构成 implementation evidence。
+
 ---
 
 ## 7. Permission & Security
@@ -8265,6 +8272,294 @@ composition 与 acceptance closure 覆盖）；`IMPLEMENTED` ≠ `VALIDATED` ≠
   package 自动推导方式补齐该 authority。
 - 本 bullet **不新增** carrier ／ serialization ／ derivation，**不修改** `§10.1`、`§4.3.31` 与
   ADR-001 的 Approved Decision。
+
+---
+
+<a id="minimal-hitl-tranche-gate"></a>
+
+### 10.3 Minimal HITL Runtime Tranche — Architecture Disposition ／ Code Start Gate（Issue #200）
+
+**Registration Status：`REGISTERED`**
+**Canonical concern：** reduced §6 HITL runtime tranche 的 Human Architecture disposition ／ Code Start
+authorization ／ Required Test obligations。
+**Verification base：** current `main @ d4061412ca729c7b5c9ee81532fe081f104906c3`。
+**Task：** [Issue #200](https://github.com/Cha-wei/cy-supply-chain-ai-copilot/issues/200)。
+**Authority：** Human Decision（`HD-HITL-R1` ／ `HD-HITL-R2`）＋ `§6` 的 Issue #198 design record（`HD-1` ～ `HD-7`）
+＋ `§6` 第 11 项（implementation 前须重新执行 architecture ／ Code Start gate）＋ `§10.1` A ～ F（IRM-1
+two-stage gate 与 CSG 验证口径）＋ `§9.1` ／ `§9.2`（test evidence boundary）＋ `§4.3.25` C-5（exact numeric semantics）。
+
+**本小节登记一个独立 change unit；它不写 code、不改 tests、不新建 ADR。**
+
+#### A. Human Decision registration and authority
+
+- **`HD-HITL-R1` — Runtime Architecture = APPROVED（Option A）**：
+
+  ```text
+  existing Python package
+  + minimal in-process HITL runtime
+  + consume existing runtime result surfaces
+  + ephemeral non-canonical review ／ decision artifacts
+  + no new dependency
+  + no persistence  ／ no DB
+  + no Web ／ API
+  + no network ／ provider egress
+  + no RBAC ／ identity ／ data-scope enforcement
+  + no audit platform
+  + no production execution  ／ no ERP write
+  ```
+
+- **本 scoped technical choice 的 disposition = local ／ low blast-radius ／ reversible ／ no new long-lived
+  infrastructure ／ technology commitment。**
+- **`HD-HITL-R2` — reduced first HITL coding tranche = APPROVED**：
+
+  ```text
+  read-only Review projection
+    → Approve deterministic RecommendedPurchaseQty as-is
+    → Reject
+    → AnalysisRun stale detection ／ re-review enforcement
+  ```
+
+- `§6` prose 契约（`HD-1` ～ `HD-7`）是本 tranche 的 semantic authority；本小节只登记 implementation
+  authorization 与 gate，**不**重写该契约。
+
+#### B. ADR disposition（scoped reasoning）
+
+```text
+本 change unit 不新建 ADR。
+```
+
+- 这不是对 `ADR-001` ／ `ADR-002` scope 的**自动继承**，也**不**把二者任一的 Python ／ in-process choice
+  扩展为 whole-project 选择：二者各自明确排除或未覆盖 HITL。ADR-002 只建立了一个先例 —— 「消费已登记的
+  in-process deterministic result surface」本身不构成 Architecture choice 的继承性扩展。
+- **本 disposition 是本次独立 Human Architecture disposition。** Human 已判断该 technical choice 属
+  local ／ low blast-radius ／ reversible ／ 无 new long-lived infrastructure 或 technology commitment。
+- 因此该 scoped choice **不属于** `CONTRIBUTING §10` 中要求 ADR 的**重大、长期、难回滚或 Blast Radius 较大**
+  的 Architecture Decision：
+
+  ```text
+  本 scoped choice  ADR not required
+  ```
+
+- 准确表述是「**该 choice 不落入需要 ADR 的决策类别**」，**不是**「ADR requirement 被豁免 ／ 被覆盖 ／ 由
+  Human Decision 替代」，**也**不以 Rule Precedence 层级 1 ／ 3 解释不做 ADR。本小节**不**建立任何
+  「Human Decision 可以替代 ADR」的一般规则。
+- **不新建 ADR 不改变**：`ADR-001` ／ `ADR-002` 的 Approved Decision 文字、其各自 scope 与其
+  Revisit Conditions。
+- **Architecture re-entry 条件** —— 只有未来 technical choice **跨越当前 architecture boundary** 时，才触发
+  `§10.1 D` §10 row 与 `CONTRIBUTING §10` 的 Architecture re-entry。下列项均为 **architecture-boundary
+  crossing**（不仅是 semantic 变更）：
+
+  ```text
+  persistence ／ DB
+  Web ／ API ／ workflow engine
+  network ／ provider egress
+  RBAC ／ identity ／ data-scope ／ Tool-permission enforcement
+  cross-process ／ service ／ multi-client 形态
+  新的长期依赖 ／ 长期基础设施 ／ technology commitment
+  production execution ／ ERP write-back
+  Tool protocol ／ Agent framework
+  ```
+
+- **`new ／ changed canonical semantics` 本身不是单独的 automatic Architecture trigger：**
+
+  ```text
+  new ／ changed canonical semantics
+    → 必须先满足 applicable design ／ Human Decision gate
+
+  仅当对应 technical implementation 同时跨越当前 approved architecture boundary
+    → 才触发 §10 Architecture re-entry
+  ```
+
+- **`quantity override` ／ `Modify` 本身不在此列**：它是**已批准 architecture boundary 之内**的行为
+
+  ```text
+  quantity override ／ Modify
+    → 必须先关闭 HD-3 semantic gate（业务语义属独立 Human Decision）
+
+  若其未来 implementation 仍完全处于已批准的 boundary 之内
+  （existing Python package ＋ in-process ＋ ephemeral ＋ no new dependency ／ persistence ／ network …）
+    → 不因「存在 override」本身自动重开 Architecture Decision
+  ```
+
+- 另加条件：Human 事后判定该 choice 的 blast radius 高于本登记的判断时，重新进入 Architecture Decision。
+
+#### C. Reduced tranche — in-scope behavior boundary
+
+| # | In-scope capability | Canonical authority | 行为边界 |
+| --- | --- | --- | --- |
+| 1 | **read-only Review projection** | `§6` 第 3 项 | 只选取既有已登记结果（`ProcurementRecommendation` ／ `SupplierRiskEvidenceCard` ／ `ExplanationResult` 的 runtime outcome 与 artifact（**仅辅助信息**））；**不**重算、**不**填值、**不** invent classification ／ status、**不**改 provenance；**不**携带 accepted package ／ 整个 pipeline result ／ raw source artifact；**无 egress** |
+| 2 | **Approve deterministic `RecommendedPurchaseQty` as-is** | `§6` 第 2 ／ 4 ／ 6 ／ 8 项；`§2.5.15`；`§3.7` | approval target = 当前 AnalysisRun 下、特定 recommendation grain（`plant_id` ＋ `material_code` ＋ `RecommendationNeedDate`）的采购数量 Human Decision；**supplier selection 不在其中**；approved value **＝** deterministic `RecommendedPurchaseQty`；**不**写回 deterministic result；**仅** `Classification = SHORTAGE` 且存在 numeric recommendation 的 grain 可被 approve（`§2.5.8`） |
+| 3 | **Reject** | `§6` 第 7 项（`HD-5`） | 终止当前 review instance；**不**触发 deterministic recomputation；**reason 必填**；后续重新考虑须创建**新** decision |
+| 4 | **AnalysisRun stale detection ／ re-review enforcement** | `§6` 第 6 ／ 8 项（`HD-4`）；`F3-RB1` | approve 前必须做 stale check；**只**比较既有 4 个组件。**`AnalysisRun` freshness 是 blocking condition，不是 sufficient condition**：`AnalysisRun` 一致**只**表示 **freshness check does not block approval**；approval 仍须同时满足其余条件（review-in-progress、grain 一致、存在合法 numeric recommendation、未处于 rejected ／ approved ／ stale terminal condition）。4 个组件任一不一致 ⇒ current review = stale、**Approve 不允许**、必须基于**新 AnalysisRun** 重新生成 recommendation、supplier-risk evidence 必须重新绑定、explanation 必须重新生成或明确 unavailable；**Human override 不跨 AnalysisRun 自动继承**（本 tranche 无 override 路径） |
+
+**本 tranche 必须保持的 invariants：**
+
+- projection 只读；**不** recompute ／ mutate deterministic result；
+- **`AnalysisRun` freshness 只是 blocking condition**：`AnalysisRun` 一致**不**构成 approval 的 sufficient
+  condition，**不得**表述为「same AnalysisRun ⇒ approve allowed」；
+- approved value **＝** deterministic `RecommendedPurchaseQty`（本 tranche 无 override 路径）；
+- explanation artifact **不是** approval authority（`§5.5` ／ `§5.6` ／ `§5.12`；`ADR-002` Response boundary）；
+- Human decision record 是 **non-canonical runtime artifact**（地位与 `ExplanationResult` 相同），**不**进入
+  deterministic result、**不**成为 `ApprovedPurchaseQty` 的企业事实（`§2.5.15`）；
+- **zero** persistence ／ **zero** network ／ egress ／ **zero** production ／ ERP write；
+- 无 rule ／ code-version freshness claim；
+- 内部 enum（若确需）属 implementation detail（`HD-6`）；本小节**不**新增 canonical entity ／ field ／ grain ／
+  enum ／ business status，**不**新增 runtime protocol ／ carrier ／ serialization contract。
+
+#### D. Explicitly out of scope（`HD-HITL-R2`）
+
+```text
+quantity override  ／  Modify                     = DEFERRED ／ OUT OF SCOPE
+```
+
+**原因（登记为 Human Decision 的理由，不得由实现者自行补全）：** `HD-3` 尚未定义 override quantity 的
+**完整业务契约**，至少缺：
+
+```text
+numeric representation
+zero ／ negative semantics
+MOQ relationship
+invalid-value behavior
+rounding ／ clamp ／ normalization
+```
+
+本 tranche **不得**存在任何 override ／ Modify 路径；也**不得**用 CLI convenience、默认值或隐式推导补齐该
+authority（同 `§10.2` D 的既有口径）。`HD-3` 的业务语义属**独立 Human Decision**。
+
+其他 out of scope：Draft generation、完整 HITL state machine、execution boundary 实现、persistence ／ durable
+approval history、reviewer identity ／ RBAC ／ Data Scope ／ Tool Permission enforcement、audit platform、
+Web ／ API ／ workflow engine、network ／ provider egress、Agent framework ／ Tool protocol、ERP write-back、
+production execution、P1。
+
+#### E. `§7` ／ `§8` JIT trigger assessment（本 tranche 为何未触发）
+
+| Blocker（`§10.1 D`） | 触发条件 | 本 tranche | 依据 |
+| --- | --- | --- | --- |
+| **§7 Permission & Security** | 实现 real user ／ role ／ data scope ／ Tool permission enforcement，或 secret-bearing integration 之前 | **NOT TRIGGERED** | 本 tranche 不实施身份／权限／数据范围**强制执行**；review projection **无 egress**，不持有 credential（`§6` 第 3 项；`§7.1` `S-3` ／ `S-4`）；Read ／ Write Boundary 保持已 `DESIGN RESOLVED` 的状态（`WRITE = DENIED`，且本 tranche 无任何写路径） |
+| **§8 Audit & Observability** | **持久记录** Human decisions、Tool calls、rule executions、failures 或 approval history 之前 | **NOT TRIGGERED** | 全部 review ／ decision artifact 只存在于 process 内 runtime memory，**无**持久化、**无** durable approval history |
+| **§10 further Architecture** | 引入 `ADR-001` 未覆盖的长期技术选择之前 | **已由本小节 A ／ B 满足** | Human 独立 Architecture disposition（非 ADR-001 ／ 002 继承），且明确无需新 ADR |
+
+```text
+actor reference                  ≠ identity verified  ≠ permission enforced
+in-memory decision               ≠ durable approval history  ≠ persistent audit evidence
+```
+
+- `actor reference` 在本 tranche **只**是要求槽位：runtime **可以**要求该槽位存在，但**不得**、也**不能**
+  声称任何身份已验证或权限已强制。
+- **触发条件一旦成立即重新生效：** 任何持久化 Human decision ／ approval history 的 unit，都必须**先**满足
+  `§10.1 D` 的 §8 blocker（event set ／ actor ／ target ／ decision ／ rule-version ／ evidence linkage ／ failure
+  traceability），并取得相应 Human Approval；本小节**不**提前设计该 event set。
+
+#### F. AnalysisRun freshness 限度（不得越读）
+
+stale detection 的判据**只**比较既有 `AnalysisRunContext` 的 4 个组件：
+
+```text
+analysis_run_id  ＋  snapshot_package_identity  ＋  accepted_content_view_digest  ＋  analysis_date
+```
+
+```text
+rule ／ code-version freshness = NOT RESOLVED（不得声称已解决）
+```
+
+`rule version` 仍属 `§8` 的 `DESIGN PENDING` 行，其 design 属 future unit。
+
+#### G. DoR ／ Code Start gate（reduced tranche）
+
+| Gate item | Result | Authority ／ rationale |
+| --- | --- | --- |
+| Objective | **PASS** | `§6` design record 的 Review ／ Approve ／ Reject ／ stale 语义已登记且可复述 |
+| Scope ／ Out of Scope | **PASS** | 见本小节 C ／ D；`§6` 第 1 项 out-of-scope 清单继续有效 |
+| Acceptance Criteria | **PASS** | 见本小节 C 的 invariants ＋ H 的 Required Tests；判据客观、可断言 |
+| Dependencies | **PASS** | 无新依赖（`dependencies = []`）；仅消费既有 runtime result surfaces |
+| Architecture authority | **PASS** | `HD-HITL-R1`（Human-approved，`§10.1 A` 口径）＋ 本小节 B 的 scoped ADR disposition |
+| Canonical semantic completeness | **PASS（限 reduced tranche）** | `§6` 第 2 ～ 8 项已登记；**quantity override 不在 scope**，故 `HD-3` 缺口不构成本 tranche blocker |
+| Testability | **PASS** | `§9.1` ／ `§9.2` `DESIGN RESOLVED`；oracle 取自 `§6` prose 契约与既有 `F3-RB1` binding 语义；SIMULATED fixtures 可用 |
+| JIT blockers | **PASS** | 见本小节 E（§7 ／ §8 NOT TRIGGERED；§10 已满足） |
+
+```text
+Code Start Gate（reduced §6 HITL runtime tranche） = PASS
+First minimal HITL runtime tranche                 = IMPLEMENTATION AUTHORIZED（仅本小节 C）
+Unrestricted implementation                        = NOT AUTHORIZED
+Quantity override ／ Modify                        = DEFERRED ／ OUT OF SCOPE
+```
+
+`§10.1 F` 是 **Issue #116 时点记录**（`First deterministic tranche` 的范围），**保持原文、不回写**；本小节登记的是
+**另一个、独立 scope 的 tranche**，两者不互相替代，也**不**合并为一个 implementation authorization。
+
+#### H. Required Test obligations（future coding unit）
+
+未来 coding unit 在 `§9.1` ／ `§9.2` 的 evidence boundary 下**至少**证明下列行为；测试输入一律标记 **`SIMULATED`**：
+
+| # | 必须验证的行为 | Canonical authority |
+| --- | --- | --- |
+| **Review projection（`§6` 第 3 项）** | | |
+| 1 | review projection 是 **read-only**（消费后确定性结果不被改动） | `§6` 第 3 项 |
+| 2 | projection **不** recompute ／ **不** mutate deterministic result（含 provenance 与既有 rule 结果） | `§6` 第 3 ／ 5 项 |
+| 3 | projection **不**填值、**不** invent classification ／ status、**不**改 provenance；**不**携带 accepted package ／ 整个 pipeline result ／ raw source artifact | `§6` 第 3 项 |
+| 4 | projection **无 egress**（**不**发送给任何 provider） | `§6` 第 3 项 |
+| 5 | projection reference 指向**本次被审查**的 projection（而非其它 instance ／ 其它 run 的 projection） | `§6` 第 3 ／ 4 项 |
+| **Approve-as-is（`§6` 第 2 项）** | | |
+| 6 | **只有**合法 deterministic recommendation（`Classification = SHORTAGE` 且数值齐备）可被 approve；`DATA_INCOMPLETE` ／ 无数值 ⇒ approve 不成立 | `§6` 第 2 项；`§2.5.8`；`§2.5.15` |
+| 7 | approved value **＝** deterministic `RecommendedPurchaseQty`（Approve-as-is 情形） | `§6` 第 2 项 |
+| 8 | deterministic `RecommendedPurchaseQty` 在 decision record 中**原样保留**（lossless，未经 round ／ quantize ／ truncate） | `§6` 第 2 ／ 4 项；`§4.3.25` C-5 |
+| 9 | decision kind 正确（Approve 记录为 approve、Reject 记录为 reject；**不**混用、**不**改写既有 decision） | `§6` 第 4 ／ 7 ／ 8 项 |
+| **AnalysisRun freshness（`§6` 第 6 项）** | | |
+| 10 | **same AnalysisRun binding ⇒ freshness check does not block approval**（**不**得断言为「same AnalysisRun ⇒ approve allowed」；approval 仍须满足其余条件） | `§6` 第 6 项 |
+| 11 | **AnalysisRun mismatch（4 组件任一不一致）⇒ stale ／ approval denied** | `§6` 第 6 ／ 8 项；`F3-RB1` |
+| 12 | stale instance **不能**被复活（不得回到 review-in-progress，也不得被 approve） | `§6` 第 8 项 |
+| 13 | 新 AnalysisRun ⇒ 必须创建**新** review instance（旧 instance 保持 stale、状态不变） | `§6` 第 8 项 |
+| **Reject（`§6` 第 7 项）** | | |
+| 14 | Reject **requires reason**（reason 缺失 ⇒ reject 不成立） | `§6` 第 7 项 |
+| 15 | rejected instance **不能**在之后被 approve；后续重新考虑创建**新** decision，旧 decision 不被改写 | `§6` 第 7 ／ 8 项 |
+| 16 | 同一 instance **不能** approve 两次 | `§6` 第 8 项 |
+| **Human decision record（`§6` 第 4 项 minimal record contract）** | | |
+| 17 | grain **完整绑定** `plant_id` ＋ `material_code` ＋ `RecommendationNeedDate`（三项齐备，无派生等价物替代） | `§6` 第 4 项 |
+| 18 | full AnalysisRun binding **原样绑定**四组件 `analysis_run_id` ＋ `snapshot_package_identity` ＋ `accepted_content_view_digest` ＋ `analysis_date` | `§6` 第 4 ／ 6 项；`F3-RB1` |
+| 19 | evidence references truthful：既有 `shortage_reference` ／ `policy_input_reference` ＋ supplier-risk evidence identity **来自被审查结果**，**不** fabricate、**不**复制 raw evidence | `§6` 第 4 项；`§9.1` provenance 义务 |
+| 20 | `actor reference` requirement slot 被携带；**不**验证 identity ／ permission（不得声称已验证／已强制） | `§6` 第 4 ／ 9 项 |
+| 21 | decision timestamp 存在 | `§6` 第 4 项 |
+| 22 | review projection reference 指向本次被审查 projection | `§6` 第 4 项 |
+| 23 | Human decision record **不**写回 deterministic result，**不**进入 deterministic result，**不**成为 `ApprovedPurchaseQty` 的企业事实 | `§6` 第 4 ／ 5 项；`§2.5.15` |
+| 24 | record **携带 `override 存在标志`**（`§6` 第 4 项最小字段之一），该字段存在且语义明确 | `§6` 第 4 项 |
+| 25 | 本 tranche 的 Approve-as-is 与 Reject 路径**不得**表示存在任何 quantity override（标志不得表达 override 存在） | `§6` 第 4 ／ 5 项；`HD-HITL-R2` |
+| 26 | 该标志**不**用于定义未来 `HD-3` override quantity 的 representation ／ domain（本 tranche 不建立也不预设该语义） | `§6` 第 5 项；本小节 D |
+| **Out-of-scope 负例断言** | | |
+| 27 | 本 tranche **不存在**任何 quantity override ／ Modify 路径（负例断言） | `HD-HITL-R2`；本小节 D |
+| 28 | explanation artifact **never** becomes approval authority | `§6` 第 3 项；`§5.5` ／ `§5.6` ／ `§5.12`；`ADR-002` Response boundary |
+| 29 | **zero** persistence（不写磁盘、不写 DB、不产生 durable business state） | `§6` 第 4 ／ 9 项 |
+| 30 | **zero** network ／ egress | `§6` 第 3 项；`§7.1` |
+| 31 | **zero** production ／ ERP write | `§3.5` ／ `§3.7`；`§6` 第 10 项 |
+| 32 | **无** rule ／ code-version freshness claim | 本小节 F；`§6` 第 6 项 |
+
+> 上表是 **contract completeness** 口径的 obligations，**不**是一个固定条数配额：未来 coding unit 必须覆盖
+> `§6` 第 4 项 minimal record contract 的全部字段与上述边界行为。
+
+- exact numeric semantics 沿用 `§4.3.25` C-5 与 `§9.1` 的断言要求；**不得**以实现的当前行为或库默认精度作为 oracle。
+- 验证随被实现行为同步建立；失败或未执行**不得**声称完成（`CONTRIBUTING §6`）。
+- 本小节只登记 obligations，**不**创建 test code、fixture 或 harness。
+
+#### I. Claim boundary ／ 不修改
+
+```text
+§6 overall                    = DESIGN PENDING（原六行表不变：Draft ／ 完整 state machine ／
+                                execution boundary 实现 均未解决）
+§7 overall                    = NOT RESOLVED（RBAC ／ Data Scope ／ Tool Permission 仍 DESIGN PENDING）
+§8                            = 不 closure（五行均 DESIGN PENDING）
+§9.4                          = DESIGN PENDING ／ JIT-BLOCKED（不变）
+rule ／ code-version freshness = NOT RESOLVED
+business acceptance           = NOT CLAIMED
+durable approval evidence     = NOT CLAIMED
+identity ／ permission enforcement = NOT CLAIMED
+production readiness ／ POC success = NOT CLAIMED
+```
+
+- 本小节**不**构成 business acceptance evidence，**不**表示 approval semantics 已验证，**不**表示 HITL runtime
+  已实现或 tested，也**不**表示整个 §6 已 resolved。
+- 本小节**不修改**：`§6` 原六行表与 Issue #198 design record 的文字、`§3` ／ `§5` ／ `§7` ／ `§8` ／ `§9`
+  已登记语义、`§10` 的 ADR 条目、`§10.1` A ～ F、`§10.2`、`ADR-001` ／ `ADR-002` 的 substantive decision、
+  `FROZEN` baseline、code ／ tests ／ runtime。
+- 本小节**不**回写任何历史时点记录。
 
 ---
 

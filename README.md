@@ -51,6 +51,20 @@ Q3 full-composition observation = TOOLING IMPLEMENTED / OBSERVED ONCE（§9.3，
                                   in-process、无 persistence ／ RBAC ／ audit ／ ERP write-back；
                                   §6 overall（含 Draft ／ 完整 state machine）仍 DESIGN PENDING；
                                   不构成 business acceptance evidence）
+Minimal HITL runtime tranche     = CODE START GATE PASS / IMPLEMENTATION AUTHORIZED（scoped；
+  （reduced；Issue #200）          Issue #200；Option A = 既有 Python package 内 minimal in-process
+                                  HITL runtime、消费既有 runtime result surfaces、ephemeral
+                                  non-canonical artifacts、无新依赖 ／ 无 persistence ／ 无 DB ／
+                                  无 Web ／ API ／ 无 network ／ egress ／ 无 RBAC ／ identity ／
+                                  data-scope enforcement ／ 无 audit platform ／ 无 production
+                                  execution ／ ERP write；scope = read-only Review projection →
+                                  Approve deterministic RecommendedPurchaseQty as-is → Reject →
+                                  AnalysisRun stale detection ／ re-review enforcement；
+                                  quantity override ／ Modify = DEFERRED ／ OUT OF SCOPE；
+                                  §7 ／ §8 JIT blocker 未被该严格 scope 触发；不新建 ADR（独立 Human
+                                  Architecture disposition）；Unrestricted implementation 仍未授权；
+                                  runtime 尚未实现，无 business acceptance ／ durable approval ／
+                                  production-readiness claim）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：
