@@ -20,6 +20,16 @@ Deterministic tranches delivered here:
       ``BR-SUPPLIER-RISK-001``, end to end and in memory, over the registered public
       entry points of each module.
 
+    P0 AI Explanation -- Q3 slice (:func:`explain_q3`)
+      an existing ``ProcurementRecommendation`` -> a read-only non-canonical Q3 projection
+      -> one provider-agnostic call whose response is a **selection** (a registered answer
+      kind plus projected fact names) -> a response artifact the runtime itself assembles
+      from the projection, plus a deterministic fail-closed path.  Because the provider
+      supplies no prose, a mutated quantity, a swapped role, an unsupported business reason
+      and an invented approval are not expressible.  The provider is injected as a plain
+      protocol; this package performs no network call, reads no credential or environment
+      secret and selects no provider, model, framework or tool protocol.
+
 Canonical authority:
 
 * ``docs/design/specs/data-integration/snapshot-import-contract.md``
@@ -28,8 +38,13 @@ Canonical authority:
   §4.4.2 / §4.4.24 -- §4.4.44 / §4.4.79 -- §4.4.83 (inherited taxonomy, reused unchanged)
 * ``docs/design/poc-design-v0.2.md`` §2.1 -- §2.7 (business rules) and §10.1 B ／ C
   (first-tranche module responsibilities and acceptance boundary)
+* ``docs/design/poc-design-v0.2.md`` §5.3 (Q3) ／ §5.5 (response meanings) ／ §5.6 -- §5.12
+  (explanation boundaries) and §5.20 (Q3 runtime implementation record), plus §7.1
+  (Secret Handling minimum contract)
 * ``docs/architecture/adr-001-deterministic-core.md`` (minimum architecture: the thin CLI
   calls this application orchestration; the core never calls back into the CLI)
+* ``docs/architecture/adr-002-p0-ai-explanation-minimum-runtime.md`` (P0 AI Explanation
+  minimum runtime: in-process, single provider-agnostic call, fail-closed)
 
 Scope boundary (deliberately narrow):
 
@@ -38,10 +53,15 @@ Scope boundary (deliberately narrow):
   construction, the §2.1 -- §2.7 deterministic business rules, the procurement
   recommendation result, the Supplier Risk evidence result, and their in-process
   composition.  Every one of those stages is the registered module entry point; the
-  composition adds no business semantics of its own.
-* **out of scope** -- Web ／ API ／ service, LLM ／ Agent ／ Tool protocol, HITL, RBAC ／
-  secrets, persistent Audit, database ／ persistent business state, real ERP ／ SRM
-  Adapter, production write-back, P1, and every §6 -- §9 just-in-time gate.
+  composition adds no business semantics of its own.  Also in scope is the provider-neutral
+  P0 AI Explanation **Q3** runtime core (:func:`explain_q3` / ``build_q3_projection``):
+  a read-only projection of registered quantities plus an injected provider seam and a
+  deterministic fail-closed path.
+* **out of scope** -- Web ／ API ／ service, a real hosted LLM provider adapter (network,
+  provider SDK, provider ／ model selection, environment credential reader), Agent
+  Framework ／ Tool protocol, HITL, RBAC ／ secrets, persistent Audit, database ／ persistent
+  business state, real ERP ／ SRM Adapter, production write-back, P1, and every §6 -- §9
+  just-in-time gate.
 
 The core is importable and directly testable and does not depend on the CLI
 (``POC Design v0.2`` §10.1 B; ADR-001).
@@ -104,6 +124,41 @@ from .exact_quantity import (
     ExactQuantity,
     parse_exact_quantity,
     parse_non_negative_quantity,
+)
+from .explanation_q3 import (
+    COMPLETENESS_COMPLETE,
+    COMPLETENESS_DATA_INCOMPLETE,
+    COMPLETENESS_RECOMMENDATION_NOT_STATED,
+    Q3_FACT_FIELDS,
+    Q3_GRAIN_FIELDS,
+    Q3_QUESTION,
+    build_q3_projection,
+    explain_q3,
+)
+from .explanation_seam import (
+    ANSWER_KINDS,
+    ANSWER_KIND_LITERALS,
+    HUMAN_DECISION_REQUIRED_TEXT,
+    NOTE_AI_EXPLANATION_UNAVAILABLE,
+    NOTE_INCOMPLETE,
+    NOTE_NO_RECOMMENDATION_BY_DESIGN,
+    NOTE_PROVIDER_UNAVAILABLE,
+    NOTE_RECOMMENDATION_UNAVAILABLE,
+    NOTE_RESPONSE_UNACCEPTABLE,
+    OUTCOME_EXPLAINED,
+    OUTCOME_NO_RECOMMENDATION_BY_DESIGN,
+    OUTCOME_PROVIDER_UNAVAILABLE,
+    OUTCOME_RECOMMENDATION_INCOMPLETE,
+    OUTCOME_RECOMMENDATION_UNAVAILABLE,
+    OUTCOME_RESPONSE_UNACCEPTABLE,
+    RESPONSE_KEYS,
+    AnswerKind,
+    ExplanationProvider,
+    ExplanationResponse,
+    ExplanationResult,
+    provider_payload,
+    render_fact_text,
+    validate_provider_response,
 )
 from .inbound_calculation import (
     EFFECTIVE_INBOUND_DATA_INCOMPLETE,
@@ -452,6 +507,37 @@ __all__ = [
     "STAGE_SUPPLIER_RISK_INPUT_SEAM",
     "run_first_tranche_pipeline",
     "run_first_tranche_pipeline_from_paths",
+    "COMPLETENESS_COMPLETE",
+    "COMPLETENESS_DATA_INCOMPLETE",
+    "COMPLETENESS_RECOMMENDATION_NOT_STATED",
+    "ExplanationProvider",
+    "ExplanationResponse",
+    "ExplanationResult",
+    "NOTE_AI_EXPLANATION_UNAVAILABLE",
+    "NOTE_INCOMPLETE",
+    "NOTE_NO_RECOMMENDATION_BY_DESIGN",
+    "NOTE_PROVIDER_UNAVAILABLE",
+    "NOTE_RECOMMENDATION_UNAVAILABLE",
+    "NOTE_RESPONSE_UNACCEPTABLE",
+    "OUTCOME_EXPLAINED",
+    "OUTCOME_NO_RECOMMENDATION_BY_DESIGN",
+    "OUTCOME_PROVIDER_UNAVAILABLE",
+    "OUTCOME_RECOMMENDATION_INCOMPLETE",
+    "OUTCOME_RECOMMENDATION_UNAVAILABLE",
+    "OUTCOME_RESPONSE_UNACCEPTABLE",
+    "Q3_FACT_FIELDS",
+    "Q3_GRAIN_FIELDS",
+    "Q3_QUESTION",
+    "RESPONSE_KEYS",
+    "ANSWER_KINDS",
+    "ANSWER_KIND_LITERALS",
+    "AnswerKind",
+    "HUMAN_DECISION_REQUIRED_TEXT",
+    "build_q3_projection",
+    "explain_q3",
+    "provider_payload",
+    "render_fact_text",
+    "validate_provider_response",
 ]
 
 __version__ = "0.1.0"

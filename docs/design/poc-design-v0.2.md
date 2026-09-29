@@ -7089,6 +7089,56 @@ responsibility / behavioral boundary 已定义
 - database
 - deployment stack
 
+#### 5.20 Q3 explanation runtime core — implementation record（Issue #182）
+
+**Registration Status：`IMPLEMENTED`（provider-neutral runtime core only）**
+**Authority：** [ADR-002](../architecture/adr-002-p0-ai-explanation-minimum-runtime.md)
+（P0 AI Explanation minimum runtime，`ACCEPTED`）＋ `§7.1` Secret Handling minimum contract
+（Issue #180）。本记录是第一个 P0 AI Explanation implementation slice 的 current-state record；
+`§5` header 的 `Implementation Status` 是该节 design-phase 快照，**不回写**。
+
+```text
+existing ProcurementRecommendation
+        ↓  read-only non-canonical Q3 projection（只选取已登记值；exact payload lossless）
+provider-agnostic single-call seam（provider 只做**选取**：registered answer kind ＋ projected fact names）
+        ↓  runtime 依据 projection **组装** answer ／ evidence ／ human-decision reminder
+Q3 explanation response artifact（non-canonical；四段 §5.5 meaning）
+```
+
+**严格限定：** projection **只**选取 `§5.3` Q3 的五个已登记量（`ShortageQty` ／
+`BasePurchaseNeed` ／ `ApplicableMOQ` ／ `MOQAdjustmentQty` ／ `RecommendedPurchaseQty`）＋ grain
+／ outcome ／ 既有 root condition ／ 既有 references ／ 既有 issue findings；**不**重算、**不**补值、
+**不** invent classification ／ status、**不**改变 provenance，且**不**携带 accepted package ／
+pipeline result ／ analysis run。response artifact 只承载 `§5.5` 四段 meaning，**不新增** business
+status ／ canonical entity・field・grain・enum ／ approval state。
+
+**Evidence fidelity（由 runtime 保证，不依赖 provider 自觉）：** provider response 是**选取契约**而非
+自由文本 —— `answer_kind` 必须取自 **read-only（immutable）closed registry**、`evidence` 必须是
+projected fact name、`human_decision_required` 必须是 `True`（表示必须提示人工决策）；runtime 再依据
+projection **自行组装** answer、evidence 行与 human-decision reminder。因此：数量被改写、shortage ／
+recommended 角色互换、projection 之外的业务原因 ／ 数值 ／ status，以及「已批准 ／ 无需人工决策」都不
+**可表达**（selection 不满足 registry relation ／ required evidence ／ 名称集合时一律 fail closed）。
+这**不**是通用 NLP fact checker，也**不**涉及 AI Eval。
+
+**本 slice 的三条窄约束（与 selection contract 一并生效）：**
+
+- provider **只**在 Q3 projection 为 `COMPLETE` 时被调用，因此 `uncertainty` 必须**严格为空** ——
+  已确定的 deterministic fact **不得**由 provider 重新标记为 Uncertainty ／ Missing Data；
+- 每个 registered answer kind（含 equality kind）都要求 `§5.3` Q3 的**五个**量作为 required evidence，
+  且 answer 明确表达 `MOQAdjustmentQty`（equality 情形下为 `MOQAdjustmentQty 为 0`）；
+- `ANSWER_KINDS` 以 read-only representation 导出，使「closed registry」的 guarantee 真正成立。
+
+**fail-closed（deterministic，不依赖 LLM）：** recommendation 不完整 ／ 缺失量 ⇒ **不调用** provider，
+并显式暴露既有缺失证据（root condition ＋ 既有 issue findings）；provider 抛错 ／ 返回不可用
+selection ⇒ explanation 明确 unavailable、deterministic recommendation **不变**、provider 消息
+**不**外传（`§7.1` S-8）。runtime outcome 属 **execution** 事实，**不是** business status，且**不得**
+被当作 business `DATA_INCOMPLETE`。
+
+**本记录未实现（out of scope）：** real hosted provider adapter、HTTP ／ network、provider SDK、
+provider ／ model selection、environment credential reader、Agent Framework ／ LangGraph、
+Tool Protocol ／ MCP、RAG ／ Vector DB、Web ／ API、persistence、HITL、Draft generation、
+Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6、AI Eval closure。
+
 ---
 
 ## 6. HITL Workflow
