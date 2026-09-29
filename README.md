@@ -37,9 +37,10 @@ P0 AI Explanation（Q3 slice）   = IMPLEMENTED（provider-neutral runtime core�
 Hosted provider adapter         = IMPLEMENTED（DeepSeek；§5.21，Issue #184；implementation
                                   configuration，credential 只从 process environment 读取，
                                   tests ／ CI 一律使用 stub transport，无真实 secret）
-Manual live smoke（opt-in）     = IMPLEMENTED / NOT RUN（§5.22，Issue #186；本环境未配置
-                                  credential ⇒ LIVE_SMOKE_NOT_RUN，零 egress；真实 hosted
-                                  调用未执行，非 AI Eval、非 validation evidence）
+Manual live smoke（opt-in）     = IMPLEMENTED / PASS once（§5.22 ／ §5.23，Issue #186 ／ #188；
+                                  tooling 已实现；real hosted smoke 于 main @ 31fab37 真实执行
+                                  一次 = LIVE_SMOKE_PASS；单次观察（n = 1），非 AI Eval、
+                                  非 provider ／ model quality validation）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：
@@ -101,9 +102,18 @@ provider ／ caller 动态字符串必须先通过 narrow validation（registere
 固定 shape 的 ISO-8601 timestamp），否则记 `None` 或在任何 egress 前以 `INVALID_METADATA` 拒绝且不回显；
 每次运行另做“无 permitted vocabulary 之外字符串”的自检，检出即以 `UNSANITIZED_REPORT` 失败并只以 fixed
 vocabulary 重建 report。结果词汇：`LIVE_SMOKE_PASS` ／ `LIVE_SMOKE_FAIL`（minimal category）／
-`LIVE_SMOKE_NOT_RUN`。**本次运行**：本环境未配置 credential ⇒ `LIVE_SMOKE_NOT_RUN`、`requests = 0`
-（零 egress），真实 hosted 调用**未**执行；automatic tests 覆盖 entry-point logic 但一律使用 stub ／
-patched transport；这不是 AI Eval，也不构成任何 validation ／ acceptance evidence。
+`LIVE_SMOKE_NOT_RUN`。automatic tests 覆盖 entry-point logic 但一律使用 stub ／ patched transport；
+这不是 AI Eval。
+
+**Real hosted smoke（`§5.23`，Issue #188）**：Human 已在本地、基于 `main @ 31fab37`、以 **process
+environment** 提供 credential，显式真实执行一次该 entry point，结果为 **`LIVE_SMOKE_PASS`**
+（`request_count = 1`、HTTP 200、真实 `/responses` envelope 被 merged parser 接受、selection 被 merged
+validator 接受、`answer_kind = MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE`、五个 Q3 量齐备、`uncertainty`
+为空、human-decision contract 保持、synthetic input 未变、sanitized report 未观察到 credential 泄漏）。
+即 `real hosted integration contract observed successfully once`；执行后该 credential 已由 Human 清除。
+这是**单次观察（n = 1）**：不构成 AI Eval、provider ／ model quality validation、business acceptance、
+production readiness 或 `POC validated` 证据（`§5.21` ／ `§5.22` 的 “live API 未验证” ／
+`LIVE_SMOKE_NOT_RUN` 为各自时点的 historical records，保持原文；current state 见 `§5.23`）。
 
 **明确未实现（Out of Scope）**：Web / API / service、Agent Framework / Tool protocol、HITL、
 RBAC / secrets、persistent Audit、database / persistent business state、real ERP / SRM Adapter /
@@ -213,9 +223,13 @@ python scripts/deepseek_q3_live_smoke.py --json   # 机器可读（sanitized）�
 
 - **local**：`1033 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures，本机
   Python 3.14）；
-- **local（manual opt-in live smoke，`§5.22`）**：process environment 未配置 hosted credential
+- **local（manual opt-in live smoke，无 credential 时）**：process environment 未配置 hosted credential
   ⇒ `LIVE_SMOKE_NOT_RUN`（`CREDENTIAL_NOT_CONFIGURED`，`requests = 0`），即**零 egress**、
-  真实 hosted 调用**未执行**；
+  真实 hosted 调用**未执行**（可重复的 no-credential 行为，`§5.22`）；
+- **live（Human-provided，`§5.23`）**：`main @ 31fab37` 上真实 hosted smoke = **`LIVE_SMOKE_PASS`**
+  一次（`request_count = 1`、HTTP 200、envelope parser ／ selection parsing ／ validator 均 PASS、
+  五个 Q3 量齐备、`uncertainty` 为空、无 credential 泄漏观察）；单次观察（n = 1），
+  **不**执行于 CI，**不**构成 AI Eval 或 provider ／ model quality validation；
 - **remote**：`main` push CI 在 **Python 3.11 与 3.12** 上运行同一 deterministic SIMULATED
   套件并通过，另有 Foundation checks 与 thin CLI 端到端检查。
 
