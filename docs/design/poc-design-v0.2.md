@@ -7360,6 +7360,135 @@ scheduled smoke 或 CI 中的 hosted 调用。
 >
 > 本节**仍为 `DESIGN PENDING`** —— 完整 HITL state machine **不由 `VB-29` 设计**（见 §3.12）。
 
+**Current-state design follow-up（Issue #198，minimal Review ／ decision boundary）：**
+
+**Registration Status：** 本记录只把 **`§6` minimal Review ／ Approve ／ Reject（＋ quantity override）boundary**
+登记为 **`DESIGN RESOLVED`（scoped；design-only）**；**`§6` overall 仍 = `DESIGN PENDING`** —— 上表六行中
+**`Draft`**、完整 state machine、**execution boundary 实现**、持久化与身份强制执行**均未解决**。本记录
+**不新增** canonical entity ／ enum ／ business status（`HD-6`），**不**构成 business acceptance evidence，
+也**不**使 `§9.4` 可 closure。
+**Authority：** Human Decision（Issue #198，`HD-1` ～ `HD-7`）＋ `§3.7` ／ `§3.8` ／ `§3.12`（`VB-29`）
+＋ `§2.5.15`（`RecommendedPurchaseQty ≠ ApprovedPurchaseQty ≠ PurchaseOrderQty`）＋ `§5.15`（Draft boundary）
+＋ `§5.5` ～ `§5.7` ／ `§5.12`（explanation 语义）＋ `ADR-001` ／ `ADR-002`（in-process、无 persistence）。
+
+```text
+POC 内（本记录登记）
+  read-only review projection
+    -> Human Review ／ quantity override（M1）／ Approve ／ Reject
+    -> non-canonical Human decision runtime record（in-process；不持久化）
+POC 外（不变）
+  execution boundary = OUTSIDE POC；WRITE = DENIED；Approve ≠ Create PO；Approve ≠ Production Execution
+```
+
+**1. 范围（本记录做什么 ／ 不做什么）。** 只登记 Review ／ Modify ／ Approve ／ Reject 的**最小语义**与
+read-only review projection、non-canonical Human decision record 的最小字段、stale ／ re-review contract，以及
+**prose** 形式的概念状态与允许／非法转换。**不**设计：`Draft` generation（上表 `Draft` 行仍 `DESIGN PENDING`）、
+完整 state machine、execution boundary 的实现、persistence ／ durable approval history、reviewer identity ／
+RBAC ／ data-scope enforcement、audit platform、Web ／ API、workflow engine、ERP write-back（`HD-1` ／ `HD-7`）。
+
+**2. Approval target（`HD-2`）。** Approve 的对象是**当前 AnalysisRun 下、特定 procurement recommendation grain
+（`plant_id` ＋ `material_code` ＋ `RecommendationNeedDate`）对应的采购数量 Human Decision**；
+**supplier selection 不属于**本次 approval target（与 `§2.5.13` ／ `§2.7.14` 的 supplier selection ／ ranking 边界一致）。
+若 Human 未修改数量，approved value = deterministic `RecommendedPurchaseQty`；若修改，approved value = **explicit
+Human override value**；**deterministic recommendation 本身始终不被修改**。
+
+**3. Review object ＝ read-only review projection（非 canonical）。** review 消费的既有已登记结果：
+`ProcurementRecommendation`（grain ／ `RecommendationNeedDate` ／ `ShortageQty` ／ `BasePurchaseNeed` ／
+`ApplicableMOQ` ／ `MOQAdjustmentQty` ／ `RecommendedPurchaseQty` ／ outcome ／ root condition ／
+`shortage_reference` ／ `policy_input_reference`）、`SupplierRiskEvidenceCard`（作为**只读证据**：plant ／ material ／
+supplier identity ＋ `DaysUntilNeed` ／ lead time ／ delivery ／ quality ／ overall risk ＋ eligibility）、以及
+`ExplanationResult` 的 runtime outcome 与 artifact（**仅辅助信息**）。
+projection：
+- **只**选取上述已登记值；**不**重算、**不**填值、**不** invent classification ／ status、**不**改 provenance；
+- **不**携带 accepted package ／ 整个 pipeline result ／ raw source artifact；
+- **不**发送给任何 provider（review projection **无 egress**，与 `§5.20` 的 explanation projection 用途不同）；
+- **explanation artifact 不是 approval authority**：`§5.5` ／ `§5.6` ／ `§5.12` 与 `ADR-002` 的 response boundary
+  已禁止 approval ／ ranking ／ selection 语义进入 artifact；Human 若要补充内容，使用**独立** human note ／ reason。
+
+**4. Human decision record（non-canonical runtime artifact；不持久化）。** 最小字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| decision kind | approve ／ reject（prose） |
+| grain | `plant_id` ＋ `material_code` ＋ `RecommendationNeedDate` |
+| AnalysisRun binding | 复用既有 `analysis_run_id` ＋ `snapshot_package_identity` ＋ `accepted_content_view_digest` ＋ `analysis_date`（`F3-RB1`） |
+| deterministic recommended value | 该 grain 的 deterministic `RecommendedPurchaseQty`（始终保留） |
+| approved value | ＝ deterministic 值，或 explicit Human override value（`HD-3`） |
+| override 存在标志 ＋ Human reason | override 时二者必须同时保留；**reject 时 reason 必填**（`HD-5`） |
+| evidence references | 既有 `shortage_reference` ／ `policy_input_reference` ＋ supplier-risk evidence identity（引用，**不**复制 raw evidence） |
+| actor reference | **要求槽位**（本记录只登记「必须由被识别的 human actor 作出」；identity ／ permission 属 §7，`HD-7`） |
+| decision timestamp | 记录时点（其**持久化**属 §8） |
+| review projection reference | 该次 decision 所审查的 read-only projection |
+
+该 record 的地位与 `ExplanationResult` 相同：**runtime artifact，不是 canonical entity**；**不**进入 deterministic
+result，**不**成为 `ApprovedPurchaseQty` 的企业事实（`§2.5.15`），也**不**含 credential ／ raw provider material。
+
+**5. Modify semantics（`HD-3` ＝ M1 override）。** 允许 Human 对 `RecommendedPurchaseQty` 做**显式 override**；
+必须**同时**保留 deterministic `RecommendedPurchaseQty`、Human override quantity 与 Human reason；**不得**把 override
+写回 deterministic result（既有 rule 结果、projection 与 provenance 一律不变）。当前**不允许**直接修改：
+`RecommendationNeedDate` ／ delivery date、`ApplicableMOQ`、supplier selection、AI explanation artifact。
+若 upstream ／ need-date 类输入发生变化，**必须**通过**新的 AnalysisRun**重新计算（见第 6 项）。
+
+**6. Staleness ／ re-review contract（`HD-4`，strict AnalysisRun binding）。** Approval **必须**绑定完整
+`AnalysisRunContext`；approve 前**必须**做 stale check。只要 review 所绑定的 AnalysisRun 与当前 AnalysisRun
+不一致：current review = **stale**；**Approve 不允许**；必须基于**新 AnalysisRun** 重新生成 recommendation；
+supplier-risk evidence **必须重新绑定**；explanation **必须重新生成或明确 unavailable**；Human override
+**不**跨 AnalysisRun 自动继承；**必须重新 Review**。
+
+本 contract 只覆盖 **AnalysisRun ／ upstream-input freshness**，其**范围与限度**如下（不得被读成跨执行不变量）：
+
+- 在**一个已经形成的 review instance 内**，其所绑定的 deterministic recommendation ／ 值**是不可变的**：
+  该 instance 内**不**重算、**不**修改它（`HD-2` ／ `HD-3`：override 不写回 deterministic result）；
+- **AnalysisRun 组件不一致 ⇒ 该 review 为 stale**（这是本 contract 唯一的 freshness 判据）；
+- 本 contract **不**声称：相同的 `AnalysisRunContext` 标识能保证**跨不同 rule ／ code version**，或跨
+  **不同未来执行**，产生**相同**的 deterministic output —— 现有 binding 组件为 `analysis_run_id` ＋
+  `snapshot_package_identity` ＋ `accepted_content_view_digest` ＋ `analysis_date`，**不**包含 rule version ／
+  code version；
+- 因此 **rule ／ code-version freshness 仍未解决**，**deferred** 到适用的 **implementation gate** 与 `§8` 的
+  **rule-version** design（`§8` 的 `rule version` 行仍 `DESIGN PENDING`；`§10.1 D` 的 §8 blocker 含 rule-version）；
+- **在任何适用 §8 依赖解决之前，本记录不得声称 durable approval evidence 已完整**（本记录不持久化任何 decision）。
+
+**7. Reject contract（`HD-5`）。** Reject **终止**当前 review instance；**不**触发 deterministic recomputation；
+**reason 必填**；后续重新考虑时创建**新的** review decision，**不修改**旧 decision（旧 decision 作为历史记录保持）。
+
+**8. Conceptual states ／ transitions（prose，`HD-6`；不登记为 canonical enum ／ business status）。**
+本记录只以描述性措辞表达下列概念（**不是**新 vocabulary、**不是** `§9.6` 意义上的 enum ／ status）：
+
+- **概念状态（prose）：** review 进行中；已批准（`§3.7` 已登记的 **POC 内** `APPROVED` workflow state）；
+  已拒绝；已 stale。
+- **允许的转换：** review 进行中 → 已批准（仅当非 stale 且 grain ／ AnalysisRun 一致）；review 进行中 → 已拒绝
+  （reason 必填）；review 进行中 → 已 stale（AnalysisRun 变化）。
+- **新实例创建（不是转换）：** 出现**新 AnalysisRun** 时，**旧 stale review instance 保持 stale、其状态不变**；
+  该 AnalysisRun 产生**一个全新的 review instance**（**replacement ／ new-instance creation**），**新** instance
+  从「review 进行中」开始。**不得**把这件事写成 stale instance 自身发生状态转换。
+- **非法转换：** 已 stale → 已批准；已 stale → review 进行中（stale instance **不得**被复活；须创建新 instance）；
+  已拒绝 → 已批准（同一 decision 不得改写，需**新** decision）；已批准 →
+  再次批准同一 instance；任何状态 → production execution ／ ERP 写回；已批准后修改 deterministic result
+  或 `analysis_run` binding。
+- **stale condition：** review 的 AnalysisRun binding 与当前 AnalysisRun 任一组件不一致（`HD-4`；该判据**只**覆盖
+  AnalysisRun ／ upstream-input freshness，不覆盖 rule ／ code version，见第 6 项）。
+
+未来 runtime implementation 若确需内部 enum，在 **implementation gate** 再决定（`HD-6`）；本记录**不**预设。
+
+**9. §7 ／ §8 boundary（`HD-7`）。** 本记录**不**设计、**不**实现：persistence、durable approval history、
+reviewer identity enforcement、RBAC ／ permission ／ data-scope enforcement、audit platform、production execution。
+`actor reference` 在本记录中**只**是要求槽位。**持久**记录 Human decisions ／ approval history 之前，必须先满足
+`§10.1 D` 的 §8 blocker（event set ／ actor ／ target ／ decision ／ rule-version ／ evidence linkage ／ failure
+traceability）；真实身份与权限的**强制执行**属 §7（RBAC ／ Data Scope ／ Tool Permission 仍 `DESIGN PENDING`）。
+
+**10. Claim boundary。** 本记录**不**构成 business acceptance evidence，**不**表示 approval semantics 已验证，
+**不**表示 HITL implementation 已获授权；`§9.4` 仍 `DESIGN PENDING` ／ `JIT-BLOCKED`（trigger 不变：任何 HITL ／
+business acceptance evidence 主张之前，必须先完成 §6 design gate 及其适用的 §7 ／ §8 依赖）。
+不变边界：`Human Approval ≠ Production Execution`；`Approve ≠ Create PO`；`WRITE = DENIED`；
+AI cannot approve ／ submit ／ create PO ／ override Human decision；AI explanation is not approval authority。
+
+**11. ADR status。** 本 design-only unit **不需要** ADR；本记录**不**提前决定未来 HITL runtime implementation
+是否需要 ADR —— implementation 前必须重新执行 architecture ／ Code Start gate，并按实际 technical choice 判断
+（`§10.1 D` 的 §10 row）。
+
+**12. 本记录不修改：** `§6` 原六行 `DESIGN PENDING` 表、`§3` ／ `§5` ／ `§7` ／ `§8` ／ `§9.4`、
+`ADR-001` ／ `ADR-002` 的 substantive decision、code ／ tests ／ runtime。本记录**不**回写任何历史时点记录。
+
 ---
 
 ## 7. Permission & Security

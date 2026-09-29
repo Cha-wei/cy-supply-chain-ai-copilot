@@ -46,6 +46,11 @@ Q3 full-composition observation = TOOLING IMPLEMENTED / OBSERVED ONCE（§9.3，
                                   完整 composition；real full-composition hosted observation 于
                                   main @ a28da0b 真实执行一次 = observed once（n = 1）；
                                   per-observation，无 AI Eval verdict、无 aggregate quality 结论）
+§6 minimal review/decision       = DESIGN RESOLVED（scoped；Issue #198；read-only review projection ＋
+  boundary（design-only）          quantity override（M1）＋ Approve ／ Reject ＋ stale contract，
+                                  in-process、无 persistence ／ RBAC ／ audit ／ ERP write-back；
+                                  §6 overall（含 Draft ／ 完整 state machine）仍 DESIGN PENDING；
+                                  不构成 business acceptance evidence）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：
