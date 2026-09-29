@@ -7485,6 +7485,17 @@ credential 不得进入 Git／canonical record／provenance／`mapping_basis`／
 | AI Eval | `DESIGN PENDING` ／ **`JIT-BLOCKED`**（见 §9.3） |
 | HITL / business acceptance | `DESIGN PENDING` ／ **`JIT-BLOCKED`**（见 §9.4） |
 
+**Current Status follow-up（Issue #190，ADR-002 runtime implementation 后）：**
+
+| 层次 | Status |
+| --- | --- |
+| AI Eval | **`DESIGN PENDING`**（见 §9.3；原 `JIT-BLOCKED` 限定已由 current main 事实推翻） |
+| HITL / business acceptance | `DESIGN PENDING` ／ **`JIT-BLOCKED`**（见 §9.4；未变） |
+
+上表依据：ADR-002 已 `ACCEPTED`（Human-approved，Issue #178）、其要求的最小 `§7` Secret Handling
+JIT gate 已由 Issue #180 关闭、Q3 runtime 已实现并 merge（`§5.20` ～ `§5.23`）。
+上方 Issue #176 closure 注记与状态表是**该时点记录**，保持原文、不回写。
+
 ```text
 §9 两层 design closure
   ≠ implementation evidence 已被 validated
@@ -7570,20 +7581,32 @@ ERP ／ SRM ／ source-system 集成已验证，也**不得**作为生产链路�
 **Existing evidence（引用，不复制）：** Issue #172 ／ PR #173 的 first-tranche integration ／
 acceptance closure（受控 SIMULATED package → procurement recommendation ＋ supplier risk evidence）。
 
-#### 9.3 AI Eval — `DESIGN PENDING` ／ `JIT-BLOCKED`
+#### 9.3 AI Eval — `DESIGN PENDING`
 
-**为何仍 `DESIGN PENDING`：**
+**为何仍 `DESIGN PENDING`（Issue #190 current-state correction）：**
 
 - `§5` 的 AI ／ Tool **behavioral boundary 已 `DESIGN RESOLVED`**（责任分层、evidence fidelity、
   no unsupported fact、partial answer、tool failure、permission boundary）；
-- 但 **AI implementation ／ LLM ／ Agent ／ Tool architecture 尚未获得授权**
-  （`§5.19` 明确不选 framework ／ LLM model ／ Tool protocol；`§10` Explicit Non-Decisions 仍列
-  Agent framework ／ LangGraph ／ vector DB 等；ADR-001 明确首批不实现 LLM ／ Agent framework）；
-- 因此**当前不存在可被真实 eval 的 AI runtime**，本层无法 closure。
+- 本节登记的 **trigger 已经满足**：**ADR-002**（`ACCEPTED`，Human-approved，Issue #178）就是在本 trigger 下
+  完成并登记的 Architecture Decision ＋ Human Approval，其 scope 为 P0 AI Explanation 的最小 runtime；
+  其要求的唯一 implementation 前置（最小 `§7` Secret Handling JIT gate）已由 **Issue #180** 关闭，
+  随后的 Q3 runtime core、hosted provider adapter、manual opt-in live smoke 与一次真实 hosted 观察
+  均已 merge（`§5.20` ～ `§5.23`）；
+- 因此 **Q3 slice 已具备可被观察 ／ 断言的 AI runtime**：provider-neutral runtime core 与 hosted adapter 已实现，
+  `validate_provider_response(...)` 是 deterministic acceptance boundary，`ANSWER_KINDS` 是 closed registry，
+  fail-closed outcome 词汇已登记；原先「**当前不存在可被真实 eval 的 AI runtime**」的理由**不再成立**；
+- 仍然**未授权**（ADR-002 不改变）：Agent Framework ／ LangGraph ／ Tool Protocol ／ MCP ／ RAG ／
+  Vector DB ／ Web ／ API ／ persistence ／ multi-step orchestration（`§10` Explicit Non-Decisions 仍列
+  Agent framework ／ LangGraph ／ vector DB）；`§5.19` 的未选型属**该 Task** 的 design boundary 声明，
+  且 ADR-002 刻意不固定 provider ／ model（属 replaceable implementation configuration）；
+- 本层仍为 `DESIGN PENDING`，**不**是因为 runtime 不存在，而是因为 **AI Eval contract 本身尚未设计**、
+  且其设计需要**单独**的 Human 授权（授权与 scope 以对应 Issue ／ PR 为准；本记录不实施、
+  也不预先定义任何 eval design）。一次真实 hosted 观察（`§5.23`，**n = 1**）只证明 hosted integration
+  contract 曾被成功观察一次，**不**构成 AI Eval 证据。
 
-**本 closure 只登记（未来 evidence category ＋ trigger boundary）：**
+**本层登记（evidence category ＋ trigger boundary）：**
 
-- **未来需要覆盖的 evidence category**（对应 `§5` 已登记的 behavioral boundary）：
+- **evidence category**（对应 `§5` 已登记的 behavioral boundary）：
   evidence fidelity（只陈述已取得的 structured deterministic result）、
   unsupported fact（不得产生无来源事实）、partial answer（证据不足时的明确部分回答）、
   tool failure（工具失败的 fail-closed 表现）、permission boundary（不得越过有效权限）、
@@ -7592,7 +7615,8 @@ acceptance closure（受控 SIMULATED package → procurement recommendation ＋
   必须完成**适用于该 implementation 的** Architecture Decision ＋ Human Approval；
   **是否需要** Agent Framework ／ provider ／ model ／ Tool protocol 等具体技术选择，
   由**该** Architecture Decision 自身决定 —— 本节**不预先选择**这些技术，
-  也**不强制**它们必须全部存在；在此之前本层保持 `DESIGN PENDING`（`JIT-BLOCKED` 状态不变）。
+  也**不强制**它们必须全部存在。该 trigger 已由 ADR-002（Human-approved，Issue #178）满足；
+  本层保持 `DESIGN PENDING` 直至 eval contract 被设计并获得对应的 Human 授权。
 
 **本层不得（不得由本 closure 静默授权）：** 选择 eval framework ／ LLM judge ／ model ／ provider，
 定义 benchmark ／ KPI ／ threshold，创建 prompt ／ eval dataset ／ eval code，
@@ -7665,7 +7689,7 @@ Options
 **至少包含：** **Option 0 — keep current / do nothing**
 
 **当前：** [ADR-001 — First Deterministic Tranche Minimum Architecture](../architecture/adr-001-deterministic-core.md) 已获 Human Approval；仅适用于第一批 deterministic tranche。
-另见 [ADR-002 — P0 AI Explanation Minimum Runtime Architecture](../architecture/adr-002-p0-ai-explanation-minimum-runtime.md)（P0 AI Explanation 的最小 runtime architecture，`ACCEPTED`，Issue #178）：只登记 architecture decision，**不**实现代码；其 implementation 仍受 `§7` Secret Handling JIT gate 阻塞。
+另见 [ADR-002 — P0 AI Explanation Minimum Runtime Architecture](../architecture/adr-002-p0-ai-explanation-minimum-runtime.md)（P0 AI Explanation 的最小 runtime architecture，`ACCEPTED`，Issue #178）：该 ADR 只登记 architecture decision，**不**实现代码；其 implementation 前置的最小 `§7` Secret Handling JIT gate 已由 **Issue #180** 关闭，P0 AI Explanation 的最小 runtime 随后已实现并 merge（见 `§5.20` ～ `§5.23`；Issue #190 current-state correction）。
 `§10` 整体仍**不**标记 `DESIGN RESOLVED`。
 
 ---
