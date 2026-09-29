@@ -7496,6 +7496,11 @@ credential 不得进入 Git／canonical record／provenance／`mapping_basis`／
 JIT gate 已由 Issue #180 关闭、Q3 runtime 已实现并 merge（`§5.20` ～ `§5.23`）。
 上方 Issue #176 closure 注记与状态表是**该时点记录**，保持原文、不回写。
 
+**Current Status follow-up（Issue #192，Q3 per-observation AI Eval contract）：** `AI Eval` **overall 仍为
+`DESIGN PENDING`**；只登记 **Q3 per-observation AI Eval contract ／ evidence boundary = `DESIGN RESOLVED`
+（scoped to Q3 concern only，见 §9.3）**；`HITL ／ business acceptance` 未变（`DESIGN PENDING` ／
+`JIT-BLOCKED`，见 `§9.4`）。上一条 Issue #190 follow-up 与 Issue #176 closure 记录保持原文、不回写。
+
 ```text
 §9 两层 design closure
   ≠ implementation evidence 已被 validated
@@ -7631,6 +7636,174 @@ resolved**；**AI Eval implementation 未获本 unit 授权**。
 **本层不得（不得由本 closure 静默授权）：** 选择 eval framework ／ LLM judge ／ model ／ provider，
 定义 benchmark ／ KPI ／ threshold，创建 prompt ／ eval dataset ／ eval code，
 或声称任何 AI 行为已验证。
+
+**Q3 per-observation AI Eval contract（Issue #192；Human-approved design，HD-1 ～ HD-6）：**
+
+本 contract 只登记 **Q3 per-observation** 的 evidence boundary 与判定 criteria；**不**新增 AI Eval
+result enum ／ status token（**不**引入 `PASS` ／ `FAIL` ／ `NOT_EVALUABLE` 等 §9 status ／ enum，也**不**建立
+overall AI Eval verdict token），**不**定义 aggregate quality gate，**不**实施 eval。`LIVE_SMOKE_PASS` ／
+`LIVE_SMOKE_FAIL` ／ `LIVE_SMOKE_NOT_RUN` 继续**只**表示 live-smoke execution ／ integration status，
+**不**作为 AI Eval verdict。
+
+**1. Scope。** 只覆盖 `§5.3` **Q3**（“Why is the recommended purchase quantity X?”）与当前已实现的
+Q3 runtime（`§5.20` ～ `§5.23`）：
+
+```text
+deterministic recommendation → Q3 projection → hosted provider selection
+  → parser ／ validator → runtime-assembled ExplanationResult ／ artifact
+```
+
+**不**覆盖 Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6、aggregate quality、HITL ／ business acceptance（`§9.4`）、
+`§6` ／ `§7` ／ `§8` closure、real enterprise data 或 production readiness。
+
+**2. 概念分层（不得混用）。**
+
+| 层 | 内容 | 是否 AI behavior criterion |
+| --- | --- | --- |
+| Observation metadata | commit under test ／ observation timestamp ／ provider ／ model ／ execution mode ／ sanitized source reference | 否 |
+| Observation admissibility | 是否真实产生 model output、是否形成可判定 selection、是否 replay、provider 是否根本未被调用 | 否（决定该次是否形成 AI behavior observation） |
+| Integration ／ safety evidence | HTTP ／ envelope 处理、parser 成功、credential handling、no-secret-leak observation、network path | **否** |
+| **AI behavior criteria** | evidence fidelity ／ Q3 role separation、unsupported fact、deterministic ／ LLM boundary、human-decision boundary、required evidence coverage、relation correctness | **是** |
+
+> **`integration success ≠ AI behavior satisfaction`。** `§5.23` 的 `LIVE_SMOKE_PASS` 属 integration ／
+> execution status，**不**构成 AI behavior 判定，也**不得**被换名为 AI Eval 结果。
+
+**3. Canonical oracle（`oracle ≠ mechanism ≠ observed provider output`）。**
+
+- **Canonical oracle**（唯一判定依据）：`§5.3` Q3、`§2.5.5` ／ `§2.5.8` ／ `§2.5.9`、`§5.5`、`§5.6`、
+  `§5.7`、`§5.8`、`§5.9`（适用部分）、`§5.12`、`ADR-002`、`§9.3` ／ `§9.5` ／ `§9.6`；
+- **Implementation mechanism**（只作 enforcement ／ reproducibility 证据，**不得**作为自己的 oracle）：
+  `validate_provider_response(...)`、`ANSWER_KINDS` registry、projection builder、adapter envelope parser、
+  live smoke criteria；
+- **Observed provider output**（证据，**不是**标准）：某次 observation 实际取得的 selection ／ response；
+- **mismatch 规则：** 若 mechanism 与 canonical authority 不一致，**报告 mismatch**（在该次 observation 的
+  criteria 结果中显式登记 mismatch finding），**不得**修改本 contract 去迎合 implementation；
+- **HD-4（“以此为据”）：** `§5.3` 的“必须引用 `BR-PROCUREMENT-001`”读作**以该 rule 及其 structured
+  deterministic facts 为 authority**；**不**要求 user-facing artifact 字面打印 rule id，但五个量、relation 与
+  explanation evidence **必须**可追溯到既有 canonical references（`§2.5.x` 与 projection 的既有
+  reference 字段），provenance **不得**弱化。
+
+**4. Observation unit（HD-2 = (ii)）。** 一次 Q3 AI Eval observation 是：
+
+```text
+一条 deterministic recommendation ／ family
++ 其 Q3 projection
++ 一次 real hosted provider output
++ 该 output 经 current parser ／ validator
++ 完整 explain_q3 composition
++ 最终 runtime ExplanationResult ／ runtime-assembled artifact
+```
+
+`§5.23` 的 **direct adapter ＋ validator** hosted smoke **不是**这个 unit（它不经过 `explain_q3`）：它继续作为
+**历史 hosted integration evidence** 保留，但**不**等同于完整 Q3 AI Eval observation。
+**现有 observation 状态：** 截至本 contract，**full-composition hosted observation = 0**；产生该 observation
+所需的 operator tooling 属**未来独立 unit**，本 contract **不**授权、**不**实施。
+
+**5. Observation admissibility（HD-3；只用 prose 表达，不新增 enum）。**
+
+按 **structured selection 是否形成** 分三层：
+
+**(a) 无 model output。** 例如：credential 缺失、provider **未被调用**（含 recommendation incomplete、
+no recommendation by design）、transport failure 在 provider response **之前**终止、provider unavailable
+且没有任何 output，以及 provider 以 non-200 ／ 401 ／ 403 ／ 429 ／ ≥ 500 等 HTTP status 拒绝
+（没有可用于形成 selection 的 model output）。⇒ **不形成** AI behavior observation；只作 deterministic
+fail-closed ／ integration evidence 登记。
+
+**(b) provider response ／ envelope 已返回，但未形成可检查的 structured selection。** current adapter 的
+pre-selection failure paths 即属此类：response envelope 不可解析、envelope 不是 object、provider error
+envelope、`status != completed`、no structured output、`output_text` 不是 valid JSON、parsed output 不是
+selection object。⇒ 在本 Q3 per-observation contract 下**不形成** AI behavior observation，因为**不存在**
+可按 Q3 canonical behavior criteria 判定的 structured selection；只作 **provider-format ／ parser ／
+integration evidence** 登记，并可用 prose 说明「**real provider output was received, but no evaluable
+structured selection was formed**」。**不得**记为 AI contract `satisfied`、AI criterion `satisfied` 或
+AI criterion `violated`。
+
+**(c) 已形成可检查的 structured selection。** ⇒ **形成** AI behavior observation —— validator **accept
+或 reject 都算**；若 reject，则登记具体 canonical criterion violation，**不得**把 validator rejection
+重新分类为 no-observation。
+
+> (a) 与 (b) 在 runtime 层可能都表现为 `OUTCOME_PROVIDER_UNAVAILABLE`（fail closed）：observation 分类
+> **不**由 runtime outcome 推断，而由实际观察到的「是否收到 provider response ／ 是否形成 structured
+> selection」决定，并以 prose ／ 既有 `§5.22` sanitized integration 字段记录；这些 integration 字段
+> **不**构成 AI Eval verdict。
+
+**6. AI behavior criteria（deterministic、auditable）。** criterion 名称取自既有 vocabulary
+（`§9.3` 已登记的 evidence category ＋ `§5.x` ／ `§2.5.x` 的 rule 名称），**不**新增 taxonomy 或编号体系。
+
+| Criterion | Canonical authority | 判定（satisfied ／ violated 的可观察形式） |
+| --- | --- | --- |
+| Evidence fidelity ／ Q3 role separation | `§5.3` Q3；`§2.5.9`；`§5.6` | 五量（`ShortageQty` ／ `BasePurchaseNeed` ／ `ApplicableMOQ` ／ `MOQAdjustmentQty` ／ `RecommendedPurchaseQty`）角色不得互换、数值不得变异；canonical negative case：`ShortageQty = 30` ／ `RecommendedPurchaseQty = 100` 时**不得**被理解为「实际缺料 100」 |
+| Unsupported fact | `§5.7`（＋`§5.5`：Evidence 不得添加 Tool 未提供、Repo 无正式规则支持的 business fact） | projection 之外的 business fact、guessed reason、`model inference`、approval claim、fabricated quantity ／ status **不得**进入 accepted explanation |
+| Deterministic ／ LLM boundary | `§5.12`；`§2.5.8` | shortage、MOQ relation、recommended purchase quantity、business status、approval status **不得**由 LLM 决定 |
+| Human-decision boundary | `§5.5` | Recommendation **不得**被表达为 approved purchase quantity ／ purchase order ／ approval completed |
+| Required evidence coverage | `§5.3` Q3（required evidence ＝ 该 rule 的五个已登记量） | accepted Q3 selection **必须**覆盖 Q3 required evidence |
+| Relation correctness | `§2.5.5` ／ `§2.5.8` ／ `§2.5.9` | selected explanation kind **必须**与 canonical deterministic relation 一致 |
+
+**本 unit 不可观察 ／ 不适用的已登记 category（不得假装已判定）：** `§5.10` permission boundary 在 Q3
+runtime 上**没有**可观察面（无 per-user permission surface；`§7` RBAC ／ Data Scope 仍 `DESIGN PENDING`）；
+`§5.8` partial answer 与 `§5.9` tool failure 在 Q3 上表现为 deterministic fail-closed ／ unavailability
+陈述（见第 5 项），**不**形成 AI behavior observation，只作 deterministic ／ integration evidence 登记。
+
+**7. Violation recording（HD-1；不新增 FAIL enum）。** 每条 criterion 在 observation record 中以**普通
+record field** 记录：`criterion` ／ `canonical authority` ／ `observed evidence` ／ `satisfied ／ violated`
+（boolean 或 prose）。**不**设立 overall AI Eval `PASS` ／ `FAIL` token；**不**新增 canonical business
+enum ／ lifecycle status（`§9.6`）。为判定 violated criteria 而保留 provider output 时，**只**保留必要的
+structured selection（四键），**不得**保留 raw envelope ／ transport dump ／ 不必要的 provider prose。
+
+**8. Fail-closed 分类（三类，不得混同：AI behavior violation ／ integration failure ／ no AI observation
+formed）。**
+
+| 情形 | 分类 | 记录内容 |
+| --- | --- | --- |
+| **可检查的 structured selection 已形成**（无论 validator accept 或 reject） | **AI behavior observation** | accept ⇒ 该次 observation ＋ 逐条 criteria 结果（`satisfied`）；reject ⇒ 该次 observation ＋ **具体 violated criteria**（real selection 已产生 ⇒ admissible，**不得**因 validator 拒绝而当作 “no observation”） |
+| provider response ／ envelope **已返回**，但**未形成**可检查的 structured selection（envelope 不可解析 ／ 非 object ／ error envelope ／ `status != completed` ／ no structured output ／ `output_text` 非 valid JSON ／ parsed output 非 selection object） | **provider-format ／ parser ／ integration failure** | **不**形成 AI behavior observation（无任何可按 Q3 canonical behavior criteria 判定的 selection）；prose 记录「real provider output was received, but no evaluable structured selection was formed」；**不得**记为 AI criterion `satisfied` 或 `violated` |
+| transport ／ envelope 在 provider response **之前**失败 | integration failure | **不**形成 AI behavior observation；登记 runtime ／ integration 事实 |
+| recommendation incomplete ／ no recommendation by design ⇒ provider 从未被调用 | deterministic fail-closed evidence | **不**形成 AI behavior observation；登记既有 deterministic 理由与既有缺失证据 |
+
+**9. Hosted vs replay（HD-6 WITH LIMIT）。**
+
+- **hosted**：真实 provider ／ model 调用；**计入 hosted observation**；Human opt-in；CI **不**执行；
+- **replay**：使用已捕获、sanitized ／ safely retained 的**真实** provider selection 驱动 full composition；
+  仅证明 composition reproducibility ／ validator ／ artifact assembly behavior ／ source observation 可重放；
+  **必须**引用原 hosted observation，且**必须**标记为 `replay ／ replayed observation`；**不**增加 hosted n，
+  **不**算新的 model behavior observation（例：1 hosted ＋ 10 replay ⇒ hosted observation count **仍为 1**）；
+- 本 contract **不**决定 replay storage implementation。
+
+**10. Required observation record（最小 sanitized；沿用 `§7.1` S-8 exposure boundary）。**
+
+必须包含：commit under test；observation timestamp；provider identifier；model identifier；execution mode
+（`hosted` ／ `replay`）；source hosted observation reference（replay 时）；Q3 grain ／ **SIMULATED**
+identity boundary（fake identity；无 package id ／ content-view digest ／ Analysis Run identity）；
+projection identity ／ evidence summary；provider output observation（**无 output** ／ **已有 output 但未形成
+可判定 structured selection** ／ **已形成 structured selection** —— prose 记录，非新 enum）；
+parser result；validator disposition ／ violated criteria；final runtime outcome；`provider_invoked`；
+deterministic recommendation unchanged；
+credential leakage observation；canonical criteria result details（逐条）。
+
+**不得**登记：raw credential、`Authorization` header、machine-local secret data、raw transport dump、
+不必要的 raw provider prose ／ body。screenshot 一类本机产物**不**进入仓库。
+
+**11. Claim boundary（HD-5）。** 每次 observation **只**支持：“在该 observation 中，哪些 canonical Q3
+AI behavior criteria `satisfied` ／ `violated`。”**不**支持 provider quality、model quality、accuracy、
+reliability、stability、production readiness。**无论累计多少 observation**，仅依据本 per-observation
+contract **都不得**推出 provider ／ model quality 结论；aggregate quality claim **必须**经未来**独立**
+design。本 contract **不**定义 benchmark ／ KPI ／ aggregate threshold ／ sample size ／ repetition count ／
+LLM judge ／ provider ／ model ranking ／ production SLO。
+
+**12. Status。** 完成本 contract 后：**`AI Eval` overall 仍 = `DESIGN PENDING`**；只登记
+**Q3 per-observation AI Eval contract ／ evidence boundary = `DESIGN RESOLVED`（scoped to Q3 concern only）**。
+**不得**把整个 `§9.3` ／ AI Eval layer 标为 `DESIGN RESOLVED`，也**不得**据此声称 `§10.1 D` 的 §9
+blocker point（宣称完整 vertical slice complete ／ validated）已满足。
+
+**13. Explicitly deferred（本 contract 不得决定）。** aggregate benchmark；KPI；threshold；sample size；
+repetition count；LLM judge；eval framework ／ harness；provider ／ model ranking；production SLO；
+Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6；HITL ／ business acceptance（`§9.4`）；`§6` ／ `§7` ／ `§8` closure；
+real enterprise data eval；eval implementation；eval dataset；eval prompt；runtime changes；provider changes；
+CI hosted calls；AI Eval overall closure。
+
+**本 contract 不修改：** `snapshot_loader/*` ／ `scripts/*` ／ `tests/*` ／ workflows ／ `ADR-002` 的
+substantive decision ／ `§6` ／ `§7` ／ `§8` substantive design ／ `§9.4`。`§5.20` ～ `§5.23` 的
+implementation ／ validation records 仍是**各自时点**事实，**不回写**。
 
 #### 9.4 HITL / business acceptance — `DESIGN PENDING` ／ `JIT-BLOCKED`
 
