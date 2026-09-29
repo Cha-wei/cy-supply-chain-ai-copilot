@@ -7701,16 +7701,31 @@ deterministic recommendation → Q3 projection → hosted provider selection
 
 **5. Observation admissibility（HD-3；只用 prose 表达，不新增 enum）。**
 
-**形成 AI behavior observation：** 真实 hosted model output 已产生，且存在可检查的 provider selection ／
-response —— 无论最终被 accept 还是 reject。
+按 **structured selection 是否形成** 分三层：
 
-**不形成 AI behavior observation**（下列情形**只能**作为 deterministic fail-closed ／ integration evidence
-登记，**不得**记为 “AI contract satisfied”）：
+**(a) 无 model output。** 例如：credential 缺失、provider **未被调用**（含 recommendation incomplete、
+no recommendation by design）、transport failure 在 provider response **之前**终止、provider unavailable
+且没有任何 output，以及 provider 以 non-200 ／ 401 ／ 403 ／ 429 ／ ≥ 500 等 HTTP status 拒绝
+（没有可用于形成 selection 的 model output）。⇒ **不形成** AI behavior observation；只作 deterministic
+fail-closed ／ integration evidence 登记。
 
-- provider **未被调用**（含 recommendation incomplete、no recommendation by design）；
-- credential 缺失；
-- transport failure 在 model output **之前**终止；
-- provider unavailable 且没有形成任何 model output。
+**(b) provider response ／ envelope 已返回，但未形成可检查的 structured selection。** current adapter 的
+pre-selection failure paths 即属此类：response envelope 不可解析、envelope 不是 object、provider error
+envelope、`status != completed`、no structured output、`output_text` 不是 valid JSON、parsed output 不是
+selection object。⇒ 在本 Q3 per-observation contract 下**不形成** AI behavior observation，因为**不存在**
+可按 Q3 canonical behavior criteria 判定的 structured selection；只作 **provider-format ／ parser ／
+integration evidence** 登记，并可用 prose 说明「**real provider output was received, but no evaluable
+structured selection was formed**」。**不得**记为 AI contract `satisfied`、AI criterion `satisfied` 或
+AI criterion `violated`。
+
+**(c) 已形成可检查的 structured selection。** ⇒ **形成** AI behavior observation —— validator **accept
+或 reject 都算**；若 reject，则登记具体 canonical criterion violation，**不得**把 validator rejection
+重新分类为 no-observation。
+
+> (a) 与 (b) 在 runtime 层可能都表现为 `OUTCOME_PROVIDER_UNAVAILABLE`（fail closed）：observation 分类
+> **不**由 runtime outcome 推断，而由实际观察到的「是否收到 provider response ／ 是否形成 structured
+> selection」决定，并以 prose ／ 既有 `§5.22` sanitized integration 字段记录；这些 integration 字段
+> **不**构成 AI Eval verdict。
 
 **6. AI behavior criteria（deterministic、auditable）。** criterion 名称取自既有 vocabulary
 （`§9.3` 已登记的 evidence category ＋ `§5.x` ／ `§2.5.x` 的 rule 名称），**不**新增 taxonomy 或编号体系。
@@ -7735,12 +7750,14 @@ record field** 记录：`criterion` ／ `canonical authority` ／ `observed evid
 enum ／ lifecycle status（`§9.6`）。为判定 violated criteria 而保留 provider output 时，**只**保留必要的
 structured selection（四键），**不得**保留 raw envelope ／ transport dump ／ 不必要的 provider prose。
 
-**8. Fail-closed 分类（三分，不得混同）。**
+**8. Fail-closed 分类（三类，不得混同：AI behavior violation ／ integration failure ／ no AI observation
+formed）。**
 
 | 情形 | 分类 | 记录内容 |
 | --- | --- | --- |
-| real model selection **已形成**，但被 canonical criteria ／ validator 拒绝 | **AI behavior observation** | 该次 observation ＋ 具体 violated criteria（real selection 已产生 ⇒ admissible，**不得**因 validator 拒绝而当作 “no observation”） |
-| transport ／ envelope 在 model output **之前**失败 | integration failure | **不**形成 AI behavior observation；登记 runtime ／ integration 事实 |
+| **可检查的 structured selection 已形成**（无论 validator accept 或 reject） | **AI behavior observation** | accept ⇒ 该次 observation ＋ 逐条 criteria 结果（`satisfied`）；reject ⇒ 该次 observation ＋ **具体 violated criteria**（real selection 已产生 ⇒ admissible，**不得**因 validator 拒绝而当作 “no observation”） |
+| provider response ／ envelope **已返回**，但**未形成**可检查的 structured selection（envelope 不可解析 ／ 非 object ／ error envelope ／ `status != completed` ／ no structured output ／ `output_text` 非 valid JSON ／ parsed output 非 selection object） | **provider-format ／ parser ／ integration failure** | **不**形成 AI behavior observation（无任何可按 Q3 canonical behavior criteria 判定的 selection）；prose 记录「real provider output was received, but no evaluable structured selection was formed」；**不得**记为 AI criterion `satisfied` 或 `violated` |
+| transport ／ envelope 在 provider response **之前**失败 | integration failure | **不**形成 AI behavior observation；登记 runtime ／ integration 事实 |
 | recommendation incomplete ／ no recommendation by design ⇒ provider 从未被调用 | deterministic fail-closed evidence | **不**形成 AI behavior observation；登记既有 deterministic 理由与既有缺失证据 |
 
 **9. Hosted vs replay（HD-6 WITH LIMIT）。**
@@ -7757,8 +7774,10 @@ structured selection（四键），**不得**保留 raw envelope ／ transport d
 必须包含：commit under test；observation timestamp；provider identifier；model identifier；execution mode
 （`hosted` ／ `replay`）；source hosted observation reference（replay 时）；Q3 grain ／ **SIMULATED**
 identity boundary（fake identity；无 package id ／ content-view digest ／ Analysis Run identity）；
-projection identity ／ evidence summary；provider output availability；parser result；validator disposition ／
-violated criteria；final runtime outcome；`provider_invoked`；deterministic recommendation unchanged；
+projection identity ／ evidence summary；provider output observation（**无 output** ／ **已有 output 但未形成
+可判定 structured selection** ／ **已形成 structured selection** —— prose 记录，非新 enum）；
+parser result；validator disposition ／ violated criteria；final runtime outcome；`provider_invoked`；
+deterministic recommendation unchanged；
 credential leakage observation；canonical criteria result details（逐条）。
 
 **不得**登记：raw credential、`Authorization` header、machine-local secret data、raw transport dump、
