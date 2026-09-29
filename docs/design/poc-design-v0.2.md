@@ -7433,7 +7433,20 @@ result，**不**成为 `ApprovedPurchaseQty` 的企业事实（`§2.5.15`），�
 `AnalysisRunContext`；approve 前**必须**做 stale check。只要 review 所绑定的 AnalysisRun 与当前 AnalysisRun
 不一致：current review = **stale**；**Approve 不允许**；必须基于**新 AnalysisRun** 重新生成 recommendation；
 supplier-risk evidence **必须重新绑定**；explanation **必须重新生成或明确 unavailable**；Human override
-**不**跨 AnalysisRun 自动继承；**必须重新 Review**。同一 AnalysisRun 内 deterministic 结果不变化 ⇒ 无需重算。
+**不**跨 AnalysisRun 自动继承；**必须重新 Review**。
+
+本 contract 只覆盖 **AnalysisRun ／ upstream-input freshness**，其**范围与限度**如下（不得被读成跨执行不变量）：
+
+- 在**一个已经形成的 review instance 内**，其所绑定的 deterministic recommendation ／ 值**是不可变的**：
+  该 instance 内**不**重算、**不**修改它（`HD-2` ／ `HD-3`：override 不写回 deterministic result）；
+- **AnalysisRun 组件不一致 ⇒ 该 review 为 stale**（这是本 contract 唯一的 freshness 判据）；
+- 本 contract **不**声称：相同的 `AnalysisRunContext` 标识能保证**跨不同 rule ／ code version**，或跨
+  **不同未来执行**，产生**相同**的 deterministic output —— 现有 binding 组件为 `analysis_run_id` ＋
+  `snapshot_package_identity` ＋ `accepted_content_view_digest` ＋ `analysis_date`，**不**包含 rule version ／
+  code version；
+- 因此 **rule ／ code-version freshness 仍未解决**，**deferred** 到适用的 **implementation gate** 与 `§8` 的
+  **rule-version** design（`§8` 的 `rule version` 行仍 `DESIGN PENDING`；`§10.1 D` 的 §8 blocker 含 rule-version）；
+- **在任何适用 §8 依赖解决之前，本记录不得声称 durable approval evidence 已完整**（本记录不持久化任何 decision）。
 
 **7. Reject contract（`HD-5`）。** Reject **终止**当前 review instance；**不**触发 deterministic recomputation；
 **reason 必填**；后续重新考虑时创建**新的** review decision，**不修改**旧 decision（旧 decision 作为历史记录保持）。
@@ -7444,12 +7457,16 @@ supplier-risk evidence **必须重新绑定**；explanation **必须重新生成
 - **概念状态（prose）：** review 进行中；已批准（`§3.7` 已登记的 **POC 内** `APPROVED` workflow state）；
   已拒绝；已 stale。
 - **允许的转换：** review 进行中 → 已批准（仅当非 stale 且 grain ／ AnalysisRun 一致）；review 进行中 → 已拒绝
-  （reason 必填）；review 进行中 → 已 stale（AnalysisRun 变化）；已 stale → review 进行中（**新 AnalysisRun** 下的
-  **新** review instance）。
-- **非法转换：** 已 stale → 已批准；已拒绝 → 已批准（同一 decision 不得改写，需**新** decision）；已批准 →
+  （reason 必填）；review 进行中 → 已 stale（AnalysisRun 变化）。
+- **新实例创建（不是转换）：** 出现**新 AnalysisRun** 时，**旧 stale review instance 保持 stale、其状态不变**；
+  该 AnalysisRun 产生**一个全新的 review instance**（**replacement ／ new-instance creation**），**新** instance
+  从「review 进行中」开始。**不得**把这件事写成 stale instance 自身发生状态转换。
+- **非法转换：** 已 stale → 已批准；已 stale → review 进行中（stale instance **不得**被复活；须创建新 instance）；
+  已拒绝 → 已批准（同一 decision 不得改写，需**新** decision）；已批准 →
   再次批准同一 instance；任何状态 → production execution ／ ERP 写回；已批准后修改 deterministic result
   或 `analysis_run` binding。
-- **stale condition：** review 的 AnalysisRun binding 与当前 AnalysisRun 任一组件不一致（`HD-4`）。
+- **stale condition：** review 的 AnalysisRun binding 与当前 AnalysisRun 任一组件不一致（`HD-4`；该判据**只**覆盖
+  AnalysisRun ／ upstream-input freshness，不覆盖 rule ／ code version，见第 6 项）。
 
 未来 runtime implementation 若确需内部 enum，在 **implementation gate** 再决定（`HD-6`）；本记录**不**预设。
 
