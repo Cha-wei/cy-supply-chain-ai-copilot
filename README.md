@@ -51,19 +51,23 @@ Q3 full-composition observation = TOOLING IMPLEMENTED / OBSERVED ONCE（§9.3，
                                   in-process、无 persistence ／ RBAC ／ audit ／ ERP write-back；
                                   §6 overall（含 Draft ／ 完整 state machine）仍 DESIGN PENDING；
                                   不构成 business acceptance evidence）
-Minimal HITL runtime tranche     = CODE START GATE PASS / IMPLEMENTATION AUTHORIZED（scoped；
-  （reduced；Issue #200）          Issue #200；Option A = 既有 Python package 内 minimal in-process
-                                  HITL runtime、消费既有 runtime result surfaces、ephemeral
-                                  non-canonical artifacts、无新依赖 ／ 无 persistence ／ 无 DB ／
-                                  无 Web ／ API ／ 无 network ／ egress ／ 无 RBAC ／ identity ／
-                                  data-scope enforcement ／ 无 audit platform ／ 无 production
-                                  execution ／ ERP write；scope = read-only Review projection →
-                                  Approve deterministic RecommendedPurchaseQty as-is → Reject →
-                                  AnalysisRun stale detection ／ re-review enforcement；
+Minimal HITL runtime tranche     = CODE START GATE PASS / IMPLEMENTATION AUTHORIZED / IMPLEMENTED
+  （reduced；Issue #200 ／ #202）    （scoped；Issue #200 gate，Issue #202 implementation；Option A =
+                                  既有 Python package 内 minimal in-process HITL runtime、消费既有
+                                  runtime result surfaces、ephemeral non-canonical artifacts、无新依赖 ／
+                                  无 persistence ／ 无 DB ／ 无 Web ／ API ／ 无 network ／ egress ／
+                                  无 RBAC ／ identity ／ data-scope enforcement ／ 无 audit platform ／
+                                  无 production execution ／ ERP write；scope = read-only Review
+                                  projection → Approve deterministic RecommendedPurchaseQty as-is →
+                                  Reject → AnalysisRun stale detection ／ re-review enforcement；
+                                  runtime surface = snapshot_loader/hitl_review.py；
+                                  explanation ↔ AnalysisRun runtime binding = IMPLEMENTED
+                                  （ExplanationResult.analysis_run 由 explain_q3 在全部 outcome path
+                                  绑定；provider-facing Q3 projection 仍不含 AnalysisRun，无额外 egress）；
                                   quantity override ／ Modify = DEFERRED ／ OUT OF SCOPE；
                                   §7 ／ §8 JIT blocker 未被该严格 scope 触发；不新建 ADR（独立 Human
                                   Architecture disposition）；Unrestricted implementation 仍未授权；
-                                  runtime 尚未实现，无 business acceptance ／ durable approval ／
+                                  IMPLEMENTED ≠ VALIDATED；无 business acceptance ／ durable approval ／
                                   production-readiness claim）
 ```
 
@@ -139,8 +143,9 @@ validator 接受、`answer_kind = MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE`、�
 production readiness 或 `POC validated` 证据（`§5.21` ／ `§5.22` 的 “live API 未验证” ／
 `LIVE_SMOKE_NOT_RUN` 为各自时点的 historical records，保持原文；current state 见 `§5.23`）。
 
-**明确未实现（Out of Scope）**：Web / API / service、Agent Framework / Tool protocol、HITL、
-RBAC / secrets、persistent Audit、database / persistent business state、real ERP / SRM Adapter /
+**明确未实现（Out of Scope）**：Web / API / service、Agent Framework / Tool protocol、quantity override /
+Modify 与 Draft generation、完整 HITL state machine、HITL execution boundary 实现、RBAC / identity / secrets、
+persistent Audit / durable approval history、database / persistent business state、real ERP / SRM Adapter /
 source connectivity、production write-back、P1，以及 `§6` ～ `§9` 各项 just-in-time gate。
 
 **状态纪律**：`DESIGN RESOLVED` ≠ `IMPLEMENTED` ≠ `TESTED`；`IMPLEMENTED` ≠ `VALIDATED`
@@ -170,9 +175,12 @@ source connectivity、production write-back、P1，以及 `§6` ～ `§9` 各项
 │   ├── result_binding.py         # F3-RB1 Analysis Run binding（跨 result provenance）
 │   ├── exact_quantity.py         # exact numeric representation（§4.3.25 C-5）
 │   ├── first_tranche_pipeline.py # first-tranche composition（§10.2；无业务语义）
+│   ├── hitl_review.py            # §6 reduced HITL review / decision runtime（§10.3 C / J；
+│   │                             #   in-process、ephemeral、无 override 路径）
 │   ├── issues.py / report.py / cli.py
 │   └── __init__.py               # public runtime surface
 ├── tests/                        # deterministic SIMULATED unittest suite
+│   └── test_hitl_review.py       # §10.3 H 的 32 项 Required Test obligations
 └── docs/
     ├── discovery/                # 需求调研与探索记录
     ├── architecture/             # ADR

@@ -54,6 +54,8 @@ from fractions import Fraction
 from types import MappingProxyType
 from typing import Protocol
 
+from .canonical_objects import AnalysisRunContext
+
 #: Execution outcome: the provider was called once and returned a usable response.
 OUTCOME_EXPLAINED: str = "EXPLAINED"
 #: Execution outcome: the family states no recommendation (reliable valid absence misses by design).
@@ -217,12 +219,22 @@ class ExplanationResult:
     then states the deterministic, provider-independent reason.  ``missing_evidence`` carries
     only values that already exist in the consumed deterministic result (root conditions and
     the registered issue findings), never a fabricated one.
+
+    ``analysis_run`` is the existing :class:`~snapshot_loader.canonical_objects.AnalysisRunContext`
+    of the deterministic result this explanation was produced from, and it is **runtime metadata**,
+    not an explanation input: it is bound by the runtime that produced the result and never declared
+    by a caller.  ``§6`` item 6 (``HD-4``) requires a review to treat an explanation produced under a
+    different Analysis Run as unavailable, which needs exactly this binding -- and no new canonical
+    semantics, status or identifier scheme.  It is deliberately **not** part of the projection handed
+    to a provider: the provider payload still carries no accepted package, no pipeline result and no
+    Analysis Run, and this field causes no additional egress.
     """
 
     question: str
     outcome: str
     projection: Mapping[str, object]
     provider_invoked: bool
+    analysis_run: AnalysisRunContext
     availability_note: str | None = None
     response: ExplanationResponse | None = None
     missing_evidence: tuple[Mapping[str, object], ...] = ()
@@ -239,6 +251,12 @@ class ExplanationResult:
             "question": self.question,
             "outcome": self.outcome,
             "provider_invoked": self.provider_invoked,
+            "analysis_run": {
+                "analysis_run_id": self.analysis_run.analysis_run_id,
+                "snapshot_package_identity": self.analysis_run.snapshot_package_identity,
+                "accepted_content_view_digest": self.analysis_run.accepted_content_view_digest,
+                "analysis_date": self.analysis_run.analysis_date,
+            },
             "availability_note": self.availability_note,
             "projection": copy.deepcopy(dict(self.projection)),
             "response": None if self.response is None else self.response.to_dict(),

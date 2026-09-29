@@ -23,6 +23,12 @@ rational payloads ／ exact decimal text), so nothing is recomputed, rounded, re
 defaulted or re-classified.  The projection never carries the accepted package, the pipeline
 result, the analysis run or any unrelated pipeline field.
 
+Every returned :class:`~snapshot_loader.explanation_seam.ExplanationResult` additionally carries the
+consumed result's existing ``AnalysisRunContext`` as **runtime metadata** (``analysis_run``), on every
+outcome path.  This module binds it from ``recommendations.analysis_run``; a caller never declares it,
+and it is deliberately absent from the projection handed to a provider, so the provider payload still
+carries no accepted package, no pipeline result and no Analysis Run.
+
 Evidence fidelity is enforced by construction rather than trusted: the provider may only
 *select* a registered answer kind and projected fact names, and the runtime assembles the
 answer, the evidence lines and the human-decision reminder from the projection itself, so a
@@ -217,6 +223,7 @@ def explain_q3(
             ),
             projection=projection,
             provider_invoked=False,
+            analysis_run=recommendations.analysis_run,
             availability_note=(
                 NOTE_NO_RECOMMENDATION_BY_DESIGN
                 if valid_absence
@@ -237,6 +244,7 @@ def explain_q3(
             outcome=OUTCOME_RECOMMENDATION_INCOMPLETE,
             projection=projection,
             provider_invoked=False,
+            analysis_run=recommendations.analysis_run,
             availability_note=NOTE_INCOMPLETE,
             missing_evidence=_missing_evidence(projection),
             notes=(
@@ -253,6 +261,7 @@ def explain_q3(
             outcome=OUTCOME_PROVIDER_UNAVAILABLE,
             projection=projection,
             provider_invoked=True,
+            analysis_run=recommendations.analysis_run,
             availability_note=NOTE_PROVIDER_UNAVAILABLE,
             notes=(
                 "the explanation provider raised "
@@ -269,6 +278,7 @@ def explain_q3(
             outcome=OUTCOME_RESPONSE_UNACCEPTABLE,
             projection=projection,
             provider_invoked=True,
+            analysis_run=recommendations.analysis_run,
             availability_note=NOTE_RESPONSE_UNACCEPTABLE,
             notes=(
                 "the provider selection is not a usable Q3 explanation and is never surfaced "
@@ -283,6 +293,7 @@ def explain_q3(
         outcome=OUTCOME_EXPLAINED,
         projection=projection,
         provider_invoked=True,
+        analysis_run=recommendations.analysis_run,
         response=response,
         notes=(
             "the provider selected a registered answer kind and projected fact names only; the "
