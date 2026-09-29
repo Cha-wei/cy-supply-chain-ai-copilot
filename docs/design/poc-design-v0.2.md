@@ -7496,6 +7496,14 @@ AI cannot approve ／ submit ／ create PO ／ override Human decision；AI expl
 authoritative 登记见 [POC Design §10.3](#minimal-hitl-tranche-gate)。本 follow-up **不**修改上述第 1 ～ 12 项，
 **不**使 `§6` overall 离开 `DESIGN PENDING`，也**不**构成 implementation evidence。
 
+**Current-state runtime follow-up（Issue #202）：** 上述 reduced tranche 的 runtime 已实现在既有 Python package 内
+（`snapshot_loader/hitl_review.py`；in-process、ephemeral、non-canonical），其 current-state 与 Required Gates
+evidence 见 [POC Design §10.3 J](#minimal-hitl-tranche-gate)，状态为 **`IMPLEMENTED`（reduced tranche）** ——
+H1 ～ H32、independent-review regression cases 与 explanation AnalysisRun binding cases 已由 deterministic
+SIMULATED `unittest` 覆盖。`§6` overall **仍为 `DESIGN PENDING`**：`Draft`、完整 state machine、execution
+boundary 实现、持久化与身份强制执行**均未解决**；`quantity override ／ Modify` **仍为 `DEFERRED ／ OUT OF SCOPE`**；
+本 follow-up **不**修改上述第 1 ～ 12 项，**不**构成 business acceptance evidence，也**不**使 `§9.4` 可 closure。
+
 ---
 
 ## 7. Permission & Security
@@ -8560,6 +8568,129 @@ production readiness ／ POC success = NOT CLAIMED
   已登记语义、`§10` 的 ADR 条目、`§10.1` A ～ F、`§10.2`、`ADR-001` ／ `ADR-002` 的 substantive decision、
   `FROZEN` baseline、code ／ tests ／ runtime。
 - 本小节**不**回写任何历史时点记录。
+
+#### J. Implementation record（Issue #202）
+
+**Registration Status：`IMPLEMENTED`（reduced tranche only；本小节是 current-state runtime 记录）**
+**Task：** [Issue #202](https://github.com/Cha-wei/cy-supply-chain-ai-copilot/issues/202)。
+
+**A. 已实现的 reduced tranche（current state）**
+
+| 本小节 C 的 in-scope capability | Current state | Runtime surface |
+| --- | --- | --- |
+| read-only Review projection | `IMPLEMENTED` | `build_review_projection` ／ `ReviewProjection` |
+| Review instance ／ grain ／ AnalysisRun binding | `IMPLEMENTED` | `open_review` ／ `ReviewInstance` |
+| Approve-as-is | `IMPLEMENTED` | `ReviewInstance.approve_as_recommended` |
+| Reject | `IMPLEMENTED` | `ReviewInstance.reject` |
+| stale detection ／ re-review enforcement | `IMPLEMENTED` | `is_stale` ／ `status` ／ `freshness_note` ／ `analysis_run_differences` |
+| Human decision record（`§6` 第 4 项 minimal field set） | `IMPLEMENTED` | `HumanDecision`（含 `override_flag`） |
+| formed artifact 不可改写（projection ／ decision） | `IMPLEMENTED` | projection 与 decision 的 payload ／ nested reference 全部 deep-frozen；`payload_to_plain` 只提供按需的只读 plain view |
+| irreversible stale condition | `IMPLEMENTED` | 一旦对某个 current run 判为 stale，`ReviewInstance` 永久 stale、不可复活 |
+| Supplier Risk evidence 的 full AnalysisRun re-binding | `IMPLEMENTED` | 消费前比较**整个** `AnalysisRunContext`（既有 4 组件），非仅 `analysis_run_id` |
+| decision evidence references 收窄为 identity ／ reference | `IMPLEMENTED` | `REFERENCE_KEYS_UPSTREAM` ／ `REFERENCE_KEYS_SUPPLIER_RISK`；risk facts 留在 projection |
+| explanation AnalysisRun runtime binding | `IMPLEMENTED` | `ExplanationResult.analysis_run`（由 `explain_q3` 在全部 outcome path 绑定） |
+| explanation artifact ＋ `HD-4` explanation freshness | `IMPLEMENTED` | review projection 的 explanation section（binding ／ outcome ／ availability note ／ artifact ／ analysis_run） |
+
+**严格限定（不得被后续实现放宽）：**
+
+- 只消费既有已登记 result surfaces（`ProcurementRecommendation` ／ `ProcurementRecommendationResult` ／
+  `SupplierRiskEvidenceCard` ／ explanation runtime outcome 与 artifact 作为**仅辅助信息**）；**不**重算、**不**改
+  provenance、**不**新增 canonical entity ／ field ／ grain ／ enum ／ business status；
+- **`AnalysisRun` freshness 是 blocking condition，不是 sufficient condition**（本小节 C 第 4 行）：实现中
+  `is_stale` / `freshness_note` 只做既有 4 组件比较；approval 另需 review-in-progress、grain 一致与合法
+  numeric recommendation；
+- **stale 为不可逆 in-process condition**（`§6` 第 8 项）：一旦观察到 current AnalysisRun 不一致，该 instance
+  永久 stale、不回到 review-in-progress、不可 approve ／ reject；新 AnalysisRun 必须 `open_review` 新 instance。
+  这是内存内的 instance condition，**不是** durable persistence；
+- **formed artifact 不可被 public surface 改写**：`ReviewProjection` 与 `HumanDecision` 的 payload 与 nested
+  evidence reference 均为只读映射／tuple；**不得**通过修改 projection 把 A grain 的 deterministic
+  recommendation 变成 B grain 的 Human decision；
+- **decision 时 actor slot 必填且不可为空**（open time 与 approve ／ reject 均校验）：`actor reference present
+  ≠ identity verified ≠ permission enforced`；**不引入** RBAC ／ authentication ／ identity verification，也**不**
+  建立「reviewer 必须等于 approver」等新业务规则；
+- **Supplier Risk evidence 的 re-binding 使用既有 `F3-RB1` binding authority**：比较既有 4 组件，**不**发明新
+  provenance taxonomy；四个组件任一不一致即视为 foreign ／ stale evidence，**不**进入 projection ／ decision；
+- **decision evidence references 只承载 identity ／ reference**（既有 `shortage_reference` ／
+  `policy_input_reference` ＋ supplier-risk evidence identity）；risk facts 留在 review projection，decision 以
+  `review_projection_reference` 关联；**不**复制 raw evidence，**不**发明新的 canonical evidence ID；
+- **explanation AnalysisRun binding 属 in-process runtime metadata**：由产生该 result 的 runtime 绑定，**不得**
+  由 HITL caller 声明；provider-facing projection **仍不包含** AnalysisRun（provider payload ≠ accepted
+  package ≠ pipeline result ≠ AnalysisRun），**不产生额外 provider egress**；
+- **无 override ／ Modify 路径**：`approve_as_recommended` 与 `reject` 均无 quantity 参数，`override_flag`
+  在本 tranche 只能为 `False`；
+- **no persistence**（全部 artifact 仅存在于 process runtime memory）、**no network ／ egress**、
+  **no production ／ ERP write**、**no rule ／ code-version freshness claim**。
+
+**B. Required Gates evidence（`§10.3` H obligations）**
+
+- `tests/test_hitl_review.py` 以 `§10.3` H 的 contract 分组逐条覆盖 H1 ～ H32（Review projection 5 ＋
+  Approve-as-is 4 ＋ AnalysisRun freshness 4 ＋ Reject 3 ＋ Human decision record 10 ＋ out-of-scope negative
+  assertions 6），fixtures 复用既有 end-to-end SIMULATED chain builder；
+- 另加 R1 ～ R10 regression cases（formed projection ／ decision 不可改写、irreversible stale、approve ／ reject
+  的 blank actor negative cases、Supplier Risk 四组件 mismatch、decision evidence reference 为 identity
+  而非 risk snapshot）与 B1 ～ B9 explanation binding cases（全部 outcome path 绑定、四组件原样、provider
+  payload 不含 AnalysisRun、same-run artifact 只读辅助、四组件 mismatch ⇒ unavailable 且不自动调用 provider、
+  新 AnalysisRun 需新 explanation 且旧 artifact 不复活、unavailable 不构成 approval blocker、无 version
+  freshness claim）；
+- 验证方式为 `§9.1` deterministic `unittest`，oracle 取自 `§6` prose 契约、`§10.3` 与既有 `F3-RB1`
+  binding 语义；全部输入标记 `SIMULATED`，provider 一律 stub；
+- failure isolation、provenance、exact numeric semantics（`§4.3.25` C-5）与 no-side-effect 义务按 `§9.1`
+  执行。
+
+**C. Boundary（本小节不做什么）**
+
+本小节**不新增** canonical field ／ entity ／ grain ／ business rule ／ status ／ enum，**不修改** `§6` 原六行表
+与 Issue #198 record、`§2` ～ `§5` ／ `§7` ／ `§8` ／ `§9` 的已登记语义、`§10.1` ／ `§10.2` 与 `ADR-001` ／
+`ADR-002`；**不**实现 quantity override ／ persistence ／ durable approval history ／ identity ／ RBAC ／ Data
+Scope ／ Tool Permission enforcement ／ audit platform ／ Web ／ API ／ workflow engine ／ network egress ／
+Tool protocol ／ Agent framework ／ ERP write-back ／ P1；**不**回写任何历史时点记录。
+
+**D. explanation AnalysisRun runtime binding（implementation record）**
+
+`§6` 第 3 项把 review object 登记为包含 `ExplanationResult` 的 runtime outcome 与 artifact（仅辅助信息）；
+`§6` 第 6 项（`HD-4`）要求新 AnalysisRun 后 explanation 必须重新生成或明确 unavailable。该义务的
+**canonical authority 早已存在**，缺的只是 **non-canonical runtime provenance binding**，因此本 tranche
+**不**需要新的 Human Decision ／ ADR ／ Architecture gate，本记录也**不**登记任何 `Human Decision Required`。
+
+```text
+Implementation
+  ExplanationResult + analysis_run: AnalysisRunContext（in-process runtime metadata）
+  由 explain_q3(...) 在**全部** outcome path 绑定 recommendations.analysis_run：
+    EXPLAINED ／ NO_RECOMMENDATION_BY_DESIGN ／ RECOMMENDATION_UNAVAILABLE ／
+    RECOMMENDATION_INCOMPLETE ／ PROVIDER_UNAVAILABLE ／ RESPONSE_UNACCEPTABLE
+  ⇒ HITL caller **不**声明 explanation 属于哪个 run
+
+Provider-facing data boundary（不变）
+  provider payload ＝ Q3 projection（question ／ grain ／ facts ／ completeness）
+  ≠ accepted package  ≠ pipeline result  ≠ AnalysisRun
+  binding 只属于 in-process ExplanationResult runtime metadata；**不产生额外 egress**
+
+HITL consumption（build_review_projection）
+  same run：review projection 携带 runtime outcome ＋ availability note ＋ artifact（若存在），
+            artifact 为 read-only auxiliary information only（deep-frozen detached representation）
+  任一组件 mismatch：explanation = unavailable for this review；old artifact **不**被消费；
+            不重用旧 artifact、不按 grain ／ quantity 相等推断 freshness、不自动调用 provider、
+            不自动 regenerate；deterministic Approve-as-is 仍按其自身已登记条件进行
+```
+
+`ExplanationResult.analysis_run` 复用既有 `AnalysisRunContext`，**不**新增 canonical entity ／ field ／
+grain ／ enum ／ carrier ／ protocol，**不**引入 rule ／ code-version freshness。
+
+```text
+§10.3 C reduced HITL runtime tranche = IMPLEMENTED（本小节 J）
+§6 overall                           = DESIGN PENDING（原六行表不变）
+§7 overall                           = NOT RESOLVED
+§8                                   = 不 closure（五行均 DESIGN PENDING）
+§9.4                                 = DESIGN PENDING ／ JIT-BLOCKED
+rule ／ code-version freshness        = NOT RESOLVED
+quantity override ／ Modify           = DEFERRED ／ OUT OF SCOPE
+business acceptance ／ durable approval evidence ／ identity-permission enforcement
+production readiness ／ POC success   = NOT CLAIMED
+```
+
+
+`IMPLEMENTED` **不等于** `VALIDATED`，**不等于** business accepted，也**不等于** `POC SUCCESS`；本 tranche 的
+验证证据**仅**为 SIMULATED fixtures 上的 deterministic `unittest` 与 CI。
 
 ---
 

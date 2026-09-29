@@ -618,6 +618,7 @@ class Q3ExplanationTests(SupplierRiskInputTestCase):
 
         allowed_modules = {
             "__future__",
+            "canonical_objects",
             "collections",
             "copy",
             "dataclasses",

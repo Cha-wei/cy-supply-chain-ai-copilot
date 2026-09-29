@@ -32,6 +32,14 @@ Deterministic tranches delivered here:
       adapter of §5.21 is the package's only network ／ credential boundary, and it is reached
       only when a caller explicitly resolves it (:func:`provider_from_environment`).
 
+    Minimal §6 HITL review / decision runtime (:func:`open_review`)
+      an existing ``ProcurementRecommendationResult`` -> a read-only non-canonical review projection
+      -> in-process review instances bound to the full ``AnalysisRunContext`` -> approve the
+      deterministic ``RecommendedPurchaseQty`` as-is / reject -> a non-canonical Human decision
+      runtime record.  The runtime is ephemeral: it persists nothing, performs no network or
+      provider egress, enforces no identity or permission, and deliberately has no quantity-override
+      / Modify path (``POC Design v0.2`` §6 Issue #198 record; §10.3 Issue #200 registration).
+
 Canonical authority:
 
 * ``docs/design/specs/data-integration/snapshot-import-contract.md``
@@ -59,13 +67,18 @@ Scope boundary (deliberately narrow):
   composition adds no business semantics of its own.  Also in scope is the provider-neutral
   P0 AI Explanation **Q3** runtime core (:func:`explain_q3` / ``build_q3_projection``):
   a read-only projection of registered quantities plus an injected provider seam and a
-  deterministic fail-closed path.
+  deterministic fail-closed path.  Also in scope is the **reduced §6 HITL runtime tranche**
+  (:func:`open_review`, ``POC Design v0.2`` §10.3 C / J): the read-only review projection,
+  approve-as-recommended, reject, and AnalysisRun stale detection / re-review enforcement
+  over already-registered runtime result surfaces, with no quantity-override path.
 * **out of scope** -- Web ／ API ／ service, an automatically reached hosted LLM provider
   (the §5.21 adapter performs network egress only when a caller explicitly resolves and
   calls it, and the §5.22 manual operator entry point lives outside this package),
-  Agent Framework ／ Tool protocol, HITL, RBAC ／ secrets, persistent Audit,
-  database ／ persistent business state, real ERP ／ SRM Adapter, production write-back,
-  P1, and every §6 -- §9 just-in-time gate.
+  Agent Framework ／ Tool protocol, quantity override ／ Modify / Draft generation / a full
+  HITL state machine, RBAC ／ identity ／ data-scope ／ Tool-permission enforcement,
+  persistent Audit ／ durable approval history, database ／ persistent business state,
+  real ERP ／ SRM Adapter, production write-back, P1, and every remaining §6 -- §9
+  just-in-time gate.
 
 The core is importable and directly testable and does not depend on the CLI
 (``POC Design v0.2`` §10.1 B; ADR-001).
@@ -179,6 +192,44 @@ from .explanation_seam import (
     provider_payload,
     render_fact_text,
     validate_provider_response,
+)
+from .hitl_review import (
+    DECISION_APPROVE,
+    DECISION_RECORD_FIELDS,
+    DECISION_REJECT,
+    EVIDENCE_KIND_SUPPLIER_RISK,
+    EVIDENCE_KIND_UPSTREAM_RESULT,
+    EXPLANATION_BOUND,
+    EXPLANATION_KEYS,
+    EXPLANATION_UNAVAILABLE_FOR_REVIEW,
+    NO_OVERRIDE_REASON,
+    NOTE_REVIEW_EXPLANATION_STALE,
+    NOTE_REVIEW_NO_NUMERIC_RECOMMENDATION,
+    NOTE_REVIEW_NO_RECOMMENDATION,
+    PROJECTION_KEYS,
+    PROJECTION_NO_RECOMMENDATION,
+    PROJECTION_RECOMMENDATION,
+    REFERENCE_KEYS_SUPPLIER_RISK,
+    REFERENCE_KEYS_UPSTREAM,
+    REVIEW_APPROVED,
+    REVIEW_FACT_FIELDS,
+    REVIEW_GRAIN_FIELDS,
+    REVIEW_OPEN,
+    REVIEW_QUESTION,
+    REVIEW_REJECTED,
+    REVIEW_STALE,
+    HumanDecision,
+    ReviewConflictError,
+    ReviewError,
+    ReviewInstance,
+    ReviewPreconditionError,
+    ReviewProjection,
+    analysis_run_differences,
+    analysis_run_is_current,
+    build_review_projection,
+    open_review,
+    payload_to_plain,
+    projection_reference,
 )
 from .inbound_calculation import (
     EFFECTIVE_INBOUND_DATA_INCOMPLETE,
@@ -530,6 +581,42 @@ __all__ = [
     "COMPLETENESS_COMPLETE",
     "COMPLETENESS_DATA_INCOMPLETE",
     "COMPLETENESS_RECOMMENDATION_NOT_STATED",
+    "DECISION_APPROVE",
+    "DECISION_RECORD_FIELDS",
+    "DECISION_REJECT",
+    "EVIDENCE_KIND_SUPPLIER_RISK",
+    "EVIDENCE_KIND_UPSTREAM_RESULT",
+    "EXPLANATION_BOUND",
+    "EXPLANATION_KEYS",
+    "EXPLANATION_UNAVAILABLE_FOR_REVIEW",
+    "HumanDecision",
+    "NO_OVERRIDE_REASON",
+    "NOTE_REVIEW_EXPLANATION_STALE",
+    "NOTE_REVIEW_NO_NUMERIC_RECOMMENDATION",
+    "NOTE_REVIEW_NO_RECOMMENDATION",
+    "PROJECTION_KEYS",
+    "PROJECTION_NO_RECOMMENDATION",
+    "PROJECTION_RECOMMENDATION",
+    "REFERENCE_KEYS_SUPPLIER_RISK",
+    "REFERENCE_KEYS_UPSTREAM",
+    "REVIEW_APPROVED",
+    "REVIEW_FACT_FIELDS",
+    "REVIEW_GRAIN_FIELDS",
+    "REVIEW_OPEN",
+    "REVIEW_QUESTION",
+    "REVIEW_REJECTED",
+    "REVIEW_STALE",
+    "ReviewConflictError",
+    "ReviewError",
+    "ReviewInstance",
+    "ReviewPreconditionError",
+    "ReviewProjection",
+    "analysis_run_differences",
+    "analysis_run_is_current",
+    "build_review_projection",
+    "open_review",
+    "payload_to_plain",
+    "projection_reference",
     "ExplanationProvider",
     "ExplanationResponse",
     "ExplanationResult",
