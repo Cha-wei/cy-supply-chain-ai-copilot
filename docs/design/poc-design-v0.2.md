@@ -7583,6 +7583,12 @@ acceptance closure（受控 SIMULATED package → procurement recommendation ＋
 
 #### 9.3 AI Eval — `DESIGN PENDING`
 
+**Current state（Issue #190）：** AI Eval 仍为 `DESIGN PENDING`；其 **JIT prerequisite 已满足**
+（ADR-002 `ACCEPTED` ＋ 最小 `§7` Secret Handling JIT gate 已由 Issue #180 关闭）；**Q3 AI Eval design
+已获 Human authorization 可以开始** —— 该 authorization **已由 Issue #190 的 D2 给出**，范围**仅**为
+**Q3-only minimal AI Eval design**、**design-only**、**下一独立 change unit**；**AI Eval design 尚未
+resolved**；**AI Eval implementation 未获本 unit 授权**。
+
 **为何仍 `DESIGN PENDING`（Issue #190 current-state correction）：**
 
 - `§5` 的 AI ／ Tool **behavioral boundary 已 `DESIGN RESOLVED`**（责任分层、evidence fidelity、
@@ -7599,10 +7605,12 @@ acceptance closure（受控 SIMULATED package → procurement recommendation ＋
   Vector DB ／ Web ／ API ／ persistence ／ multi-step orchestration（`§10` Explicit Non-Decisions 仍列
   Agent framework ／ LangGraph ／ vector DB）；`§5.19` 的未选型属**该 Task** 的 design boundary 声明，
   且 ADR-002 刻意不固定 provider ／ model（属 replaceable implementation configuration）；
-- 本层仍为 `DESIGN PENDING`，**不**是因为 runtime 不存在，而是因为 **AI Eval contract 本身尚未设计**、
-  且其设计需要**单独**的 Human 授权（授权与 scope 以对应 Issue ／ PR 为准；本记录不实施、
-  也不预先定义任何 eval design）。一次真实 hosted 观察（`§5.23`，**n = 1**）只证明 hosted integration
-  contract 曾被成功观察一次，**不**构成 AI Eval 证据。
+- 本层仍为 `DESIGN PENDING`，**不**是因为 runtime 不存在，而是因为 **AI Eval contract 本身尚未设计**；
+  其设计原则上需要**独立**的 Human authorization —— 该 authorization **已由 Issue #190 的 D2 给出**，
+  范围**仅**为：授权**下一独立 change unit** 开始 **Q3-only minimal AI Eval design**（design-only）。
+  本记录**不**实施该设计，也**不**授权 eval implementation，且不预先定义任何 eval design 内容。
+  一次真实 hosted 观察（`§5.23`，**n = 1**）只证明 hosted integration contract 曾被成功观察一次，
+  **不**构成 AI Eval 证据。
 
 **本层登记（evidence category ＋ trigger boundary）：**
 
@@ -7616,7 +7624,9 @@ acceptance closure（受控 SIMULATED package → procurement recommendation ＋
   **是否需要** Agent Framework ／ provider ／ model ／ Tool protocol 等具体技术选择，
   由**该** Architecture Decision 自身决定 —— 本节**不预先选择**这些技术，
   也**不强制**它们必须全部存在。该 trigger 已由 ADR-002（Human-approved，Issue #178）满足；
-  本层保持 `DESIGN PENDING` 直至 eval contract 被设计并获得对应的 Human 授权。
+  AI Eval **design** authorization 已由 Issue #190 的 D2 给出（Q3-only、design-only，见上
+  “Current state”）；本层保持 `DESIGN PENDING` 直至 AI Eval contract 被设计完成，
+  而 **AI Eval implementation 仍需另行 Human authorization**。
 
 **本层不得（不得由本 closure 静默授权）：** 选择 eval framework ／ LLM judge ／ model ／ provider，
 定义 benchmark ／ KPI ／ threshold，创建 prompt ／ eval dataset ／ eval code，
