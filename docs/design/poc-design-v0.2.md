@@ -7255,11 +7255,76 @@ LIVE_SMOKE_PASS ／ LIVE_SMOKE_FAIL（sanitized）／ LIVE_SMOKE_NOT_RUN（crede
 - 未请求、未猜测、未创建、未写入任何 credential；CI 与全部 tests **未**调用 DeepSeek；
 - 离线证据：`python -m unittest discover -s tests` → **1033 tests OK**（2 个 pre-existing skips）。
 
+**Current-state follow-up（Issue #188，详见 `§5.23`）：** 上一条“本次实际执行记录”是 **Issue #186 workspace 的
+时点记录**（当时 `LIVE_SMOKE_NOT_RUN`、尚无 live validation evidence），**保持原样、不回写**。此后 Human 在
+`main @ 31fab37` 上用 process environment credential 显式执行了**一次** real hosted smoke 并取得
+`LIVE_SMOKE_PASS`；current state 为 **live smoke tooling = `IMPLEMENTED`；real hosted smoke = `PASS once`**
+（单次观察，非 AI Eval、非 provider ／ model quality validation，详见 `§5.23`）。
+
 **本记录未实现 ／ 未声称（out of scope）：** 未声称 AI Eval ready ／ passed、provider quality validated、
 business accepted、live API 已验证、`POC validated` 或 `POC success`；未实现 Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6、
 Draft generation、HITL、persistence、Web ／ API、Agent Framework ／ Tool Protocol ／ RAG、automatic
 scheduled smoke ／ CI 中的 hosted 调用；真实 live run 仍需 operator 在**自己的**环境自行配置 credential
-（属 Human 环境决策，本记录不代为执行）。
+（属 Human 环境决策，本记录不代为执行）。（以上 out-of-scope 表述属 **Issue #186 时点**；current state 见
+本节 “Current-state follow-up” 与 `§5.23`。）
+
+#### 5.23 DeepSeek Q3 live API contract smoke — validation record（Issue #188）
+
+**Registration Status：`DeepSeek Q3 live API contract smoke = PASS`**
+**（`real hosted integration contract observed successfully once`）**
+**Authority：** `§5.22`（manual opt-in smoke entry point，Issue #186）＋ `§5.21`（hosted adapter，Issue #184）
+＋ [ADR-002](../architecture/adr-002-p0-ai-explanation-minimum-runtime.md)＋ `§7.1` Secret Handling minimum
+contract（Issue #180）。本记录**只**登记一次真实 hosted execution 的 sanitized 结果；**不**改变 `§9.3` 的
+`DESIGN PENDING` ／ `JIT-BLOCKED`，**不**构成 AI Eval、provider ／ model quality、business acceptance 或
+`POC validated` 证据；`§5` header 的 `Implementation Status` 快照**不回写**。
+
+```text
+Validation type          : manual opt-in live hosted smoke
+Commit under test        : 31fab37ad98e36befee92800efc2c214d51db793（= 执行时的 current main）
+Provider                 : DeepSeek
+Model                    : deepseek-flash
+Endpoint                 : /responses（https://api.deepseek.com/responses）
+Execution                : exactly one real hosted request（Human 显式执行；process environment credential）
+HTTP                     : 200
+Envelope parser          : PASS（merged parser 接受真实 Responses envelope）
+Selection parsing        : PASS
+Deterministic validator  : PASS（merged validate_provider_response(...) 接受该 selection）
+Answer kind              : MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE
+Q3 evidence              : all five registered facts present
+Uncertainty              : empty
+Human-decision contract  : preserved
+Synthetic input          : unchanged
+Credential leakage       : none observed in the sanitized report
+Overall                  : LIVE_SMOKE_PASS
+Timestamp                : 2026-09-29T08:06:47+00:00
+```
+
+**登记事实：**
+
+- **执行方式**：Human 在本地、基于 `main @ 31fab37`、以 **process environment** 提供 credential，显式运行一次
+  `python scripts/deepseek_q3_live_smoke.py --json --commit-sha 31fab37ad98e36befee92800efc2c214d51db793`，
+  执行后已从当前 PowerShell process 清除该 credential；**Agent 未执行该调用、未持有、未索取 credential**；
+- **观察范围**：该次真实执行同时覆盖 DeepSeek hosted API contract、network path、`/responses` envelope、
+  merged parser 与 merged validator —— 即 `§5.22` 的 11 条 PASS criteria 全部满足
+  （`criteria_unsatisfied = []`），`answer_kind` 属 closed registry 且与固定 synthetic relation 一致，
+  evidence 覆盖全部五个已登记 Q3 量，`uncertainty` 为空，human-decision contract 保持，synthetic input 未被修改；
+- **historical records 不被回写**：`§5.21` 的 “真实 provider 的 envelope 语义一致性**未**经 live API 验证”
+  与 `§5.22` 的 “`LIVE_SMOKE_NOT_RUN` ／ 真实 hosted 调用未执行” 都是**各自时点的 historical records**，
+  保持原文；二者的 **current state** 由本记录表达为
+  `real hosted integration contract observed successfully once`；
+- **data boundary**：唯一 payload 是固定 **SIMULATED** Q3 projection（五个已登记 Q3 量、fake plant ／ material
+  identity、无 package ／ run ／ raw evidence）；`real enterprise ／ customer data = NONE`；
+- **single observation**：n = 1。本记录**不**构成可重复的 quality gate，**不**证明 provider ／ model 输出质量、
+  稳定性、延迟或成本，**不**改变任何 deterministic rule、contract、ADR 或 `§7.1` 边界。
+
+**Evidence boundary（本记录只登记 sanitized evidence）：** 未登记 API key、`Authorization` header、raw provider
+response body、prompt ／ raw transport dump、本机 username ／ path、PowerShell history、secret environment
+内容；screenshot 本身**不**进入仓库；credential 仅以 “无泄漏观察结果” 的形式被登记。
+
+**本记录明确未声称：** AI Eval passed ／ ready、provider quality validated、model quality validated、
+business accepted、production ready、`POC validated` 或 `POC success`；也未实现 Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6、
+Draft generation、HITL、persistence、Web ／ API、Agent Framework ／ Tool Protocol ／ RAG、automatic
+scheduled smoke 或 CI 中的 hosted 调用。
 
 ---
 
