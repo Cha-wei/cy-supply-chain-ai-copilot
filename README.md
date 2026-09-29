@@ -41,10 +41,11 @@ Manual live smoke（opt-in）     = IMPLEMENTED / PASS once（§5.22 ／ §5.23�
                                   tooling 已实现；real hosted smoke 于 main @ 31fab37 真实执行
                                   一次 = LIVE_SMOKE_PASS；单次观察（n = 1），非 AI Eval、
                                   非 provider ／ model quality validation）
-Q3 full-composition observation = TOOLING IMPLEMENTED / OBSERVATION NOT RUN（§9.3，Issue #194；
+Q3 full-composition observation = TOOLING IMPLEMENTED / OBSERVED ONCE（§9.3，Issue #194 ／ #196；
   （opt-in operator tooling）      manual opt-in；固定 SIMULATED fixture；由 explain_q3(...) 驱动的
-                                  完整 composition；sanitized record；real observation 仍 = 0，
-                                  不构成 AI behavior evidence，非 AI Eval verdict）
+                                  完整 composition；real full-composition hosted observation 于
+                                  main @ a28da0b 真实执行一次 = observed once（n = 1）；
+                                  per-observation，无 AI Eval verdict、无 aggregate quality 结论）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：
@@ -231,8 +232,13 @@ python scripts/q3_full_composition_observation.py --json --commit-sha <merged-ma
   finding**；
 - missing credential ／ non-`COMPLETE` projection ⇒ **零 egress**；报告不含 raw body ／ header ／ credential ／
   机器路径；**不**新增 PASS ／ FAIL 或任何 AI Eval verdict token；
-- **real full-composition hosted observation 仍 = 0 ／ `NOT RUN`**：tooling 的存在不等同于 observation，
-  真实执行需 Human opt-in，并由独立 validation-record unit 登记。
+- **real full-composition hosted observation = observed once（n = 1）**：Human 已在
+  `main @ a28da0b55e5956d858463ed3a14b1e68673e5388` 上以 process environment credential 显式真实执行一次
+  （tool exit code `0`；执行后 credential 已立即清除），sanitized record 见 `§9.3` 的 Issue #196 follow-up；
+- **该记录只支持 per-observation 事实**：本 tooling 不产生 overall AI Eval verdict，也不支持 provider ／ model
+  quality、accuracy、reliability、stability、benchmark、production readiness、business acceptance、
+  `POC validated` 或 `POC success`；无论累计多少 observation，仅依据 per-observation contract 都**不得**推出
+  quality 结论（aggregate claim 须经未来独立 design）。`AI Eval` overall 仍 `DESIGN PENDING`。
 
 **CI 状态（必须准确表述）：**
 
@@ -265,6 +271,16 @@ python scripts/q3_full_composition_observation.py --json --commit-sha <merged-ma
   一次（`request_count = 1`、HTTP 200、envelope parser ／ selection parsing ／ validator 均 PASS、
   五个 Q3 量齐备、`uncertainty` 为空、无 credential 泄漏观察）；单次观察（n = 1），
   **不**执行于 CI，**不**构成 AI Eval 或 provider ／ model quality validation；
+- **live（Human-provided，第一次 full-composition hosted observation，`§9.3` ／ Issue #196）**：
+  `main @ a28da0b55e5956d858463ed3a14b1e68673e5388` 上真实执行一次
+  `scripts/q3_full_composition_observation.py`（tool exit code `0`；credential 仅来自 process environment，
+  执行后立即清除）= **observed once（n = 1）**：`request_count = 1`、HTTP 200、真实 hosted response 形成
+  checkable structured selection（`MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE`，五个 registered facts 齐备，
+  `uncertainty` 空，`human_decision_required` boolean true，无多余键）、经 merged parser ／ validator 被接受、
+  由完整 `explain_q3(...)` composition 产出 `EXPLAINED`、deterministic recommendation 未变、无 mismatch
+  finding、`credential leakage not observed in the sanitized tooling output`。该记录**只**支持该次
+  per-observation 事实：**不**是 AI Eval verdict（无 PASS ／ FAIL），**不**构成 provider ／ model quality、
+  accuracy、stability、production readiness 或 business acceptance 证据，也**不**支持任何 aggregate 结论；
 - **remote**：`main` push CI 在 **Python 3.11 与 3.12** 上运行同一 deterministic SIMULATED
   套件并通过，另有 Foundation checks 与 thin CLI 端到端检查。
 

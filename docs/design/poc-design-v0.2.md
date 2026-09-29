@@ -7820,6 +7820,62 @@ Human 执行真实 observation 时**必须**提供**实际执行的** merged-mai
 review 对 GitHub authority 核验**。第一次真实 observation 仍需 Human 在 merged main 上 opt-in 执行，并由
 **独立** docs-only validation-record unit 登记（绑定实际执行时的 merged-main commit）。
 
+**Validation ／ current-state follow-up（Issue #196，第一次 real full-composition hosted observation）：**
+
+**real full-composition hosted observation = observed once（n = 1）。** Human 于
+`main @ a28da0b55e5956d858463ed3a14b1e68673e5388`（= 执行时的 current merged main；GitHub 核验该 commit 为该
+main tip，`compare(a28da0b...main) = identical`）以 **process environment only** 提供 credential、显式执行一次
+`python scripts/q3_full_composition_observation.py --json --commit-sha a28da0b…`（tool exit code `0`）；执行后该
+credential 已**立即清除**。该次执行构成**一次** Q3 **AI behavior observation**：real hosted provider response ＋
+checkable structured selection ＋ parser ／ validator ＋ 完整 `explain_q3(...)` composition ＋ final
+`ExplanationResult` 全部被实际执行。
+
+```text
+observation timestamp    : 2026-09-29T14:25:37+00:00
+provider / model         : deepseek / deepseek-flash
+endpoint                 : https://api.deepseek.com/responses
+execution mode           : hosted
+SIMULATED grain          : plant_id SIM-P1 / material_code SIM-M2 / RecommendationNeedDate 2026-10-20
+projection completeness  : COMPLETE
+quantities               : ShortageQty 30 / BasePurchaseNeed 30 / ApplicableMOQ 100 /
+                           MOQAdjustmentQty 70 / RecommendedPurchaseQty 100
+provider invoked         : true        request count : 1
+provider response        : true        HTTP          : 200
+structured selection     : true（answer_kind MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE；
+                           evidence = 五个 registered facts；evidence_unknown_name_count 0；
+                           extra_key_count 0；uncertainty_entry_count 0；
+                           human_decision_required boolean true）
+mechanism disposition    : accepted by the merged validator mechanism
+final runtime outcome    : EXPLAINED
+recommendation unchanged : true        mismatch findings : none
+credential observation   : credential leakage not observed in the sanitized tooling output
+```
+
+**Canonical criterion record（oracle 为 canonical authority；validator 仅为 mechanism）：**
+
+| Criterion | Canonical authority | Result |
+| --- | --- | --- |
+| evidence fidelity ／ Q3 role separation | `§5.3` Q3；`§2.5.9`；`§5.6` | `not expressible under the selection contract`（provider selection 不携带 quantity value ／ role，二者由 runtime 组装） |
+| unsupported fact | `§5.7`；`§5.5` | `not violated in this observation` |
+| deterministic ／ LLM boundary | `§5.12`；`§2.5.8` | `not expressible under the selection contract` |
+| human-decision boundary | `§5.5` | `not violated in this observation`（`human_decision_required = boolean true`） |
+| required evidence coverage | `§5.3` Q3；`§2.5.8` | `not violated in this observation`（五个 required registered facts 齐备） |
+| relation correctness | `§2.5.5` ／ `§2.5.8` ／ `§2.5.9` | `not violated in this observation`（`MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE` 与 deterministic relation 一致：缺口 30 → MOQ 100 → 建议 100 → adjustment 70） |
+
+**本记录只登记 n = 1 的 per-observation 事实：** **不**产生任何 overall AI Eval verdict（无 `PASS` ／ `FAIL`），
+**不**声称 provider quality ／ model quality ／ accuracy ／ reliability ／ stability ／ benchmark passed ／
+production ready ／ business accepted ／ `POC validated` ／ `POC success`；无论累计多少 observation，仅依据本
+per-observation contract **都不得**推出 quality 结论（aggregate quality claim 须经未来**独立** design）。
+`AI Eval` overall **仍 = `DESIGN PENDING`**；Q3 per-observation AI Eval contract ／ evidence boundary **仍 =
+`DESIGN RESOLVED`（scoped to Q3 concern only）**。
+
+**Evidence boundary（本记录只登记 sanitized evidence）：** 未登记 API key、`Authorization` header、raw request ／
+response body、raw provider envelope、environment dump、本机路径、shell history、screenshot 或 arbitrary provider
+prose；credential 仅以「**process environment only**，执行后**立即清除**」记录，并沿用 observation-level 措辞
+`credential leakage not observed in the sanitized tooling output` —— **不**声称平台级绝对无泄漏。
+`§9.3` contract items 1 ～ 13、`§9.4`、`ADR-002`、`§5.20` ～ `§5.23` 的历史记录（含 Issue #194 时点的
+`0 ／ NOT RUN`）均**未修改**，historical time-point 事实保持原文。
+
 #### 9.4 HITL / business acceptance — `DESIGN PENDING` ／ `JIT-BLOCKED`
 
 **为何仍 `DESIGN PENDING`：** 本层的 evidence 对象（Human `Review` ／ `Modify` ／ `Approve` ／
