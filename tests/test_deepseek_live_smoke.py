@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ast
 import contextlib
+import dataclasses
 import importlib.util
 import io
 import json
@@ -126,11 +127,11 @@ class DeepSeekLiveSmokeTests(SupplierRiskInputTestCase):
         self, transport: StubTransport | None = None, *, environ: object = None, **kwargs: Any
     ):
         environment = {DEEPSEEK_API_KEY_ENV: CREDENTIAL_SENTINEL} if environ is None else environ
+        kwargs.setdefault("timestamp", FIXED_TIMESTAMP)
+        kwargs.setdefault("commit_sha", FIXED_SHA)
         return smoke.run_live_smoke(
             environ=environment,
             transport=transport if transport is not None else StubTransport(),
-            timestamp=FIXED_TIMESTAMP,
-            commit_sha=FIXED_SHA,
             **kwargs,
         )
 
@@ -147,6 +148,11 @@ class DeepSeekLiveSmokeTests(SupplierRiskInputTestCase):
     def assert_no_canary(self, text: str) -> None:
         for canary in CANARIES:
             self.assertNotIn(canary, text)
+
+    def assert_not_recorded(self, report: Any, value: str) -> None:
+        """The value is not one of the report's own strings (exact, so a date prefix is fine)."""
+
+        self.assertNotIn(value, smoke._report_strings(report.to_dict()))
 
     def shape(self, value: object) -> object:
         if isinstance(value, dict):
@@ -418,15 +424,23 @@ class DeepSeekLiveSmokeTests(SupplierRiskInputTestCase):
         with mock.patch.object(smoke, "NOTE_PASS", EXCEPTION_CANARY):
             report = self.report(StubTransport())
             unsatisfied = report.criteria_unsatisfied
-            validated = report.validator_accepted
 
         self.assertEqual(report.status, smoke.STATUS_FAIL)
         self.assertEqual(report.failure_category, smoke.CATEGORY_UNSANITIZED_REPORT)
-        self.assertEqual(unsatisfied, ("credential-not-leaked",))
+        self.assertEqual(len(unsatisfied), len(smoke.PASS_CRITERIA))
         self.assertEqual(report.notes, (smoke.NOTE_UNSANITIZED_REPORT,))
-        # The run is withheld and the report that is actually surfaced is itself clean: the
-        # foreign string (a stand-in for a credential, header or provider body) never appears.
-        self.assertTrue(validated)
+        # The fallback is rebuilt from fixed vocabulary only: it drops the dynamic provider
+        # (answer kind / evidence) and caller (commit / timestamp) strings entirely, so the
+        # surfaced report cannot keep carrying whatever the check just rejected.
+        self.assertIsNone(report.answer_kind)
+        self.assertEqual(report.evidence_names, ())
+        self.assertEqual(report.commit_sha, "UNKNOWN")
+        self.assertNotEqual(report.timestamp, FIXED_TIMESTAMP)
+        self.assertIsNotNone(smoke._safe_timestamp(report.timestamp))
+        self.assertFalse(report.selection_parsed)
+        self.assertFalse(report.validator_accepted)
+        self.assertEqual(report.criteria_satisfied, ())
+        # The surfaced report is itself clean.
         self.assertTrue(report.credential_not_leaked)
         self.assertEqual(smoke._unsanitized_strings(report), ())
         self.assert_no_canary(self.serialized(report))
@@ -521,6 +535,7 @@ class DeepSeekLiveSmokeTests(SupplierRiskInputTestCase):
             "json",
             "os",
             "pathlib",
+            "re",
             "snapshot_loader",
             "sys",
             "typing",
@@ -586,6 +601,200 @@ class DeepSeekLiveSmokeTests(SupplierRiskInputTestCase):
         self.assertIn("credential safe  : True", text)
         self.assertIn("requests         : 0", text)
         self.assert_no_canary(text)
+
+    # --- 21-28 provider- and caller-controlled strings cannot enter the report -------------
+
+    def test_smoke_21_an_unregistered_answer_kind_is_never_recorded(self) -> None:
+        unregistered = "LEAK-CANARY-UNREGISTERED-KIND"
+
+        transport = StubTransport(
+            response=self.ok({**GOOD_SELECTION, "answer_kind": unregistered})
+        )
+        report = self.report(transport)
+
+        self.assertEqual(report.status, smoke.STATUS_FAIL)
+        self.assertEqual(report.failure_category, smoke.CATEGORY_VALIDATOR_REJECTED)
+        self.assertEqual(report.request_count, 1)
+        self.assertIsNone(report.answer_kind)
+        self.assertTrue(report.credential_not_leaked)
+        self.assertEqual(smoke._unsanitized_strings(report), ())
+        self.assert_no_canary(self.serialized(report))
+        self.assertNotIn(unregistered, self.serialized(report))
+
+    def test_smoke_22_a_credential_like_answer_kind_is_never_recorded(self) -> None:
+        cases = (
+            ("credential-sentinel", CREDENTIAL_SENTINEL),
+            ("bearer-shaped", f"Bearer {CREDENTIAL_SENTINEL}"),
+            ("header-shaped", "Authorization: Bearer LEAK-CANARY"),
+            ("free-prose", "实际缺料 100，建议采购 100（LEAK-CANARY）。"),
+        )
+        for name, answer_kind in cases:
+            with self.subTest(case=name):
+                transport = StubTransport(
+                    response=self.ok({**GOOD_SELECTION, "answer_kind": answer_kind})
+                )
+
+                report = self.report(transport)
+
+                self.assertEqual(report.status, smoke.STATUS_FAIL)
+                self.assertEqual(report.failure_category, smoke.CATEGORY_VALIDATOR_REJECTED)
+                self.assertIsNone(report.answer_kind)
+                self.assertFalse(report.validator_accepted)
+                self.assertTrue(report.credential_not_leaked)
+                serialized = self.serialized(report)
+                self.assertNotIn(answer_kind, serialized)
+                self.assert_no_canary(serialized)
+
+    def test_smoke_23_invalid_commit_metadata_is_rejected_before_any_egress(self) -> None:
+        canary = f"{CREDENTIAL_SENTINEL}; rm -rf /"
+
+        with mock.patch.object(
+            smoke, "provider_from_environment", side_effect=AssertionError("no credential read")
+        ), mock.patch(
+            "urllib.request.urlopen", side_effect=AssertionError("no egress in this test")
+        ) as urlopen:
+            report = self.report(StubTransport(), commit_sha=canary)
+
+        urlopen.assert_not_called()
+        self.assertEqual(report.status, smoke.STATUS_FAIL)
+        self.assertEqual(report.failure_category, smoke.CATEGORY_INVALID_METADATA)
+        self.assertEqual(report.request_count, 0)
+        self.assertEqual(report.commit_sha, "UNKNOWN")
+        self.assertIsNotNone(smoke._safe_timestamp(report.timestamp))
+        self.assertTrue(report.credential_not_leaked)
+        self.assertEqual(report.notes, (smoke.NOTE_INVALID_METADATA,))
+        self.assert_not_recorded(report, canary)
+        self.assert_no_canary(self.serialized(report))
+
+    def test_smoke_24_invalid_commit_metadata_is_never_echoed_by_the_cli(self) -> None:
+        canary = f"{CREDENTIAL_SENTINEL}-NOT-A-SHA"
+        stdout, stderr = io.StringIO(), io.StringIO()
+
+        with mock.patch.dict(
+            os.environ, {DEEPSEEK_API_KEY_ENV: CREDENTIAL_SENTINEL}, clear=True
+        ), mock.patch(
+            "urllib.request.urlopen", side_effect=AssertionError("no egress in this test")
+        ) as urlopen, contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = smoke.main(["--json", "--commit-sha", canary])
+
+        urlopen.assert_not_called()
+        self.assertEqual(code, 1)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], smoke.STATUS_FAIL)
+        self.assertEqual(payload["failure_category"], smoke.CATEGORY_INVALID_METADATA)
+        self.assertEqual(payload["commit_sha"], "UNKNOWN")
+        self.assertEqual(payload["request_count"], 0)
+        self.assertEqual(set(payload), REPORT_KEYS)
+        self.assertNotIn(canary, stdout.getvalue() + stderr.getvalue())
+        self.assert_no_canary(stdout.getvalue() + stderr.getvalue())
+
+    def test_smoke_25_only_safe_commit_identifiers_are_recorded(self) -> None:
+        accepted = (
+            "UNKNOWN",
+            FIXED_SHA,
+            FIXED_SHA[:7],
+            FIXED_SHA[:4],
+            FIXED_SHA.upper(),
+        )
+        for value in accepted:
+            with self.subTest(case=f"accepted:{value}"):
+                report = self.report(StubTransport(), commit_sha=value)
+
+                self.assertEqual(report.status, smoke.STATUS_PASS)
+                self.assertEqual(report.commit_sha, value)
+
+        rejected = (
+            "",
+            "   ",
+            "xyz",
+            "abc",
+            FIXED_SHA + "0",
+            f"{FIXED_SHA} ",
+            "HEAD",
+            "refs/heads/main",
+            "../../etc/passwd",
+            CREDENTIAL_SENTINEL,
+            "0123456789abcdef" * 5,
+            "deadbeef; rm -rf /",
+        )
+        for value in rejected:
+            with self.subTest(case=f"rejected:{value!r}"):
+                report = self.report(StubTransport(), commit_sha=value)
+
+                self.assertEqual(report.status, smoke.STATUS_FAIL)
+                self.assertEqual(report.failure_category, smoke.CATEGORY_INVALID_METADATA)
+                self.assertEqual(report.commit_sha, "UNKNOWN")
+                self.assertEqual(report.request_count, 0)
+                self.assertEqual(report.criteria_satisfied, ())
+                self.assertTrue(report.credential_not_leaked)
+                self.assert_not_recorded(report, value)
+
+    def test_smoke_26_an_invalid_injected_timestamp_cannot_enter_the_report(self) -> None:
+        for value in (
+            EXCEPTION_CANARY,
+            "2026-09-29",
+            "2026-09-29T00:00:00",
+            "not-a-date",
+            "2026-13-45T99:99:99+00:00",
+            CREDENTIAL_SENTINEL,
+        ):
+            with self.subTest(case=value):
+                report = self.report(StubTransport(), timestamp=value)
+
+                self.assertEqual(report.status, smoke.STATUS_FAIL)
+                self.assertEqual(report.failure_category, smoke.CATEGORY_INVALID_METADATA)
+                self.assertEqual(report.request_count, 0)
+                self.assertEqual(report.notes, (smoke.NOTE_INVALID_METADATA,))
+                self.assertNotEqual(report.timestamp, value)
+                self.assertIsNotNone(smoke._safe_timestamp(report.timestamp))
+                self.assertTrue(report.credential_not_leaked)
+                self.assert_not_recorded(report, value)
+                self.assert_no_canary(self.serialized(report))
+
+        # A valid injected timestamp (the test surface) is still recorded verbatim.
+        recorded = self.report(StubTransport(), timestamp=FIXED_TIMESTAMP)
+        self.assertEqual(recorded.status, smoke.STATUS_PASS)
+        self.assertEqual(recorded.timestamp, FIXED_TIMESTAMP)
+
+    def test_smoke_27_the_cli_shape_check_strings_are_sanitized(self) -> None:
+        self.assertEqual(smoke._safe_commit_sha("UNKNOWN"), "UNKNOWN")
+        self.assertEqual(smoke._safe_commit_sha(FIXED_SHA), FIXED_SHA)
+        self.assertIsNone(smoke._safe_commit_sha(None))
+        self.assertIsNone(smoke._safe_commit_sha(12345))
+        self.assertIsNone(smoke._safe_commit_sha(EXCEPTION_CANARY))
+        self.assertEqual(smoke._safe_timestamp(FIXED_TIMESTAMP), FIXED_TIMESTAMP)
+        self.assertEqual(
+            smoke._safe_timestamp("2026-09-29T00:00:00.123456Z"),
+            "2026-09-29T00:00:00.123456Z",
+        )
+        self.assertIsNone(smoke._safe_timestamp(EXCEPTION_CANARY))
+        self.assertIsNone(smoke._safe_timestamp(None))
+        self.assertIsNotNone(smoke._safe_timestamp(smoke._generated_timestamp()))
+
+    def test_smoke_28_the_sanitizer_validates_dynamic_fields_instead_of_trusting_them(
+        self,
+    ) -> None:
+        clean = self.report(StubTransport())
+        self.assertTrue(clean.credential_not_leaked)
+        self.assertEqual(smoke._unsanitized_strings(clean), ())
+
+        # Every dynamic field the report carries is *validated*, never trusted into the allowlist:
+        # an unregistered answer kind, an unregistered evidence name and unsafe caller metadata
+        # are all detected even though the report "carries" them.
+        contaminated = dataclasses.replace(
+            clean,
+            answer_kind=EXCEPTION_CANARY,
+            evidence_names=(EXCEPTION_CANARY,),
+            commit_sha=EXCEPTION_CANARY,
+            timestamp=EXCEPTION_CANARY,
+        )
+        self.assertEqual(set(smoke._unsanitized_strings(contaminated)), {EXCEPTION_CANARY})
+
+        # A registered answer kind and a registered evidence name are still permitted.
+        registered = dataclasses.replace(
+            clean, answer_kind=smoke.EXPECTED_ANSWER_KIND, evidence_names=tuple(Q3_FACT_FIELDS)
+        )
+        self.assertEqual(smoke._unsanitized_strings(registered), ())
 
     def test_smoke_20_the_suite_path_never_reaches_the_network(self) -> None:
         with mock.patch(

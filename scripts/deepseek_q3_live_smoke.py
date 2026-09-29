@@ -39,9 +39,13 @@ Secret boundary (``§7.1``)
   this script deliberately has **no** ``--api-key`` flag, no ``.env`` loader and no file input,
   and it never reads the credential value itself;
 * the credential therefore cannot reach the projection, the prompt, stdout or the report, and
-  the report is credential-safe by construction: it carries only statuses, counts, identifiers
-  and registered vocabulary, and the run additionally verifies that no other string entered it
-  (:func:`_unsanitized_strings`).
+  the report is credential-safe by construction: it carries only statuses, counts, validated
+  identifiers and registered vocabulary, and the run additionally verifies that no other string
+  entered it (:func:`_unsanitized_strings` -- the report's own dynamic fields are re-validated
+  there instead of being trusted);
+* caller-supplied metadata is validated **before any egress** (a commit identifier must be
+  ``UNKNOWN`` or a hex Git SHA; a timestamp must be an ISO-8601 instant).  An invalid value is
+  rejected with fixed sanitized wording, is never recorded and is never echoed.
 
 Data boundary
 -------------
@@ -57,6 +61,7 @@ import argparse
 import copy
 import json
 import os
+import re
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -103,6 +108,7 @@ CATEGORY_UNEXPECTED_ENVELOPE: str = "UNEXPECTED_ENVELOPE"
 CATEGORY_VALIDATOR_REJECTED: str = "VALIDATOR_REJECTED"
 CATEGORY_CRITERION_FAILED: str = "CRITERION_FAILED"
 CATEGORY_UNSANITIZED_REPORT: str = "UNSANITIZED_REPORT"
+CATEGORY_INVALID_METADATA: str = "INVALID_METADATA"
 
 #: Fixed notes.  None of them interpolates provider, transport or exception text, so no foreign
 #: string can enter the report through a message (``§7.1`` ``S-8``).
@@ -126,7 +132,13 @@ NOTE_CRITERIA_UNSATISFIED: str = (
 )
 NOTE_UNSANITIZED_REPORT: str = (
     "the report carried a string outside the permitted status / identifier / registered "
-    "vocabulary, so it was withheld as a failure"
+    "vocabulary, so it was withheld as a failure and the report was rebuilt from fixed "
+    "vocabulary only"
+)
+NOTE_INVALID_METADATA: str = (
+    "the supplied run metadata is not a safe identifier (a commit identifier must be UNKNOWN or "
+    "a hex Git SHA, and a timestamp must be an ISO-8601 instant), so no request was sent and the "
+    "supplied value was neither recorded nor echoed"
 )
 NOTE_PASS: str = (
     "the real hosted integration contract worked once: one request, the merged parser accepted "
@@ -158,9 +170,9 @@ PASS_CRITERIA: tuple[str, ...] = (
     "credential-not-leaked",
 )
 
-#: Every literal string a sanitized report may contain besides the provider configuration, the
-#: caller's timestamp ／ commit SHA, the registered answer kinds, the registered fact names and
-#: the run's own evidence names.
+#: Identifiers a sanitized report may carry besides the fixed vocabulary: the registered answer
+#: kinds and the registered fact names.  Nothing else is permitted -- in particular the report's
+#: own dynamic fields are **validated** below instead of being trusted into the allowlist.
 _PERMITTED_REPORT_TEXTS: frozenset[str] = frozenset(
     {
         STATUS_PASS,
@@ -176,12 +188,14 @@ _PERMITTED_REPORT_TEXTS: frozenset[str] = frozenset(
         CATEGORY_VALIDATOR_REJECTED,
         CATEGORY_CRITERION_FAILED,
         CATEGORY_UNSANITIZED_REPORT,
+        CATEGORY_INVALID_METADATA,
         NOTE_CREDENTIAL_NOT_CONFIGURED,
         NOTE_PROVIDER_FAILED,
         NOTE_UNEXPECTED_FAILURE,
         NOTE_VALIDATOR_REJECTED,
         NOTE_CRITERIA_UNSATISFIED,
         NOTE_UNSANITIZED_REPORT,
+        NOTE_INVALID_METADATA,
         NOTE_PASS,
         DEEPSEEK_PROVIDER,
         DEEPSEEK_MODEL,
@@ -190,6 +204,48 @@ _PERMITTED_REPORT_TEXTS: frozenset[str] = frozenset(
         *PASS_CRITERIA,
     }
 )
+
+
+#: The explicit unknown-commit marker a report may carry.
+_UNKNOWN_COMMIT_SHA: str = "UNKNOWN"
+
+#: The only shape a caller-supplied commit identifier may have: a hex Git SHA (short or full).
+#: Anything else -- free text, a path, a command, a credential-like value -- is rejected **before
+#: any egress** and is neither recorded nor echoed.
+_COMMIT_SHA_PATTERN = re.compile(r"\A[0-9a-fA-F]{4,40}\Z")
+
+#: The only shape a caller-supplied timestamp may have: an ISO-8601 / RFC 3339 instant.
+_TIMESTAMP_PATTERN = re.compile(
+    r"\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})\Z"
+)
+
+
+def _safe_commit_sha(value: object) -> str | None:
+    """The value itself when it is a safe commit identifier, otherwise ``None``."""
+
+    if not isinstance(value, str):
+        return None
+    if value == _UNKNOWN_COMMIT_SHA:
+        return value
+    return value if _COMMIT_SHA_PATTERN.match(value) is not None else None
+
+
+def _safe_timestamp(value: object) -> str | None:
+    """The value itself when it is an ISO-8601 instant of the fixed shape, otherwise ``None``."""
+
+    if not isinstance(value, str) or _TIMESTAMP_PATTERN.match(value) is None:
+        return None
+    try:
+        datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return value
+
+
+def _generated_timestamp() -> str:
+    """The internally generated timestamp (always of the permitted shape)."""
+
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def synthetic_q3_projection() -> dict[str, object]:
@@ -250,10 +306,11 @@ class _CountingTransport:
 class SmokeReport:
     """Credential-safe smoke report: statuses, counts, identifiers and registered vocabulary.
 
-    Every field is either a fixed literal, a count, a boolean, a validator-produced registered
-    name or a caller-provided identifier.  No field is copied from a request, a response, a
-    header or an exception, so the report has no channel through which a credential could leave
-    the process; :func:`_unsanitized_strings` re-checks that property on every run.
+    Every field is either a fixed literal, a count, a boolean, a registered vocabulary member
+    (``answer_kind`` ／ evidence names, recorded only when they are registered) or a **validated**
+    caller identifier.  No field is copied from a request, a response, a header or an exception,
+    so the report has no channel through which a credential or any other foreign string could
+    leave the process; :func:`_unsanitized_strings` re-checks that property on every run.
     """
 
     status: str
@@ -348,17 +405,20 @@ def _report_strings(value: object) -> list[str]:
 def _unsanitized_strings(report: SmokeReport) -> tuple[str, ...]:
     """Report strings outside the permitted vocabulary -- normally none.
 
-    This is the run's own check that the report has no channel for foreign content: if a future
-    change interpolated a provider body, a header, an exception message or a credential into any
-    field, the offending string would show up here and the run would be withheld as a failure.
+    The permitted set is built from **fixed** vocabulary plus the registered answer kinds and the
+    registered fact names.  The report's own dynamic fields are re-**validated** here rather than
+    trusted into the allowlist: a commit identifier must be a safe identifier and a timestamp must
+    be an ISO-8601 instant of the fixed shape, and the answer kind ／ evidence names are only ever
+    recorded when they are registered vocabulary in the first place.  A provider-controlled or
+    caller-controlled arbitrary string therefore cannot be legitimised merely by the report
+    carrying it: it shows up here, and the run is withheld.
     """
 
     permitted = set(_PERMITTED_REPORT_TEXTS) | set(ANSWER_KIND_LITERALS) | set(Q3_FACT_FIELDS)
-    permitted.add(report.timestamp)
-    permitted.add(report.commit_sha)
-    if report.answer_kind is not None:
-        permitted.add(report.answer_kind)
-    permitted.update(report.evidence_names)
+    if _safe_commit_sha(report.commit_sha) is not None:
+        permitted.add(report.commit_sha)
+    if _safe_timestamp(report.timestamp) is not None:
+        permitted.add(report.timestamp)
     return tuple(text for text in _report_strings(report.to_dict()) if text not in permitted)
 
 
@@ -430,12 +490,34 @@ def run_live_smoke(
     (stub transport, fake environment) without any network access.  A real run uses the merged
     :class:`~snapshot_loader.deepseek_provider.StdlibHttpTransport` and the real process
     environment.  At most **one** request is ever sent.
+
+    Caller-supplied metadata is validated here **before any egress**, for the CLI and the
+    programmatic surface alike: an unsafe commit identifier or timestamp is rejected (no request,
+    no credential resolution, fixed sanitized wording, non-zero exit) instead of being trusted
+    into the report.
     """
 
-    stamp = timestamp or datetime.now(timezone.utc).isoformat(timespec="seconds")
+    generated_stamp = _generated_timestamp()
+    safe_sha = _safe_commit_sha(commit_sha)
+    safe_stamp = generated_stamp if timestamp is None else _safe_timestamp(timestamp)
     counting = _CountingTransport(transport if transport is not None else StdlibHttpTransport())
     projection = synthetic_q3_projection()
     before = copy.deepcopy(projection)
+
+    if safe_sha is None or safe_stamp is None:
+        # Rejected before any egress: the supplied value is neither recorded nor echoed, and no
+        # credential is resolved (the composition boundary is not reached at all).
+        return _report(
+            status=STATUS_FAIL,
+            failure_category=CATEGORY_INVALID_METADATA,
+            counting=counting,
+            timestamp=generated_stamp,
+            commit_sha=_UNKNOWN_COMMIT_SHA,
+            synthetic_input_unchanged=projection == before,
+            notes=(NOTE_INVALID_METADATA,),
+        )
+
+    stamp, commit_sha = safe_stamp, safe_sha
 
     # The credential is resolved only here, only from the process environment, and only by the
     # merged composition boundary; this script never reads the credential value (§7.1 S-2/S-3).
@@ -485,7 +567,10 @@ def run_live_smoke(
         )
 
     raw_answer_kind = selection.get("answer_kind")
-    answer_kind = raw_answer_kind if isinstance(raw_answer_kind, str) else None
+    # A provider-controlled string may enter the report only when it is a **registered** literal.
+    # An unregistered (or credential-like) value is recorded as "not reported" instead of being
+    # carried into the report, so the sanitized report can never echo provider-controlled text.
+    answer_kind = raw_answer_kind if raw_answer_kind in ANSWER_KIND_LITERALS else None
     response = validate_provider_response(selection, projection)
     if response is None:
         return _report(
@@ -554,14 +639,17 @@ def run_live_smoke(
         **common,
     )
     if not report.credential_not_leaked:
+        # The fallback is rebuilt from fixed vocabulary only: it drops the dynamic provider
+        # (``answer_kind`` ／ evidence names) and caller (commit ／ timestamp) strings entirely, so
+        # the surfaced report cannot keep carrying whatever the check just rejected.
         return _report(
             status=STATUS_FAIL,
             failure_category=CATEGORY_UNSANITIZED_REPORT,
-            criteria_satisfied=tuple(
-                name for name in criteria if name != "credential-not-leaked"
-            ),
+            counting=counting,
+            timestamp=generated_stamp,
+            commit_sha=_UNKNOWN_COMMIT_SHA,
+            synthetic_input_unchanged=projection == before,
             notes=(NOTE_UNSANITIZED_REPORT,),
-            **common,
         )
     return report
 
@@ -587,7 +675,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--commit-sha",
         default=os.environ.get("GITHUB_SHA", "UNKNOWN"),
-        help="commit SHA recorded in the sanitized evidence (defaults to GITHUB_SHA)",
+        help=(
+            "commit identifier recorded in the sanitized evidence: 'UNKNOWN' or a hex Git SHA "
+            "(short or full). Any other value is rejected before any request is sent, is never "
+            "recorded and is never echoed. Defaults to GITHUB_SHA."
+        ),
     )
     arguments = parser.parse_args(argv)
 
