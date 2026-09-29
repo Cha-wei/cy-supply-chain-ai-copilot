@@ -37,6 +37,9 @@ P0 AI Explanation（Q3 slice）   = IMPLEMENTED（provider-neutral runtime core�
 Hosted provider adapter         = IMPLEMENTED（DeepSeek；§5.21，Issue #184；implementation
                                   configuration，credential 只从 process environment 读取，
                                   tests ／ CI 一律使用 stub transport，无真实 secret）
+Manual live smoke（opt-in）     = IMPLEMENTED / NOT RUN（§5.22，Issue #186；本环境未配置
+                                  credential ⇒ LIVE_SMOKE_NOT_RUN，零 egress；真实 hosted
+                                  调用未执行，非 AI Eval、非 validation evidence）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：
@@ -86,6 +89,21 @@ DeepSeek 返回的只是 **selection**，最终仍由 existing `validate_provide
 JSON）一律 fail closed，无 retry、不切换 provider ／ credential。实现仅用 **standard library**
 （`urllib.request`），**无** SDK ／ 新增 dependency；HTTP transport 可注入，tests 与 CI **不**调用
 真实 DeepSeek、**不**持有真实 secret。Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6 与 AI Eval closure 仍未实现。
+
+**Q3 manual opt-in live smoke（`§5.22`，Issue #186）**：`scripts/deepseek_q3_live_smoke.py` 是
+operator 显式运行的 **thin** entry point —— 它复用已 merge 的 adapter 与已 merge 的
+`validate_provider_response(...)`，**不**复制 HTTP client ／ parser ／ validator，**不**新增 retry ／
+fallback。唯一 business payload 是固定 **SIMULATED** Q3 projection（五个已登记量、fake plant ／
+material、无 package ／ run ／ raw evidence）。import 该脚本**不**发起 network；credential 只由
+merged composition boundary 从 **process environment** 解析，该脚本**不**读取 credential value、**不**提供
+`--api-key` ／ 文件输入；report 只承载 status ／ count ／ identifier 与 registered vocabulary ——
+provider ／ caller 动态字符串必须先通过 narrow validation（registered `answer_kind`、安全 commit identifier、
+固定 shape 的 ISO-8601 timestamp），否则记 `None` 或在任何 egress 前以 `INVALID_METADATA` 拒绝且不回显；
+每次运行另做“无 permitted vocabulary 之外字符串”的自检，检出即以 `UNSANITIZED_REPORT` 失败并只以 fixed
+vocabulary 重建 report。结果词汇：`LIVE_SMOKE_PASS` ／ `LIVE_SMOKE_FAIL`（minimal category）／
+`LIVE_SMOKE_NOT_RUN`。**本次运行**：本环境未配置 credential ⇒ `LIVE_SMOKE_NOT_RUN`、`requests = 0`
+（零 egress），真实 hosted 调用**未**执行；automatic tests 覆盖 entry-point logic 但一律使用 stub ／
+patched transport；这不是 AI Eval，也不构成任何 validation ／ acceptance evidence。
 
 **明确未实现（Out of Scope）**：Web / API / service、Agent Framework / Tool protocol、HITL、
 RBAC / secrets、persistent Audit、database / persistent business state、real ERP / SRM Adapter /
@@ -152,6 +170,25 @@ python -m unittest discover -s tests -v
 python -m unittest tests.test_layer1_acceptance -v
 ```
 
+**Q3 manual opt-in live smoke（可选，仅 operator 显式运行；自动执行路径一律不产生真实 egress）：**
+
+```bash
+# 固定 SIMULATED 数据，最多 1 次 hosted 请求；credential 只从 process environment 解析
+python scripts/deepseek_q3_live_smoke.py          # 文本报告
+python scripts/deepseek_q3_live_smoke.py --json   # 机器可读（sanitized）报告
+```
+
+- credential 未配置时输出 `LIVE_SMOKE_NOT_RUN` 且 **零 egress**（exit code 0）；PASS 为 exit code 0，
+  FAIL 为 exit code 1；
+- 该脚本**没有** `--api-key` ／ 文件输入：credential 不可通过 command line 传入；
+- automatic tests **会覆盖** entry-point logic（含 CLI 路径），但一律使用 **stub ／ patched transport ＋
+  fake environment**：**不**使用真实 hosted credential、**不**执行真实 DeepSeek network call；CI **不**执行
+  real live smoke、**不**持有真实 secret。只有 operator 的显式 real run 才可能 egress；
+- `--commit-sha` 只接受 `UNKNOWN` 或 hex Git SHA（short ／ full）；timestamp 只接受固定 shape 的 ISO-8601
+  instant。不安全的值在任何请求前被拒绝（`INVALID_METADATA`）、不记录、不回显；
+- 报告**不**包含 credential、`Authorization` header、raw provider body 或 exception message（`§7.1`
+  S-8 ／ S-11，`§5.22`）。
+
 **CI 状态（必须准确表述）：**
 
 ```
@@ -167,14 +204,18 @@ python -m unittest tests.test_layer1_acceptance -v
   integration / acceptance tests**（`tests/test_first_tranche_pipeline.py` 等同套件内
   执行）—— 以及 Foundation checks 与 thin CLI entry-point 检查；
 - **不运行**：real-system / external integration（真实 ERP / SRM / source connectivity、
-  跨进程或服务级集成）、lint、AI Eval。
+  跨进程或服务级集成）、lint、AI Eval、**real live smoke**（`§5.22`：CI 不执行真实 hosted 调用，
+  也不持有 hosted credential；entry-point logic 由 offline stub ／ patched-transport tests 覆盖）。
 
 `§6` ～ `§9` 的 Required Gates 仍按各自 status boundary 处理。
 
 当前验证证据：
 
-- **local**：`964 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures，本机
+- **local**：`1033 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures，本机
   Python 3.14）；
+- **local（manual opt-in live smoke，`§5.22`）**：process environment 未配置 hosted credential
+  ⇒ `LIVE_SMOKE_NOT_RUN`（`CREDENTIAL_NOT_CONFIGURED`，`requests = 0`），即**零 egress**、
+  真实 hosted 调用**未执行**；
 - **remote**：`main` push CI 在 **Python 3.11 与 3.12** 上运行同一 deterministic SIMULATED
   套件并通过，另有 Foundation checks 与 thin CLI 端到端检查。
 

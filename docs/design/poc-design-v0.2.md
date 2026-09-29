@@ -7193,6 +7193,76 @@ patched transport）。
 
 ---
 
+#### 5.22 Q3 manual opt-in live smoke — implementation record（Issue #186）
+
+**Registration Status：`IMPLEMENTED`（manual opt-in smoke entry point only）**
+**Authority：** `§5.21`（hosted adapter record）＋ [ADR-002](../architecture/adr-002-p0-ai-explanation-minimum-runtime.md)
+＋ `§7.1` Secret Handling minimum contract（Issue #180）＋ `§9.1`（deterministic unit tests）。
+本记录**不**改变 `§9.3` 的 `DESIGN PENDING` ／ `JIT-BLOCKED`，也**不**构成任何 validation ／ acceptance evidence。
+
+```text
+fixed SIMULATED Q3 projection（唯一 business payload；fake identity，无 package ／ run ／ raw evidence）
+        ↓  merged composition boundary（§7.1 S-2／S-3：只从 process environment 解析 credential）
+        ↓  merged DeepSeek adapter（§5.21；one request，≤ 1 次）
+        ↓  merged envelope parser → merged validate_provider_response(...)（唯一 trust boundary）
+LIVE_SMOKE_PASS ／ LIVE_SMOKE_FAIL（sanitized）／ LIVE_SMOKE_NOT_RUN（credential 未配置）
+```
+
+**登记事实：**
+
+- entry point 是 **`scripts/deepseek_q3_live_smoke.py`**，**thin**：直接复用已 merge 的 adapter 与已 merge 的
+  `validate_provider_response(...)`；**不**复制 HTTP client ／ envelope parser ／ validator，**不**新增
+  retry ／ backoff ／ provider 切换 ／ fallback，**不**新增 dependency；
+- **opt-in boundary**：import 该模块**不**发起任何 network I/O；automatic tests **会覆盖** entry-point logic
+  （包括 CLI 路径），但一律使用 **stub ／ patched transport ＋ fake environment**，**不**使用真实 hosted
+  credential、**不**执行真实 DeepSeek network call；CI **不**执行 real live smoke、**不**持有真实 secret；
+  只有 operator 显式 real run 才可能产生 egress；
+- **data boundary**：唯一 business payload 是固定 **SIMULATED** projection —— 五个已登记 Q3 量、fake
+  plant ／ material identity，**无** package identity ／ content-view digest ／ Analysis Run identity ／
+  raw source evidence；其 key 集合与 exact payload 类型与 runtime `build_q3_projection(...)` 的 `COMPLETE`
+  projection 完全一致（tests 断言五量与该 SIMULATED fixture 的 runtime projection **逐值相同**，仅 identity
+  不同）；
+- **secret boundary**：credential 只由 merged composition boundary 从 **process environment** 解析；entry
+  point **不**读取 credential value，**不**提供 `--api-key` ／ `.env` ／ file 输入，**不**构造 header；
+- **report boundary**：sanitized report 只承载 status ／ count ／ boolean ／ identifier 与 **registered
+  vocabulary**；**provider ／ caller 提供的动态字符串必须先通过 narrow validation 才能进入 report**：
+  `answer_kind` 只有属 closed registry 时才记录（否则记为 `None`，provider-controlled 任意字符串**不**进入
+  report），commit identifier 必须为 `UNKNOWN` 或 hex Git SHA、timestamp 必须为固定 shape 的 ISO-8601 instant
+  （否则在任何 egress 之前以 `INVALID_METADATA` 拒绝，**不**记录、**不**回显原始输入、**不**解析 credential）；
+  sanitizer **不**把 report 自身的动态字段直接加入 allowlist，而是**重新校验**它们；一旦检出 permitted
+  vocabulary 之外的字符串即 `LIVE_SMOKE_FAIL`（`UNSANITIZED_REPORT`），且该 fallback report **只**由 fixed
+  vocabulary 重建（丢弃 provider ／ caller 动态字符串）；raw provider body ／ `Authorization` header ／
+  exception message ／ credential 一律不进入 report ／ stdout ／ log；
+- **status vocabulary**：`LIVE_SMOKE_PASS` ／ `LIVE_SMOKE_FAIL` ／ `LIVE_SMOKE_NOT_RUN`（exit code：PASS ／
+  NOT_RUN = 0，FAIL = 1）。failure category 是固定 minimal 集：`CREDENTIAL_NOT_CONFIGURED` ／
+  `INVALID_METADATA` ／ `TRANSPORT_FAILURE` ／ `CREDENTIAL_REJECTED`（401 ／ 403）／ `RATE_LIMITED`（429）／
+  `PROVIDER_SERVER_ERROR`（≥ 500）／ `UNEXPECTED_HTTP_STATUS` ／ `UNEXPECTED_ENVELOPE` ／
+  `VALIDATOR_REJECTED` ／ `CRITERION_FAILED` ／ `UNSANITIZED_REPORT`；
+- **PASS 需同时满足**：恰好 1 次 hosted request；HTTP success；真实 envelope 被 existing parser 接受；
+  selection 可解析；`validate_provider_response(...)` 接受；`answer_kind` 与固定 synthetic relation 一致；
+  evidence 覆盖全部五个 Q3 量；`uncertainty` 为空；human-decision contract 保持；synthetic input 未被修改；
+  report 未携带 permitted vocabulary 之外的字符串；
+- **fail-closed 语义**：任何未满足项一律记为 `LIVE_SMOKE_FAIL` ＋ minimal category，**不**伪装为 PASS，**不**回退
+  到旧回答，**不**重试，**不**切换 provider ／ credential；
+- 实现仅使用 **Python standard library**；tests 全部离线（stub transport ＋ fake environment），且 pinned
+  entry point 的 import boundary（不 import HTTP client ／ SDK ／ subprocess）。
+
+**本次实际执行记录（Issue #186 workspace）：**
+
+- process environment **未**配置 hosted credential ⇒ 实际运行结果为 `LIVE_SMOKE_NOT_RUN`
+  （`CREDENTIAL_NOT_CONFIGURED`，`requests = 0`，即**零 egress**）；因此 **真实 hosted 调用未执行**，
+  live 结果**未**验证，`§5.21` 的 “envelope 语义一致性未经 live API 验证” 状态**不变**；
+- 未请求、未猜测、未创建、未写入任何 credential；CI 与全部 tests **未**调用 DeepSeek；
+- 离线证据：`python -m unittest discover -s tests` → **1033 tests OK**（2 个 pre-existing skips）。
+
+**本记录未实现 ／ 未声称（out of scope）：** 未声称 AI Eval ready ／ passed、provider quality validated、
+business accepted、live API 已验证、`POC validated` 或 `POC success`；未实现 Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6、
+Draft generation、HITL、persistence、Web ／ API、Agent Framework ／ Tool Protocol ／ RAG、automatic
+scheduled smoke ／ CI 中的 hosted 调用；真实 live run 仍需 operator 在**自己的**环境自行配置 credential
+（属 Human 环境决策，本记录不代为执行）。
+
+---
+
 ## 6. HITL Workflow
 
 > 本章节只建立未来需要设计的内容。**不得设计具体状态机。**

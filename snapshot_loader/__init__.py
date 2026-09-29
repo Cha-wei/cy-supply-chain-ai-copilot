@@ -27,8 +27,10 @@ Deterministic tranches delivered here:
       from the projection, plus a deterministic fail-closed path.  Because the provider
       supplies no prose, a mutated quantity, a swapped role, an unsupported business reason
       and an invented approval are not expressible.  The provider is injected as a plain
-      protocol; this package performs no network call, reads no credential or environment
-      secret and selects no provider, model, framework or tool protocol.
+      protocol; the Q3 runtime core itself performs no network call, reads no credential or
+      environment secret and selects no provider, model or framework.  The opt-in hosted
+      adapter of §5.21 is the package's only network ／ credential boundary, and it is reached
+      only when a caller explicitly resolves it (:func:`provider_from_environment`).
 
 Canonical authority:
 
@@ -39,7 +41,8 @@ Canonical authority:
 * ``docs/design/poc-design-v0.2.md`` §2.1 -- §2.7 (business rules) and §10.1 B ／ C
   (first-tranche module responsibilities and acceptance boundary)
 * ``docs/design/poc-design-v0.2.md`` §5.3 (Q3) ／ §5.5 (response meanings) ／ §5.6 -- §5.12
-  (explanation boundaries) and §5.20 (Q3 runtime implementation record), plus §7.1
+  (explanation boundaries), §5.20 (Q3 runtime implementation record), §5.21 (hosted
+  provider adapter record) and §5.22 (manual opt-in live smoke record), plus §7.1
   (Secret Handling minimum contract)
 * ``docs/architecture/adr-001-deterministic-core.md`` (minimum architecture: the thin CLI
   calls this application orchestration; the core never calls back into the CLI)
@@ -57,11 +60,12 @@ Scope boundary (deliberately narrow):
   P0 AI Explanation **Q3** runtime core (:func:`explain_q3` / ``build_q3_projection``):
   a read-only projection of registered quantities plus an injected provider seam and a
   deterministic fail-closed path.
-* **out of scope** -- Web ／ API ／ service, a real hosted LLM provider adapter (network,
-  provider SDK, provider ／ model selection, environment credential reader), Agent
-  Framework ／ Tool protocol, HITL, RBAC ／ secrets, persistent Audit, database ／ persistent
-  business state, real ERP ／ SRM Adapter, production write-back, P1, and every §6 -- §9
-  just-in-time gate.
+* **out of scope** -- Web ／ API ／ service, an automatically reached hosted LLM provider
+  (the §5.21 adapter performs network egress only when a caller explicitly resolves and
+  calls it, and the §5.22 manual operator entry point lives outside this package),
+  Agent Framework ／ Tool protocol, HITL, RBAC ／ secrets, persistent Audit,
+  database ／ persistent business state, real ERP ／ SRM Adapter, production write-back,
+  P1, and every §6 -- §9 just-in-time gate.
 
 The core is importable and directly testable and does not depend on the CLI
 (``POC Design v0.2`` §10.1 B; ADR-001).
