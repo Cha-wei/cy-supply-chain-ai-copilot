@@ -7812,8 +7812,10 @@ fallback ／ provider switch）＋ 由 **`explain_q3(...)`** 驱动的完整 com
 integration ／ safety evidence 与 AI behavior criteria（不新增任何 AI Eval result enum ／ verdict token）。
 **real full-composition hosted observation 仍 = 0 ／ `NOT RUN`** —— tooling 的存在**不**构成 observation，
 **不**构成 AI behavior evidence，也不改变 `AI Eval = DESIGN PENDING`（Q3 contract 仍 scoped `DESIGN RESOLVED`）；
-第一次真实 observation 仍需 Human 在 merged main 上 opt-in 执行，并由**独立** docs-only validation-record
-unit 登记（绑定实际执行时的 merged-main commit）。
+tooling 在任何 hosted egress 之前**要求精确 40 位 hex 的 merged-main commit identifier**（省略 ／ `UNKNOWN` ／
+短 SHA ／ 非法值一律零 egress、exit code `1`、不记录也不回显），因此 durable observation 必然绑定实际执行时的
+merged-main commit；第一次真实 observation 仍需 Human 在 merged main 上 opt-in 执行，并由**独立** docs-only
+validation-record unit 登记（绑定实际执行时的 merged-main commit）。
 
 #### 9.4 HITL / business acceptance — `DESIGN PENDING` ／ `JIT-BLOCKED`
 

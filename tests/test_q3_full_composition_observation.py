@@ -13,10 +13,13 @@ Human Decision HD-A ～ HD-D require:
 * the sanitized record carries no raw body, no header, no credential, no machine path and no
   unregistered provider content;
 * at most one hosted request is made, with no retry, no fallback and no provider switching;
-* a missing credential and a non-``COMPLETE`` projection both produce **zero egress**;
+* a missing credential and a non-``COMPLETE`` projection both produce **zero egress**, and a real
+  observation additionally requires the exact 40-hex merged-main commit identifier (an omitted,
+  ``UNKNOWN``, abbreviated or malformed identifier never opens an egress path);
 * canonical criterion mapping stays an oracle-based observation, with ``not determined`` /
   ``not expressible under the selection contract`` prose and mismatch findings instead of a second
-  validator.
+  validator -- a mechanism-shape deviation (an extra key, an unknown evidence name, an unregistered
+  answer kind) is never converted into a canonical business-semantics violation.
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -318,6 +322,24 @@ class Q3FullCompositionObservationTests(unittest.TestCase):
         self.assertGreaterEqual(record.selection["extra_key_count"], 1)
         self.assertGreaterEqual(record.selection["evidence_unknown_name_count"], 1)
         self.assertEqual(record.selection["evidence_names"], ["ShortageQty"])
+        # Unregistered content is a mechanism-shape deviation: it is recorded, but it is not proof
+        # of an unsupported business fact, and it never auto-escalates to the LLM boundary criterion.
+        self.assertEqual(
+            self.criterion(record, "unsupported fact")["result"], obs.NOTE_NOT_DETERMINED
+        )
+        self.assertEqual(
+            self.criterion(record, "deterministic / LLM boundary")["result"],
+            obs.NOTE_NOT_EXPRESSIBLE,
+        )
+        self.assertEqual(
+            self.criterion(record, "human-decision boundary")["result"], obs.NOTE_VIOLATED
+        )
+        self.assertEqual(
+            self.criterion(record, "required evidence coverage")["result"], obs.NOTE_VIOLATED
+        )
+        self.assertEqual(
+            self.criterion(record, "relation correctness")["result"], obs.NOTE_NOT_DETERMINED
+        )
         self.assertEqual(obs._unsanitized_strings(record), ())
         self.assert_no_sensitive(serialized)
 
@@ -398,23 +420,115 @@ class Q3FullCompositionObservationTests(unittest.TestCase):
 
     # --- 16-17 metadata validation and the thin-boundary guard -----------------------
 
-    def test_obs_16_invalid_metadata_is_zero_egress_and_never_echoed(self) -> None:
-        canary = f"{CREDENTIAL_SENTINEL}; rm -rf /"
-        transport = StubTransport()
+    def test_obs_16_a_real_observation_requires_the_exact_40_hex_commit(self) -> None:
+        # Omitted (the run_observation default), UNKNOWN, abbreviated and malformed identifiers must
+        # all fail closed with zero egress, exit 1, a sanitized record and no echo of the input.
+        cases = (
+            ("omitted", obs._UNKNOWN_COMMIT, False),
+            ("explicit-unknown", "UNKNOWN", False),
+            ("short-sha", FIXED_SHA[:7], False),
+            ("short-sha-4", FIXED_SHA[:4], False),
+            ("not-a-sha", "not a sha", False),
+            ("empty", "", False),
+            ("credential-shaped", f"{CREDENTIAL_SENTINEL}; rm -rf /", False),
+            ("exact-40-hex", FIXED_SHA, True),
+        )
+        for name, value, allowed in cases:
+            with self.subTest(case=name):
+                transport = StubTransport()
 
-        record, exit_code, transport = self.run_tool(transport, commit_sha=canary)
+                record, exit_code, transport = self.run_tool(transport, commit_sha=value)
 
-        self.assertEqual(exit_code, obs.EXIT_NO_TRUTHFUL_RECORD)
-        self.assertEqual(len(transport.requests), 0)
-        self.assertEqual(record.request_count, 0)
-        self.assertEqual(record.commit_under_test, "UNKNOWN")
-        serialized = self.serialized(record)
-        self.assertNotIn(canary, serialized)
-        self.assertNotIn(CREDENTIAL_SENTINEL, serialized)
-        self.assertTrue(obs._safe_commit(FIXED_SHA))
+                if allowed:
+                    self.assertEqual(exit_code, obs.EXIT_RECORD_PRODUCED)
+                    self.assertEqual(len(transport.requests), 1)
+                    self.assertEqual(record.commit_under_test, FIXED_SHA)
+                    self.assertTrue(record.provider_response_received)
+                else:
+                    self.assertEqual(exit_code, obs.EXIT_NO_TRUTHFUL_RECORD)
+                    self.assertEqual(len(transport.requests), 0)
+                    self.assertEqual(record.request_count, 0)
+                    self.assertFalse(record.provider_invoked)
+                    self.assertEqual(record.commit_under_test, "UNKNOWN")
+                    self.assertIn(obs.NOTE_COMMIT_REQUIRED, record.notes)
+                    self.assertEqual(
+                        record.observation_admissibility,
+                        obs.ADMISSIBILITY_NO_MODEL_OUTPUT,
+                    )
+                    serialized = self.serialized(record)
+                    # ``UNKNOWN`` is the sanitized placeholder this record legitimately carries; any
+                    # other rejected input must not appear anywhere.
+                    if value and value != obs._UNKNOWN_COMMIT:
+                        self.assertNotIn(value, serialized)
+                    self.assert_no_sensitive(serialized)
+                self.assertEqual(obs._unsanitized_strings(record), ())
+
+        # Shape helpers: the sanitizer shape and the egress gate are deliberately different.
         self.assertTrue(obs._safe_commit(FIXED_SHA[:7]))
         self.assertTrue(obs._safe_commit("UNKNOWN"))
         self.assertIsNone(obs._safe_commit("not a sha"))
+        self.assertEqual(obs._egress_commit(FIXED_SHA), FIXED_SHA)
+        self.assertIsNone(obs._egress_commit(FIXED_SHA[:7]))
+        self.assertIsNone(obs._egress_commit("UNKNOWN"))
+        self.assertIsNone(obs._egress_commit(FIXED_SHA.upper() + "0"))
+
+    def test_obs_18_the_cli_requires_the_commit_identifier(self) -> None:
+        for label, argv in (("omitted", ["--json"]), ("short", ["--json", "--commit-sha", FIXED_SHA[:7]])):
+            with self.subTest(case=label):
+                stdout, stderr = io.StringIO(), io.StringIO()
+                with mock.patch.dict(
+                    os.environ, CREDENTIAL_ENV, clear=True
+                ), mock.patch(
+                    "urllib.request.urlopen", side_effect=AssertionError("no egress in this test")
+                ) as urlopen, contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    exit_code = obs.main(argv)
+
+                urlopen.assert_not_called()
+                self.assertEqual(exit_code, obs.EXIT_NO_TRUTHFUL_RECORD)
+                payload = json.loads(stdout.getvalue())
+                self.assertEqual(payload["request_count"], 0)
+                self.assertEqual(payload["commit_under_test"], "UNKNOWN")
+                self.assertNotIn(FIXED_SHA[:7], stdout.getvalue() + stderr.getvalue())
+                self.assert_no_sensitive(stdout.getvalue() + stderr.getvalue())
+
+    def test_obs_19_extra_key_only_is_not_a_proven_canonical_violation(self) -> None:
+        # A mechanism-shape deviation alone must not be converted into a canonical violation just
+        # because the mechanism rejected it.
+        extra_key_only = {**GOOD_SELECTION, "reason": PROSE_CANARY}
+
+        record, exit_code, transport = self.run_tool(self.stub(extra_key_only))
+
+        self.assertEqual(exit_code, obs.EXIT_RECORD_PRODUCED)
+        self.assertEqual(len(transport.requests), 1)
+        self.assertEqual(record.final_runtime_outcome, "RESPONSE_UNACCEPTABLE")
+        self.assertEqual(record.mechanism_validator_disposition, obs.NOTE_MECHANISM_REJECTED)
+        # The deviation is recorded, but it proves no business semantics.
+        self.assertEqual(
+            self.criterion(record, "unsupported fact")["result"], obs.NOTE_NOT_DETERMINED
+        )
+        self.assertEqual(
+            self.criterion(record, "deterministic / LLM boundary")["result"],
+            obs.NOTE_NOT_EXPRESSIBLE,
+        )
+        self.assertEqual(
+            self.criterion(record, "evidence fidelity / Q3 role separation")["result"],
+            obs.NOTE_NOT_EXPRESSIBLE,
+        )
+        self.assertEqual(
+            self.criterion(record, "human-decision boundary")["result"], obs.NOTE_NOT_VIOLATED
+        )
+        self.assertEqual(
+            self.criterion(record, "required evidence coverage")["result"],
+            obs.NOTE_NOT_VIOLATED,
+        )
+        self.assertEqual(
+            self.criterion(record, "relation correctness")["result"], obs.NOTE_NOT_VIOLATED
+        )
+        # mechanism != canonical oracle: the disagreement is preserved as a mismatch finding.
+        self.assertTrue(record.mismatch_findings)
+        self.assertIn("mismatch finding", record.mismatch_findings[0])
+        self.assertNotIn(PROSE_CANARY, self.serialized(record))
+        self.assertEqual(obs._unsanitized_strings(record), ())
 
     def test_obs_17_entry_point_keeps_the_thin_boundary(self) -> None:
         source = SCRIPT_PATH.read_text(encoding="utf-8")

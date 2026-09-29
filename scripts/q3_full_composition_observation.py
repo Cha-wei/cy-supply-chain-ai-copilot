@@ -32,6 +32,11 @@ Opt-in and safety boundary
 * the credential is resolved **only** by the merged composition boundary
   (:func:`snapshot_loader.provider_from_environment`) from the **process environment**; this
   tooling never reads the credential value, has no ``--api-key`` flag and no credential file;
+* a real observation **requires the exact 40-hex merged-main commit identifier** (``HD-C``): an
+  omitted, ``UNKNOWN``, abbreviated or malformed ``--commit-sha`` never opens an egress path, is
+  never echoed and is never recorded, and the tooling reports a sanitized failure record with exit
+  code ``1``.  The tooling does not invoke git or any subprocess to verify repository membership;
+  the identifier is operator-supplied;
 * at most **one** hosted request is ever sent (no retry, no backoff, no provider switching, no
   fallback); a missing credential or a non-``COMPLETE`` projection results in **zero egress**;
 * the recording transport forwards the body in memory to the merged adapter and keeps **no**
@@ -57,12 +62,16 @@ Usage
 
 ::
 
-    python scripts/q3_full_composition_observation.py
+    python scripts/q3_full_composition_observation.py --commit-sha <merged-main-sha>
     python scripts/q3_full_composition_observation.py --json --commit-sha <merged-main-sha>
+
+``--commit-sha`` must be the **exact 40-hex** merged-main commit the observation is taken on;
+omitting it (or passing ``UNKNOWN``, a short SHA or anything malformed) produces a sanitized
+failure record with **zero egress** and exit code ``1``.
 
 Exit code ``0`` means the tooling completed and produced a truthful sanitized record (whether or
 not an AI behavior observation was formed); exit code ``1`` means the tooling could not produce a
-truthful record (invalid metadata, fixture not accepted, more than one request observed, or an
+truthful record (unsafe metadata, fixture not accepted, more than one request observed, or an
 unsanitized report).
 """
 
@@ -220,8 +229,15 @@ NOTE_MISMATCH: str = (
     "disagree; the canonical design is not modified to accommodate the implementation"
 )
 NOTE_COMMIT_PROVENANCE: str = (
-    "operator-supplied commit identifier; this tooling does not invoke git or any subprocess to "
-    "verify it"
+    "operator-supplied commit identifier; the tooling does not locally verify repository membership"
+)
+NOTE_COMMIT_REQUIRED: str = (
+    "a real hosted observation requires the exact 40-hex merged-main commit identifier, so no "
+    "request was sent; an omitted, unknown, abbreviated or malformed identifier never opens an "
+    "egress path and is never echoed or recorded"
+)
+NOTE_TIMESTAMP_INVALID: str = (
+    "the supplied observation timestamp is not an ISO-8601 instant, so nothing was sent"
 )
 
 #: The fixed SIMULATED identity boundary this record always states.
@@ -250,9 +266,12 @@ CRITERIA: tuple[tuple[str, str], ...] = (
     ("relation correctness", "§2.5.5；§2.5.8；§2.5.9"),
 )
 
-#: The only shapes an operator-supplied commit identifier may have.
+#: The only shapes an operator-supplied commit identifier may have, and the exact shape a **real
+#: hosted observation** requires (``HD-C``: the durable record must bind the executed merged-main
+#: commit).  The tooling never invokes git or any subprocess to verify repository membership.
 _UNKNOWN_COMMIT: str = "UNKNOWN"
 _COMMIT_PATTERN = re.compile(r"\A[0-9a-fA-F]{4,40}\Z")
+_FULL_COMMIT_PATTERN = re.compile(r"\A[0-9a-fA-F]{40}\Z")
 _TIMESTAMP_PATTERN = re.compile(
     r"\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})\Z"
 )
@@ -734,6 +753,13 @@ def canonical_criteria(
     expressible under the selection contract`` records that this provider contract cannot express
     the violation at all (the provider selects, the runtime assembles the wording); ``not
     determined`` records that the observation cannot decide it.
+
+    A mechanism-shape deviation (an extra key, an unknown evidence name, an unregistered answer
+    kind) is **not** by itself proof of an unsupported business fact or of an LLM deciding
+    deterministic business truth: this tooling deliberately keeps no arbitrary provider value, so
+    the business semantics of such content cannot be read back.  Those deviations are therefore
+    recorded as ``not determined`` on the unsupported-fact criterion, and the mechanism rejection
+    is recorded separately -- never converted into a canonical violation to justify the mechanism.
     """
 
     values = _projected_quantities(projection)
@@ -743,11 +769,23 @@ def canonical_criteria(
         if sanitized.answer_kind_registered
         else None
     )
-    unsupported = (
+    human_decision_ok = sanitized.human_decision_required == "boolean true"
+    unregistered_kind = (
+        sanitized.answer_kind != NOTE_ABSENT and not sanitized.answer_kind_registered
+    )
+    deviation = (
         sanitized.extra_key_count > 0
         or sanitized.evidence_unknown_name_count > 0
-        or (sanitized.answer_kind != NOTE_ABSENT and not sanitized.answer_kind_registered)
+        or not sanitized.evidence_is_list
+        or not sanitized.uncertainty_is_list
+        or sanitized.uncertainty_entry_count > 0
+        or unregistered_kind
+        or not human_decision_ok
     )
+    #: A canonical unsupported-business-fact assertion is provable only from retained evidence that
+    #: identifies the asserted business meaning.  This contract retains shape facts only, so the
+    #: condition is deliberately not derivable from a deviation alone.
+    unsupported_fact_provable = False
 
     records: list[dict[str, str]] = []
     for name, authority in CRITERIA:
@@ -761,24 +799,39 @@ def canonical_criteria(
                 "contract"
             )
         elif name == "unsupported fact":
-            result = NOTE_VIOLATED if unsupported else NOTE_NOT_VIOLATED
-            evidence = (
-                f"extra key count {sanitized.extra_key_count}; unknown evidence name count "
-                f"{sanitized.evidence_unknown_name_count}; answer_kind {sanitized.answer_kind}"
-            )
+            if unsupported_fact_provable:
+                result = NOTE_VIOLATED
+                evidence = "the sanitized observation proves a specific unsupported business assertion"
+            elif deviation:
+                result = NOTE_NOT_DETERMINED
+                evidence = (
+                    f"a mechanism-shape deviation was observed (extra key count "
+                    f"{sanitized.extra_key_count}; unknown evidence name count "
+                    f"{sanitized.evidence_unknown_name_count}; answer_kind "
+                    f"{sanitized.answer_kind}), but this record keeps no arbitrary provider value, "
+                    "so no specific unsupported business fact, guessed reason, model inference, "
+                    "approval claim or fabricated quantity/status can be proven from it"
+                )
+            else:
+                result = NOTE_NOT_VIOLATED
+                evidence = (
+                    "no deviation from the registered selection vocabulary was observed, so no "
+                    "unsupported business fact was observed to enter the explanation"
+                )
         elif name == "deterministic / LLM boundary":
-            if unsupported:
-                result, evidence = NOTE_VIOLATED, "the selection asserts content outside the registered selection vocabulary"
+            if unsupported_fact_provable:
+                result = NOTE_VIOLATED
+                evidence = "a proven unsupported business assertion would mean the LLM supplied a deterministic fact"
             else:
                 result = NOTE_NOT_EXPRESSIBLE
                 evidence = (
                     "no business quantity, status or relation is expressible in a selection; the "
                     "registered quantities come from the deterministic projection and are rendered "
-                    "by the runtime"
+                    "by the runtime, so an LLM-decided deterministic truth cannot be expressed here "
+                    "(a wrong registered relation is recorded under relation correctness instead)"
                 )
         elif name == "human-decision boundary":
-            violated = sanitized.human_decision_required != "boolean true"
-            result = NOTE_VIOLATED if violated else NOTE_NOT_VIOLATED
+            result = NOTE_VIOLATED if not human_decision_ok else NOTE_NOT_VIOLATED
             evidence = f"human_decision_required = {sanitized.human_decision_required}"
         elif name == "required evidence coverage":
             result = NOTE_VIOLATED if not coverage_complete else NOTE_NOT_VIOLATED
@@ -811,11 +864,21 @@ def canonical_criteria(
 
 
 def _safe_commit(value: object) -> str | None:
+    """The value when it is a well-shaped commit identifier (used by the report sanitizer)."""
+
     if not isinstance(value, str):
         return None
     if value == _UNKNOWN_COMMIT:
         return value
     return value if _COMMIT_PATTERN.match(value) is not None else None
+
+
+def _egress_commit(value: object) -> str | None:
+    """The value only when it is the exact 40-hex identifier a real observation requires."""
+
+    if not isinstance(value, str):
+        return None
+    return value if _FULL_COMMIT_PATTERN.match(value) is not None else None
 
 
 def _safe_timestamp(value: object) -> str | None:
@@ -981,6 +1044,8 @@ def _permitted_strings(record: ObservationRecord) -> set[str]:
             NOTE_NOT_VIOLATED,
             NOTE_VIOLATED,
             NOTE_COMMIT_PROVENANCE,
+            NOTE_COMMIT_REQUIRED,
+            NOTE_TIMESTAMP_INVALID,
             _UNKNOWN_COMMIT,
             DEEPSEEK_PROVIDER,
             DEEPSEEK_MODEL,
@@ -1044,9 +1109,11 @@ def run_observation(
     """
 
     generated = _generated_timestamp()
-    safe_commit = _safe_commit(commit_sha)
+    egress_commit = _egress_commit(commit_sha)
     safe_stamp = generated if timestamp is None else _safe_timestamp(timestamp)
-    if safe_commit is None or safe_stamp is None:
+    if egress_commit is None or safe_stamp is None:
+        # No egress path is opened: an omitted, unknown, abbreviated or malformed commit identifier
+        # never reaches the provider, is never echoed and is never recorded.
         record = ObservationRecord(
             commit_under_test=_UNKNOWN_COMMIT,
             commit_provenance=NOTE_COMMIT_PROVENANCE,
@@ -1070,7 +1137,11 @@ def run_observation(
             credential_leakage_observation=NOTE_CREDENTIAL_OBSERVATION,
             observation_admissibility=ADMISSIBILITY_NO_MODEL_OUTPUT,
             selection=None,
-            notes=("the supplied run metadata is not a safe identifier, so nothing was sent",),
+            notes=(
+                NOTE_COMMIT_REQUIRED
+                if egress_commit is None
+                else NOTE_TIMESTAMP_INVALID,
+            ),
         )
         return record, EXIT_NO_TRUTHFUL_RECORD
 
@@ -1083,7 +1154,7 @@ def run_observation(
 
         if pipeline is None:
             record = _no_egress_record(
-                safe_commit, safe_stamp, transport_observation,
+                egress_commit, safe_stamp, transport_observation,
                 notes=(NOTE_FIXTURE_NOT_ACCEPTED,), admissibility=ADMISSIBILITY_NO_MODEL_OUTPUT,
             )
             return record, EXIT_NO_TRUTHFUL_RECORD
@@ -1092,7 +1163,7 @@ def run_observation(
         recommendation = recommendations.for_family(PLANT_ID, MATERIAL_CODE)
         if recommendation is None:
             record = _no_egress_record(
-                safe_commit, safe_stamp, transport_observation,
+                egress_commit, safe_stamp, transport_observation,
                 notes=(NOTE_NO_RECOMMENDATION,), admissibility=ADMISSIBILITY_NO_MODEL_OUTPUT,
             )
             return record, EXIT_RECORD_PRODUCED
@@ -1107,7 +1178,7 @@ def run_observation(
             # Zero egress: the merged runtime would not call a provider for a non-COMPLETE
             # projection, and neither does this tooling.
             record = _no_egress_record(
-                safe_commit, safe_stamp, transport_observation,
+                egress_commit, safe_stamp, transport_observation,
                 notes=(NOTE_PROJECTION_INCOMPLETE,),
                 admissibility=ADMISSIBILITY_NO_MODEL_OUTPUT,
             )
@@ -1181,7 +1252,7 @@ def run_observation(
         notes = notes + (NOTE_MULTIPLE_REQUESTS,)
 
     record = ObservationRecord(
-        commit_under_test=safe_commit,
+        commit_under_test=egress_commit,
         commit_provenance=NOTE_COMMIT_PROVENANCE,
         observation_timestamp=safe_stamp,
         provider=DEEPSEEK_PROVIDER,
@@ -1310,8 +1381,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--commit-sha",
         default=_UNKNOWN_COMMIT,
         help=(
-            "commit identifier of the merged main the observation is taken on: 'UNKNOWN' or a hex "
-            "Git SHA. Any other value is rejected before any request is sent and is never echoed."
+            "the exact 40-hex merged-main commit the observation is taken on. This is REQUIRED for "
+            "a real observation: omitted, 'UNKNOWN', an abbreviated SHA or any malformed value "
+            "produces a sanitized failure record with zero egress and exit code 1, and is never "
+            "echoed. The tooling does not verify repository membership."
         ),
     )
     arguments = parser.parse_args(argv)

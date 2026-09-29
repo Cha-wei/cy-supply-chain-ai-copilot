@@ -187,9 +187,9 @@ python -m unittest tests.test_layer1_acceptance -v
 **Q3 manual opt-in live smoke（可选，仅 operator 显式运行；自动执行路径一律不产生真实 egress）：**
 
 ```bash
-# 固定 SIMULATED 数据，最多 1 次 hosted 请求；credential 只从 process environment 解析
-python scripts/deepseek_q3_live_smoke.py          # 文本报告
-python scripts/deepseek_q3_live_smoke.py --json   # 机器可读（sanitized）报告
+# 固定 SIMULATED 数据，最多 1 次 hosted 请求；credential 只从 process environment 解析。
+# 真实 hosted 执行必须带上所执行的 merged-main commit：
+python scripts/deepseek_q3_live_smoke.py --json --commit-sha <merged-main-sha>
 ```
 
 - credential 未配置时输出 `LIVE_SMOKE_NOT_RUN` 且 **零 egress**（exit code 0）；PASS 为 exit code 0，
@@ -206,17 +206,25 @@ python scripts/deepseek_q3_live_smoke.py --json   # 机器可读（sanitized）�
 **Q3 full-composition hosted observation（`§9.3`，Issue #194；可选，仅 operator 显式运行）：**
 
 ```bash
-# 固定 SIMULATED fixture；最多 1 次 hosted 请求；由 merged explain_q3(...) 驱动完整 composition
-python scripts/q3_full_composition_observation.py
+# 固定 SIMULATED fixture；最多 1 次 hosted 请求；由 merged explain_q3(...) 驱动完整 composition。
+# 真实 hosted 执行**必须**给出精确的 40 位 merged-main commit：
 python scripts/q3_full_composition_observation.py --json --commit-sha <merged-main-sha>
 ```
 
 - 与 live smoke 的区别：本 tooling 走 **deterministic pipeline → procurement recommendation → Q3 projection →
   hosted provider → parser → validator → 完整 `explain_q3(...)` composition**（`§9.3` 定义的 observation unit），
   而 `§5.23` 的 smoke 只直连 adapter ＋ validator；两者都**不**在 CI 执行；
+- **commit binding（HD-C）**：真实 observation **必须**绑定所执行的 merged-main commit —— `--commit-sha`
+  必须是**精确 40 位 hex**。省略参数、`UNKNOWN`、短 SHA 或任何非法值一律 **零 egress**、exit code `1`、
+  仅产出 sanitized failure record，且**不**记录／**不**回显该输入；tooling 不调用 git ／ subprocess 验证
+  repository membership（identifier 由 operator 提供）；
 - exit code `0` = 已产出 truthful sanitized record（无论该次是否形成 AI behavior observation）；
-  exit code `1` = 无法产出 truthful record（metadata 不安全 ／ fixture 未被接受 ／ 观察到多次请求 ／ record 未通过
-  sanitization）；
+  exit code `1` = 无法产出 truthful record（commit 未按要求绑定 ／ fixture 未被接受 ／ 观察到多次请求 ／
+  record 未通过 sanitization）；
+- canonical criterion mapping 只按**可观察证据**判定：mechanism-shape deviation（多余键 ／ 未登记 evidence
+  name ／ 未登记 `answer_kind`）**不**自动等同 business-semantics violation（记 `not determined` ／
+  `not expressible under the selection contract`），mechanism 与 canonical 判定不一致时保留 **mismatch
+  finding**；
 - missing credential ／ non-`COMPLETE` projection ⇒ **零 egress**；报告不含 raw body ／ header ／ credential ／
   机器路径；**不**新增 PASS ／ FAIL 或任何 AI Eval verdict token；
 - **real full-composition hosted observation 仍 = 0 ／ `NOT RUN`**：tooling 的存在不等同于 observation，
@@ -244,7 +252,7 @@ python scripts/q3_full_composition_observation.py --json --commit-sha <merged-ma
 
 当前验证证据：
 
-- **local**：`1050 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures，本机
+- **local**：`1052 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures，本机
   Python 3.14）；
 - **local（manual opt-in live smoke，无 credential 时）**：process environment 未配置 hosted credential
   ⇒ `LIVE_SMOKE_NOT_RUN`（`CREDENTIAL_NOT_CONFIGURED`，`requests = 0`），即**零 egress**、
