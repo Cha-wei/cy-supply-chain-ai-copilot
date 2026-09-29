@@ -24,7 +24,9 @@ Boundary summary:
 * the HTTP transport is an injectable seam, so tests never touch the network, and CI never
   holds a real secret;
 * one request produces one response: no tool calling, no web search, no MCP, no agent, no
-  multi-turn or persistent conversation state.
+  multi-turn or persistent conversation state.  The request asks for ``reasoning.effort =
+  "none"`` because a closed selection needs no thinking budget; that is implementation
+  configuration, not a canonical semantic.
 
 Standard library only (``urllib.request``); no SDK and no new dependency.
 """
@@ -36,7 +38,7 @@ import os
 import urllib.error
 import urllib.request
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from .explanation_seam import ANSWER_KIND_LITERALS, RESPONSE_KEYS
@@ -80,21 +82,31 @@ class ProviderUnavailable(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class HttpRequest:
-    """One HTTP request handed to a transport (frozen, so a stub can retain it safely)."""
+    """One HTTP request handed to a transport (frozen, so a stub can retain it safely).
+
+    ``headers`` and ``body`` are excluded from ``repr`` deliberately: the request carries the
+    credential in its ``Authorization`` header (``§7.1`` ``S-8``), so a diagnostic that prints
+    the object must never be able to expose it.  The attributes remain fully accessible for
+    the transport that has to send the request.
+    """
 
     method: str
     url: str
-    headers: tuple[tuple[str, str], ...]
-    body: bytes
+    headers: tuple[tuple[str, str], ...] = field(repr=False)
+    body: bytes = field(repr=False)
     timeout: float
 
 
 @dataclass(frozen=True, slots=True)
 class HttpResponse:
-    """One HTTP response: a status and a bounded body (HTTP errors are responses, not raises)."""
+    """One HTTP response: a status and a bounded body (HTTP errors are responses, not raises).
+
+    ``body`` is excluded from ``repr`` for the same reason: a provider error body may echo
+    request context, so diagnosis output must not surface it by accident.
+    """
 
     status: int
-    body: bytes
+    body: bytes = field(repr=False)
 
 
 class HttpTransport(Protocol):
@@ -141,15 +153,15 @@ def selection_json_schema() -> dict[str, object]:
     It mirrors the **existing** selection vocabulary -- it does not define a new contract:
     ``answer_kind`` is restricted to :data:`~snapshot_loader.explanation_seam.ANSWER_KIND_LITERALS`,
     ``evidence`` must list exactly the registered Q3 fact names, ``uncertainty`` must be empty
-    and ``human_decision_required`` must be ``true``.  The schema is a provider hint; the
-    authoritative validation stays with
+    and ``human_decision_required`` must be ``true``.  Only the fields the provider documents
+    for a ``json_schema`` format are sent (``type`` ／ ``name`` ／ ``schema``); the schema is a
+    provider hint and the authoritative validation stays with
     :func:`~snapshot_loader.explanation_seam.validate_provider_response`.
     """
 
     return {
         "type": "json_schema",
         "name": SELECTION_SCHEMA_NAME,
-        "strict": True,
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -177,25 +189,31 @@ def selection_json_schema() -> dict[str, object]:
 
 
 def _extract_output_text(envelope: Mapping[str, object]) -> str | None:
-    """The first structured output text of a Responses-style envelope, or ``None``."""
+    """The structured output text of the documented Responses shape, or ``None``.
+
+    Only ``output[] -> message -> content[] -> output_text`` is parsed.  Items of any other
+    type (for example a ``reasoning`` item preceding the message) contribute nothing, and
+    there is deliberately **no** convenience-field fallback, so an undocumented envelope fails
+    closed instead of being guessed at.
+    """
 
     output = envelope.get("output")
-    if isinstance(output, Sequence) and not isinstance(output, (str, bytes)):
-        for item in output:
-            if not isinstance(item, Mapping):
-                continue
-            content = item.get("content")
-            if not isinstance(content, Sequence) or isinstance(content, (str, bytes)):
-                continue
-            for part in content:
-                if (
-                    isinstance(part, Mapping)
-                    and part.get("type") == "output_text"
-                    and isinstance(part.get("text"), str)
-                ):
-                    return str(part["text"])
-    text = envelope.get("output_text")
-    return text if isinstance(text, str) else None
+    if not isinstance(output, Sequence) or isinstance(output, (str, bytes)):
+        return None
+    for item in output:
+        if not isinstance(item, Mapping) or item.get("type") != "message":
+            continue
+        content = item.get("content")
+        if not isinstance(content, Sequence) or isinstance(content, (str, bytes)):
+            continue
+        for part in content:
+            if (
+                isinstance(part, Mapping)
+                and part.get("type") == "output_text"
+                and isinstance(part.get("text"), str)
+            ):
+                return str(part["text"])
+    return None
 
 
 class DeepSeekProvider:
@@ -252,6 +270,7 @@ class DeepSeekProvider:
         return {
             "model": self._model,
             "instructions": INSTRUCTIONS,
+            "reasoning": {"effort": "none"},
             "input": [
                 {
                     "role": "user",
@@ -326,9 +345,11 @@ class DeepSeekProvider:
             )
         if isinstance(envelope.get("error"), Mapping):
             raise ProviderUnavailable("the hosted provider reported an error")
-        if envelope.get("status") in ("failed", "incomplete"):
+        if envelope.get("status") != "completed":
+            # The status is a hard gate: anything other than a completed response (including a
+            # missing status) fails closed rather than being parsed optimistically.
             raise ProviderUnavailable(
-                "the hosted provider reported an incomplete or failed response"
+                "the hosted provider did not report a completed response"
             )
         text = _extract_output_text(envelope)
         if text is None:

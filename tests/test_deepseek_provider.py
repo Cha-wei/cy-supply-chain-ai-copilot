@@ -40,35 +40,41 @@ from tests.test_supplier_risk_input import SupplierRiskInputTestCase
 CREDENTIAL_SENTINEL = "DEEPSEEK-SENTINEL-NOT-A-REAL-CREDENTIAL"
 
 #: Keys a request body may carry; anything else would mean extra egress content.
-REQUEST_KEYS = {"model", "instructions", "input", "text"}
+REQUEST_KEYS = {"model", "instructions", "input", "text", "reasoning"}
+
+#: The only fields the provider documents for a ``json_schema`` structured-output format.
+FORMAT_KEYS = {"type", "name", "schema"}
 
 
 def envelope(selection: object) -> bytes:
     """A Responses-style success envelope carrying ``selection`` as structured output."""
 
+    return envelope_from_output(
+        [
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [
+                    {"type": "output_text", "text": json.dumps(selection, ensure_ascii=False)}
+                ],
+            }
+        ]
+    )
+
+
+def envelope_from_output(output: object, *, status: object = "completed") -> bytes:
+    """An envelope with the documented top-level status and a caller-supplied ``output``."""
+
     return json.dumps(
-        {
-            "id": "SIMULATED-RESPONSE",
-            "model": adapter.DEEPSEEK_MODEL,
-            "status": "completed",
-            "output": [
-                {
-                    "type": "message",
-                    "role": "assistant",
-                    "content": [
-                        {"type": "output_text", "text": json.dumps(selection, ensure_ascii=False)}
-                    ],
-                }
-            ],
-        },
+        {"id": "SIMULATED-RESPONSE", "model": adapter.DEEPSEEK_MODEL, "status": status, "output": output},
         ensure_ascii=False,
     ).encode("utf-8")
 
 
 def envelope_with_text(text: str) -> bytes:
-    return json.dumps(
-        {"status": "completed", "output": [{"content": [{"type": "output_text", "text": text}]}]}
-    ).encode("utf-8")
+    return envelope_from_output(
+        [{"type": "message", "content": [{"type": "output_text", "text": text}]}]
+    )
 
 
 class StubTransport:
@@ -219,7 +225,10 @@ class DeepSeekAdapterTests(SupplierRiskInputTestCase):
         format_block = transport.body_json()["text"]["format"]
         self.assertEqual(format_block["type"], "json_schema")
         self.assertEqual(format_block["name"], adapter.SELECTION_SCHEMA_NAME)
-        self.assertTrue(format_block["strict"])
+        # Only the documented fields are sent: there is no undocumented `strict` flag, and the
+        # fidelity guarantee never rests on one (the validator stays the trust boundary).
+        self.assertEqual(set(format_block), FORMAT_KEYS)
+        self.assertNotIn("strict", format_block)
         schema = format_block["schema"]
         self.assertEqual(schema["type"], "object")
         self.assertFalse(schema["additionalProperties"])
@@ -465,6 +474,127 @@ class DeepSeekAdapterTests(SupplierRiskInputTestCase):
 
         self.assertEqual(recommendations.to_dict(), before_result)
         self.assertEqual(recommendation.to_dict(), before_recommendation)
+
+
+    # --- 18 documented envelope shape + status gate ----------------------------------
+
+    def test_d18_documented_envelope_shapes_and_status_gate(self) -> None:
+        recommendations, _built = self.recommendations_for("d18")
+        documented = [
+            {"type": "message", "content": [{"type": "output_text", "text": json.dumps(GOOD_SELECTION)}]}
+        ]
+
+        # Documented success shape: status=completed -> output[] -> message -> output_text.
+        transport = StubTransport(adapter.HttpResponse(200, envelope_from_output(documented)))
+        result = self.explain(recommendations, self.provider(transport))
+        self.assertEqual(result.outcome, OUTCOME_EXPLAINED)
+
+        # A reasoning item before the message item is skipped, not parsed, and stays a success.
+        reasoning_first = [
+            {"type": "reasoning", "summary": [{"type": "summary_text", "text": "thinking"}]},
+            *documented,
+        ]
+        transport = StubTransport(adapter.HttpResponse(200, envelope_from_output(reasoning_first)))
+        result = self.explain(recommendations, self.provider(transport))
+        self.assertEqual(result.outcome, OUTCOME_EXPLAINED)
+        assert result.response is not None
+        self.assertIn("ShortageQty = 30", result.response.evidence)
+
+        # Anything that is not a completed response fails closed, even with valid-looking output.
+        failing_envelopes: tuple[tuple[str, bytes], ...] = (
+            ("status-in-progress", envelope_from_output(documented, status="in_progress")),
+            ("status-missing", json.dumps({"output": documented}).encode("utf-8")),
+            ("status-null", envelope_from_output(documented, status=None)),
+            ("status-unknown", envelope_from_output(documented, status="succeeded")),
+            ("status-failed", envelope_from_output(documented, status="failed")),
+            ("status-incomplete", envelope_from_output(documented, status="incomplete")),
+            (
+                "top-level-output-text-only",
+                json.dumps(
+                    {
+                        "status": "completed",
+                        "output_text": json.dumps(GOOD_SELECTION),
+                    }
+                ).encode("utf-8"),
+            ),
+            (
+                "output-text-without-message-item",
+                envelope_from_output(
+                    [{"content": [{"type": "output_text", "text": json.dumps(GOOD_SELECTION)}]}]
+                ),
+            ),
+        )
+        for label, body in failing_envelopes:
+            with self.subTest(label=label):
+                transport = StubTransport(adapter.HttpResponse(200, body))
+                result = self.explain(recommendations, self.provider(transport))
+                self.assertEqual(result.outcome, OUTCOME_PROVIDER_UNAVAILABLE)
+                self.assertIsNone(result.response)
+                self.assertEqual(len(transport.requests), 1)
+
+    # --- 19 credential-safe request / response representation -------------------------
+
+    def test_d19_credential_safe_request_and_response_repr(self) -> None:
+        recommendations, _built = self.recommendations_for("d19")
+        transport = StubTransport()
+
+        self.explain(recommendations, self.provider(transport))
+
+        request = transport.requests[0]
+        response = adapter.HttpResponse(500, b'{"error":"provider echo with context"}')
+        self.assertIn("Bearer", dict(request.headers)["Authorization"])
+        for rendered in (repr(request), repr(response), str(request), f"{request!r}"):
+            self.assertNotIn(CREDENTIAL_SENTINEL, rendered)
+        self.assertNotIn("provider echo with context", repr(response))
+        self.assertNotIn(request.body.decode("utf-8"), repr(request))
+        self.assertIn("POST", repr(request))
+        self.assertIn("/responses", repr(request))
+        self.assertIn("500", repr(response))
+
+        # The transport can still read the credential header and the body it has to send.
+        self.assertEqual(transport.headers()["Authorization"], f"Bearer {CREDENTIAL_SENTINEL}")
+        self.assertIn(b'"answer_kind"'.decode("utf-8"), request.body.decode("utf-8").replace("\\", ""))
+        self.assertIsInstance(request.body, bytes)
+
+        # The stdlib transport still sends the Authorization header it is handed.
+        captured: dict[str, object] = {}
+
+        class _Capture:
+            status = 200
+            def read(self, size: int = -1) -> bytes:
+                return envelope(GOOD_SELECTION)
+            def __enter__(self) -> "_Capture":
+                return self
+            def __exit__(self, *exc: object) -> None:
+                return None
+
+        def fake_urlopen(http_request: object, timeout: float | None = None) -> "_Capture":
+            captured["headers"] = dict(http_request.headers)  # type: ignore[attr-defined]
+            captured["body"] = http_request.data  # type: ignore[attr-defined]
+            return _Capture()
+
+        with mock.patch.object(adapter.urllib.request, "urlopen", side_effect=fake_urlopen):
+            sent = adapter.StdlibHttpTransport().send(request)
+        self.assertEqual(sent.status, 200)
+        self.assertEqual(
+            captured["headers"]["Authorization"], f"Bearer {CREDENTIAL_SENTINEL}"
+        )
+        self.assertEqual(captured["body"], request.body)
+
+    # --- 20 reasoning setting is implementation configuration -------------------------
+
+    def test_d20_reasoning_setting_is_explicit(self) -> None:
+        recommendations, _built = self.recommendations_for("d20")
+        transport = StubTransport()
+
+        result = self.explain(recommendations, self.provider(transport))
+
+        self.assertEqual(result.outcome, OUTCOME_EXPLAINED)
+        body = transport.body_json()
+        self.assertEqual(body["reasoning"], {"effort": "none"})
+        self.assertEqual(set(body), REQUEST_KEYS)
+        # The provider-neutral seam is untouched: the projection is still the only data.
+        self.assertEqual(transport.projection_in_request()["question"], "Q3")
 
 
 if __name__ == "__main__":  # pragma: no cover - manual run entry point

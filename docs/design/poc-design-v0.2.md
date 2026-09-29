@@ -7166,12 +7166,21 @@ existing runtime-owned explanation artifact
   snapshot package ／ raw artifact；
 - provider 返回的**只有** selection；`validate_provider_response(...)` 仍是**唯一**的 business
   relation ／ evidence fidelity authority（adapter 不重新实现该校验）；
-- 失败边界（credential 缺失 ／ transport ／ timeout ／ 401 ／ 403 ／ 429 ／ 5xx ／ malformed envelope ／
-  invalid JSON）一律 **fail closed**：不自动切换 provider ／ credential、不使用旧回答、**不**实现
-  retry ／ backoff infrastructure、exception details 不进入 user-facing artifact；selection 语义不合法
-  由 existing validator 判为 `RESPONSE_UNACCEPTABLE`；
+- **structured output 只发送 provider 已登记的 format 字段**（`type` ／ `name` ／ `schema`）；**不**附带
+  未登记的 `strict` 标志，fidelity guarantee **不**依赖任何此类字段，只依赖 existing validator；
+- **raw envelope parsing 严格 fail-closed**：顶层 `status` 必须严格等于 `"completed"`（缺失 ／ 其它值
+  一律不可用），且只解析 documented shape
+  `output[] → message → content[] → output_text`（非 `message` item 如 `reasoning` 被跳过；**无**
+  top-level `output_text` fallback）；
+- **credential-safe representation**：`HttpRequest.headers` ／ `body` 与 `HttpResponse.body` **不**进入
+  `repr`，因此诊断输出不可能暴露 `Authorization` header 或 provider error body（`§7.1` S-8）；
+- 失败边界（credential 缺失 ／ transport ／ timeout ／ 401 ／ 403 ／ 429 ／ 5xx ／ 非 completed status ／
+  malformed envelope ／ invalid JSON）一律 **fail closed**：不自动切换 provider ／ credential、不使用旧回答、
+  **不**实现 retry ／ backoff infrastructure、exception details 不进入 user-facing artifact；selection 语义
+  不合法由 existing validator 判为 `RESPONSE_UNACCEPTABLE`；
 - one request → one response：**无** tool calling ／ Web search ／ MCP ／ Agent ／ multi-turn ／
-  persistent conversation state；
+  persistent conversation state；请求显式设置 `reasoning.effort = "none"`（closed selection 不需要
+  thinking budget），属 **implementation configuration**，不改变任何 canonical semantics；
 - 实现仅使用 **Python standard library**（`urllib.request`）；**无** SDK、**无**新增 dependency；
 - HTTP transport 为可注入 seam：tests 一律使用 stub transport，**不**调用真实 DeepSeek，CI **不**持有
   真实 secret。
