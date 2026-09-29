@@ -187,9 +187,9 @@ python -m unittest tests.test_layer1_acceptance -v
 **Q3 manual opt-in live smoke（可选，仅 operator 显式运行；自动执行路径一律不产生真实 egress）：**
 
 ```bash
-# 固定 SIMULATED 数据，最多 1 次 hosted 请求；credential 只从 process environment 解析。
-# 真实 hosted 执行必须带上所执行的 merged-main commit：
-python scripts/deepseek_q3_live_smoke.py --json --commit-sha <merged-main-sha>
+# 固定 SIMULATED 数据，最多 1 次 hosted 请求；credential 只从 process environment 解析
+python scripts/deepseek_q3_live_smoke.py          # 文本报告
+python scripts/deepseek_q3_live_smoke.py --json   # 机器可读（sanitized）报告
 ```
 
 - credential 未配置时输出 `LIVE_SMOKE_NOT_RUN` 且 **零 egress**（exit code 0）；PASS 为 exit code 0，
@@ -199,7 +199,8 @@ python scripts/deepseek_q3_live_smoke.py --json --commit-sha <merged-main-sha>
   fake environment**：**不**使用真实 hosted credential、**不**执行真实 DeepSeek network call；CI **不**执行
   real live smoke、**不**持有真实 secret。只有 operator 的显式 real run 才可能 egress；
 - `--commit-sha` 只接受 `UNKNOWN` 或 hex Git SHA（short ／ full）；timestamp 只接受固定 shape 的 ISO-8601
-  instant。不安全的值在任何请求前被拒绝（`INVALID_METADATA`）、不记录、不回显；
+  instant。不安全的值在任何请求前被拒绝（`INVALID_METADATA`）、不记录、不回显（该 smoke 的 metadata
+  contract 自 `§5.22` 起未改变；**不**强制 exact full merged-main SHA）；
 - 报告**不**包含 credential、`Authorization` header、raw provider body 或 exception message（`§7.1`
   S-8 ／ S-11，`§5.22`）。
 
@@ -207,17 +208,20 @@ python scripts/deepseek_q3_live_smoke.py --json --commit-sha <merged-main-sha>
 
 ```bash
 # 固定 SIMULATED fixture；最多 1 次 hosted 请求；由 merged explain_q3(...) 驱动完整 composition。
-# 真实 hosted 执行**必须**给出精确的 40 位 merged-main commit：
+# 真实 hosted 执行必须由 operator 提供精确 40 位 commit identifier：
 python scripts/q3_full_composition_observation.py --json --commit-sha <merged-main-sha>
 ```
 
 - 与 live smoke 的区别：本 tooling 走 **deterministic pipeline → procurement recommendation → Q3 projection →
   hosted provider → parser → validator → 完整 `explain_q3(...)` composition**（`§9.3` 定义的 observation unit），
   而 `§5.23` 的 smoke 只直连 adapter ＋ validator；两者都**不**在 CI 执行；
-- **commit binding（HD-C）**：真实 observation **必须**绑定所执行的 merged-main commit —— `--commit-sha`
-  必须是**精确 40 位 hex**。省略参数、`UNKNOWN`、短 SHA 或任何非法值一律 **零 egress**、exit code `1`、
-  仅产出 sanitized failure record，且**不**记录／**不**回显该输入；tooling 不调用 git ／ subprocess 验证
-  repository membership（identifier 由 operator 提供）；
+- **commit binding（HD-C）**：真实 observation 的 durable record **必须**绑定 commit identifier ——
+  `--commit-sha` 必须是**精确 40 位 hex**。省略参数、`UNKNOWN`、短 SHA 或任何非法值一律 **零 egress**、
+  exit code `1`、仅产出 sanitized failure record，且**不**记录／**不**回显该输入。该 identifier 由 operator
+  提供：tooling 只做 **shape enforcement**（**不**调用 git ／ subprocess），**不**验证 GitHub repository
+  membership 或 current main identity；Human 执行真实 observation 时必须提供**实际执行的** merged-main SHA，
+  该事实由后续 validation-record review 对 GitHub authority 核验 —— 代码本身**不**保证 supplied SHA 就是
+  真实 merged-main；
 - exit code `0` = 已产出 truthful sanitized record（无论该次是否形成 AI behavior observation）；
   exit code `1` = 无法产出 truthful record（commit 未按要求绑定 ／ fixture 未被接受 ／ 观察到多次请求 ／
   record 未通过 sanitization）；
