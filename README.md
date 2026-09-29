@@ -41,6 +41,10 @@ Manual live smoke（opt-in）     = IMPLEMENTED / PASS once（§5.22 ／ §5.23�
                                   tooling 已实现；real hosted smoke 于 main @ 31fab37 真实执行
                                   一次 = LIVE_SMOKE_PASS；单次观察（n = 1），非 AI Eval、
                                   非 provider ／ model quality validation）
+Q3 full-composition observation = TOOLING IMPLEMENTED / OBSERVATION NOT RUN（§9.3，Issue #194；
+  （opt-in operator tooling）      manual opt-in；固定 SIMULATED fixture；由 explain_q3(...) 驱动的
+                                  完整 composition；sanitized record；real observation 仍 = 0，
+                                  不构成 AI behavior evidence，非 AI Eval verdict）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：
@@ -195,9 +199,40 @@ python scripts/deepseek_q3_live_smoke.py --json   # 机器可读（sanitized）�
   fake environment**：**不**使用真实 hosted credential、**不**执行真实 DeepSeek network call；CI **不**执行
   real live smoke、**不**持有真实 secret。只有 operator 的显式 real run 才可能 egress；
 - `--commit-sha` 只接受 `UNKNOWN` 或 hex Git SHA（short ／ full）；timestamp 只接受固定 shape 的 ISO-8601
-  instant。不安全的值在任何请求前被拒绝（`INVALID_METADATA`）、不记录、不回显；
+  instant。不安全的值在任何请求前被拒绝（`INVALID_METADATA`）、不记录、不回显（该 smoke 的 metadata
+  contract 自 `§5.22` 起未改变；**不**强制 exact full merged-main SHA）；
 - 报告**不**包含 credential、`Authorization` header、raw provider body 或 exception message（`§7.1`
   S-8 ／ S-11，`§5.22`）。
+
+**Q3 full-composition hosted observation（`§9.3`，Issue #194；可选，仅 operator 显式运行）：**
+
+```bash
+# 固定 SIMULATED fixture；最多 1 次 hosted 请求；由 merged explain_q3(...) 驱动完整 composition。
+# 真实 hosted 执行必须由 operator 提供精确 40 位 commit identifier：
+python scripts/q3_full_composition_observation.py --json --commit-sha <merged-main-sha>
+```
+
+- 与 live smoke 的区别：本 tooling 走 **deterministic pipeline → procurement recommendation → Q3 projection →
+  hosted provider → parser → validator → 完整 `explain_q3(...)` composition**（`§9.3` 定义的 observation unit），
+  而 `§5.23` 的 smoke 只直连 adapter ＋ validator；两者都**不**在 CI 执行；
+- **commit binding（HD-C）**：真实 observation 的 durable record **必须**绑定 commit identifier ——
+  `--commit-sha` 必须是**精确 40 位 hex**。省略参数、`UNKNOWN`、短 SHA 或任何非法值一律 **零 egress**、
+  exit code `1`、仅产出 sanitized failure record，且**不**记录／**不**回显该输入。该 identifier 由 operator
+  提供：tooling 只做 **shape enforcement**（**不**调用 git ／ subprocess），**不**验证 GitHub repository
+  membership 或 current main identity；Human 执行真实 observation 时必须提供**实际执行的** merged-main SHA，
+  该事实由后续 validation-record review 对 GitHub authority 核验 —— 代码本身**不**保证 supplied SHA 就是
+  真实 merged-main；
+- exit code `0` = 已产出 truthful sanitized record（无论该次是否形成 AI behavior observation）；
+  exit code `1` = 无法产出 truthful record（commit 未按要求绑定 ／ fixture 未被接受 ／ 观察到多次请求 ／
+  record 未通过 sanitization）；
+- canonical criterion mapping 只按**可观察证据**判定：mechanism-shape deviation（多余键 ／ 未登记 evidence
+  name ／ 未登记 `answer_kind`）**不**自动等同 business-semantics violation（记 `not determined` ／
+  `not expressible under the selection contract`），mechanism 与 canonical 判定不一致时保留 **mismatch
+  finding**；
+- missing credential ／ non-`COMPLETE` projection ⇒ **零 egress**；报告不含 raw body ／ header ／ credential ／
+  机器路径；**不**新增 PASS ／ FAIL 或任何 AI Eval verdict token；
+- **real full-composition hosted observation 仍 = 0 ／ `NOT RUN`**：tooling 的存在不等同于 observation，
+  真实执行需 Human opt-in，并由独立 validation-record unit 登记。
 
 **CI 状态（必须准确表述）：**
 
@@ -221,7 +256,7 @@ python scripts/deepseek_q3_live_smoke.py --json   # 机器可读（sanitized）�
 
 当前验证证据：
 
-- **local**：`1033 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures，本机
+- **local**：`1052 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures，本机
   Python 3.14）；
 - **local（manual opt-in live smoke，无 credential 时）**：process environment 未配置 hosted credential
   ⇒ `LIVE_SMOKE_NOT_RUN`（`CREDENTIAL_NOT_CONFIGURED`，`requests = 0`），即**零 egress**、
