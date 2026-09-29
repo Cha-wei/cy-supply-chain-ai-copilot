@@ -7805,6 +7805,16 @@ CI hosted calls；AI Eval overall closure。
 substantive decision ／ `§6` ／ `§7` ／ `§8` substantive design ／ `§9.4`。`§5.20` ～ `§5.23` 的
 implementation ／ validation records 仍是**各自时点**事实，**不回写**。
 
+**Current-state follow-up（Issue #194，operator tooling only）：** Q3 full-composition hosted observation 的
+**operator tooling 已实现** —— `scripts/q3_full_composition_observation.py`：固定自备 **SIMULATED** fixture
+（业务结果仍由 existing pipeline 计算）＋ recording transport ／ provider seam（≤ 1 request；无 retry ／
+fallback ／ provider switch）＋ 由 **`explain_q3(...)`** 驱动的完整 composition ＋ sanitized record；并显式分层
+integration ／ safety evidence 与 AI behavior criteria（不新增任何 AI Eval result enum ／ verdict token）。
+**real full-composition hosted observation 仍 = 0 ／ `NOT RUN`** —— tooling 的存在**不**构成 observation，
+**不**构成 AI behavior evidence，也不改变 `AI Eval = DESIGN PENDING`（Q3 contract 仍 scoped `DESIGN RESOLVED`）；
+第一次真实 observation 仍需 Human 在 merged main 上 opt-in 执行，并由**独立** docs-only validation-record
+unit 登记（绑定实际执行时的 merged-main commit）。
+
 #### 9.4 HITL / business acceptance — `DESIGN PENDING` ／ `JIT-BLOCKED`
 
 **为何仍 `DESIGN PENDING`：** 本层的 evidence 对象（Human `Review` ／ `Modify` ／ `Approve` ／

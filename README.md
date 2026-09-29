@@ -41,6 +41,10 @@ Manual live smoke（opt-in）     = IMPLEMENTED / PASS once（§5.22 ／ §5.23�
                                   tooling 已实现；real hosted smoke 于 main @ 31fab37 真实执行
                                   一次 = LIVE_SMOKE_PASS；单次观察（n = 1），非 AI Eval、
                                   非 provider ／ model quality validation）
+Q3 full-composition observation = TOOLING IMPLEMENTED / OBSERVATION NOT RUN（§9.3，Issue #194；
+  （opt-in operator tooling）      manual opt-in；固定 SIMULATED fixture；由 explain_q3(...) 驱动的
+                                  完整 composition；sanitized record；real observation 仍 = 0，
+                                  不构成 AI behavior evidence，非 AI Eval verdict）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：
@@ -199,6 +203,25 @@ python scripts/deepseek_q3_live_smoke.py --json   # 机器可读（sanitized）�
 - 报告**不**包含 credential、`Authorization` header、raw provider body 或 exception message（`§7.1`
   S-8 ／ S-11，`§5.22`）。
 
+**Q3 full-composition hosted observation（`§9.3`，Issue #194；可选，仅 operator 显式运行）：**
+
+```bash
+# 固定 SIMULATED fixture；最多 1 次 hosted 请求；由 merged explain_q3(...) 驱动完整 composition
+python scripts/q3_full_composition_observation.py
+python scripts/q3_full_composition_observation.py --json --commit-sha <merged-main-sha>
+```
+
+- 与 live smoke 的区别：本 tooling 走 **deterministic pipeline → procurement recommendation → Q3 projection →
+  hosted provider → parser → validator → 完整 `explain_q3(...)` composition**（`§9.3` 定义的 observation unit），
+  而 `§5.23` 的 smoke 只直连 adapter ＋ validator；两者都**不**在 CI 执行；
+- exit code `0` = 已产出 truthful sanitized record（无论该次是否形成 AI behavior observation）；
+  exit code `1` = 无法产出 truthful record（metadata 不安全 ／ fixture 未被接受 ／ 观察到多次请求 ／ record 未通过
+  sanitization）；
+- missing credential ／ non-`COMPLETE` projection ⇒ **零 egress**；报告不含 raw body ／ header ／ credential ／
+  机器路径；**不**新增 PASS ／ FAIL 或任何 AI Eval verdict token；
+- **real full-composition hosted observation 仍 = 0 ／ `NOT RUN`**：tooling 的存在不等同于 observation，
+  真实执行需 Human opt-in，并由独立 validation-record unit 登记。
+
 **CI 状态（必须准确表述）：**
 
 ```
@@ -221,7 +244,7 @@ python scripts/deepseek_q3_live_smoke.py --json   # 机器可读（sanitized）�
 
 当前验证证据：
 
-- **local**：`1033 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures，本机
+- **local**：`1050 tests / 2 skipped / 0 failed`（本文上方命令，SIMULATED fixtures，本机
   Python 3.14）；
 - **local（manual opt-in live smoke，无 credential 时）**：process environment 未配置 hosted credential
   ⇒ `LIVE_SMOKE_NOT_RUN`（`CREDENTIAL_NOT_CONFIGURED`，`requests = 0`），即**零 egress**、
