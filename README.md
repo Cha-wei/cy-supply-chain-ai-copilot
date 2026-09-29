@@ -33,8 +33,10 @@ Deterministic business rules    = IMPLEMENTED（BR-REQUIREMENT-001 / BR-INVENTOR
                                   BR-PROCUREMENT-001 / BR-SUPPLIER-RISK-001）
 Recommendation result           = IMPLEMENTED（procurement recommendation + supplier risk evidence）
 Integration / acceptance closure= IMPLEMENTED（Issue #172；thin composition，无业务语义）
-P0 AI Explanation（Q3 slice）   = IMPLEMENTED（provider-neutral runtime core；§5.20，Issue #182；
-                                  无 hosted provider adapter / 无 network / 无 credential handling）
+P0 AI Explanation（Q3 slice）   = IMPLEMENTED（provider-neutral runtime core；§5.20，Issue #182）
+Hosted provider adapter         = IMPLEMENTED（DeepSeek；§5.21，Issue #184；implementation
+                                  configuration，credential 只从 process environment 读取，
+                                  tests ／ CI 一律使用 stub transport，无真实 secret）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：
@@ -74,13 +76,20 @@ deterministic result 不变）。因此数量改写、shortage ／ recommended �
 数值 ／ status、「已批准 ／ 无需人工决策」以及把已确定事实重标为 uncertain 都不可表达（由 runtime
 组装与 registered relation ／ required evidence 校验保证，不依赖 provider 自觉，也不涉及 AI Eval）。
 该 core **不**选择 provider ／ model、**不**做 HTTP ／ network、**不**读取 environment credential、
-**不**新增依赖；tests 只用 stub provider。真实 hosted provider adapter、Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6
-与 AI Eval closure 仍未实现。
+**不**新增依赖；tests 只用 stub provider。
 
-**明确未实现（Out of Scope）**：Web / API / service、real hosted LLM provider adapter、Agent
-Framework / Tool protocol、HITL、RBAC / secrets、persistent Audit、database / persistent business
-state、real ERP / SRM Adapter / source connectivity、production write-back、P1，以及 `§6` ～ `§9`
-各项 just-in-time gate。
+**Hosted provider adapter（DeepSeek，`§5.21`，Issue #184）**：`snapshot_loader/deepseek_provider.py`
+是 **provider integration ／ composition boundary**：它是唯一读取 credential 的地方（仅从 **process
+environment**，环境变量名属 implementation configuration），唯一 egress 是 existing Q3 projection，
+DeepSeek 返回的只是 **selection**，最终仍由 existing `validate_provider_response(...)` 判定。失败
+（credential 缺失 ／ transport ／ timeout ／ 401 ／ 403 ／ 429 ／ 5xx ／ malformed envelope ／ invalid
+JSON）一律 fail closed，无 retry、不切换 provider ／ credential。实现仅用 **standard library**
+（`urllib.request`），**无** SDK ／ 新增 dependency；HTTP transport 可注入，tests 与 CI **不**调用
+真实 DeepSeek、**不**持有真实 secret。Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6 与 AI Eval closure 仍未实现。
+
+**明确未实现（Out of Scope）**：Web / API / service、Agent Framework / Tool protocol、HITL、
+RBAC / secrets、persistent Audit、database / persistent business state、real ERP / SRM Adapter /
+source connectivity、production write-back、P1，以及 `§6` ～ `§9` 各项 just-in-time gate。
 
 **状态纪律**：`DESIGN RESOLVED` ≠ `IMPLEMENTED` ≠ `TESTED`；`IMPLEMENTED` ≠ `VALIDATED`
 ≠ `POC SUCCESS`。全部验证仅覆盖 **SIMULATED** fixtures，不构成真实企业集成证据。
@@ -130,7 +139,10 @@ state、real ERP / SRM Adapter / source connectivity、production write-back、P
 
 ## 运行与测试
 
-只使用 Python 标准库，无第三方运行时依赖，无 network / database / LLM。
+只使用 Python 标准库，无第三方运行时依赖。deterministic core 与全部 tests 都不发起 network ／
+database ／ LLM 调用：唯一可能发起 hosted 调用的是 `snapshot_loader/deepseek_provider.py` 的
+DeepSeek adapter，且只在被显式注入并调用时；tests 与 CI 一律使用 stub transport，从不调用真实
+provider，也不持有真实 secret。
 
 ```bash
 # 单元测试（deterministic SIMULATED fixtures）—— 在 repository root 运行
