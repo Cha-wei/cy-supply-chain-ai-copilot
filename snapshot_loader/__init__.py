@@ -120,6 +120,22 @@ from .result_binding import (
     require_same_accepted_package,
     require_same_analysis_run,
 )
+from .deepseek_provider import (
+    DEEPSEEK_API_KEY_ENV,
+    DEEPSEEK_BASE_URL,
+    DEEPSEEK_MODEL,
+    DEEPSEEK_PROVIDER,
+    DEEPSEEK_RESPONSES_PATH,
+    DeepSeekProvider,
+    HttpRequest,
+    HttpResponse,
+    HttpTransport,
+    ProviderUnavailable,
+    StdlibHttpTransport,
+    UnavailableProvider,
+    provider_from_environment,
+    selection_json_schema,
+)
 from .exact_quantity import (
     ExactQuantity,
     parse_exact_quantity,
@@ -538,6 +554,20 @@ __all__ = [
     "provider_payload",
     "render_fact_text",
     "validate_provider_response",
+    "DEEPSEEK_API_KEY_ENV",
+    "DEEPSEEK_BASE_URL",
+    "DEEPSEEK_MODEL",
+    "DEEPSEEK_PROVIDER",
+    "DEEPSEEK_RESPONSES_PATH",
+    "DeepSeekProvider",
+    "HttpRequest",
+    "HttpResponse",
+    "HttpTransport",
+    "ProviderUnavailable",
+    "StdlibHttpTransport",
+    "UnavailableProvider",
+    "provider_from_environment",
+    "selection_json_schema",
 ]
 
 __version__ = "0.1.0"

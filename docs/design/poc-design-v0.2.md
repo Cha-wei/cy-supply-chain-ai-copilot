@@ -7134,10 +7134,53 @@ selection ⇒ explanation 明确 unavailable、deterministic recommendation **�
 **不**外传（`§7.1` S-8）。runtime outcome 属 **execution** 事实，**不是** business status，且**不得**
 被当作 business `DATA_INCOMPLETE`。
 
-**本记录未实现（out of scope）：** real hosted provider adapter、HTTP ／ network、provider SDK、
-provider ／ model selection、environment credential reader、Agent Framework ／ LangGraph、
-Tool Protocol ／ MCP、RAG ／ Vector DB、Web ／ API、persistence、HITL、Draft generation、
-Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6、AI Eval closure。
+**本记录未实现（out of scope）：** provider SDK、provider ／ model selection 的 canonical 化、
+Agent Framework ／ LangGraph、Tool Protocol ／ MCP、RAG ／ Vector DB、Web ／ API、persistence、
+HITL、Draft generation、Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6、AI Eval closure。
+
+#### 5.21 DeepSeek hosted provider adapter — implementation record（Issue #184）
+
+**Registration Status：`IMPLEMENTED`（provider adapter only；implementation configuration，可替换）**
+**Authority：** [ADR-002](../architecture/adr-002-p0-ai-explanation-minimum-runtime.md)（`ACCEPTED`；
+provider ／ model 属 replaceable implementation configuration，**不需要新 ADR**）＋ `§7.1`
+Secret Handling minimum contract（Issue #180）。本记录是 Q3 slice 的**首个 hosted provider**
+的 current-state record；`§5` header 的 `Implementation Status` 快照**不回写**。
+
+```text
+process environment（唯一 credential 读取点）
+        ↓  DeepSeek adapter integration boundary（§7.1 S-3）
+existing Q3 projection only（唯一 business payload）
+        ↓  one hosted request：POST https://api.deepseek.com/responses（model deepseek-flash）
+selection JSON（structured output；只有四个 selection 字段）
+        ↓  existing validate_provider_response(...)（最终 trust boundary，不被绕过）
+existing runtime-owned explanation artifact
+```
+
+**登记事实：**
+
+- adapter 是 **provider integration ／ composition boundary**：credential 只在该边界从 **process
+  environment** 读取（环境变量名属 implementation configuration，**不**登记为 canonical
+  semantics），raw credential **不**进入 business-side seam，也**不**出现在 prompt ／ projection ／
+  response artifact ／ stdout ／ log ／ exception ／ serialized result 中；
+- egress **只有** existing Q3 projection；**不**发送 entire recommendation object ／ pipeline result ／
+  snapshot package ／ raw artifact；
+- provider 返回的**只有** selection；`validate_provider_response(...)` 仍是**唯一**的 business
+  relation ／ evidence fidelity authority（adapter 不重新实现该校验）；
+- 失败边界（credential 缺失 ／ transport ／ timeout ／ 401 ／ 403 ／ 429 ／ 5xx ／ malformed envelope ／
+  invalid JSON）一律 **fail closed**：不自动切换 provider ／ credential、不使用旧回答、**不**实现
+  retry ／ backoff infrastructure、exception details 不进入 user-facing artifact；selection 语义不合法
+  由 existing validator 判为 `RESPONSE_UNACCEPTABLE`；
+- one request → one response：**无** tool calling ／ Web search ／ MCP ／ Agent ／ multi-turn ／
+  persistent conversation state；
+- 实现仅使用 **Python standard library**（`urllib.request`）；**无** SDK、**无**新增 dependency；
+- HTTP transport 为可注入 seam：tests 一律使用 stub transport，**不**调用真实 DeepSeek，CI **不**持有
+  真实 secret。
+
+**本记录未实现 ／ 未声称（out of scope）：** Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6；Draft generation；HITL；
+persistence；Web ／ API；Agent Framework ／ Tool Protocol ／ RAG；manual live smoke path（本次不做）；
+**未**声称 AI Eval ready ／ passed、provider quality validated、business accepted、`POC validated` 或
+`POC success`；真实 provider 的 envelope 语义一致性**未**经 live API 验证（tests 只覆盖 stub 与
+patched transport）。
 
 ---
 
