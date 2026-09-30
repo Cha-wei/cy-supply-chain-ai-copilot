@@ -24,8 +24,18 @@ existing ReviewInstance / AnalysisRun
 A :class:`ProcurementRequestDraft` is assembled **locally and deterministically** from values that
 already exist on the review runtime.  Nothing is recomputed, filled, defaulted, parsed or inferred:
 the initial quantity is the deterministic ``RecommendedPurchaseQty``; the quantity after a Human
-decision is the *corresponding* ``HumanDecision.approved_value``; and the ``RecommendationNeedDate`` is
-**derived** from the review grain, so the Draft holds no independent copy anyone could modify.
+decision is the ``approved_value`` of **the ``HumanDecision`` actually recorded on that
+``ReviewInstance``**; and the ``RecommendationNeedDate`` is **derived** from the review grain, so the
+Draft holds no independent copy anyone could modify.
+
+The binding is therefore **per review instance**, not per projection: a decision is reflected only
+when it *is* the object the review runtime itself recorded (``review.decision is decision``), so a
+reconstructed or field-mutated look-alike that happens to carry the same ``AnalysisRun``, grain and
+``review_projection_reference`` is never accepted, and neither is another instance's decision for the
+same grain and run.  This is implementable without any durable identity because a
+``HumanDecision`` is an ephemeral in-process runtime artifact: there is no reload or
+reconstruction contract to support, so the in-process identity of the recorded decision **is** the
+binding evidence (``§6.1`` C / D).
 
 Deliberate boundaries (``HD-DRAFT-R1`` / §6.1):
 
@@ -96,13 +106,35 @@ def _rational_payload(value: Fraction | None) -> dict[str, int] | None:
 
 
 def _require_identity(review: ReviewInstance, decision: HumanDecision) -> None:
-    """Reject a decision that is not this review's own decision for this exact grain and run.
+    """Reject anything that is not the decision this review instance actually recorded.
 
-    ``§6.1`` C requires an approved Draft to be **bound to the corresponding ``HumanDecision``** and
-    ``§6.1`` A requires a new ``AnalysisRun`` to yield a new instance and a new Draft.  A decision
-    whose ``analysis_run``, grain or ``review_projection_reference`` does not match this review
-    instance therefore belongs to a different review and is never consumed.
+    ``§6.1`` C requires an approved Draft to be bound to **the corresponding ``HumanDecision``** --
+    read here as *the Human decision actually recorded on that ``ReviewInstance``* -- and ``§6.1`` A
+    requires a new ``AnalysisRun`` to yield a new instance and a new Draft.
+
+    The authoritative rule is therefore object identity against the review runtime's own recorded
+    decision: ``review.decision is decision``.  A caller cannot obtain the reflected quantity by
+    handing in a **look-alike** decision -- a ``dataclasses.replace`` copy, or any other object whose
+    ``AnalysisRun``, grain and ``review_projection_reference`` all match -- because such an object is
+    not the decision the review recorded, and nothing here reconstructs, re-derives or trusts it.
+
+    This needs no durable identity, serializer or persistence: a ``HumanDecision`` is an ephemeral
+    in-process runtime artifact with no reload contract, so in-process identity is exactly the
+    evidence required and no canonical instance identifier is introduced.
+
+    The registered identity comparisons (``AnalysisRun`` four components, grain, reviewed projection)
+    are kept as **defense in depth**: they state the binding contract directly in terms of the
+    registered identity fields, and they remain the checks that describe *why* a genuinely foreign
+    decision does not belong to this review.
     """
+
+    if review.decision is not decision:
+        raise DraftError(
+            "this is not the Human decision recorded on this review instance, so the Draft cannot "
+            "reflect it (§6.1 C / D): a Draft binds the HumanDecision actually recorded on that "
+            "ReviewInstance, never a reconstructed or field-mutated look-alike that merely carries "
+            "the same Analysis Run, grain and review projection"
+        )
 
     differences = analysis_run_differences(decision.analysis_run, review.analysis_run)
     if differences:
@@ -137,10 +169,12 @@ class ProcurementRequestDraft:
     * no applicable Human decision yet -- the deterministic ``RecommendedPurchaseQty`` of the reviewed
       recommendation (``§6.1`` A: an initial Draft may rest on the deterministic result alone, and no
       ``HumanDecision`` is required or may be fabricated);
-    * an applicable Human decision -- that decision's ``approved_value``, which is either the
-      deterministic recommendation (approve-as-is) or the explicit Human override value (``§10.4``);
-      the value is read from the ``HumanDecision`` and is never re-parsed, recomputed or inferred from
-      an override reason (``§6.1`` D).
+    * an applicable Human decision -- the ``approved_value`` of **the ``HumanDecision`` actually
+      recorded on that ``ReviewInstance``**, which is either the deterministic recommendation
+      (approve-as-is) or the explicit Human override value (``§10.4``); the value is read from the
+      ``HumanDecision`` and is never re-parsed, recomputed or inferred from an override reason
+      (``§6.1`` D).  Only the recorded decision object itself is accepted -- a look-alike carrying
+      the same run, grain and reviewed projection is never reflected.
 
     ``RecommendationNeedDate`` is not stored: it is derived from the review grain on every access, so
     neither this Draft nor any renderer can modify it (``§6.1`` B).
@@ -225,14 +259,31 @@ class ProcurementRequestDraft:
         return _UNDECIDED_STATE
 
     def is_actionable(self, current_analysis_run) -> bool:
-        """Whether the Draft still permits a decision (``§6.1`` C).
+        """Whether a **new** Human decision is still possible on this Draft (``§6.1`` C).
 
-        Non-actionable once the review instance is stale, and non-actionable once any decision has
-        been bound: an approved Draft is already decided and a rejected Draft is **terminal** -- a
-        rejection is never turned into an approval and never triggers a deterministic recomputation.
+        Two independent blocking conditions, both delegated to the existing runtime rather than
+        redefined here:
+
+        * the review instance is stale -- a stale Draft can never be approved or revived;
+        * the review instance has **already recorded its own Human decision** (approved or rejected)
+          -- the Human decision lifecycle belongs to ``ReviewInstance``, and the Draft layer neither
+          restates it nor grants a second decision on top of it.  This holds for a Draft opened after
+          the review was decided (it carries no decision of its own yet is still not actionable) and
+          for an initial Draft opened *before* the decision was taken (once the review records its
+          decision, that same Draft stops being actionable).
+
+        Non-actionable once any decision has been bound to this Draft as well: an approved Draft is
+        already decided and a rejected Draft is **terminal** -- a rejection is never turned into an
+        approval and never triggers a deterministic recomputation.
+
+        This reports whether the underlying review can still take a decision; it deliberately does
+        **not** gate :meth:`with_decision`, which binds a decision the review has *already* recorded
+        (that binding is never a new Human decision, and it is what produces the post-decision Draft).
         """
 
         if self.is_stale(current_analysis_run):
+            return False
+        if self.review.decision is not None:
             return False
         return self.decision is None
 
@@ -246,15 +297,22 @@ class ProcurementRequestDraft:
     # --- assembly -------------------------------------------------------------------------
 
     def with_decision(self, decision: HumanDecision, current_analysis_run) -> "ProcurementRequestDraft":
-        """Bind a **corresponding** Human decision and return the resulting new Draft.
+        """Bind the recorded Human decision and return the resulting new Draft.
 
-        The decision must be this review instance's own decision for this exact grain, run and
-        reviewed projection (see :func:`_require_identity`), and this Draft must still be actionable:
-        a stale Draft can never be approved or revived, and a Draft that already carries a decision
-        cannot be decided twice.  On success the returned Draft reflects the decision's
-        ``approved_value`` truthfully -- including when that value is an explicit Human override, and
-        including when it happens to equal the deterministic recommendation (an explicit override is
-        never silently rewritten into approve-as-is).
+        The decision must be **the ``HumanDecision`` actually recorded on this Draft's
+        ``ReviewInstance``** -- the object the review runtime returned and stored (see
+        :func:`_require_identity`); a look-alike that only repeats the same run, grain and reviewed
+        projection is never accepted.  The Draft must also still be actionable *with respect to the
+        Draft itself*: a stale Draft can never be approved or revived, and a Draft that already
+        carries a decision cannot be decided twice.  On success the returned Draft reflects the
+        decision's ``approved_value`` truthfully -- including when that value is an explicit Human
+        override, and including when it happens to equal the deterministic recommendation (an
+        explicit override is never silently rewritten into approve-as-is).
+
+        Binding an *already recorded* decision is not a new Human decision, so it is not gated by
+        :meth:`is_actionable`: a review instance that has recorded its decision is not actionable for
+        a further decision, yet binding that one recorded decision is exactly how the corresponding
+        post-decision Draft is formed.
         """
 
         if self.is_stale(current_analysis_run):

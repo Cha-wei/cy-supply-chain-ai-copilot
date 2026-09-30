@@ -132,9 +132,11 @@ Draft runtime                 = IMPLEMENTED（§10.6 I，Issue #214）
 该 scoped tranche 的 runtime **已实现**（Issue #214；`snapshot_loader/draft_runtime.py`；
 `open_draft` ／ `ProcurementRequestDraft`；current state 见
 [§10.6 I](design/poc-design-v0.2.md#draft-runtime-code-start-gate)）：initial Draft quantity ＝ deterministic
-`RecommendedPurchaseQty` 并显式标记 `DRAFT`；decision 存在后 quantity ＝ 对应 `HumanDecision.approved_value`
-（含 explicit override）；`RecommendationNeedDate` 由 review grain **派生只读**；supplier identity **absent**；
-reject terminal ／ stale non-actionable ／ new `AnalysisRun` ⇒ new instance ＋ new Draft ／ override 不继承。
+`RecommendedPurchaseQty` 并显式标记 `DRAFT`；decision 存在后 quantity ＝ **该 `ReviewInstance` 实际记录的**
+`HumanDecision.approved_value`（binding 要求 `review.decision is decision`，look-alike ／ 其它 instance 的
+decision 一律拒绝；含 explicit override）；`RecommendationNeedDate` 由 review grain **派生只读**；supplier
+identity **absent**；reject terminal ／ stale non-actionable ／ new `AnalysisRun` ⇒ new instance ＋ new Draft ／
+override 不继承；`is_actionable` 亦尊重 underlying `ReviewInstance` 的 terminal decision。
 `§7` ／ `§8` = **NOT TRIGGERED**；`§9.4` **不推进**；`IMPLEMENTED ≠ VALIDATED ≠ business accepted ≠
 POC SUCCESS`。
 保持：`§6.1 Draft semantic design = DESIGN RESOLVED`；`§6 overall = DESIGN PENDING`；`§7 overall = NOT

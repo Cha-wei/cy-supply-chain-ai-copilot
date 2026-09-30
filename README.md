@@ -142,8 +142,11 @@ Draft runtime tranche             = CODE START GATE PASS / IMPLEMENTATION AUTHOR
                                   NOT TRIGGERED；§9.4 不推进；runtime surface =
                                   DRAFT_MARKER ／ DraftError ／ ProcurementRequestDraft ／ open_draft
                                   （snapshot_loader/draft_runtime.py）；initial Draft quantity =
-                                  deterministic RecommendedPurchaseQty；HumanDecision 存在 ⇒
-                                  approved_value 原样进入 Draft；reject ／ stale ／ new AnalysisRun
+                                  deterministic RecommendedPurchaseQty；decision binding =
+                                  只接受该 ReviewInstance 实际记录的 HumanDecision（review.decision is
+                                  decision；look-alike ／ 其它 instance 的 decision 一律拒绝）⇒
+                                  approved_value 原样进入 Draft；initial Draft ／ 已记录 decision 的 review
+                                  ⇒ is_actionable = False；reject ／ stale ／ new AnalysisRun
                                   lifecycle 按 §6.1 D1～D5；Draft runtime =
                                   IMPLEMENTED（§10.6 I，Issue #214）；IMPLEMENTED ≠ VALIDATED；
                                   Unrestricted implementation = NOT AUTHORIZED）

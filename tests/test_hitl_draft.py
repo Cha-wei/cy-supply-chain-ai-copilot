@@ -506,6 +506,198 @@ class DraftBoundaryTests(DraftRuntimeTestCase):
         self.assertTrue(draft.is_actionable(recommendations.analysis_run))
 
 
+# --- Review follow-up: the recorded decision, and terminal actionability ----------------
+
+
+class RecordedDecisionBindingTests(DraftRuntimeTestCase):
+    """A Draft binds the ``HumanDecision`` actually recorded on that ``ReviewInstance``.
+
+    ``§6.1`` C / D require the decision-derived value to come from **the corresponding
+    HumanDecision**.  Matching ``AnalysisRun`` / grain / ``review_projection_reference`` alone does
+    not establish that: a ``dataclasses.replace`` look-alike carries all three unchanged.  These
+    tests pin the strengthened binding -- the decision must *be* the object the review runtime
+    recorded -- and prove that the rejection is per ``ReviewInstance`` rather than per projection.
+    """
+
+    def test_d24_a_look_alike_decision_with_a_forged_value_is_never_reflected(self) -> None:
+        recommendations, instance, decision, _draft = self.approved("d24", quantity="150")
+        run = recommendations.analysis_run
+
+        # The forged decision keeps every registered identity field identical; only the reflected
+        # value (and, in the variants below, other non-identity fields) differs.
+        forged = dataclasses.replace(decision, approved_value=Fraction(999, 1))
+        self.assertIsNot(forged, decision)
+        self.assertEqual(forged.analysis_run, instance.analysis_run)
+        self.assertEqual(forged.grain, instance.grain)
+        self.assertEqual(forged.review_projection_reference, instance.review_projection_reference)
+        self.assertEqual(forged.decision_kind, decision.decision_kind)
+        self.assertIs(instance.decision, decision)
+        self.assertIsNot(instance.decision, forged)
+
+        _recommendations_fresh, fresh_instance, fresh = self.initial("d24-fresh")
+        self.assertIsNot(fresh_instance, instance)
+        self.assertIsNone(fresh_instance.decision)
+
+        with self.assertRaises(DraftError):
+            fresh.with_decision(forged, run)
+        # Nothing from the look-alike entered the Draft and the Draft is unchanged.
+        self.assertIsNone(fresh.decision)
+        self.assertEqual(fresh.quantity, Fraction(100, 1))
+        self.assertEqual(fresh.quantity, fresh.deterministic_recommended_value)
+        self.assertEqual(fresh.draft_state(run), DRAFT)
+        self.assertFalse(fresh.has_approved_draft(run))
+        self.assertIsNone(fresh_instance.decision)
+        self.assertEqual(fresh_instance.recommended_purchase_qty, fresh.quantity)
+
+        # Every other field mutation of the recorded decision is rejected the same way.
+        for index, mutant in enumerate(
+            (
+                dataclasses.replace(decision, approved_value=None),
+                dataclasses.replace(decision, override_flag=not decision.override_flag),
+                dataclasses.replace(decision, override_reason=NO_OVERRIDE_REASON),
+                dataclasses.replace(decision, decision_kind=DECISION_REJECT),
+                dataclasses.replace(decision, human_reason="forged reason"),
+                dataclasses.replace(decision, actor_reference="forged-actor"),
+                dataclasses.replace(decision, evidence_references=()),
+                dataclasses.replace(decision, decision_timestamp=decision.decision_timestamp),
+            )
+        ):
+            _r, _i, case = self.initial(f"d24-mutant-{index}")
+            with self.subTest(mutation=index), self.assertRaises(DraftError):
+                case.with_decision(mutant, run)
+            self.assertIsNone(case.decision)
+            self.assertEqual(case.quantity, Fraction(100, 1))
+            self.assertEqual(case.draft_state(run), DRAFT)
+
+        # The decision the review actually recorded still binds and is reflected truthfully.
+        bound = open_draft(instance).with_decision(instance.decision, run)
+        self.assertIs(bound.decision, decision)
+        self.assertEqual(bound.quantity, Fraction(150, 1))
+        self.assertEqual(bound.quantity, decision.approved_value)
+        self.assertTrue(bound.has_approved_draft(run))
+
+    def test_d25_another_review_instances_decision_is_never_reflected(self) -> None:
+        _built, recommendations, risk = self.reviewable("d25")
+        # Two genuinely distinct review instances over the same result, grain and projection, so
+        # every registered identity field agrees and only the recorded decision differs.
+        first = self.open(recommendations, risk)
+        second = self.open(recommendations, risk)
+        self.assertIsNot(first, second)
+        self.assertEqual(first.grain, second.grain)
+        self.assertEqual(
+            first.review_projection_reference, second.review_projection_reference
+        )
+        self.assertEqual(
+            hitl_module.analysis_run_differences(first.analysis_run, second.analysis_run), ()
+        )
+
+        decision = self.override(first, recommendations, "150")
+        self.assertIs(first.decision, decision)
+        self.assertIs(decision.override_flag, True)
+        self.assertIsNone(second.decision)
+        # The foreign decision's registered identity fields match this instance exactly.
+        self.assertEqual(decision.analysis_run, second.analysis_run)
+        self.assertEqual(decision.grain, second.grain)
+        self.assertEqual(
+            decision.review_projection_reference, second.review_projection_reference
+        )
+
+        # Per-ReviewInstance binding, not per projection: the decision of instance A is refused by a
+        # Draft of instance B, and the Draft states nothing decision-derived.
+        second_draft = open_draft(second)
+        with self.assertRaises(DraftError):
+            second_draft.with_decision(decision, recommendations.analysis_run)
+        self.assertIsNone(second_draft.decision)
+        self.assertEqual(second_draft.quantity, Fraction(100, 1))
+        self.assertEqual(second_draft.draft_state(recommendations.analysis_run), DRAFT)
+        self.assertFalse(second_draft.has_approved_draft(recommendations.analysis_run))
+        self.assertNotEqual(second_draft.quantity, decision.approved_value)
+
+        # Instance B can still take its own decision, which its own Draft then reflects.
+        own = self.override(second, recommendations, "175")
+        self.assertIsNot(own, decision)
+        bound = second_draft.with_decision(second.decision, recommendations.analysis_run)
+        self.assertIs(bound.decision, own)
+        self.assertEqual(bound.quantity, own.approved_value)
+        self.assertEqual(bound.quantity, Fraction(175, 1))
+        self.assertTrue(bound.has_approved_draft(recommendations.analysis_run))
+        # Instance A's decision is unaffected: nothing was rewritten anywhere.
+        self.assertIs(first.decision, decision)
+        self.assertIsNot(first.decision, own)
+
+
+class TerminalActionabilityTests(DraftRuntimeTestCase):
+    """The Draft layer never redefines the Human decision lifecycle of ``ReviewInstance``."""
+
+    def test_d26_an_initial_draft_is_not_actionable_once_the_review_approved(self) -> None:
+        recommendations, instance, draft = self.initial("d26")
+        run = recommendations.analysis_run
+        self.assertTrue(draft.is_actionable(run))
+
+        decision = self.approve(instance, recommendations)
+
+        # The initial Draft stops being actionable as soon as the review records its decision.
+        self.assertEqual(instance.status(run), REVIEW_APPROVED)
+        self.assertFalse(draft.is_actionable(run))
+        # Its own bound content is unchanged: an initial Draft adopts nothing implicitly.
+        self.assertIsNone(draft.decision)
+        self.assertEqual(draft.quantity, Fraction(100, 1))
+        self.assertEqual(draft.draft_state(run), DRAFT)
+
+        # A Draft opened after the decision is likewise not actionable, yet binding the decision the
+        # review recorded still forms the corresponding immutable post-decision Draft.
+        reopened = open_draft(instance)
+        self.assertFalse(reopened.is_actionable(run))
+        bound = reopened.with_decision(instance.decision, run)
+        self.assertIsNot(bound, reopened)
+        self.assertIs(bound.decision, decision)
+        self.assertEqual(bound.quantity, decision.approved_value)
+        self.assertEqual(bound.quantity, Fraction(100, 1))
+        self.assertTrue(bound.has_approved_draft(run))
+        self.assertFalse(bound.is_actionable(run))
+        self.assertIsNone(reopened.decision)
+
+        # The pre-existing initial Draft is immutable and still binds only the recorded decision.
+        self.assertFalse(draft.is_actionable(run))
+        self.assertIsNone(draft.decision)
+        self.assertEqual(draft.quantity, Fraction(100, 1))
+
+    def test_d27_an_initial_draft_is_not_actionable_once_the_review_rejected(self) -> None:
+        recommendations, instance, draft = self.initial("d27")
+        run = recommendations.analysis_run
+        self.assertTrue(draft.is_actionable(run))
+
+        decision = instance.reject(
+            current_analysis_run=run,
+            reason=REASON,
+            actor_reference=ACTOR,
+            clock=_clock,
+        )
+
+        self.assertEqual(instance.status(run), REVIEW_REJECTED)
+        self.assertFalse(draft.is_actionable(run))
+        self.assertIsNone(draft.decision)
+        self.assertEqual(draft.quantity, Fraction(100, 1))
+        self.assertEqual(draft.draft_state(run), DRAFT)
+
+        # A rejection is terminal: the recorded reject decision binds into a terminal Draft that
+        # states no approved quantity, and no further decision is possible on either layer.
+        reopened = open_draft(instance)
+        self.assertFalse(reopened.is_actionable(run))
+        bound = reopened.with_decision(instance.decision, run)
+        self.assertIs(bound.decision, decision)
+        self.assertEqual(bound.draft_state(run), "REJECTED")
+        self.assertIsNone(bound.quantity)
+        self.assertFalse(bound.has_approved_draft(run))
+        self.assertFalse(bound.is_actionable(run))
+        with self.assertRaises(DraftError):
+            bound.with_decision(decision, run)
+        # The review cannot be decided again either, and its deterministic value is unchanged.
+        with self.assertRaises(hitl_module.ReviewConflictError):
+            self.approve(instance, recommendations)
+        self.assertEqual(instance.recommended_purchase_qty, Fraction(100, 1))
+
+
 def open_review_valid_absence(recommendations, risk):
     """Open a review instance over a valid-absence result (no recommendation by design)."""
 
