@@ -138,7 +138,9 @@ decision 一律拒绝；含 explicit override）；`RecommendationNeedDate` 由 
 identity **absent**；reject terminal ／ stale non-actionable ／ new `AnalysisRun` ⇒ new instance ＋ new Draft ／
 override 不继承；`is_actionable` 亦尊重 underlying `ReviewInstance` 的 terminal decision；
 public construction（`ProcurementRequestDraft(review=...)` ／ `open_draft`）**只**形成 initial Draft
-（`decision` 为 `init=False`），decision-bearing Draft **只能**由 validated `with_decision` 路径形成。
+（`decision` 为 `init=False`），且在该 review 已记录 `HumanDecision` 时 **fail closed**（`DraftError`；
+initial Draft 仅在 `review.decision is None` 时合法）；decision-bearing Draft **只能**由 validated
+`with_decision(review.decision, run)` 路径从 decision 前已形成的 initial Draft 产生。
 `§7` ／ `§8` = **NOT TRIGGERED**；`§9.4` **不推进**；`IMPLEMENTED ≠ VALIDATED ≠ business accepted ≠
 POC SUCCESS`。
 保持：`§6.1 Draft semantic design = DESIGN RESOLVED`；`§6 overall = DESIGN PENDING`；`§7 overall = NOT

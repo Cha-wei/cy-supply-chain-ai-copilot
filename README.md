@@ -148,8 +148,10 @@ Draft runtime tranche             = CODE START GATE PASS / IMPLEMENTATION AUTHOR
                                   approved_value 原样进入 Draft；initial Draft ／ 已记录 decision 的 review
                                   ⇒ is_actionable = False；public construction（
                                   ProcurementRequestDraft(review=...) ／ open_draft）只形成 initial Draft
-                                  （decision 为 init=False），decision-bearing Draft 只能由
-                                  with_decision 形成；reject ／ stale ／ new AnalysisRun
+                                  （decision 为 init=False），且 review 已记录 HumanDecision 时 fail close
+                                  （DraftError；initial Draft 仅在 review.decision is None 时合法）；
+                                  decision-bearing Draft 只能由 with_decision 从 decision 前已形成的
+                                  initial Draft 产生；reject ／ stale ／ new AnalysisRun
                                   lifecycle 按 §6.1 D1～D5；Draft runtime =
                                   IMPLEMENTED（§10.6 I，Issue #214）；IMPLEMENTED ≠ VALIDATED；
                                   Unrestricted implementation = NOT AUTHORIZED）

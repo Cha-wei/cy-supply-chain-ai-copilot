@@ -60,29 +60,35 @@ class DraftRuntimeTestCase(HitlReviewTestCase):
         return recommendations, instance, open_draft(instance)
 
     def approved(self, name: str = "draft-approved", *, quantity: Any = None):
-        """One approved-as-is (or explicitly overridden) decision and its bound Draft."""
+        """One approved-as-is (or explicitly overridden) decision and its bound Draft.
+
+        The initial Draft is opened **before** the decision is taken, which is the only authorized
+        order: public initial-Draft construction fails closed once the review has recorded a decision.
+        """
 
         _built, recommendations, risk = self.reviewable(name)
         instance = self.open(recommendations, risk)
+        initial = open_draft(instance)
         if quantity is None:
             decision = self.approve(instance, recommendations)
         else:
             decision = self.override(instance, recommendations, quantity)
-        draft = open_draft(instance).with_decision(decision, recommendations.analysis_run)
+        draft = initial.with_decision(decision, recommendations.analysis_run)
         return recommendations, instance, decision, draft
 
     def rejected(self, name: str = "draft-rejected"):
-        """One reject decision and its bound (terminal) Draft."""
+        """One reject decision and its bound (terminal) Draft, opened before the decision."""
 
         _built, recommendations, risk = self.reviewable(name)
         instance = self.open(recommendations, risk)
+        initial = open_draft(instance)
         decision = instance.reject(
             current_analysis_run=recommendations.analysis_run,
             reason=REASON,
             actor_reference=ACTOR,
             clock=_clock,
         )
-        draft = open_draft(instance).with_decision(decision, recommendations.analysis_run)
+        draft = initial.with_decision(decision, recommendations.analysis_run)
         return recommendations, instance, decision, draft
 
 
@@ -488,9 +494,10 @@ class DraftBoundaryTests(DraftRuntimeTestCase):
             "override_quantity",
             set(inspect.signature(hitl_module.ReviewInstance.approve_with_override).parameters),
         )
-        self.assertIsNone(
-            open_draft(instance).decision
-        )  # binding is explicit and never implicit
+        # Binding is explicit and never implicit: a decided review cannot be re-opened as an initial
+        # Draft at all, so the post-decision Draft above is reachable only through with_decision.
+        with self.assertRaises(DraftError):
+            open_draft(instance)
 
     def test_d23_a_valid_absence_states_no_quantity_without_inventing_one(self) -> None:
         _built, recommendations, risk = self.valid_absence("d23")
@@ -520,8 +527,16 @@ class RecordedDecisionBindingTests(DraftRuntimeTestCase):
     """
 
     def test_d24_a_look_alike_decision_with_a_forged_value_is_never_reflected(self) -> None:
-        recommendations, instance, decision, _draft = self.approved("d24", quantity="150")
+        _built, recommendations, risk = self.reviewable("d24")
         run = recommendations.analysis_run
+        instance = self.open(recommendations, risk)
+        # The initial Draft is opened while the review is still open, then the review records its
+        # decision: that is the only authorized order under the initial-Draft construction guard.
+        initial = open_draft(instance)
+        decision = self.override(instance, recommendations, "150")
+        self.assertIs(instance.decision, decision)
+        self.assertEqual(initial.quantity, Fraction(100, 1))
+        self.assertIsNone(initial.decision)
 
         # The forged decision keeps every registered identity field identical; only the reflected
         # value (and, in the variants below, other non-identity fields) differs.
@@ -570,7 +585,7 @@ class RecordedDecisionBindingTests(DraftRuntimeTestCase):
             self.assertEqual(case.draft_state(run), DRAFT)
 
         # The decision the review actually recorded still binds and is reflected truthfully.
-        bound = open_draft(instance).with_decision(instance.decision, run)
+        bound = initial.with_decision(instance.decision, run)
         self.assertIs(bound.decision, decision)
         self.assertEqual(bound.quantity, Fraction(150, 1))
         self.assertEqual(bound.quantity, decision.approved_value)
@@ -644,18 +659,15 @@ class TerminalActionabilityTests(DraftRuntimeTestCase):
         self.assertEqual(draft.quantity, Fraction(100, 1))
         self.assertEqual(draft.draft_state(run), DRAFT)
 
-        # A Draft opened after the decision is likewise not actionable, yet binding the decision the
-        # review recorded still forms the corresponding immutable post-decision Draft.
-        reopened = open_draft(instance)
-        self.assertFalse(reopened.is_actionable(run))
-        bound = reopened.with_decision(instance.decision, run)
-        self.assertIsNot(bound, reopened)
+        # Binding the decision the review recorded still forms the corresponding immutable
+        # post-decision Draft, from the initial Draft that was opened before the decision.
+        bound = draft.with_decision(instance.decision, run)
+        self.assertIsNot(bound, draft)
         self.assertIs(bound.decision, decision)
         self.assertEqual(bound.quantity, decision.approved_value)
         self.assertEqual(bound.quantity, Fraction(100, 1))
         self.assertTrue(bound.has_approved_draft(run))
         self.assertFalse(bound.is_actionable(run))
-        self.assertIsNone(reopened.decision)
 
         # The pre-existing initial Draft is immutable and still binds only the recorded decision.
         self.assertFalse(draft.is_actionable(run))
@@ -682,9 +694,7 @@ class TerminalActionabilityTests(DraftRuntimeTestCase):
 
         # A rejection is terminal: the recorded reject decision binds into a terminal Draft that
         # states no approved quantity, and no further decision is possible on either layer.
-        reopened = open_draft(instance)
-        self.assertFalse(reopened.is_actionable(run))
-        bound = reopened.with_decision(instance.decision, run)
+        bound = draft.with_decision(instance.decision, run)
         self.assertIs(bound.decision, decision)
         self.assertEqual(bound.draft_state(run), "REJECTED")
         self.assertIsNone(bound.quantity)
@@ -713,6 +723,10 @@ class PublicConstructionGuardTests(DraftRuntimeTestCase):
         run = recommendations.analysis_run
         instance = self.open(recommendations, risk)
         other = self.open(recommendations, risk)
+        # Both initial Drafts are opened before either review records its decision: that is the only
+        # authorized order now that public initial-Draft construction fails closed on a decided review.
+        instance_initial = open_draft(instance)
+        other_initial = open_draft(other)
         decision = self.override(instance, recommendations, "150")
         other_decision = self.override(other, recommendations, "175")
 
@@ -749,23 +763,34 @@ class PublicConstructionGuardTests(DraftRuntimeTestCase):
                 # The init-disabled field cannot be set through dataclasses.replace either
                 # (CPython reports this as TypeError; ValueError is accepted for older versions).
                 with self.assertRaises((TypeError, ValueError)):
-                    dataclasses.replace(open_draft(instance), decision=candidate)
+                    dataclasses.replace(instance_initial, decision=candidate)
+                # The public initial-Draft path is closed as well on a decided review.
+                with self.assertRaises(DraftError):
+                    draft_module.ProcurementRequestDraft(review=instance)
+                with self.assertRaises(DraftError):
+                    open_draft(instance)
 
-        # Every constructible Draft of this review instance states the deterministic value only: no
-        # forged quantity (999) and no other instance's value (175) is reachable.
-        initial = draft_module.ProcurementRequestDraft(review=instance)
-        self.assertIs(initial.review, instance)
-        self.assertIsNone(initial.decision)
-        self.assertEqual(initial.quantity, Fraction(100, 1))
-        self.assertEqual(initial.draft_state(run), DRAFT)
-        self.assertFalse(initial.has_approved_draft(run))
-        for candidate in candidates:
-            self.assertNotEqual(initial.quantity, candidate[1].approved_value)
+        # The Draft opened before the decision states the deterministic value only: no forged quantity
+        # (999) and no other instance's value (175) is reachable from it.
+        self.assertIs(instance_initial.review, instance)
+        self.assertIsNone(instance_initial.decision)
+        self.assertEqual(instance_initial.quantity, Fraction(100, 1))
+        self.assertEqual(instance_initial.draft_state(run), DRAFT)
+        self.assertFalse(instance_initial.has_approved_draft(run))
+        for _label, candidate in candidates:
+            self.assertNotEqual(instance_initial.quantity, candidate.approved_value)
 
         # The binding that survives the guard still refuses the look-alikes and the foreign decision.
         for _label, candidate in candidates:
             with self.assertRaises(DraftError):
-                open_draft(instance).with_decision(candidate, run)
+                instance_initial.with_decision(candidate, run)
+        # `other_initial` refuses the other instance's recorded decision even though every registered
+        # identity field matches, and accepts only its own recorded decision.
+        with self.assertRaises(DraftError):
+            other_initial.with_decision(decision, run)
+        other_bound = other_initial.with_decision(other.decision, run)
+        self.assertIs(other_bound.decision, other_decision)
+        self.assertEqual(other_bound.quantity, Fraction(175, 1))
 
     def test_d29_the_validated_binding_path_still_forms_the_post_decision_draft(self) -> None:
         # approve-as-is
@@ -805,6 +830,121 @@ class PublicConstructionGuardTests(DraftRuntimeTestCase):
         self.assertIsNone(reject_bound.quantity)
         self.assertFalse(reject_bound.has_approved_draft(reject_run))
         self.assertIsNone(reject_draft.decision)
+
+
+class PostDecisionConstructionTests(DraftRuntimeTestCase):
+    """Public initial-Draft construction fails closed once the review recorded a decision.
+
+    ``§6.1`` A makes the Draft quantity follow the Human decision, so an initial Draft fabricated
+    *after* the decision would restate the pre-decision deterministic ``RecommendedPurchaseQty``.  The
+    authorized sequence is unchanged: the initial Draft is opened while the review is open, and after
+    the review records its decision that same Draft binds it through ``with_decision``.
+    """
+
+    def test_d30_public_initial_draft_construction_is_denied_after_approve_as_is(self) -> None:
+        recommendations, instance, draft = self.initial("d30")
+        run = recommendations.analysis_run
+        decision = self.approve(instance, recommendations)
+        self.assertEqual(decision.approved_value, Fraction(100, 1))
+
+        with self.assertRaises(DraftError):
+            open_draft(instance)
+        with self.assertRaises(DraftError):
+            draft_module.ProcurementRequestDraft(review=instance)
+        # No new Draft can restate the pre-decision deterministic quantity.
+        bound = draft.with_decision(instance.decision, run)
+        self.assertIs(bound.decision, decision)
+        self.assertEqual(bound.quantity, Fraction(100, 1))
+
+    def test_d31_public_initial_draft_construction_is_denied_after_an_override(self) -> None:
+        recommendations, instance, draft = self.initial("d31")
+        run = recommendations.analysis_run
+        self.assertEqual(draft.quantity, Fraction(100, 1))
+        decision = self.override(instance, recommendations, "150")
+
+        with self.assertRaises(DraftError):
+            open_draft(instance)
+        with self.assertRaises(DraftError):
+            draft_module.ProcurementRequestDraft(review=instance)
+
+        # The Human override value is what the Draft states; the deterministic 100 is not reachable
+        # through any newly constructed Draft.
+        bound = draft.with_decision(instance.decision, run)
+        self.assertIs(bound.decision, decision)
+        self.assertEqual(decision.approved_value, Fraction(150, 1))
+        self.assertEqual(bound.quantity, Fraction(150, 1))
+        self.assertNotEqual(bound.quantity, Fraction(100, 1))
+        self.assertEqual(draft.quantity, Fraction(100, 1))
+
+    def test_d32_public_initial_draft_construction_is_denied_after_reject(self) -> None:
+        recommendations, instance, draft = self.initial("d32")
+        run = recommendations.analysis_run
+        decision = instance.reject(
+            current_analysis_run=run,
+            reason=REASON,
+            actor_reference=ACTOR,
+            clock=_clock,
+        )
+
+        with self.assertRaises(DraftError):
+            open_draft(instance)
+        with self.assertRaises(DraftError):
+            draft_module.ProcurementRequestDraft(review=instance)
+        # A rejected review forms no approved Draft at all.
+        bound = draft.with_decision(instance.decision, run)
+        self.assertIs(bound.decision, decision)
+        self.assertEqual(bound.draft_state(run), "REJECTED")
+        self.assertIsNone(bound.quantity)
+        self.assertFalse(bound.has_approved_draft(run))
+
+    def test_d33_the_initial_draft_opened_before_the_decision_still_binds(self) -> None:
+        # The authorized sequence, for each registered decision outcome, using one initial Draft that
+        # was opened while the review was still open.
+        override_then = lambda instance, recommendations: self.override(  # noqa: E731 - local fixture
+            instance, recommendations, "150"
+        )
+
+        def take_reject(instance, recommendations):
+            return instance.reject(
+                current_analysis_run=recommendations.analysis_run,
+                reason=REASON,
+                actor_reference=ACTOR,
+                clock=_clock,
+            )
+
+        cases = (
+            ("approve-as-is", self.approve, Fraction(100, 1)),
+            ("override", override_then, Fraction(150, 1)),
+            ("reject", take_reject, None),
+        )
+        for label, take_decision, expected in cases:
+            with self.subTest(decision=label):
+                recommendations, instance, initial = self.initial(f"d33-{label}")
+                run = recommendations.analysis_run
+                self.assertIsNone(initial.decision)
+                self.assertEqual(initial.quantity, Fraction(100, 1))
+                self.assertTrue(initial.is_actionable(run))
+
+                decision = take_decision(instance, recommendations)
+                self.assertIs(instance.decision, decision)
+
+                # Public initial-Draft construction is closed; the pre-existing initial Draft is the
+                # only route to the post-decision Draft, and it binds only the recorded decision.
+                with self.assertRaises(DraftError):
+                    open_draft(instance)
+                bound = initial.with_decision(instance.decision, run)
+                self.assertIs(bound.decision, decision)
+                self.assertIsNot(bound, initial)
+                if expected is None:
+                    self.assertIsNone(bound.quantity)
+                    self.assertEqual(bound.draft_state(run), "REJECTED")
+                else:
+                    self.assertEqual(bound.quantity, decision.approved_value)
+                    self.assertEqual(bound.quantity, expected)
+                # The initial Draft stays the immutable pre-decision artifact it always was.
+                self.assertIsNone(initial.decision)
+                self.assertEqual(initial.quantity, Fraction(100, 1))
+                self.assertEqual(initial.draft_state(run), DRAFT)
 
 
 def open_review_valid_absence(recommendations, risk):

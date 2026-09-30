@@ -41,7 +41,10 @@ That binding is not optional and not bypassable through public construction: the
 takes only the review instance and always yields an **initial** Draft, so a decision-bearing Draft is
 formed **only** by the validated :meth:`ProcurementRequestDraft.with_decision` path.  A caller cannot
 inject a ``HumanDecision`` -- and with it a decision-derived quantity -- by constructing a Draft
-directly.
+directly.  Public initial-Draft construction also **fails closed** once the review instance has
+recorded a Human decision: an initial Draft fabricates a *pre-decision* view that ``§6.1`` A no longer
+authorizes, so the recorded decision is reflected by binding it into the initial Draft that was formed
+before the decision -- the Draft is never silently recreated from the deterministic value.
 
 Deliberate boundaries (``HD-DRAFT-R1`` / §6.1):
 
@@ -185,14 +188,17 @@ class ProcurementRequestDraft:
     ``RecommendationNeedDate`` is not stored: it is derived from the review grain on every access, so
     neither this Draft nor any renderer can modify it (``§6.1`` B).
 
-    **Public construction cannot inject a decision.**  The only public construction path is
-    ``ProcurementRequestDraft(review=...)`` / :func:`open_draft`, which always yields an **initial**
-    Draft with no ``HumanDecision``; the decision field is ``init=False``, so
-    ``ProcurementRequestDraft(review=..., decision=...)`` is not an expressible call and neither is
-    ``dataclasses.replace``.  A decision-bearing Draft therefore exists only through the validated
-    binding path :meth:`with_decision`, which accepts the decision the review actually recorded and
-    then forms the new immutable Draft through the narrow private factory
-    :func:`_form_decided_draft`.
+    **Public construction cannot inject a decision, and creates only a pre-decision Draft.**  The only
+    public construction path is ``ProcurementRequestDraft(review=...)`` / :func:`open_draft`, which
+    always yields an **initial** Draft with no ``HumanDecision``; the decision field is ``init=False``,
+    so ``ProcurementRequestDraft(review=..., decision=...)`` is not an expressible call and neither is
+    ``dataclasses.replace``.  Public construction additionally **fails closed** once the review
+    instance has recorded its own decision: an initial Draft would restate the *pre-decision*
+    deterministic ``RecommendedPurchaseQty`` while ``§6.1`` A requires the Draft quantity to follow the
+    Human decision, so no such Draft may be fabricated afterwards.  A decision-bearing Draft therefore
+    exists only through the validated binding path :meth:`with_decision`, which accepts the decision
+    the review actually recorded and then forms the new immutable Draft through the narrow private
+    factory :func:`_form_decided_draft`.
     """
 
     review: ReviewInstance
@@ -202,6 +208,31 @@ class ProcurementRequestDraft:
     #: :func:`_form_decided_draft`, after :meth:`with_decision` has accepted the decision the review
     #: actually recorded.
     decision: HumanDecision | None = field(default=None, init=False)
+
+    def __post_init__(self) -> None:
+        """Fail closed when an **initial** Draft is requested for an already-decided review instance.
+
+        ``§6.1`` A makes the Draft quantity decision-dependent once a Human decision exists: an
+        approved Draft states ``approved_value`` and a rejected review forms no approved Draft.  A
+        freshly opened initial Draft would instead restate the **pre-decision** deterministic
+        ``RecommendedPurchaseQty``, so public initial-Draft construction is legal **only** while
+        ``review.decision is None``.
+
+        A decision-bearing Draft is never built through this path: :func:`_form_decided_draft` forms it
+        from :meth:`with_decision`, which requires the decision the review actually recorded.  The
+        authorized sequence is therefore unaffected: open the initial Draft while the review is still
+        open, let the review record its decision, then bind that recorded decision.
+        """
+
+        if self.review.decision is not None:
+            raise DraftError(
+                "an initial Draft can only be opened while the review instance has not recorded a "
+                "Human decision, but this review instance already recorded a Human decision of kind "
+                f"{self.review.decision.decision_kind!r}; its result must be reflected truthfully "
+                "(§6.1 A), so a pre-decision Draft is never fabricated afterwards. Bind that recorded "
+                "decision into the initial Draft that was formed before the decision by calling "
+                "with_decision(recorded_decision, current_analysis_run)"
+            )
 
     # --- registered identity --------------------------------------------------------------
 
@@ -287,10 +318,9 @@ class ProcurementRequestDraft:
         * the review instance is stale -- a stale Draft can never be approved or revived;
         * the review instance has **already recorded its own Human decision** (approved or rejected)
           -- the Human decision lifecycle belongs to ``ReviewInstance``, and the Draft layer neither
-          restates it nor grants a second decision on top of it.  This holds for a Draft opened after
-          the review was decided (it carries no decision of its own yet is still not actionable) and
-          for an initial Draft opened *before* the decision was taken (once the review records its
-          decision, that same Draft stops being actionable).
+          restates it nor grants a second decision on top of it.  This is reachable through an initial
+          Draft that was opened *before* the decision was taken: once the review records its decision,
+          that same Draft stops being actionable.
 
         Non-actionable once any decision has been bound to this Draft as well: an approved Draft is
         already decided and a rejected Draft is **terminal** -- a rejection is never turned into an
@@ -331,8 +361,8 @@ class ProcurementRequestDraft:
 
         Binding an *already recorded* decision is not a new Human decision, so it is not gated by
         :meth:`is_actionable`: a review instance that has recorded its decision is not actionable for
-        a further decision, yet binding that one recorded decision is exactly how the corresponding
-        post-decision Draft is formed.
+        a further decision, yet binding that one recorded decision into the initial Draft formed before
+        the decision is exactly how the corresponding post-decision Draft is formed.
         """
 
         if self.is_stale(current_analysis_run):
@@ -394,20 +424,24 @@ def _form_decided_draft(
 ) -> ProcurementRequestDraft:
     """The **only** path that forms a decision-bearing Draft (``§6.1`` C / D).
 
-    The public constructor accepts only the review instance (``decision`` is ``init=False``), so this
-    narrow private factory is the single way a Draft can come to carry a ``HumanDecision``.  It is
-    called by :meth:`ProcurementRequestDraft.with_decision` **after** that method has rejected a stale
-    or already-decided Draft and :func:`_require_identity` has accepted the decision the review
-    actually recorded -- so no public construction path can reach a decision-derived quantity without
-    the validated binding.
+    The public construction path is initial-only -- it accepts just the review instance and fails
+    closed once that instance has recorded a decision -- so this narrow private factory is the single
+    way a Draft can come to carry a ``HumanDecision``.  It is called by
+    :meth:`ProcurementRequestDraft.with_decision` **after** that method has rejected a stale or
+    already-decided Draft and :func:`_require_identity` has accepted the decision the review actually
+    recorded, so no public construction path can reach a decision-derived quantity without the
+    validated binding.
 
-    The formed Draft is still ``frozen``: the field is written once, during construction of the new
-    artifact, and the previous Draft is never touched.  This is plain local immutability, not a
-    security framework: it closes the normal public-API construction path, and no canonical instance
-    identifier, serializer, persistence or durable identity is introduced to do it.
+    It builds the new artifact directly (the public ``__init__`` / ``__post_init__`` guard deliberately
+    does not apply to a *bound* Draft) and the result is still ``frozen``: the fields are written once,
+    during construction of the new artifact, and the previous Draft is never touched.  This is plain
+    local immutability, not a security framework: it closes the normal public-API construction path,
+    and no canonical instance identifier, serializer, persistence or durable identity is introduced to
+    do it.
     """
 
-    draft = ProcurementRequestDraft(review=review)
+    draft = object.__new__(ProcurementRequestDraft)
+    object.__setattr__(draft, "review", review)
     object.__setattr__(draft, "decision", decision)
     return draft
 
@@ -422,6 +456,12 @@ def open_draft(review: ReviewInstance) -> ProcurementRequestDraft:
     This is the **only** public construction path besides the class constructor, and neither accepts a
     ``HumanDecision``: a decision-bearing Draft is formed only by the validated
     :meth:`ProcurementRequestDraft.with_decision` binding.
+
+    It **fails closed** when the review instance has already recorded its own Human decision: an
+    initial Draft formed at that point would restate the pre-decision deterministic quantity instead of
+    the Human decision's outcome, and ``§6.1`` A requires the Draft quantity to follow the decision.
+    The ``HumanDecision`` is then reflected by binding it into the initial Draft that was formed before
+    the decision.
 
     Opening a Draft never mutates the deterministic result, never persists anything and never contacts
     a provider.

@@ -9602,11 +9602,17 @@ production readiness ／ POC success = NOT CLAIMED
 > look-alike 可通过三项比较）；② `is_actionable` 未尊重 underlying `ReviewInstance` 的 terminal decision，
 > 使已 approve ／ reject 的 review 上重新 open 的 Draft 被误报为 actionable；③ public constructor
 > `ProcurementRequestDraft(review=..., decision=...)` 可**绕过**全部 binding 校验直接注入 `HumanDecision`
-> （进而得到 `Draft.quantity = forged HumanDecision.approved_value`）。三者已收敛为下方「严格限定」的
-> `review.decision is decision`、`is_actionable` 与「public construction 不得注入 `HumanDecision`」三条约束，
-> 并列入 B 的 Required Test evidence（`D24` ～ `D29`）；对应既有三项 identity 比较**保留**为
-> defense-in-depth，**未**引入 canonical instance ID ／ serializer ／ persistence ／ durable identity ／
-> 新依赖 ／ 新 business vocabulary。
+> （进而得到 `Draft.quantity = forged HumanDecision.approved_value`）；④ 已记录 decision 的 review 仍可经
+> `open_draft(review)` ／ public constructor **重新**产生一个未绑定 initial Draft，其 quantity 回到
+> **decision 前**的 deterministic `RecommendedPurchaseQty`（例：deterministic 100 ／ Human override 150，
+> 却仍可得到 quantity = 100 的 Draft），与 `§6.1` A 及本小节 D 的
+> 「initial Draft → applicable HumanDecision exists ⇒ Draft truthfully reflects approved_value」冲突
+> （`is_actionable = False` 不能修正 Draft 自身的 quantity ／ state 仍停留在 pre-decision view）。四项已收敛
+> 为下方「严格限定」的 `review.decision is decision`、`is_actionable`、「public construction 不得注入
+> `HumanDecision`」与「public initial-Draft construction 要求 `review.decision is None`」四条约束，并列入 B
+> 的 Required Test evidence（`D24` ～ `D33`）；对应既有三项 identity 比较**保留**为 defense-in-depth，
+> **未**引入 canonical instance ID ／ serializer ／ reload contract ／ factory protocol ／ 新 public runtime
+> carrier ／ persistence ／ durable identity ／ 新依赖 ／ 新 business vocabulary。
 
 **A. 已实现的 Draft surface（current state）**
 
@@ -9619,6 +9625,7 @@ production readiness ／ POC success = NOT CLAIMED
 | supplier identity absent | `IMPLEMENTED` | Draft **无** supplier 字段（模块无 supplier 参数 ／ 属性） |
 | reject ／ stale ／ new-`AnalysisRun` lifecycle | `IMPLEMENTED` | `.draft_state` ／ `.is_actionable` ／ `.has_approved_draft` ／ `.with_decision` |
 | public construction 只能形成 initial Draft | `IMPLEMENTED` | `ProcurementRequestDraft(review=...)` ／ `open_draft`（`decision` 为 `init=False`，**不**是 constructor 参数） |
+| public initial-Draft construction 要求 `review.decision is None` | `IMPLEMENTED` | `ProcurementRequestDraft.__post_init__`（已记录 decision ⇒ `DraftError`，fail closed） |
 | decision-bearing Draft 只能由 validated binding 形成 | `IMPLEMENTED` | `ProcurementRequestDraft.with_decision`（校验后经 private factory `_form_decided_draft`） |
 
 **严格限定（不得被后续实现放宽）：**
@@ -9638,10 +9645,21 @@ production readiness ／ POC success = NOT CLAIMED
   （`HumanDecision` 为 ephemeral in-process runtime artifact，无 reload contract，故 in-process identity
   即为 binding 证据）；
 - `is_actionable` **同时**尊重 underlying `ReviewInstance` 的 terminal decision：review instance 已记录
-  decision（approved ／ rejected）⇒ Draft **不** actionable（不论该 Draft 自身是否已绑定 decision，也不论它
-  是 decision 前 open 的 initial Draft 还是 decision 后重新 open 的 Draft）；stale ⇒ **不** actionable
-  （不变）；绑定一个 review **已记录**的 decision **不是**新的 Human decision（故不受 `is_actionable`
-  限制），而这正是形成 post-decision Draft 的路径；Draft 层**不**重新定义 Human decision lifecycle；
+  decision（approved ／ rejected）⇒ Draft **不** actionable（适用于 decision **前**已形成的 initial Draft：
+  review 一旦记录 decision，该 Draft 即不再 actionable，**不**论该 Draft 自身是否已绑定 decision）；
+  stale ⇒ **不** actionable（不变）；绑定一个 review **已记录**的 decision **不是**新的 Human decision
+  （故不受 `is_actionable` 限制），而这正是形成 post-decision Draft 的路径；Draft 层**不**重新定义 Human
+  decision lifecycle；
+- **public initial-Draft construction 要求 `review.decision is None`**：`ProcurementRequestDraft(review=...)`
+  与 `open_draft(review)` 是**唯一** public initial-Draft construction path，且在该 review instance 已记录
+  `HumanDecision` 时 **fail closed**（`DraftError`）；**不**得自动产生一个未绑定 initial Draft —— 否则其
+  quantity ／ state 会退回 **decision 前**的 deterministic view（例：deterministic 100 ／ Human override 150，
+  却得到 quantity = 100 的 Draft），与 `§6.1` A 及本小节 D 冲突（`is_actionable = False` **不**能修正 Draft
+  自身的 quantity ／ state）；合法顺序**不变**：review open 时形成 initial Draft → review 记录 decision →
+  `initial.with_decision(review.decision, current_analysis_run)`；原 initial Draft 保持 immutable（其
+  deterministic quantity 是 **decision 前已形成的历史 ephemeral artifact**，允许保留）；**不**得为
+  「decided review → reconstruct post-decision Draft」引入 serializer ／ reload contract ／ factory protocol ／
+  新 public runtime carrier ／ persistence ／ canonical ID；
 - **public Draft construction 不得注入 `HumanDecision`**：唯一 public construction path 为
   `ProcurementRequestDraft(review=...)` ／ `open_draft`，**只**形成 initial Draft；`decision` 字段为
   `init=False`（**不**是 constructor 参数，`dataclasses.replace` 亦无法设置），故
@@ -9663,7 +9681,7 @@ production readiness ／ POC success = NOT CLAIMED
 
 **B. Required Gates evidence（本小节 G obligations）**
 
-- `tests/test_hitl_draft.py` 以 `§10.6` G 的 contract 分组覆盖全部义务（`D1` ～ `D29`）：Initial（quantity ＝
+- `tests/test_hitl_draft.py` 以 `§10.6` G 的 contract 分组覆盖全部义务（`D1` ～ `D33`）：Initial（quantity ＝
   deterministic 值、显式 `DRAFT` marker、不要求 ／ 不虚构 `HumanDecision`）、Decision-derived
   （approve-as-is ⇒ `approved_value`；override ⇒ Human override `approved_value`；等值 override 仍为 override；
   deterministic recommendation unchanged）、Read-only ／ absence（`RecommendationNeedDate` 派生只读、
@@ -9676,10 +9694,13 @@ production readiness ／ POC success = NOT CLAIMED
   decision 前 open 的 initial Draft `is_actionable = False`；reject 同理；`with_decision`(该 review 实际记录的
   decision) 仍产生对应 immutable post-decision Draft）、Public construction guard（public constructor
   signature 仅 `review`；`decision=` ／ positional 注入 forged `approved_value` ／ value-identical copy ／
-  另一 `ReviewInstance` decision 均为 `TypeError`，`dataclasses.replace` 亦不可设置；任何可构造 Draft
-  quantity 只为 deterministic 值；validated binding path 的 approve-as-is ／ override ／ reject 语义不变）、
-  Claim boundary、Exact semantics、Architecture boundaries（zero persistence ／ network ／ provider capability、
-  narrow public surface、既有 HITL ／ override behaviour 不变）；
+  另一 `ReviewInstance` decision 均为 `TypeError`，`dataclasses.replace` 亦不可设置；validated binding path
+  的 approve-as-is ／ override ／ reject 语义不变）、Post-decision construction guard（approve-as-is ／
+  explicit override ／ reject 之后 `open_draft(review)` 与 `ProcurementRequestDraft(review=review)` 均
+  `DraftError`，**不**重新产生 deterministic quantity 的未绑定 Draft；decision 前形成的 initial Draft
+  仍可 `with_decision(review.decision, run)`，覆盖 100 → override 150 ⇒ quantity = 150 及 reject ⇒
+  quantity = None）、Claim boundary、Exact semantics、Architecture boundaries（zero persistence ／ network ／
+  provider capability、narrow public surface、既有 HITL ／ override behaviour 不变）；
 - 既有 `tests/test_hitl_review.py`（H ／ R ／ B ／ O 共 67 tests）**全部保持通过**，未修改既有断言；
 - fixtures 复用既有 end-to-end SIMULATED chain builder；全部输入 `SIMULATED`。
 
