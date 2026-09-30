@@ -121,6 +121,25 @@ Procurement Request Draft         = DESIGN RESOLVED（scoped to Draft generation
                                   ephemeral ／ POC runtime artifact（不 persistence ⇒ 不触发 §8）；
                                   §7 ／ Architecture re-entry = NOT TRIGGERED ／ NOT REQUIRED；
                                   Draft runtime implementation = NOT STARTED ／ NOT AUTHORIZED）
+Draft runtime tranche             = CODE START GATE PASS / IMPLEMENTATION AUTHORIZED（scoped；
+  （Code Start；Issue #212）          Issue #212；HD-DRAFT-R1 Runtime Architecture = Option A =
+                                  existing Python package + deterministic／local Draft assembly +
+                                  in-process + ephemeral + non-canonical Draft + 消费既有
+                                  ReviewInstance／AnalysisRun／HumanDecision surfaces + no new
+                                  dependency／persistence／Web／API／workflow engine／network／egress／
+                                  hosted LLM／credential／RBAC-identity-data-scope-Tool-permission
+                                  enforcement／audit platform／production execution／ERP write；
+                                  ADR = NOT REQUIRED（local／low blast-radius／reversible／无新长期
+                                  基础设施或技术承诺；不是 waiver、非 Human Decision 替代 ADR、
+                                  不继承 ADR-001／002 scope）；HD-DRAFT-R2 scoped tranche =
+                                  existing ReviewInstance／AnalysisRun → initial ephemeral Draft
+                                  （quantity = deterministic RecommendedPurchaseQty）→ applicable
+                                  HumanDecision exists ⇒ Draft truthfully reflects approved_value
+                                  → Reject／stale／new AnalysisRun lifecycle；严格遵守 §6.1 D1～D5；
+                                  hosted LLM wording = OUT OF SCOPE（未来引入须重新进入
+                                  Architecture／egress gate，不得继承 ADR-002）；§7／§8 =
+                                  NOT TRIGGERED；§9.4 不推进；Draft runtime = NOT STARTED；
+                                  Unrestricted implementation = NOT AUTHORIZED）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：

@@ -7663,6 +7663,14 @@ POC success                          = NOT CLAIMED
 - `Draft generation` 的 **runtime implementation** 仍 `NOT STARTED ／ NOT AUTHORIZED`：本小节只登记语义，
   实现前须独立通过 applicable DoR ／ Code Start assessment。
 
+> **Current-state Gate follow-up（Issue #212）：** 上述 DoR ／ Code Start assessment 其后已完成并通过：
+> canonical 登记见 [POC Design §10.6](#draft-runtime-code-start-gate)，其中
+> `Draft Runtime Code Start Gate = PASS`（7 PASS ＋ 2 NOT TRIGGERED ＋ 1 NOT REQUIRED；0 blocking gate items）且
+> `Draft Runtime Tranche = IMPLEMENTATION AUTHORIZED`（**仅**该 scoped tranche），其 Human Architecture
+> disposition（`HD-DRAFT-R1` ＝ Option A、ADR = NOT REQUIRED）与 Architecture re-entry conditions 均登记于该处。
+> 本小节 A ～ G 的**语义**与 D1 ～ D5 **未**改变；本 follow-up **不**修改本小节任何文字，也**不**使 `§6` overall
+> 离开 `DESIGN PENDING`。
+
 #### G. 本小节不修改
 
 `§6` 原六行 `DESIGN PENDING` 表与 Issue #198 design record 的文字、`§10.3` ／ `§10.4` ／ `§10.5` 的已登记
@@ -9351,6 +9359,224 @@ production readiness ／ POC success       = NOT CLAIMED
 
 `IMPLEMENTED` **不等于** `VALIDATED`，**不等于** business accepted，也**不等于** `POC SUCCESS`；本 tranche 的
 验证证据**仅**为 SIMULATED fixtures 上的 deterministic `unittest` 与 CI。
+
+<a id="draft-runtime-code-start-gate"></a>
+
+### 10.6 Draft Runtime — Architecture Disposition ／ Code Start Gate（Issue #212）
+
+**Registration Status：`REGISTERED`**
+**Canonical concern：** `Procurement Request Draft` runtime 最小 tranche 的 Human Architecture disposition ／
+DoR ／ Code Start 结果 ／ scoped implementation authorization ／ Architecture re-entry conditions。
+**Verification base：** current `main @ 5489c7f9804640d003bfea0bf006b68989e4ece1`。
+**Task：** [Issue #212](https://github.com/Cha-wei/cy-supply-chain-ai-copilot/issues/212)。
+**Authority：** Human Decision（`HD-DRAFT-R1` ／ `HD-DRAFT-R2`）＋ `§6.1`（Draft scoped semantic design，
+Issue #210 的 D1 ～ D5）＋ `§6` 第 2 ／ 4 ／ 6 ／ 8 项 ＋ `§3.6` ～ `§3.8` ＋ `§5.15` ＋ `§2.5.15` ＋
+`§10.4`（HD-3 override 契约）＋ `§10.5` G（既有 override runtime）＋ `§10.1` A ～ F（IRM-1 two-stage gate 与
+CSG 口径）。
+
+**本小节登记一个独立 change unit；它不写 code、不改 tests、不新建 ADR。**
+
+#### A. Human Decision registration and authority
+
+- **`HD-DRAFT-R1` — Runtime Architecture = APPROVED（Option A）**：
+
+  ```text
+  existing Python package
+  + deterministic ／ local Draft assembly
+  + in-process
+  + ephemeral
+  + non-canonical Procurement Request Draft
+  + consume existing ReviewInstance ／ AnalysisRun ／ HumanDecision surfaces
+  + no new dependency
+  + no persistence ／ DB
+  + no Web ／ API ／ workflow engine
+  + no network ／ provider egress
+  + no hosted LLM
+  + no credential
+  + no RBAC ／ identity ／ data-scope ／ Tool-permission enforcement
+  + no audit platform
+  + no production execution ／ ERP write
+  ```
+
+  Draft wording ／ presentation 在本 scoped runtime 中使用 **deterministic local assembly**（无 hosted LLM、
+  无 egress、无 credential）。`§6.1 D` 对**未来** LLM wording 的允许语义**保持不变**，但：
+
+  ```text
+  hosted LLM wording = OUT OF SCOPE for this tranche
+  ```
+
+- **`HD-DRAFT-R2` — scoped coding tranche = APPROVED**：
+
+  ```text
+  existing ReviewInstance ／ AnalysisRun
+    → initial ephemeral Draft（quantity = deterministic RecommendedPurchaseQty）
+    → applicable HumanDecision exists ⇒ Draft truthfully reflects approved_value
+    → Reject ／ stale ／ new AnalysisRun lifecycle
+  ```
+
+  严格遵守 `§6.1` D1 ～ D5。
+
+#### B. ADR disposition（scoped reasoning）
+
+```text
+本 change unit 不新建 ADR。
+本 scoped technical choice  ADR = NOT REQUIRED
+```
+
+- 本 disposition 是**本次独立 Human Architecture disposition**：Human 判断该 choice 属 **local ／
+  low blast-radius ／ reversible ／ no new long-lived infrastructure ／ no new technology commitment**；
+- 因此该 scoped choice **不属于** `CONTRIBUTING §10` 中要求 ADR 的**重大、长期、难回滚或 Blast Radius 较大**的
+  Architecture Decision；
+- 准确表述是「该 choice **不落入**需要 ADR 的决策类别」：**不是** ADR requirement 被 waived，**不是** Human
+  Decision 替代 ADR，**不**继承或扩大 `ADR-001` ／ `ADR-002` 的 scope；
+- **不新建 ADR 不改变**：`ADR-001` ／ `ADR-002` 的 Approved Decision 文字、各自 scope 与 Revisit
+  Conditions。
+
+#### C. DoR ／ Code Start criteria
+
+| Gate item | Result | Authority ／ rationale |
+| --- | --- | --- |
+| Objective | **PASS** | 目标可复述：在既有 in-process review runtime 上产出 **ephemeral non-canonical `Procurement Request Draft`**，初始 quantity ＝ deterministic `RecommendedPurchaseQty`，Human decision 后 truthful 反映 `approved_value`，并保持 reject ／ stale ／ new-run lifecycle |
+| Scope ／ Out of Scope | **PASS** | 见本小节 D ／ E |
+| Acceptance Criteria | **PASS** | `§6.1` A ～ E 的每条语义客观可断言（Draft 标记、quantity 权威、NeedDate 只读、supplier 缺席、lifecycle、non-canonical 地位） |
+| Dependencies | **PASS** | **无新依赖**；所需输入全部已存在于既有 runtime（见本小节 D） |
+| Canonical Semantic Completeness | **PASS** | `§6.1`（Issue #210，D1 ～ D5）已 `DESIGN RESOLVED`；readiness assessment **未发现**新的业务语义缺口 |
+| Architecture Authority | **PASS** | `HD-DRAFT-R1`（Human-approved）＋ 本小节 B 的 scoped ADR disposition |
+| §7 trigger | **NOT TRIGGERED** | 无 role ／ data-scope ／ Tool-permission 强制执行；无 secret-bearing integration；Draft 不持 credential |
+| §8 trigger | **NOT TRIGGERED** | Draft 保持 ephemeral，不持久化 Human decision ／ approval history ／ Draft |
+| §10 Architecture re-entry | **NOT REQUIRED（本 tranche）** | 见本小节 F 的 re-entry conditions |
+| Testability | **PASS** | `§9.1` deterministic `unittest` ＋ 既有 SIMULATED chain builder 足以覆盖本小节 G 的全部义务 |
+
+```text
+Draft Runtime Code Start Gate = PASS
+
+Gate accounting（10 个 gate item）：
+  7 PASS           —— Objective ／ Scope ／ Out of Scope ／ Acceptance Criteria ／ Dependencies ／
+                      Canonical Semantic Completeness ／ Architecture Authority ／ Testability
+                      （本小节 C 表中 Result 为 **PASS** 的条目）
+  2 NOT TRIGGERED  —— §7 trigger ／ §8 trigger（**不是** PASS；是未触发）
+  1 NOT REQUIRED   —— §10 Architecture re-entry（**不是** PASS；是不需要）
+  0 blocking gate items
+
+technical ／ semantic blockers = 0
+New Human Decision Required   = NO
+```
+
+#### D. Implementation readiness（**非** canonical business semantics）
+
+以下只是**实现就绪性指引**，不新增 canonical 语义、不规定内部 field layout：
+
+- 消费**既有** surface：`ReviewInstance.recommended_purchase_qty`（initial Draft quantity）、
+  `ReviewInstance.grain`（含 `RecommendationNeedDate`）、`ReviewInstance.analysis_run` ／ `is_stale` ／
+  `status` ／ `is_stale_forever`（lifecycle）、`HumanDecision.approved_value` ／
+  `deterministic_recommended_value` ／ `decision_kind` ／ `override_flag` ／ `grain` ／ `analysis_run`
+  （decision-derived value 的**唯一**来源）。这些均**已存在**，**不**是新的 authoritative input channel；
+- Draft 由 **deterministic local assembly** 产生；**不**引入 LLM、provider、network、credential 或新依赖；
+- Draft 必须**显式**标记 `DRAFT`，并保持
+
+  ```text
+  RecommendedPurchaseQty ≠ ApprovedPurchaseQty ≠ PurchaseOrderQty
+  ```
+
+- initial Draft **可以只基于** deterministic result：Human decision 尚未存在时**不要求**也不得虚构
+  `HumanDecision`；Human decision 出现后，任何 decision-derived value **只能**来自对应 `HumanDecision`；
+- Draft = **non-canonical ＋ ephemeral ＋ POC runtime artifact**；**不**进入 deterministic result、**不**成为
+  企业事实；**不新增** canonical entity ／ field ／ grain ／ enum ／ business status；
+- lifecycle 复用既有机制**不变**：per-ReviewInstance ／ per-AnalysisRun；stale non-actionable ／ 不得复活；
+  rejected terminal；approved Draft 绑定对应 `HumanDecision`；override 不跨 `AnalysisRun` 继承；
+  **不**扩展为完整 HITL state machine。
+
+**In scope：** 上述 scoped Draft runtime tranche。
+**Out of scope（本 tranche 不得实现）：** 任何 re-entry condition（本小节 F）；hosted LLM wording；supplier
+selection ／ ranking；修改 `RecommendationNeedDate` ／ delivery date；Draft 的 persistence；完整 HITL state
+machine；execution boundary **实现**；ERP ／ production write；P1。
+
+#### E. Scope 与 Architecture re-entry conditions
+
+**本 tranche 授权范围** ＝ 本小节 A 的 `HD-DRAFT-R2` shape（严格限定于 D 的边界）。
+
+**Architecture re-entry conditions** —— 出现以下任一项时，**必须**重新进入 `§10.1 D` §10 row 与
+`CONTRIBUTING §10` 的 Architecture re-entry，且**不得**沿用本小节的 scoped disposition：
+
+```text
+persistence ／ DB
+Web ／ API ／ workflow engine
+network ／ provider egress
+hosted LLM
+RBAC ／ identity ／ data-scope ／ Tool-permission enforcement
+cross-process ／ service ／ multi-client shape
+new long-lived dependency ／ infrastructure
+production execution ／ ERP write
+Tool protocol ／ Agent framework
+```
+
+**特别登记（`§6.1 D` 的直接延续）：** 若未来 runtime 使用 **hosted LLM** 生成 Draft wording，**必须**在
+implementation 前**重新判断** Architecture ／ egress authorization；`ADR-002` 的 hosted egress approval
+**只覆盖 AI Explanation**，**不得**被自动继承为 Draft 的 egress 授权（`ADR-002` 的 scope 与 Revisit
+Conditions 不变）。另加条件：Human 事后判定该 choice 的 blast radius 高于本登记的判断时，重新进入
+Architecture Decision。
+
+#### F. `§7` ／ `§8` ／ `§9.4` disposition
+
+```text
+§7    = NOT TRIGGERED
+§8    = NOT TRIGGERED（仅因不持久化）
+§9.4  = 不推进（仍 DESIGN PENDING ／ JIT-BLOCKED）
+```
+
+- **`§7`：** 本 tranche 不实施任何身份 ／ 权限 ／ 数据范围**强制执行**，无 secret-bearing integration、
+  无 egress、无 credential（Draft 由 deterministic local assembly 产生）⇒ **NOT TRIGGERED**。
+  若未来任一 re-entry condition（尤其 hosted LLM 或 RBAC）进入，则**立即**重新触发相应 §7 concern；
+- **`§8`：** Draft 与 decision 均为 in-process runtime object，**不**持久化任何 Human decision ／ approval
+  history ／ Draft ⇒ **NOT TRIGGERED**。一旦任何 unit 开始**持久化** Draft ／ decision trace ／
+  rule version 等，`§10.1 D` 的 §8 blocker **立即重新生效**，须先取得相应 Human Approval；
+- **`§9.4`：** 本 tranche **不**构成 business acceptance evidence，**不**表示 approval semantics 已验证，
+  也**不**使 `§9.4` 可 closure（仍 `DESIGN PENDING` ／ `JIT-BLOCKED`）。SIMULATED unit tests 与 Human merge
+  **不**等同于 business acceptance。
+
+#### G. Required Test obligations（future coding unit）
+
+以 **contract completeness** 口径登记，**不**是固定 test 数量配额；测试输入一律 `SIMULATED`。
+
+| 组 | 必须证明的行为 |
+| --- | --- |
+| **Initial Draft** | initial Draft quantity **＝** deterministic `RecommendedPurchaseQty`；Draft **显式**标记 `DRAFT`；initial Draft **不要求**且**不虚构** `HumanDecision` |
+| **Decision-derived** | approve-as-is ⇒ Draft 反映 `approved_value`（＝ deterministic 值）；explicit quantity override ⇒ Draft 反映 **Human override `approved_value`**；该值**只能**取自对应 `HumanDecision`（不得由 Draft 推导）；deterministic recommendation **逐字未变** |
+| **Read-only ／ 缺席** | `RecommendationNeedDate` **只读原样**（＝ recommendation grain 值，不得被 Draft 修改）；**supplier identity absent**；**no invented structured values**（无对应 `HumanDecision` 时不得出现 decision-derived value） |
+| **Lifecycle** | reject ⇒ **不**形成 approved Draft 且 rejected Draft **terminal ／ non-actionable**；stale Draft **non-actionable ／ 不得 approve ／ 不得复活**；new `AnalysisRun` ⇒ **新** `ReviewInstance` ＋ **新** Draft；override **not inherited**；**four-component `AnalysisRun` mismatch** 逐项覆盖 |
+| **Claim boundary** | Draft **永不**被表述为 ERP Purchase Request ／ Purchase Order ／ submitted record ／ production execution |
+| **Exact semantics** | quantity 断言使用 exact rational payload，**无** float、**无** round ／ quantize ／ truncate ／ clamp ／ normalize（`§4.3.25` C-5） |
+| **Boundaries** | **zero persistence**；**zero network ／ egress**；**no** canonical entity ／ enum ／ business status 被引入；既有 HITL ／ override（approve-as-is ／ override ／ reject）**regressions 全部保持** |
+
+#### H. Scoped implementation authorization ／ claim boundary
+
+```text
+Draft Runtime Code Start Gate = PASS（本小节 C）
+Draft Runtime Tranche         = IMPLEMENTATION AUTHORIZED（仅本小节 A ／ D 的 scope）
+Draft runtime                 = NOT STARTED（本小节不写 code）
+Unrestricted implementation   = NOT AUTHORIZED
+§6.1 Draft semantic design    = DESIGN RESOLVED（不变）
+§6 overall                    = DESIGN PENDING（原六行表不变：完整 state machine ／
+                                execution boundary 实现 ／ 持久化 ／ 身份强制执行 均未解决）
+§7 overall                    = NOT RESOLVED
+§8                            = 不 closure（五行均 DESIGN PENDING）
+§9.4                          = DESIGN PENDING ／ JIT-BLOCKED
+rule ／ code-version freshness = NOT RESOLVED
+production execution          = OUTSIDE POC
+source ／ production WRITE     = DENIED
+business acceptance ／ durable approval evidence ／ identity-permission enforcement
+production readiness ／ POC success = NOT CLAIMED
+```
+
+- 本小节**不**构成 implementation evidence，**不**表示 Draft runtime 已实现或 tested，也**不**表示
+  approval semantics 已验证；
+- 本小节**不新增** canonical entity ／ field ／ grain ／ enum ／ business rule ／ status，**不新增** runtime
+  protocol ／ carrier ／ serialization contract；
+- **gate PR merge 前 `runtime coding = NOT AUTHORIZED`**；merge 后本 scoped authorization 生效，随后由**独立**
+  coding unit 实施；
+- 本小节**不修改**：`§6` 原六行表与 Issue #198 record、`§6.1` A ～ G 的实质内容、`§10.1` A ～ F、`§10.2`、
+  `§10.3` A ～ J 的实质内容、`§10.4` A ～ G 的实质内容、`§10.5` A ～ G 的实质内容、`§3` ／ `§5` ／ `§7` ／
+  `§8` ／ `§9` 的已登记语义、`ADR-001` ／ `ADR-002`、`FROZEN` baseline；**不**回写任何历史时点记录。
 
 ## 11. Open Design Backlog
 
