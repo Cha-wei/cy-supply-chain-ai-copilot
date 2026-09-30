@@ -698,6 +698,115 @@ class TerminalActionabilityTests(DraftRuntimeTestCase):
         self.assertEqual(instance.recommended_purchase_qty, Fraction(100, 1))
 
 
+class PublicConstructionGuardTests(DraftRuntimeTestCase):
+    """The public construction path cannot inject a ``HumanDecision`` (review follow-up).
+
+    ``ProcurementRequestDraft`` is public surface, so a bare constructor that accepted a ``decision``
+    argument would let a caller bypass ``review.decision is decision`` -- and every registered identity
+    comparison with it -- and form ``Draft.quantity = forged HumanDecision.approved_value``.  These
+    tests pin the closure of that path: public construction yields an **initial** Draft only, and a
+    decision-bearing Draft comes **only** from the validated binding path.
+    """
+
+    def test_d28_the_public_constructor_cannot_inject_a_human_decision(self) -> None:
+        _built, recommendations, risk = self.reviewable("d28")
+        run = recommendations.analysis_run
+        instance = self.open(recommendations, risk)
+        other = self.open(recommendations, risk)
+        decision = self.override(instance, recommendations, "150")
+        other_decision = self.override(other, recommendations, "175")
+
+        # The public constructor takes only the review instance: `decision` is not a parameter, so a
+        # decision can neither be passed by keyword nor positionally.
+        self.assertEqual(
+            tuple(inspect.signature(draft_module.ProcurementRequestDraft).parameters), ("review",)
+        )
+        self.assertNotIn(
+            "decision", inspect.signature(draft_module.ProcurementRequestDraft).parameters
+        )
+
+        candidates = (
+            ("forged approved_value", dataclasses.replace(decision, approved_value=Fraction(999, 1))),
+            ("value-identical copy", dataclasses.replace(decision)),
+            ("other ReviewInstance decision", other_decision),
+        )
+        # `other_decision` genuinely satisfies every registered identity comparison of `instance`,
+        # so only the construction guard prevents it from being carried into a Draft of `instance`.
+        self.assertEqual(other_decision.analysis_run, instance.analysis_run)
+        self.assertEqual(other_decision.grain, instance.grain)
+        self.assertEqual(
+            other_decision.review_projection_reference, instance.review_projection_reference
+        )
+
+        for label, candidate in candidates:
+            with self.subTest(candidate=label):
+                with self.assertRaises(TypeError):
+                    draft_module.ProcurementRequestDraft(review=instance, decision=candidate)
+                with self.assertRaises(TypeError):
+                    draft_module.ProcurementRequestDraft(review=instance, **{"decision": candidate})
+                with self.assertRaises(TypeError):
+                    draft_module.ProcurementRequestDraft(instance, candidate)
+                # The init-disabled field cannot be set through dataclasses.replace either
+                # (CPython reports this as TypeError; ValueError is accepted for older versions).
+                with self.assertRaises((TypeError, ValueError)):
+                    dataclasses.replace(open_draft(instance), decision=candidate)
+
+        # Every constructible Draft of this review instance states the deterministic value only: no
+        # forged quantity (999) and no other instance's value (175) is reachable.
+        initial = draft_module.ProcurementRequestDraft(review=instance)
+        self.assertIs(initial.review, instance)
+        self.assertIsNone(initial.decision)
+        self.assertEqual(initial.quantity, Fraction(100, 1))
+        self.assertEqual(initial.draft_state(run), DRAFT)
+        self.assertFalse(initial.has_approved_draft(run))
+        for candidate in candidates:
+            self.assertNotEqual(initial.quantity, candidate[1].approved_value)
+
+        # The binding that survives the guard still refuses the look-alikes and the foreign decision.
+        for _label, candidate in candidates:
+            with self.assertRaises(DraftError):
+                open_draft(instance).with_decision(candidate, run)
+
+    def test_d29_the_validated_binding_path_still_forms_the_post_decision_draft(self) -> None:
+        # approve-as-is
+        recommendations, instance, draft = self.initial("d29-approve")
+        run = recommendations.analysis_run
+        decision = self.approve(instance, recommendations)
+        bound = draft.with_decision(instance.decision, run)
+        self.assertIs(bound.decision, decision)
+        self.assertEqual(bound.quantity, decision.approved_value)
+        self.assertEqual(bound.quantity, Fraction(100, 1))
+        self.assertTrue(bound.has_approved_draft(run))
+        self.assertIsNone(draft.decision)
+
+        # explicit override
+        override_recommendations, override_instance, override_draft = self.initial("d29-override")
+        override_run = override_recommendations.analysis_run
+        override_decision = self.override(override_instance, override_recommendations, "150.25")
+        override_bound = override_draft.with_decision(override_instance.decision, override_run)
+        self.assertIs(override_bound.decision, override_decision)
+        self.assertIs(override_decision.override_flag, True)
+        self.assertEqual(override_bound.quantity, override_decision.approved_value)
+        self.assertEqual(override_bound.quantity, Fraction(601, 4))
+        self.assertNotEqual(override_bound.quantity, override_bound.deterministic_recommended_value)
+
+        # reject: terminal, forms no approved Draft, states no approved quantity
+        reject_recommendations, reject_instance, reject_draft = self.initial("d29-reject")
+        reject_run = reject_recommendations.analysis_run
+        reject_decision = reject_instance.reject(
+            current_analysis_run=reject_run,
+            reason=REASON,
+            actor_reference=ACTOR,
+            clock=_clock,
+        )
+        reject_bound = reject_draft.with_decision(reject_instance.decision, reject_run)
+        self.assertIs(reject_bound.decision, reject_decision)
+        self.assertEqual(reject_bound.draft_state(reject_run), "REJECTED")
+        self.assertIsNone(reject_bound.quantity)
+        self.assertFalse(reject_bound.has_approved_draft(reject_run))
+        self.assertIsNone(reject_draft.decision)
+
+
 def open_review_valid_absence(recommendations, risk):
     """Open a review instance over a valid-absence result (no recommendation by design)."""
 
