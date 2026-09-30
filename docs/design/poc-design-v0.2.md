@@ -8230,6 +8230,38 @@ prose；credential 仅以「**process environment only**，执行后**立即清�
   必须先完成 §6 design gate 及其适用的 §7 ／ §8 依赖；
 - **不得**由本 closure 提前设计 §6 ／ §7 ／ §8 的实质内容，也**不得**把 §6 ～ §8 标记为已 closure。
 
+**Current-state correction（Issue #216）：** 上方「为何仍 `DESIGN PENDING`」是 **Issue #176 时点的 historical
+premise**，原文保持、不回写；其中关于 evidence object 是否存在的判断在 current `main` 上**已不再成立**：
+
+```text
+Issue #176 时点 premise（historical）：
+  Human Review ／ Modify ／ Approve ／ Reject 与 business acceptance 的 evidence objects 尚不存在
+
+Current main current state：
+  Review ／ quantity Modify ／ Approve ／ Reject ／ Procurement Request Draft
+  runtime surfaces = 已存在
+    Review ／ Approve ／ Reject          → §10.3 J（Issue #202）
+    quantity Modify（HD-3 override）     → §10.4 ／ §10.5 G（Issue #204 ／ #208）
+    Procurement Request Draft            → §6.1 ／ §10.6 I（Issue #210 ／ #214）
+
+因此本层当前仍为 DESIGN PENDING ／ JIT-BLOCKED，
+  **不是**因为这些 runtime objects 不存在，
+  而是因为 scoped acceptance ／ evidence boundary **尚未设计**；
+  applicable §7 ／ §8 dependency 的适用性判定
+  以及 Human-approved acceptance ／ evidence policy
+  仍留给后续独立 design unit。
+```
+
+同一 historical premise 中另一处 current-state 偏差一并登记（同样只做 current-state correction）：
+上方依赖块把 `Secret Handling` 列入 `DESIGN PENDING`；该 concern 的 **hosted P0 AI Explanation minimum**
+已由 **Issue #180** 的 scoped closure 登记为 `DESIGN RESOLVED`（见
+[§7.1](#secret-handling-minimum)），而 `§7 overall = NOT RESOLVED`、`production Secret Management = NOT CLAIMED`
+**不变**，RBAC ／ Data Scope ／ Tool Permission 仍 `DESIGN PENDING`。
+
+本 correction **只**修正 current-state 前提，**不**推进本层 substantive design，**不**修改上方依赖、
+trigger boundary 与 evidence category 文字，**不**改变 `§9.4 = DESIGN PENDING ／ JIT-BLOCKED`，
+也**不**改变 `§6` overall ／ `§7` overall ／ `§8` 的已登记状态。
+
 **Prerequisite-scope registration（Issue #216；Human Decision `HD-HITL-ACCEPT-R1`）：**
 
 **Registration Status：`REGISTERED`（prerequisite-scope interpretation only；本层 Status **不变**）**
@@ -8265,7 +8297,7 @@ applicable §6 design gate = SATISFIED at the scoped POC HITL boundary
 
 | 项 | Disposition |
 | --- | --- |
-| full HITL state machine ／ 完整 workflow 细节 | **Deferred**（`§1` Out of Scope 已登记） |
+| full HITL state machine ／ 完整 workflow 细节 | **Deferred**（`§1` `GSD-5` classification table） |
 | execution boundary **实现** | **`OUTSIDE POC`**（`§3.12` ／ `VB-29`）；`WRITE = DENIED` 不变 |
 | persistence ／ durable approval history | **future `§8` trigger if introduced**（`§10.1` D §8 row；`§10.6` F） |
 | reviewer identity ／ RBAC enforcement | **future `§7` trigger if introduced**（`§10.1` D §7 row；`§10.6` F） |
