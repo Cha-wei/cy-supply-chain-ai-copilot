@@ -155,6 +155,16 @@ Draft runtime tranche             = CODE START GATE PASS / IMPLEMENTATION AUTHOR
                                   lifecycle 按 §6.1 D1～D5；Draft runtime =
                                   IMPLEMENTED（§10.6 I，Issue #214）；IMPLEMENTED ≠ VALIDATED；
                                   Unrestricted implementation = NOT AUTHORIZED）
+§9.4 acceptance prerequisite       = APPLICABLE §6 DESIGN GATE SATISFIED at the scoped POC HITL boundary
+  scope（design-only；Issue #216 ／   （Review ＋ quantity Modify ＋ Approve ＋ Reject ＋ Procurement Request
+  HD-HITL-ACCEPT-R1）                 Draft ＋ stale ／ re-review ＋ Human Approval ≠ Production Execution）；
+                                    full HITL state machine = Deferred；execution boundary = OUTSIDE POC；
+                                    persistence ／ durable history = future §8 trigger if introduced；
+                                    identity ／ permission enforcement = future §7 trigger if introduced；
+                                    applicable §6 prerequisite satisfied ≠ §6 overall resolved；
+                                    prerequisite ambiguity closed ≠ §9.4 design resolved ⇒
+                                    §9.4 = DESIGN PENDING ／ JIT-BLOCKED（不变；该 scoped acceptance ／
+                                    evidence design 尚未开始、其 substantive closure 尚未授权）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：
