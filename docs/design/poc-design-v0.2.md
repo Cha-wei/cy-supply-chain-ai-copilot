@@ -7429,6 +7429,15 @@ result，**不**成为 `ApprovedPurchaseQty` 的企业事实（`§2.5.15`），�
 `RecommendationNeedDate` ／ delivery date、`ApplicableMOQ`、supplier selection、AI explanation artifact。
 若 upstream ／ need-date 类输入发生变化，**必须**通过**新的 AnalysisRun**重新计算（见第 6 项）。
 
+> **Current-state authority follow-up（Issue #204）：** 本项此前只登记「允许显式 override」，其**业务契约**当时仍未
+> 定义。该缺口已由 Human 批准的 **HD-3 Option A′ — Quantity Override Minimum Contract** 关闭，canonical 登记见
+> [POC Design §10.4](#hd-3-quantity-override-contract)（numeric representation ＝ exact base-10 decimal string；
+> `override > 0`；`approved_value >= ApplicableMOQ`；非法值 decision-level fail closed；不得 round ／ quantize ／
+> clamp ／ normalize；方向不限、无 additional maximum cap；reason 必填；decision kind 仍为 `approve` ＋
+> `override_flag = true`）。`HD-3 semantic gate = CLOSED ／ DESIGN RESOLVED`；**quantity override runtime
+> implementation = NOT STARTED ／ NOT AUTHORIZED**。本 follow-up **不**修改上述第 1 ～ 12 项，**不**使 `§6`
+> overall 离开 `DESIGN PENDING`，也**不**构成 implementation evidence。
+
 **6. Staleness ／ re-review contract（`HD-4`，strict AnalysisRun binding）。** Approval **必须**绑定完整
 `AnalysisRunContext`；approve 前**必须**做 stale check。只要 review 所绑定的 AnalysisRun 与当前 AnalysisRun
 不一致：current review = **stale**；**Approve 不允许**；必须基于**新 AnalysisRun** 重新生成 recommendation；
@@ -7501,7 +7510,9 @@ authoritative 登记见 [POC Design §10.3](#minimal-hitl-tranche-gate)。本 fo
 evidence 见 [POC Design §10.3 J](#minimal-hitl-tranche-gate)，状态为 **`IMPLEMENTED`（reduced tranche）** ——
 H1 ～ H32、independent-review regression cases 与 explanation AnalysisRun binding cases 已由 deterministic
 SIMULATED `unittest` 覆盖。`§6` overall **仍为 `DESIGN PENDING`**：`Draft`、完整 state machine、execution
-boundary 实现、持久化与身份强制执行**均未解决**；`quantity override ／ Modify` **仍为 `DEFERRED ／ OUT OF SCOPE`**；
+boundary 实现、持久化与身份强制执行**均未解决**；`quantity override ／ Modify` 在本 reduced tranche **仍为
+`OUT OF SCOPE`**（其 **HD-3 业务契约**已由 Issue #204 登记为 `DESIGN RESOLVED`，见
+[§10.4](#hd-3-quantity-override-contract)；runtime 仍 `NOT STARTED ／ NOT AUTHORIZED`）；
 本 follow-up **不**修改上述第 1 ～ 12 项，**不**构成 business acceptance evidence，也**不**使 `§9.4` 可 closure。
 
 ---
@@ -8417,11 +8428,13 @@ two-stage gate 与 CSG 验证口径）＋ `§9.1` ／ `§9.2`（test evidence bo
 #### D. Explicitly out of scope（`HD-HITL-R2`）
 
 ```text
-quantity override  ／  Modify                     = DEFERRED ／ OUT OF SCOPE
+quantity override  ／  Modify                     = OUT OF SCOPE（本 reduced tranche）
+HD-3 semantic contract                            = DESIGN RESOLVED（§10.4，Issue #204）
+quantity override runtime implementation          = NOT STARTED ／ NOT AUTHORIZED
 ```
 
-**原因（登记为 Human Decision 的理由，不得由实现者自行补全）：** `HD-3` 尚未定义 override quantity 的
-**完整业务契约**，至少缺：
+**原因（登记为 Human Decision 的理由，不得由实现者自行补全）：** 本 reduced tranche 批准时 `HD-3` 尚未定义 override
+quantity 的**完整业务契约**，至少缺：
 
 ```text
 numeric representation
@@ -8431,8 +8444,13 @@ invalid-value behavior
 rounding ／ clamp ／ normalization
 ```
 
+上述缺口**已由 Issue #204 的 `HD-3` Option A′ 关闭**（canonical 登记见
+[POC Design §10.4](#hd-3-quantity-override-contract)）。但**语义缺口关闭 ≠ 本 tranche 范围扩大**：本 reduced
+tranche **仍不得**存在任何 override ／ Modify 路径（`§10.3` J 的负例义务继续有效），quantity override runtime
+属**独立** implementation unit，且**尚未获授权**。
+
 本 tranche **不得**存在任何 override ／ Modify 路径；也**不得**用 CLI convenience、默认值或隐式推导补齐该
-authority（同 `§10.2` D 的既有口径）。`HD-3` 的业务语义属**独立 Human Decision**。
+authority（同 `§10.2` D 的既有口径）。`HD-3` 的业务语义已由独立 Human Decision 登记（`§10.4`），**不**由实现者补全。
 
 其他 out of scope：Draft generation、完整 HITL state machine、execution boundary 实现、persistence ／ durable
 approval history、reviewer identity ／ RBAC ／ Data Scope ／ Tool Permission enforcement、audit platform、
@@ -8489,7 +8507,8 @@ rule ／ code-version freshness = NOT RESOLVED（不得声称已解决）
 Code Start Gate（reduced §6 HITL runtime tranche） = PASS
 First minimal HITL runtime tranche                 = IMPLEMENTATION AUTHORIZED（仅本小节 C）
 Unrestricted implementation                        = NOT AUTHORIZED
-Quantity override ／ Modify                        = DEFERRED ／ OUT OF SCOPE
+Quantity override ／ Modify                        = OUT OF SCOPE（本 reduced tranche；
+                                                     HD-3 semantic contract 见 §10.4）
 ```
 
 `§10.1 F` 是 **Issue #116 时点记录**（`First deterministic tranche` 的范围），**保持原文、不回写**；本小节登记的是
@@ -8683,7 +8702,8 @@ grain ／ enum ／ carrier ／ protocol，**不**引入 rule ／ code-version fr
 §8                                   = 不 closure（五行均 DESIGN PENDING）
 §9.4                                 = DESIGN PENDING ／ JIT-BLOCKED
 rule ／ code-version freshness        = NOT RESOLVED
-quantity override ／ Modify           = DEFERRED ／ OUT OF SCOPE
+HD-3 semantic contract               = DESIGN RESOLVED（§10.4）
+quantity override ／ Modify runtime   = NOT STARTED ／ NOT AUTHORIZED
 business acceptance ／ durable approval evidence ／ identity-permission enforcement
 production readiness ／ POC success   = NOT CLAIMED
 ```
@@ -8691,6 +8711,223 @@ production readiness ／ POC success   = NOT CLAIMED
 
 `IMPLEMENTED` **不等于** `VALIDATED`，**不等于** business accepted，也**不等于** `POC SUCCESS`；本 tranche 的
 验证证据**仅**为 SIMULATED fixtures 上的 deterministic `unittest` 与 CI。
+
+---
+
+<a id="hd-3-quantity-override-contract"></a>
+
+### 10.4 HD-3 Quantity Override Minimum Contract（Option A′，Issue #204）
+
+**Registration Status：`DESIGN RESOLVED`（design-only；本小节是 Human Decision 的 canonical 登记）**
+**Canonical concern：** `§6` 第 5 项（`HD-3` ＝ M1 override）此前只登记「允许显式 override」而**未**定义其业务契约；
+本小节把 Human 批准的 **Option A′ — Quantity Override Minimum Contract** 登记为 canonical authority，并据此
+**关闭 `HD-3` semantic gate**。
+**Verification base：** current `main @ 17d28fa010ad2654613b004b69bcbd10bfdd5c95`。
+**Task：** [Issue #204](https://github.com/Cha-wei/cy-supply-chain-ai-copilot/issues/204)。
+**Authority：** Human Decision（HD-3 Option A′）＋ `§6` 第 2 ／ 4 ／ 5 ／ 6 项（`HD-2` ～ `HD-4`）＋
+`§2.5.5` ／ `§2.5.7` ／ `§2.5.8` ／ `§2.5.9` ／ `§2.5.15` ＋ `§4.3.25` C-5 ／ `§4.4.42` ＋
+`§10.3` B ／ D（`HD-HITL-R1` ／ `HD-HITL-R2`）。
+
+> **本小节只登记语义，不实现 runtime。** `quantity override runtime implementation = NOT STARTED ／
+> NOT AUTHORIZED`：实现前仍须独立通过 applicable DoR ／ Code Start assessment（见下 F）。
+
+#### A. Numeric representation（HD-3-1）
+
+```text
+input = exact base-10 decimal string
+```
+
+- 复用**既有** exact quantity semantics（`§4.3.25` C-5 的 base-10 decimal string 表示与既有 exact numeric
+  machinery）；**不**创建新的 numeric system、**不**新增 canonical field ／ carrier ／ serialization contract；
+- **不得**引入：binary floating-point、scientific notation、locale comma、thousands separator、
+  **fixed scale**、**decimal precision policy**；
+- **不得** round ／ quantize ／ truncate；
+- `decimal precision` ／ `fixed scale` ／ `quantity rounding` **继续为 `NOT DEFINED`**
+  （`§4.3.25` C-5 ／ `§4.4.42`）；本决定**不**为其取值。
+
+#### B. Zero ／ negative（HD-3-2）
+
+合法 override **只**有：
+
+```text
+override_quantity > 0
+```
+
+```text
+override_quantity = 0   →  INVALID
+override_quantity < 0   →  INVALID
+```
+
+- Human 若决定「本次不采购」，**使用既有 `Reject`**（`§6` 第 7 项）；
+- **不得**用 `Approve + approved_value = 0` 表达「不采购」；
+- 本决定**不**新增 business status ／ enum，也**不**新增「批准 0」语义。
+
+#### C. MOQ relationship（HD-3-3）
+
+override 必须继续满足：
+
+```text
+approved_value >= ApplicableMOQ
+```
+
+- 当前 POC **不允许** Human override **绕过 MOQ**；
+- **不得**修改 `ApplicableMOQ`、**不得**修改 deterministic `RecommendedPurchaseQty`、
+  **不得**修改 `MOQAdjustmentQty`、**不得**根据 override 重算新的 `MOQAdjustmentQty`：
+  这些 deterministic values **始终保持原值**（`§6` 第 5 项：override 不写回 deterministic result）；
+- `MOQAdjustmentQty` 继续**只**属于 deterministic recommendation 的解释（`§2.5.9`），
+  **不**代表已批准量的 MOQ 调整。
+
+#### D. Invalid value behavior（HD-3-4）
+
+任何违反本小节的 override ⇒ **decision-level fail closed**：
+
+```text
+no HumanDecision record
+no deterministic mutation
+review instance remains review-in-progress
+caller may correct input and retry
+```
+
+至少覆盖：
+
+```text
+missing
+non-string ／ non-numeric
+NaN
+Infinity
+scientific notation
+locale ／ thousands formatting
+zero
+negative
+lower than ApplicableMOQ
+其它违反本 HD-3 contract 的值
+```
+
+**不得**降级为：`DATA_INCOMPLETE`、approve-as-is、warning-only decision、deterministic business outcome。
+fail-closed 层级 = **invocation ／ decision level**（与既有 `result_binding` 的 invocation-level rejection 口径
+一致），**不**产生 grain 级 business outcome，**不**污染 deterministic result。
+
+#### E. No implicit modification（HD-3-5）／ Direction（HD-3-6）
+
+系统**不得**对 Human override 做：
+
+```text
+round ／ quantize ／ clamp ／ normalize ／ absolute-value conversion ／ auto-adjust-to-MOQ
+```
+
+Human 输入**必须本身**就是合法 exact value。
+
+在满足 `override > 0` ＋ `override >= ApplicableMOQ` ＋ `reason present` 的前提下，Human **可以**：
+
+```text
+approved_value > RecommendedPurchaseQty
+approved_value < RecommendedPurchaseQty
+approved_value = RecommendedPurchaseQty（显式 override path）
+```
+
+- **不设置** additional maximum cap；
+- 即使 override value 在数值上**碰巧等于** deterministic `RecommendedPurchaseQty`，只要 Human 显式走 override
+  path，仍须 **truthful** 表达该 Human action；**不得**依据数值相等自行改写成 approve-as-is。
+
+#### F. Decision semantics ／ staleness ／ architecture boundary
+
+**Existing authority 的直接延续（不是新的独立 Decision）：**
+
+- override 时 Human reason = **REQUIRED**。authority 为 **`§6` 第 4 项**（`override 存在标志` ＋ Human reason
+  「override 时二者必须同时保留」）与 **`§6` 第 5 项**（deterministic `RecommendedPurchaseQty` ＋ Human override
+  quantity ＋ Human reason 三者必须同时保留）。`HD-5` 是 **Reject** 的 reason contract，**不**作为 override
+  reason 的 authority；
+- override 后最终 decision：
+
+  ```text
+  decision kind                  = approve
+  override_flag                  = true
+  approved_value                 = Human override quantity
+  deterministic_recommended_value = preserved original value
+  Human reason                   = preserved
+  ```
+
+- **不得**新增 `modify` decision kind、canonical enum 或 business status：`Modify` 是 approval **之前** Human 对
+  quantity 的显式 override action，**不是**新的最终 decision kind；
+- decision record 的 **canonical minimal contract 无需扩展**：`§6` 第 4 项已经包含
+
+  ```text
+  deterministic recommended value
+  approved value
+  override existence flag
+  Human reason
+  ```
+
+  以及该记录其余既有字段。本小节**只**规定这些字段的**业务语义**，**不**规定未来 runtime 必须使用
+  `override_reason` ／ `human_reason` 等**具体内部 field layout** —— 当前
+  `snapshot_loader/hitl_review.py` 中的 `override_reason` ／ `human_reason` 属该 reduced tranche 的
+  runtime representation（且 `override_reason = no_quantity_override` 只是当前「无 override」路径的实现细节，
+  `override_reason` 本身也不在 `§6` 的 record surface 上），**不得**由本 docs-only Human Decision registration
+  升格为 HD-3 的 canonical field layout。implementation mapping 留到下一 **Code Start ／ implementation unit**，
+  但届时的实现必须**完整、truthful** 地满足上述 canonical contract。
+
+**Staleness（`HD-4` 不变）：**
+
+```text
+override does not inherit across AnalysisRun
+AnalysisRun mismatch ⇒ old review = stale；old override is not carried forward；
+新 AnalysisRun ⇒ 新 review instance
+```
+
+- **不修改**既有 four-component freshness contract
+  （`analysis_run_id` ＋ `snapshot_package_identity` ＋ `accepted_content_view_digest` ＋ `analysis_date`）；
+- **不新增** rule ／ code-version freshness；**不**声称跨执行 equivalence。
+
+**Architecture ／ JIT（登记）：**
+
+```text
+Architecture re-entry = NOT REQUIRED
+New ADR              = NOT REQUIRED
+§7 trigger           = NOT TRIGGERED
+§8 trigger           = NOT TRIGGERED
+```
+
+前提：future implementation 保持
+
+```text
+existing Python package ＋ in-process ＋ ephemeral
+＋ no new dependency ＋ no persistence ＋ no network ／ egress
+＋ no identity ／ permission enforcement ＋ no production ／ ERP write
+```
+
+`§10.3` B 已明文：`new ／ changed canonical semantics` 本身**不是** automatic Architecture trigger —— 它只需先
+满足 applicable design ／ Human Decision gate（本小节即该 gate）。若未来 implementation **跨越**上述边界
+（persistence ／ DB、Web ／ API ／ workflow engine、network ／ provider egress、RBAC ／ identity ／ data-scope ／
+Tool-permission enforcement、cross-process ／ service ／ multi-client、新的长期依赖、production execution ／
+ERP write-back、Tool protocol ／ Agent framework），则**重新进入**相应 Gate（`§10.1 D` §10 row ／ §7 ／ §8）。
+
+**Gate 边界：**
+
+```text
+HD-3 semantic gate                    = CLOSED ／ DESIGN RESOLVED（本小节）
+quantity override runtime             = NOT STARTED
+quantity override runtime implementation = NOT AUTHORIZED（本小节不授权 coding）
+下一 Gate                              = quantity override runtime implementation readiness ／ Code Start gate
+```
+
+本小节**不**授权 runtime implementation：实现前须独立通过 applicable DoR ／ Code Start assessment，并按实际
+technical choice 判断是否需要 Architecture disposition。
+
+**G. 本小节不修改：** `§6` 第 1 ～ 4 ／ 6 ～ 12 项（含 `HD-2` ／ `HD-4` ～ `HD-7`）、`§6` 原六行
+`DESIGN PENDING` 表、`§10.1` A ～ F、`§10.2`、`§10.3` A ～ J、`§2` ～ `§5` ／ `§7` ／ `§8` ／ `§9` 的已登记语义、
+`ADR-001` ／ `ADR-002`、`FROZEN` baseline、code ／ tests ／ runtime。本小节**不**回写任何历史时点记录。
+
+```text
+HD-3 semantic contract               = DESIGN RESOLVED（Option A′；本小节）
+quantity override ／ Modify runtime   = NOT STARTED ／ NOT AUTHORIZED
+§6 overall                           = DESIGN PENDING（原六行表不变）
+§7 overall                           = NOT RESOLVED
+§8                                   = 不 closure（五行均 DESIGN PENDING）
+§9.4                                 = DESIGN PENDING ／ JIT-BLOCKED
+rule ／ code-version freshness        = NOT RESOLVED
+business acceptance ／ durable approval evidence ／ identity-permission enforcement
+production readiness ／ POC success   = NOT CLAIMED
+```
 
 ---
 

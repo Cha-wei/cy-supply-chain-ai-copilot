@@ -64,11 +64,27 @@ Minimal HITL runtime tranche     = CODE START GATE PASS / IMPLEMENTATION AUTHORI
                                   explanation ↔ AnalysisRun runtime binding = IMPLEMENTED
                                   （ExplanationResult.analysis_run 由 explain_q3 在全部 outcome path
                                   绑定；provider-facing Q3 projection 仍不含 AnalysisRun，无额外 egress）；
-                                  quantity override ／ Modify = DEFERRED ／ OUT OF SCOPE；
+                                  quantity override ／ Modify = OUT OF SCOPE（本 reduced tranche；
+                                  HD-3 业务语义见下方 HD-3 行）；
                                   §7 ／ §8 JIT blocker 未被该严格 scope 触发；不新建 ADR（独立 Human
                                   Architecture disposition）；Unrestricted implementation 仍未授权；
                                   IMPLEMENTED ≠ VALIDATED；无 business acceptance ／ durable approval ／
                                   production-readiness claim）
+HD-3 quantity override contract    = DESIGN RESOLVED（design-only；Issue #204；HD-3 Option A′）
+  （quantity override semantics）     input = exact base-10 decimal string（复用既有 exact quantity
+                                  semantics；不得 binary float ／ scientific notation ／ locale ／
+                                  thousands ／ fixed scale ／ precision policy ／ round ／ quantize ／
+                                  truncate）；override_quantity > 0（= 0 与 < 0 INVALID；「本次不采购」
+                                  用既有 Reject）；approved_value >= ApplicableMOQ（不得绕过 MOQ，
+                                  且不修改 ApplicableMOQ ／ deterministic RecommendedPurchaseQty ／
+                                  MOQAdjustmentQty）；非法值 = decision-level fail closed；
+                                  不得 round ／ quantize ／ clamp ／ normalize ／ auto-adjust-to-MOQ；
+                                  方向不限、无 additional maximum cap；reason 必填；最终 decision =
+                                  approve + override_flag = true + approved_value = Human override
+                                  quantity + deterministic value preserved（不新增 modify kind ／
+                                  enum ／ status）；HD-4 stale 不变；Architecture re-entry ／ New ADR ／
+                                  §7 ／ §8 trigger = NOT REQUIRED ／ NOT TRIGGERED；
+                                  runtime = NOT STARTED ／ NOT AUTHORIZED；DESIGN RESOLVED ≠ IMPLEMENTED）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：
