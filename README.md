@@ -85,17 +85,23 @@ HD-3 quantity override contract    = DESIGN RESOLVED（design-only；Issue #204�
                                   enum ／ status）；HD-4 stale 不变；Architecture re-entry ／ New ADR ／
                                   §7 ／ §8 trigger = NOT REQUIRED ／ NOT TRIGGERED；
                                   runtime = NOT STARTED；DESIGN RESOLVED ≠ IMPLEMENTED）
-Quantity override runtime tranche  = CODE START GATE PASS / IMPLEMENTATION AUTHORIZED（scoped；
-  （Code Start；Issue #206）         Issue #206；DoR ／ Code Start assessment = Code Start Gate PASS
+Quantity override runtime tranche  = CODE START GATE PASS / IMPLEMENTATION AUTHORIZED / IMPLEMENTED
+  （Code Start ＋ impl；Issue #206 ／   （scoped；Issue #206 gate，Issue #208 implementation；
+   #208）                              DoR ／ Code Start assessment = Code Start Gate PASS
                                   （7 PASS ＋ 2 NOT TRIGGERED ＋ 1 NOT REQUIRED；0 blocking items）；
-                                  scope = existing ReviewInstance + explicit Human quantity override
-                                  + approve using the Human override value；边界 = existing Python
-                                  package + in-process + ephemeral + no new dependency / persistence /
-                                  network / egress / identity-permission enforcement /
-                                  ERP-production write；§7 ／ §8 ／ §10 = NOT TRIGGERED ／ NOT REQUIRED；
-                                  Required Test obligations 以 contract completeness 口径登记；
-                                  runtime 仍 NOT STARTED；Unrestricted implementation = NOT AUTHORIZED；
-                                  Code Start Gate = PASS ≠ implemented ／ validated）
+                                  runtime surface = ReviewInstance.approve_with_override
+                                  （snapshot_loader/hitl_review.py）；override 输入 = exact finite
+                                  base-10 decimal string（既有 parse_exact_quantity ／ ExactQuantity），
+                                  要求 > 0 ＋ >= ApplicableMOQ ＋ reason 必填，exact Fraction
+                                  approved_value，无 float ／ round ／ quantize ／ clamp ／ normalize ／
+                                  auto-adjust-to-MOQ；非法值 = decision-level fail closed（无 decision、
+                                  review 保持 OPEN、deterministic 不变、可重试）；decision 仍为 approve
+                                  ＋ override_flag = true（不新增 modify kind ／ enum ／ status）；
+                                  边界 = existing Python package + in-process + ephemeral + no new
+                                  dependency / persistence / network / egress / identity-permission
+                                  enforcement / ERP-production write；§7 ／ §8 ／ §10 =
+                                  NOT TRIGGERED ／ NOT REQUIRED；Unrestricted implementation =
+                                  NOT AUTHORIZED；IMPLEMENTED ≠ VALIDATED）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：

@@ -8710,7 +8710,7 @@ grain ／ enum ／ carrier ／ protocol，**不**引入 rule ／ code-version fr
 §9.4                                 = DESIGN PENDING ／ JIT-BLOCKED
 rule ／ code-version freshness        = NOT RESOLVED
 HD-3 semantic contract               = DESIGN RESOLVED（§10.4）
-quantity override runtime             = NOT STARTED
+quantity override runtime             = IMPLEMENTED（§10.5 G，Issue #208）
 quantity override runtime tranche     = IMPLEMENTATION AUTHORIZED（§10.5，scoped only）
 business acceptance ／ durable approval evidence ／ identity-permission enforcement
 production readiness ／ POC success   = NOT CLAIMED
@@ -8928,13 +8928,17 @@ technical choice 判断是否需要 Architecture disposition。
 > **HD-3 业务契约本身未变**；本 follow-up **不**修改本小节 A ～ G 的任何文字，也**不**使 `§6` overall 离开
 > `DESIGN PENDING`。
 
+> **Current-state implementation follow-up（Issue #208）：** 该 scoped tranche 其后已实现：canonical 登记见
+> [POC Design §10.5 G](#quantity-override-code-start-gate)，`quantity override runtime = IMPLEMENTED`。
+> §10.4 的 HD-3 业务契约与 decision mapping **未被修改**；本 follow-up **不**修改本小节 A ～ G 的任何文字。
+
 **G. 本小节不修改：** `§6` 第 1 ～ 4 ／ 6 ～ 12 项（含 `HD-2` ／ `HD-4` ～ `HD-7`）、`§6` 原六行
 `DESIGN PENDING` 表、`§10.1` A ～ F、`§10.2`、`§10.3` A ～ J、`§2` ～ `§5` ／ `§7` ／ `§8` ／ `§9` 的已登记语义、
 `ADR-001` ／ `ADR-002`、`FROZEN` baseline、code ／ tests ／ runtime。本小节**不**回写任何历史时点记录。
 
 ```text
 HD-3 semantic contract               = DESIGN RESOLVED（Option A′；本小节）
-quantity override ／ Modify runtime   = NOT STARTED ／ NOT AUTHORIZED
+quantity override ／ Modify runtime   = IMPLEMENTED（§10.5 G；Issue #208）
 §6 overall                           = DESIGN PENDING（原六行表不变）
 §7 overall                           = NOT RESOLVED
 §8                                   = 不 closure（五行均 DESIGN PENDING）
@@ -9093,12 +9097,16 @@ override exists only through the explicit new override entry
 no modify decision kind exists
 ```
 
+**Current-state implementation follow-up（Issue #208）：** 上述 updated H25 ／ H27 已按此新含义落地，且本小节 C
+的 scoped tranche 已实现；canonical 登记见 [POC Design §10.5 G](#quantity-override-code-start-gate)。本小节
+A ～ F 的 gate 结论与 authorization 文字**不变**。
+
 #### F. Claim boundary ／ 不修改
 
 ```text
 Quantity Override Runtime Code Start Gate = PASS（本小节 A）
 Quantity Override Runtime Tranche         = IMPLEMENTATION AUTHORIZED（仅本小节 C）
-quantity override runtime                 = NOT STARTED（本小节不写 code）
+quantity override runtime                 = IMPLEMENTED（本小节 G；Issue #208）
 Unrestricted implementation               = NOT AUTHORIZED
 §6 overall                                = DESIGN PENDING（原六行表不变）
 §7 overall                                = NOT RESOLVED
@@ -9117,7 +9125,85 @@ production readiness ／ POC success       = NOT CLAIMED
   `§10.4` A ～ G 的实质内容、`§2` ～ `§5` ／ `§7` ／ `§8` ／ `§9` 的已登记语义、`ADR-001` ／ `ADR-002`、
   `FROZEN` baseline、code ／ tests ／ runtime。本小节**不**回写任何历史时点记录。
 
----
+#### G. Implementation record（Issue #208）
+
+**Registration Status：`IMPLEMENTED`（本小节 C 的 scoped tranche only；本小节是 current-state runtime 记录）**
+**Task：** [Issue #208](https://github.com/Cha-wei/cy-supply-chain-ai-copilot/issues/208)。
+
+**A. 已实现的 override surface（current state）**
+
+| 本小节 C 的 in-scope capability | Current state | Runtime surface |
+| --- | --- | --- |
+| 显式 Human quantity override ＋ 以 override 值 approve | `IMPLEMENTED` | `ReviewInstance.approve_with_override` |
+| 既有 `ApplicableMOQ` 的只读消费 | `IMPLEMENTED` | `ReviewInstance.applicable_moq`（既有 `recommendation.applicable_moq`） |
+| exact override 输入解析 | `IMPLEMENTED` | 既有 `parse_exact_quantity` ／ `ExactQuantity` |
+| override 的 exact `approved_value` | `IMPLEMENTED` | `Fraction(units, 10 ** scale)`（lossless） |
+| truthful decision mapping | `IMPLEMENTED` | `HumanDecision`（`override_flag = True` ＋ internal non-exported `override_reason` ＋ Human reason） |
+
+**严格限定（不得被后续实现放宽）：**
+
+- `approve_as_recommended` 与 `reject` 的签名**仍无** quantity ／ override 参数：as-is 路径**永不可**携带
+  quantity；override **只**经 `approve_with_override` 这一显式入口；
+- 输入必须是 exact finite base-10 decimal string，解析后要求 `> 0` 且 `>=` 既有 `ApplicableMOQ`，并要求
+  non-empty Human reason；**不**做 float ／ round ／ quantize ／ truncate ／ clamp ／ normalize ／
+  absolute-value ／ auto-adjust-to-MOQ，**不**引入 precision ／ scale 语义；
+- 非法输入 ⇒ **decision-level fail closed**（`ReviewPreconditionError` ／ `ReviewConflictError`）：无
+  `HumanDecision`、instance 保持 `OPEN`、deterministic result 与 projection 不变、可修正重试；**不**降级为
+  `DATA_INCOMPLETE` ／ approve-as-is ／ warning-only ／ deterministic business outcome；
+- decision mapping truthful：`decision_kind` **仍为** `approve`，`override_flag = True`，
+  `approved_value` = Human override exact value，`deterministic_recommended_value` = 原 deterministic
+  `RecommendedPurchaseQty`，Human reason 保留；override 数值**碰巧等于** deterministic 值时仍保持
+  `override_flag = True`，**不**静默改写为 approve-as-is；
+- **不**修改 `ApplicableMOQ` ／ `RecommendedPurchaseQty` ／ `MOQAdjustmentQty` ／ `ShortageQty` ／
+  deterministic `ProcurementRecommendation` ／ review projection；
+- **不新增** `modify` decision kind ／ canonical enum ／ business status；`override_reason` 等仍是 runtime
+  implementation detail（**不是** canonical field layout，且**不**导出为 public surface —— override 时的内部
+  reason token 为模块私有，`HumanDecision.override_reason` 字段本身保留）；
+- stale ／ terminal 复用既有机制**不变**（4 组件比较、不可逆 stale、stale 不可复活、approved ／ rejected
+  terminal、新 `AnalysisRun` ⇒ 新 instance、override 不跨 `AnalysisRun` 继承）；**无** rule ／ code-version
+  freshness；
+- **no persistence**、**no network ／ egress**、**no identity ／ permission enforcement**、
+  **no audit platform**、**no Web ／ API ／ workflow engine**、**no ERP ／ production write**、
+  **no Agent ／ Tool protocol**、**no new dependency**。
+
+**B. Required Gates evidence（本小节 E obligations）**
+
+- `tests/test_hitl_review.py` 新增 `O1` ～ `O16`：legal override（>／<／== deterministic 且 == 时仍 truthful；
+  `ApplicableMOQ = 0`）、exact semantics（finite base-10 fixtures，含
+  `999999999999999999.0001`，断言 exact 保留 ／ 无 float ／ 无 rounding-clamp-auto-adjust）、invalid override
+  （24 个非法输入 ＋ reason missing-blank ＋ 不可 override 的 grain，全部断言「无 decision ＋ review `OPEN` ＋
+  deterministic 与 projection 不变 ＋ 修正后重试成功」）、invariants（`ProcurementRecommendation` ／
+  `RecommendedPurchaseQty` ／ `ApplicableMOQ` ／ `MOQAdjustmentQty` ／ `ShortageQty` ／ projection 不变）、
+  state ／ freshness（四个 `AnalysisRun` 组件各自 mismatch、不可逆 stale、terminal、跨 run 不继承）、
+  boundaries（仍为 approve ／无 `modify` 词汇／无 persistence ／ network ／ ERP ／ production 能力）；
+- 既有 `H25` ／ `H27` 已按本小节 E 的指引**合法更新**（未删除或弱化意图）；
+- 验证方式为 `§9.1` deterministic `unittest`，oracle 取自 `§10.4` ／ `§6` 与既有 exact quantity semantics；
+  全部输入 `SIMULATED`。
+
+**C. Boundary（本小节不做什么）**
+
+本小节**不新增** canonical entity ／ field ／ grain ／ enum ／ business rule ／ status，**不新增** runtime
+protocol ／ carrier ／ serialization contract，**不**实现本小节 C 列出的任何 out-of-scope 项，**不**扩大到完整
+HITL state machine；**不修改** `§6` 原六行表与 Issue #198 record、`§10.1` A ～ F、`§10.2`、`§10.3` A ～ J 的
+实质内容、`§10.4` A ～ G 的实质内容、`§2` ～ `§5` ／ `§7` ／ `§8` ／ `§9` 的已登记语义、`ADR-001` ／
+`ADR-002`、`FROZEN` baseline；**不**回写任何历史时点记录。
+
+```text
+Quantity Override Runtime Code Start Gate = PASS（本小节 A）
+Quantity Override Runtime Tranche         = IMPLEMENTATION AUTHORIZED（本小节 C）
+quantity override runtime                 = IMPLEMENTED（本小节 G）
+Unrestricted implementation               = NOT AUTHORIZED
+§6 overall                                = DESIGN PENDING（原六行表不变）
+§7 overall                                = NOT RESOLVED
+§8                                        = 不 closure（五行均 DESIGN PENDING）
+§9.4                                      = DESIGN PENDING ／ JIT-BLOCKED
+rule ／ code-version freshness            = NOT RESOLVED
+business acceptance ／ durable approval evidence ／ identity-permission enforcement
+production readiness ／ POC success       = NOT CLAIMED
+```
+
+`IMPLEMENTED` **不等于** `VALIDATED`，**不等于** business accepted，也**不等于** `POC SUCCESS`；本 tranche 的
+验证证据**仅**为 SIMULATED fixtures 上的 deterministic `unittest` 与 CI。
 
 ## 11. Open Design Backlog
 

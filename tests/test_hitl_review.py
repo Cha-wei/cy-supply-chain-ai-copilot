@@ -20,7 +20,7 @@ result object.  All inputs are ``SIMULATED``.
 
 Boundary assertions are deliberate: this suite checks that the module performs no network call, no
 persistence, no provider egress and no production / ERP write, that it never mutates or recomputes a
-deterministic result, and that no quantity-override path exists anywhere on the surface.
+deterministic result, that the as-is / reject surfaces cannot carry a quantity override, and that the only override path is the explicitly authorized ``approve_with_override`` entry.
 """
 
 from __future__ import annotations
@@ -52,6 +52,7 @@ from snapshot_loader import (
     EXPLANATION_UNAVAILABLE_FOR_REVIEW,
     NO_OVERRIDE_REASON,
     NOTE_REVIEW_EXPLANATION_STALE,
+    NOTE_REVIEW_NO_RECOMMENDATION,
     OUTCOME_EXPLAINED,
     OUTCOME_NO_RECOMMENDATION_BY_DESIGN,
     OUTCOME_PROVIDER_UNAVAILABLE,
@@ -76,6 +77,7 @@ from snapshot_loader import (
     ProcurementRecommendationResult,
     compute_supplier_risk,
     open_review,
+    parse_exact_quantity,
     payload_to_plain,
     projection_reference,
 )
@@ -116,6 +118,12 @@ def _code_constants(module) -> tuple[str, ...]:
         and isinstance(node.value, str)
         and node.value not in documentation
     )
+
+
+def _moq_fraction(quantity: ExactQuantity) -> Fraction:
+    """The exact rational value of one exact base-10 quantity (no precision loss)."""
+
+    return Fraction(quantity.units, 10**quantity.scale)
 
 
 def _clock() -> datetime:
@@ -295,6 +303,64 @@ class HitlReviewTestCase(SupplierRiskInputTestCase):
             actor_reference=supplied,
             clock=_clock,
         )
+
+    def override(
+        self,
+        instance,
+        recommendations,
+        quantity: Any,
+        *,
+        reason: Any = REASON,
+        run=None,
+        actor: Any = ACTOR,
+    ):
+        """Invoke the explicit override path with the given raw Human input."""
+
+        return instance.approve_with_override(
+            current_analysis_run=recommendations.analysis_run if run is None else run,
+            plant_id=PLANT,
+            material_code=DEMAND,
+            recommendation_need_date=self.need_date(recommendations),
+            override_quantity=quantity,
+            reason=reason,
+            actor_reference=actor,
+            clock=_clock,
+        )
+
+    def zero_moq_recommendations(self, recommendations):
+        """The same result with ``ApplicableMOQ = 0`` (a legal, explicit zero MOQ).
+
+        The recommendation stays numeric and applicable: with MOQ 0 the deterministic
+        ``RecommendedPurchaseQty`` equals ``BasePurchaseNeed`` and ``MOQAdjustmentQty`` is 0
+        (``§2.5.8``), so the family is still reviewable and any strictly positive override
+        satisfies the MOQ.
+        """
+
+        return self.with_moq(recommendations, "0")
+
+    def with_moq(self, recommendations, moq_text: str):
+        """The same result re-stated with a different, explicit ``ApplicableMOQ``.
+
+        The deterministic quantities are recomputed **consistently** (``§2.5.8``:
+        ``RecommendedPurchaseQty = max(BasePurchaseNeed, ApplicableMOQ)`` and
+        ``MOQAdjustmentQty = RecommendedPurchaseQty - BasePurchaseNeed``) so the fixture stays a
+        coherent deterministic recommendation; the override path itself never changes them.
+        """
+
+        recommendation = recommendations.for_family(PLANT, DEMAND)
+        assert recommendation is not None
+        moq = parse_exact_quantity(moq_text)
+        assert moq is not None
+        base = recommendation.base_purchase_need
+        assert base is not None
+        recommended = base if _moq_fraction(moq) < base else _moq_fraction(moq)
+        adjusted = dataclasses.replace(
+            recommendation,
+            applicable_moq=moq,
+            recommended_purchase_qty=recommended,
+            moq_adjustment_qty=recommended - base,
+        )
+        return dataclasses.replace(recommendations, recommendations=(adjusted,))
 
     # --- shared assertions ------------------------------------------------------------
 
@@ -969,17 +1035,16 @@ class HumanDecisionRecordTests(HitlReviewTestCase):
             actor_reference=ACTOR,
             clock=_clock,
         )
+        # The as-is and reject paths never state that a quantity override exists: the override
+        # existence flag is truthful on every non-override decision.
         for decision in (approved, rejected):
             self.assertIs(decision.override_flag, False)
             self.assertEqual(decision.override_reason, NO_OVERRIDE_REASON)
             self.assertNotEqual(decision.decision_kind, "modify")
+            self.assertNotEqual(decision.override_flag, True)
 
-        # There is no override / modify runtime path at all: no parameter accepts a quantity, and no
-        # public name on the surface is an override entry point.
-        for name in hitl_module.__all__:
-            lowered = name.lower()
-            self.assertNotIn("override_quantity", lowered)
-            self.assertNotIn("modify", lowered)
+        # The as-is path still cannot carry an override quantity: it exposes no quantity / override /
+        # approved_value parameter, and neither do the projection builder or the review opener.
         import inspect
 
         for entry in (
@@ -998,25 +1063,44 @@ class HumanDecisionRecordTests(HitlReviewTestCase):
             self.assertNotIn("override", parameters)
             self.assertNotIn("approved_value", parameters)
 
-        # The approved value equals the deterministic value in every reachable case.
+        # The approved value equals the deterministic value on the as-is path, and no public name is
+        # a `modify` entry point or a canonical override vocabulary token.
         self.assertEqual(approved.approved_value, approved.deterministic_recommended_value)
+        for name in hitl_module.__all__:
+            self.assertNotIn("modify", name.lower())
+            self.assertNotIn("override_quantity", name.lower())
 
     def test_h26_the_flag_defines_no_future_override_semantics(self) -> None:
         _recommendations, _risk, _instance, decision = self._decision("h26")
         payload = decision.to_dict()
         self.assertEqual(payload["override_reason"], NO_OVERRIDE_REASON)
-        # The flag's own value names no future override quantity domain, MOQ relation, sign rule or
-        # rounding policy, and no code constant of the module registers one.
+        # The non-override flag names no business domain, MOQ relation, sign rule or rounding policy,
+        # and no code constant of the module registers such an override policy.
         for forbidden in ("moq", "MOQ", "rounding", "clamp", "quantize", "negative", "domain"):
             self.assertNotIn(forbidden, payload["override_reason"])
         for constant in _code_constants(hitl_module):
-            for forbidden in ("OVERRIDE_DOMAIN", "OVERRIDE_MOQ", "OVERRIDE_SCALE", "rounding", "clamp"):
+            for forbidden in (
+                "OVERRIDE_DOMAIN",
+                "OVERRIDE_MOQ",
+                "OVERRIDE_SCALE",
+                "OVERRIDE_ROUNDING",
+                "rounding",
+                "clamp",
+                "quantize",
+            ):
                 self.assertNotIn(forbidden, constant)
-        for forbidden in ("override_domain", "override_moq", "override_quantity", "modify"):
+        # The override implementation adds no new override *policy* vocabulary: the only registered
+        # shape is the registered contract (§10.4), and it is expressed by realising exactly the
+        # values the contract fixes -- a strictly positive value, the > 0 check, the existing
+        # ApplicableMOQ comparison and the reason requirement.
+        for forbidden in ("override_domain", "override_scale", "override_rounding"):
             self.assertFalse(
                 {name for name in MODULE_IDENTIFIERS if forbidden in name.lower()},
                 f"a future override semantic is named in code: {forbidden}",
             )
+        self.assertFalse({name for name in MODULE_IDENTIFIERS if "modify" in name.lower()})
+        self.assertIn("approve_with_override", MODULE_IDENTIFIERS)
+        self.assertTrue({name for name in MODULE_IDENTIFIERS if "OVERRIDE_REASON" in name})
 
 
 # --- §10.3 H: out-of-scope negative assertions (6 obligations) ------------------------
@@ -1029,10 +1113,9 @@ class OutOfScopeAssertionTests(HitlReviewTestCase):
         _built, recommendations, risk = self.reviewable("h27")
         instance = self.open(recommendations, risk)
 
-        # The instance exposes no way to change a quantity, and the decision it produces still
-        # carries the deterministic value.
-        surface = {name for name in dir(instance) if not name.startswith("__")}
-        self.assertFalse({name for name in surface if "override" in name.lower()} - {"override_flag"})
+        # The **as-is** path exposes no way to change a quantity, and the decision it produces still
+        # carries the deterministic value.  An override exists only through the explicit override
+        # entry (§10.5 C / E), which is a separate, explicitly named method.
         with self.assertRaises(TypeError):
             instance.approve_as_recommended(  # type: ignore[call-arg]
                 current_analysis_run=recommendations.analysis_run,
@@ -1042,9 +1125,26 @@ class OutOfScopeAssertionTests(HitlReviewTestCase):
                 actor_reference=ACTOR,
                 approved_value=Fraction(999, 1),
             )
+        surface = {name for name in dir(instance) if not name.startswith("__")}
+        override_entries = {name for name in surface if "override" in name.lower()}
+        self.assertEqual(override_entries, {"approve_with_override"})
+
         decision = self.approve(instance, recommendations)
         self.assertEqual(decision.approved_value, Fraction(100, 1))
         self.assertNotEqual(decision.approved_value, Fraction(999, 1))
+        self.assertIs(decision.override_flag, False)
+
+        # No `modify` decision kind exists on any surface, and the decision kind namespace is
+        # unchanged: an override is still an `approve`.  Every identifier of the module is free of
+        # `modify` vocabulary.
+        self.assertEqual(
+            {hitl_module.DECISION_APPROVE, hitl_module.DECISION_REJECT},
+            {"approve", "reject"},
+        )
+        self.assertFalse({name for name in surface if "modify" in name.lower()})
+        for name in hitl_module.__all__:
+            self.assertNotIn("modify", name.lower())
+        self.assertFalse({name for name in MODULE_IDENTIFIERS if "modify" in name.lower()})
 
         # A review instance is immutable: a decision cannot be smuggled in by mutation.
         with self.assertRaises(dataclasses.FrozenInstanceError):
@@ -1505,6 +1605,411 @@ class DecisionEvidenceReferenceShapeTests(HitlReviewTestCase):
             self.assertNotIn(forbidden, serialized)
 
 
+
+
+# --- Explicit Human quantity override approval (§10.4 / §10.5 C / E) ---------------------------
+
+
+class OverrideApprovalTests(HitlReviewTestCase):
+    """The scoped quantity override tranche: legal, exact, fail-closed and state behaviour."""
+
+    # --- legal overrides --------------------------------------------------------------
+
+    def test_o1_a_legal_override_above_the_deterministic_value(self) -> None:
+        _built, recommendations, risk = self.reviewable("o1")
+        instance = self.open(recommendations, risk)
+        decision = self.override(instance, recommendations, "150.25")
+
+        self.assertEqual(decision.decision_kind, DECISION_APPROVE)
+        self.assertEqual(decision.decision_kind, "approve")
+        self.assertIs(decision.override_flag, True)
+        self.assertNotEqual(decision.override_reason, NO_OVERRIDE_REASON)
+        self.assertEqual(decision.approved_value, Fraction(601, 4))  # 150.25 exactly
+        self.assertEqual(decision.deterministic_recommended_value, Fraction(100, 1))
+        self.assertEqual(decision.human_reason, REASON)
+        self.assertGreater(decision.approved_value, decision.deterministic_recommended_value)
+        self.assertEqual(instance.status(recommendations.analysis_run), REVIEW_APPROVED)
+        self.assertIs(instance.decision, decision)
+
+    def test_o2_a_legal_override_below_the_deterministic_value_but_at_the_moq(self) -> None:
+        _built, recommendations, risk = self.reviewable("o2")
+        # An explicit ApplicableMOQ of 20 keeps the deterministic recommendation at the base purchase
+        # need (30) with MOQAdjustmentQty 0 (§2.5.8), so an override strictly between the MOQ and the
+        # recommendation -- ApplicableMOQ <= override < RecommendedPurchaseQty -- is reviewable.
+        fixture = self.with_moq(recommendations, "20")
+        instance = self.open(fixture, risk)
+        self.assertEqual(instance.applicable_moq.text(), "20")
+        self.assertEqual(instance.recommended_purchase_qty, Fraction(30, 1))
+
+        decision = self.override(instance, fixture, "25")
+        self.assertIs(decision.override_flag, True)
+        self.assertNotEqual(decision.override_reason, NO_OVERRIDE_REASON)
+        self.assertEqual(decision.approved_value, Fraction(25, 1))
+        self.assertEqual(decision.deterministic_recommended_value, Fraction(30, 1))
+        # The registered obligation: strictly below the deterministic recommendation ...
+        self.assertLess(decision.approved_value, decision.deterministic_recommended_value)
+        # ... while still satisfying the applicable MOQ.
+        self.assertGreaterEqual(decision.approved_value, Fraction(20, 1))
+        self.assertEqual(decision.human_reason, REASON)
+
+        # The deterministic values are untouched, including the MOQ and MOQAdjustmentQty.
+        recommendation = fixture.for_family(PLANT, DEMAND)
+        assert recommendation is not None
+        self.assertEqual(recommendation.applicable_moq.text(), "20")
+        self.assertEqual(recommendation.recommended_purchase_qty, Fraction(30, 1))
+        self.assertEqual(recommendation.base_purchase_need, Fraction(30, 1))
+        self.assertEqual(recommendation.moq_adjustment_qty, Fraction(0, 1))
+        self.assertEqual(recommendation.shortage_qty, Fraction(30, 1))
+
+    def test_o3_an_override_equal_to_the_deterministic_value_stays_truthful(self) -> None:
+        _built, recommendations, risk = self.reviewable("o3")
+        instance = self.open(recommendations, risk)
+        decision = self.override(instance, recommendations, "100")
+
+        # Numerically equal -- but the Human explicitly took the override path, so the record must
+        # say so and must never be silently rewritten into approve-as-is.
+        self.assertEqual(decision.approved_value, Fraction(100, 1))
+        self.assertEqual(decision.approved_value, decision.deterministic_recommended_value)
+        self.assertIs(decision.override_flag, True)
+        self.assertNotEqual(decision.override_reason, NO_OVERRIDE_REASON)
+        self.assertEqual(decision.human_reason, REASON)
+        self.assertEqual(decision.to_dict()["override_flag"], True)
+
+        # The as-is path on the same input is a different, still-available decision shape.
+        as_is = self.approve(self.open(recommendations, risk), recommendations)
+        self.assertIs(as_is.override_flag, False)
+        self.assertEqual(as_is.override_reason, NO_OVERRIDE_REASON)
+        self.assertIsNone(as_is.human_reason)
+        self.assertEqual(as_is.approved_value, decision.approved_value)
+
+    def test_o4_an_override_with_applicable_moq_zero(self) -> None:
+        _built, recommendations, risk = self.reviewable("o4")
+        zero_moq = self.zero_moq_recommendations(recommendations)
+        instance = self.open(zero_moq, risk)
+        self.assertEqual(instance.applicable_moq.text(), "0")
+
+        # Any strictly positive exact value satisfies a zero MOQ.
+        for quantity, expected in (
+            ("0.1", Fraction(1, 10)),
+            ("1", Fraction(1, 1)),
+            ("10.125", Fraction(81, 8)),
+            ("999999999999999999.0001", Fraction(9999999999999999990001, 10**4)),
+        ):
+            decision = self.override(
+                self.open(zero_moq, risk), zero_moq, quantity
+            )
+            self.assertIs(decision.override_flag, True)
+            self.assertEqual(decision.approved_value, expected, quantity)
+            self.assertEqual(
+                decision.deterministic_recommended_value,
+                zero_moq.for_family(PLANT, DEMAND).recommended_purchase_qty,
+                quantity,
+            )
+
+        # Zero is still invalid even when the MOQ is zero.
+        with self.assertRaises(ReviewPreconditionError):
+            self.override(instance, zero_moq, "0")
+
+    # --- exact semantics --------------------------------------------------------------
+
+    def test_o5_exact_values_are_preserved_without_float_or_normalization(self) -> None:
+        _built, recommendations, risk = self.reviewable("o5")
+        for quantity, expected in (
+            ("100.1", Fraction(1001, 10)),
+            ("110.125", Fraction(881, 8)),
+            ("999999999999999999.0001", Fraction(9999999999999999990001, 10**4)),
+            ("125", Fraction(125, 1)),
+            ("125.00", Fraction(125, 1)),
+            ("+125", Fraction(125, 1)),
+            ("0125.00", Fraction(125, 1)),
+        ):
+            decision = self.override(self.open(recommendations, risk), recommendations, quantity)
+            self.assertEqual(decision.approved_value, expected, quantity)
+            payload = decision.to_dict()
+            self.assertEqual(
+                payload["approved_value"],
+                {"numerator": expected.numerator, "denominator": expected.denominator},
+                quantity,
+            )
+            self.assertEqual(payload["deterministic_recommended_value"],
+                             {"numerator": 100, "denominator": 1}, quantity)
+            self.assert_no_float(payload)
+
+    def test_o6_no_rounding_clamp_or_auto_adjust_is_applied(self) -> None:
+        _built, recommendations, risk = self.reviewable("o6")
+        # A value below the deterministic recommendation is kept exactly: it is not raised to the
+        # recommendation, not clamped to the MOQ boundary, and not rounded to any scale.
+        decision = self.override(self.open(recommendations, risk), recommendations, "100.0001")
+        self.assertEqual(decision.approved_value, Fraction(1000001, 10000))
+        self.assertLess(decision.approved_value, Fraction(101, 1))
+        # A value above is likewise kept: no truncation toward the MOQ or the recommendation.
+        above = self.override(self.open(recommendations, risk), recommendations, "100.999")
+        self.assertEqual(above.approved_value, Fraction(100999, 1000))
+        self.assertNotEqual(above.approved_value, Fraction(101, 1))
+
+    # --- illegal overrides ------------------------------------------------------------
+
+    def test_o7_illegal_override_inputs_fail_closed_and_allow_retry(self) -> None:
+        _built, recommendations, risk = self.reviewable("o7")
+        before = json.dumps(recommendations.to_dict(), sort_keys=True)
+        instance = self.open(recommendations, risk)
+        projection_before = json.dumps(
+            payload_to_plain(instance.projection.payload), ensure_ascii=False, sort_keys=True
+        )
+
+        illegal = {
+            "missing": None,
+            "int": 150,
+            "float": 150.25,
+            "list": ["150"],
+            "dict": {"quantity": "150"},
+            "empty": "",
+            "blank": "   ",
+            "malformed": "1.2.3",
+            "scientific": "1e3",
+            "scientific_upper": "1E3",
+            "locale_comma": "1,000",
+            "thousands_underscore": "1_000",
+            "leading_space": " 150",
+            "trailing_space": "150 ",
+            "no_integer_part": ".5",
+            "no_fraction_part": "150.",
+            "nan": "NaN",
+            "infinity": "Infinity",
+            "negative_infinity": "-Infinity",
+            "zero": "0",
+            "zero_decimal": "0.000",
+            "negative": "-5",
+            "negative_decimal": "-0.5",
+            "below_moq": "99.999",
+            "below_moq_exact": "0.0001",
+        }
+        for label, quantity in illegal.items():
+            with self.assertRaises(ReviewPreconditionError, msg=label):
+                self.override(instance, recommendations, quantity)
+
+        # No decision was produced, the instance is still in review-in-progress, the deterministic
+        # result and the projection are unchanged, and the caller may retry with a corrected value.
+        self.assertIsNone(instance.decision)
+        self.assertEqual(instance.status(recommendations.analysis_run), REVIEW_OPEN)
+        self.assertEqual(json.dumps(recommendations.to_dict(), sort_keys=True), before)
+        self.assertEqual(
+            json.dumps(
+                payload_to_plain(instance.projection.payload), ensure_ascii=False, sort_keys=True
+            ),
+            projection_before,
+        )
+        decision = self.override(instance, recommendations, "100.5")
+        self.assertIs(decision.override_flag, True)
+        self.assertEqual(decision.approved_value, Fraction(201, 2))
+
+    def test_o8_a_missing_or_blank_reason_fails_closed(self) -> None:
+        _built, recommendations, risk = self.reviewable("o8")
+        instance = self.open(recommendations, risk)
+        for bad in (None, "", "   ", "\n\t"):
+            with self.assertRaises(ReviewPreconditionError):
+                self.override(instance, recommendations, "150", reason=bad)
+        self.assertIsNone(instance.decision)
+        self.assertEqual(instance.status(recommendations.analysis_run), REVIEW_OPEN)
+        decision = self.override(instance, recommendations, "150", reason=REASON)
+        self.assertEqual(decision.human_reason, REASON)
+
+    def test_o9_an_override_cannot_be_taken_on_an_unreviewable_grain(self) -> None:
+        _built, recommendations, risk = self.reviewable("o9")
+        _built2, incomplete, incomplete_risk = self.incomplete("o9-incomplete")
+        for label, result, grain_risk in (
+            ("data_incomplete", incomplete, incomplete_risk),
+            ("absent", recommendations, risk),
+        ):
+            material = DEMAND if label == "data_incomplete" else "M-NOT-IN-PACKAGE"
+            instance = open_review(
+                result,
+                plant_id=PLANT,
+                material_code=material,
+                actor_reference=ACTOR,
+                supplier_risk=grain_risk,
+            )
+            with self.assertRaises(ReviewPreconditionError, msg=label):
+                instance.approve_with_override(
+                    current_analysis_run=result.analysis_run,
+                    plant_id=PLANT,
+                    material_code=material,
+                    recommendation_need_date=None,
+                    override_quantity="150",
+                    reason=REASON,
+                    actor_reference=ACTOR,
+                    clock=_clock,
+                )
+            self.assertIsNone(instance.decision)
+
+    # --- invariants -------------------------------------------------------------------
+
+    def test_o10_the_deterministic_result_and_projection_are_unchanged(self) -> None:
+        _built, recommendations, risk = self.reviewable("o10")
+        recommendation = recommendations.for_family(PLANT, DEMAND)
+        assert recommendation is not None
+        before_result = json.dumps(recommendations.to_dict(), sort_keys=True)
+        instance = self.open(recommendations, risk)
+        before_projection = json.dumps(
+            payload_to_plain(instance.projection.payload), ensure_ascii=False, sort_keys=True
+        )
+
+        decision = self.override(instance, recommendations, "150.25")
+
+        self.assertEqual(json.dumps(recommendations.to_dict(), sort_keys=True), before_result)
+        self.assertEqual(
+            json.dumps(
+                payload_to_plain(instance.projection.payload), ensure_ascii=False, sort_keys=True
+            ),
+            before_projection,
+        )
+        self.assertEqual(recommendation.recommended_purchase_qty, Fraction(100, 1))
+        self.assertEqual(recommendation.applicable_moq.text(), "100")
+        self.assertEqual(recommendation.moq_adjustment_qty, Fraction(70, 1))
+        self.assertEqual(recommendation.shortage_qty, Fraction(30, 1))
+        self.assertEqual(recommendation.base_purchase_need, Fraction(30, 1))
+        # The decision links to the projection it reviewed, and the record carries the original
+        # deterministic value rather than the override.
+        self.assertEqual(
+            decision.review_projection_reference, instance.review_projection_reference
+        )
+        self.assertEqual(decision.analysis_run, recommendations.analysis_run)
+        self.assertEqual(decision.grain, instance.grain)
+
+    def test_o11_an_override_preserves_the_evidence_references_and_actor_slot(self) -> None:
+        _built, recommendations, risk = self.reviewable("o11")
+        decision = self.override(
+            self.open(recommendations, risk),
+            recommendations,
+            "150",
+            actor="user:simulated-overriding-reviewer",
+        )
+        self.assertEqual(decision.actor_reference, "user:simulated-overriding-reviewer")
+        kinds = {item["kind"] for item in decision.evidence_references}
+        self.assertEqual(kinds, {EVIDENCE_KIND_UPSTREAM_RESULT, EVIDENCE_KIND_SUPPLIER_RISK})
+        for item in decision.evidence_references:
+            if item["kind"] == EVIDENCE_KIND_UPSTREAM_RESULT:
+                self.assertEqual(set(item), set(REFERENCE_KEYS_UPSTREAM))
+            else:
+                self.assertEqual(set(item), set(REFERENCE_KEYS_SUPPLIER_RISK))
+        self.assertIsInstance(decision.decision_timestamp, datetime)
+
+        # Blank / missing actor slots are refused on the override path as well.
+        for blank in ("", "   ", None):
+            with self.assertRaises(ReviewPreconditionError):
+                self.override(self.open(recommendations, risk), recommendations, "150", actor=blank)
+
+    # --- state / freshness ------------------------------------------------------------
+
+    def test_o12_every_analysis_run_component_mismatch_denies_an_override(self) -> None:
+        _built, recommendations, risk = self.reviewable("o12")
+        for component, value in (
+            ("analysis_run_id", "RUN-2"),
+            ("snapshot_package_identity", "SIMULATED-PKG-FOREIGN"),
+            ("accepted_content_view_digest", "f" * 64),
+            ("analysis_date", "2026-10-02"),
+        ):
+            instance = self.open(recommendations, risk)
+            changed = self.current_run(recommendations, **{component: value})
+            self.assertTrue(instance.is_stale(changed), component)
+            with self.assertRaises(ReviewConflictError, msg=component):
+                self.override(instance, recommendations, "150", run=changed)
+            self.assertIsNone(instance.decision)
+            self.assertEqual(instance.status(changed), REVIEW_STALE)
+            # The stale condition is irreversible: the original run no longer revives the instance.
+            self.assertEqual(instance.status(recommendations.analysis_run), REVIEW_STALE)
+            with self.assertRaises(ReviewConflictError, msg=component):
+                self.override(instance, recommendations, "150")
+
+    def test_o13_an_override_does_not_inherit_across_an_analysis_run(self) -> None:
+        _built, recommendations, risk = self.reviewable("o13")
+        first = self.open(recommendations, risk)
+        first_decision = self.override(first, recommendations, "150")
+
+        new_run = self.current_run(recommendations, analysis_run_id="RUN-2")
+        new_result = dataclasses.replace(recommendations, analysis_run=new_run)
+        replacement = self.open(new_result, risk)
+
+        # A new Analysis Run starts from review-in-progress with no inherited override.
+        self.assertEqual(replacement.status(new_run), REVIEW_OPEN)
+        self.assertIsNone(replacement.decision)
+        self.assertEqual(replacement.recommended_purchase_qty, Fraction(100, 1))
+        second_decision = self.override(replacement, new_result, "100")
+        self.assertIs(second_decision.override_flag, True)
+        self.assertEqual(second_decision.approved_value, Fraction(100, 1))
+        self.assertEqual(second_decision.analysis_run, new_run)
+        self.assertEqual(first_decision.analysis_run, recommendations.analysis_run)
+
+    def test_o14_terminal_instances_refuse_a_further_override(self) -> None:
+        _built, recommendations, risk = self.reviewable("o14")
+
+        approved = self.open(recommendations, risk)
+        first = self.override(approved, recommendations, "150")
+        with self.assertRaises(ReviewConflictError):
+            self.override(approved, recommendations, "200")
+        self.assertIs(approved.decision, first)
+
+        rejected = self.open(recommendations, risk)
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            rejected.decision = None  # type: ignore[misc]
+        rejected_decision = rejected.reject(
+            current_analysis_run=recommendations.analysis_run,
+            reason=REASON,
+            actor_reference=ACTOR,
+            clock=_clock,
+        )
+        with self.assertRaises(ReviewConflictError):
+            self.override(rejected, recommendations, "150")
+        self.assertIs(rejected.decision, rejected_decision)
+        self.assertEqual(rejected.status(recommendations.analysis_run), REVIEW_REJECTED)
+
+        # The as-is path is terminal in the same way.
+        as_is = self.open(recommendations, risk)
+        self.approve(as_is, recommendations)
+        with self.assertRaises(ReviewConflictError):
+            self.override(as_is, recommendations, "150")
+
+    def test_o15_an_override_is_still_an_approve_and_adds_no_vocabulary(self) -> None:
+        _built, recommendations, risk = self.reviewable("o15")
+        decision = self.override(self.open(recommendations, risk), recommendations, "150")
+        self.assertEqual(decision.decision_kind, DECISION_APPROVE)
+        self.assertNotEqual(decision.decision_kind, "modify")
+        self.assertEqual(
+            {hitl_module.DECISION_APPROVE, hitl_module.DECISION_REJECT}, {"approve", "reject"}
+        )
+        for name in hitl_module.__all__:
+            self.assertNotIn("modify", name.lower())
+        for forbidden in ("modify", "MODIFY"):
+            self.assertNotIn(forbidden, json.dumps(payload_to_plain(decision.to_dict())))
+
+    def test_o16_the_override_path_adds_no_io_persistence_or_egress(self) -> None:
+        for forbidden in (
+            "sqlite",
+            "shelve",
+            "pickle",
+            "dbm",
+            "tempfile",
+            "pathlib",
+            "shutil",
+            "urllib",
+            "socket",
+            "subprocess",
+            "environ",
+            "getenv",
+            "erp",
+            "purchaseorder",
+            "production",
+        ):
+            self.assertFalse(
+                {name for name in MODULE_IDENTIFIERS if forbidden in name.lower()},
+                f"a persistence / network / production capability appears in the code: {forbidden}",
+            )
+        _built, recommendations, risk = self.reviewable("o16")
+        instance = self.open(recommendations, risk)
+        decision = self.override(instance, recommendations, "150")
+        self.assertEqual([name for name in dir(instance) if "provider" in name.lower()], [])
+        self.assertNotIn("provider", json.dumps(payload_to_plain(decision.to_dict())).lower())
+        self.assertNotIn("file", instance.to_dict())
 
 
 # --- Explanation ↔ AnalysisRun binding and re-review consumption --------------------------------

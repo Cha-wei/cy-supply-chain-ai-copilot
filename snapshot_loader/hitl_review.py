@@ -26,13 +26,17 @@ runtime outcome + artifact as **read-only auxiliary information only**).  It rec
 nothing, invents no classification / status and changes no provenance.  The artifact is never an
 approval authority.
 
-Deliberate boundaries (``HD-HITL-R1`` / ``§10.3`` C / D):
+Deliberate boundaries (``HD-HITL-R1`` / ``§10.3`` C / D / ``§10.4`` / ``§10.5``):
 
-* **quantity override / Modify is out of scope.**  There is no override quantity, no override
-  domain, no MOQ / zero / negative / rounding rule anywhere in this module, and no path that could
-  accept one.  The Human decision record still carries the registered **override-existence flag**,
-  which in this tranche can only express *"no quantity override"* -- it deliberately defines no
-  future ``HD-3`` semantics.
+* **explicit Human quantity override is bounded by the registered HD-3 contract.**  The only override
+  path is :meth:`ReviewInstance.approve_with_override`, whose input must be an **exact finite base-10
+  decimal string** that parses through the existing exact quantity machinery, is strictly positive,
+  satisfies the existing ``ApplicableMOQ``, and is accompanied by a Human reason.  It never coerces:
+  no float, rounding, quantization, truncation, clamping, normalization, absolute value or
+  auto-adjust-to-MOQ, and no new precision / scale semantics.  A violation fails closed at the
+  decision level, and no ``modify`` decision kind, canonical enum or business status is introduced.
+  The Human decision record carries the registered **override-existence flag**, which truthfully
+  expresses either *"no quantity override"* (the as-is / reject paths) or an explicit Human override.
 * **no persistence.**  Every review instance and decision is an in-process runtime object; nothing
   is written to disk, to a database or to any durable business state.
 * **no network / egress.**  The review projection is never handed to a provider.
@@ -83,6 +87,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from .canonical_objects import AnalysisRunContext
+from .exact_quantity import ExactQuantity, parse_exact_quantity
 from .procurement_recommendation import (
     ProcurementRecommendation,
     ProcurementRecommendationResult,
@@ -181,6 +186,11 @@ DECISION_RECORD_FIELDS: tuple[str, ...] = (
 
 #: The single reason text this tranche can ever state alongside the override-existence flag.
 NO_OVERRIDE_REASON: str = "no_quantity_override"
+#: The internal reason text paired with ``override_flag = True``.  This is a **runtime
+#: implementation detail**, not a canonical field or vocabulary: ``§6`` item 4 registers only that the
+#: override existence flag and the Human reason must be retained together.  It is deliberately **not**
+#: exported from this module or from the package, so the token never becomes public surface.
+_INTERNAL_OVERRIDE_REASON: str = "explicit_human_quantity_override"
 
 #: Deterministic, provider-independent note carried when nothing could be reviewed.
 NOTE_REVIEW_NO_RECOMMENDATION: str = (
@@ -244,6 +254,18 @@ def _rational_payload(value: Fraction | None) -> dict[str, int] | None:
     if value is None:
         return None
     return {"numerator": value.numerator, "denominator": value.denominator}
+
+
+def _exact_fraction(quantity: ExactQuantity) -> Fraction:
+    """One exact base-10 quantity as an exact rational, with no precision loss.
+
+    The registered decision payload is an exact rational (``{"numerator", "denominator"}``), so an
+    override parsed through the existing exact quantity machinery is converted **exactly** here:
+    ``units / 10 ** scale`` is a power-of-ten denominator, so the value is lossless by construction
+    and no rounding, quantization or scale policy is involved.
+    """
+
+    return Fraction(quantity.units, 10**quantity.scale)
 
 
 def _deep_freeze(value: Any) -> Any:
@@ -707,10 +729,14 @@ class HumanDecision:
     and never becomes an ``ApprovedPurchaseQty`` enterprise fact (``§2.5.15``), and it is never
     persisted (durable approval history belongs to ``§8`` and is not implemented here).
 
-    ``override_flag`` is the registered override-existence flag.  In this tranche it can only be
-    ``False`` and ``override_reason`` can only be :data:`NO_OVERRIDE_REASON`: there is no
-    quantity-override path, and this record deliberately defines no future ``HD-3`` override
-    quantity representation, domain, MOQ relation, zero / negative semantics or rounding rule.
+    ``override_flag`` is the registered override-existence flag.  It is ``False`` for the as-is and
+    reject paths (with ``override_reason`` = :data:`NO_OVERRIDE_REASON`), and ``True`` for an explicit
+    Human quantity override (with an internal, non-exported ``override_reason`` value), in which case
+    ``approved_value`` is the exact Human override value while ``deterministic_recommended_value``
+    keeps the original deterministic ``RecommendedPurchaseQty``.  ``override_reason`` is a **runtime
+    implementation detail**, not a canonical field or vocabulary: ``§6`` item 4 registers only that
+    the override existence flag and the Human reason are retained together.  No ``modify`` decision
+    kind, canonical enum or business status is introduced.
 
     ``actor_reference`` is carried verbatim as a **requirement slot** and is required to be
     non-empty for every decision.  It is **not** an identity assertion and **not** a permission
@@ -817,6 +843,17 @@ class ReviewInstance:
         """Whether the deterministic result states an applicable numeric recommendation."""
 
         return self.recommendation is not None and self.recommendation.has_numeric_result
+
+    @property
+    def applicable_moq(self) -> ExactQuantity | None:
+        """The **existing** deterministic ``ApplicableMOQ`` of this grain, or ``None``.
+
+        This is the read-only MOQ the override path validates against (``§10.4`` C).  It is consumed
+        from the already-registered recommendation result -- not a new input channel, not a new
+        contract, and never modified, defaulted or recomputed here.
+        """
+
+        return None if self.recommendation is None else self.recommendation.applicable_moq
 
     @property
     def is_stale_forever(self) -> bool:
@@ -948,7 +985,8 @@ class ReviewInstance:
         open (not stale / rejected / approved) instance, an explicitly matching grain, a non-empty
         actor-reference slot, and an applicable numeric deterministic recommendation.  A matching
         Analysis Run alone is never sufficient, and this method has no parameter that could carry an
-        override quantity.
+        override quantity: the explicit override path is
+        :meth:`approve_with_override` (``§10.4`` HD-3 Option A′ / ``§10.5`` C).
         """
 
         actor = self._require_actor(actor_reference)
@@ -979,6 +1017,117 @@ class ReviewInstance:
             override_flag=False,
             override_reason=NO_OVERRIDE_REASON,
             human_reason=None,
+            evidence_references=self._evidence_references(),
+            actor_reference=actor,
+            decision_timestamp=clock(),
+            review_projection_reference=self.review_projection_reference,
+        )
+        self._record(decision, REVIEW_APPROVED)
+        return decision
+
+    def approve_with_override(
+        self,
+        *,
+        current_analysis_run: AnalysisRunContext,
+        plant_id: Any,
+        material_code: Any,
+        recommendation_need_date: Any,
+        override_quantity: Any,
+        reason: Any,
+        actor_reference: str,
+        clock: Callable[[], datetime] = _instant,
+    ) -> HumanDecision:
+        """Approve an **explicit Human quantity override** of ``RecommendedPurchaseQty`` (``§10.4``).
+
+        The override input is an **exact finite base-10 decimal string**, parsed with the existing
+        exact quantity machinery (``§10.4`` A / ``§10.5`` D).  A usable override requires **all** of:
+
+        * a non-empty actor-reference slot;
+        * a non-stale, open instance whose Analysis Run binding matches and whose grain matches;
+        * an applicable numeric deterministic recommendation;
+        * ``override_quantity`` parses as an exact base-10 decimal and is **strictly positive**
+          (``§10.4`` B: ``= 0`` and ``< 0`` are invalid; a Human who decides not to purchase uses
+          :meth:`reject`);
+        * the value is **>= the existing ``ApplicableMOQ``** (``§10.4`` C: the POC does not let an
+          override bypass the MOQ);
+        * a non-empty Human reason (``§10.4`` F).
+
+        Nothing is ever coerced: no float, rounding, quantization, truncation, clamping,
+        normalization, absolute value or auto-adjust-to-MOQ is applied, and no new precision or scale
+        semantics is introduced.  Any violation fails closed at the **decision level** -- no
+        ``HumanDecision`` is produced, this instance stays in review-in-progress, the deterministic
+        result is untouched, and a corrected input may retry.
+
+        The resulting record states the override truthfully: the decision kind stays
+        :data:`DECISION_APPROVE`, ``override_flag`` is ``True``, ``approved_value`` is the exact
+        Human override value, the deterministic recommended value is preserved, and the Human reason
+        is preserved.  This holds even when the override value happens to equal the deterministic
+        recommendation: an explicit override path is never silently rewritten into approve-as-is.
+        No ``modify`` decision kind, canonical enum or business status is introduced.
+        """
+
+        actor = self._require_actor(actor_reference)
+        self._require_open(current_analysis_run)
+        if self.recommendation is None or not self.recommendation.has_numeric_result:
+            raise ReviewPreconditionError(
+                "only a grain with an applicable numeric deterministic recommendation can be "
+                "overridden: this grain states no applicable numeric recommendation "
+                "(§2.5.8 / §6 item 2)"
+            )
+        if (
+            self.grain[0] != plant_id
+            or self.grain[1] != material_code
+            or self.grain[2] != recommendation_need_date
+        ):
+            raise ReviewConflictError(
+                "the reviewed grain does not match the requested plant_id + material_code + "
+                "RecommendationNeedDate, so this instance cannot decide for that grain (§6 item 2)"
+            )
+        if not isinstance(reason, str) or not reason.strip():
+            raise ReviewPreconditionError(
+                "an override approval requires a Human reason (§10.4 F / §6 item 4); an empty or "
+                "missing reason is not a decision"
+            )
+
+        parsed = parse_exact_quantity(override_quantity)
+        if parsed is None:
+            raise ReviewPreconditionError(
+                "the Human override quantity must be an exact finite base-10 decimal string "
+                "(§10.4 A); a missing, non-string, malformed, scientific-notation, locale-formatted "
+                "or otherwise unrepresentable value is not a usable override and no Human decision "
+                "is recorded"
+            )
+        if parsed.units <= 0:
+            raise ReviewPreconditionError(
+                "the Human override quantity must be strictly positive (§10.4 B): zero and negative "
+                "values are invalid, and a decision not to purchase is expressed with reject()"
+            )
+
+        applicable_moq = self.recommendation.applicable_moq
+        if applicable_moq is None:
+            raise ReviewPreconditionError(
+                "an override cannot be validated against the applicable MOQ because this "
+                "recommendation carries no ApplicableMOQ at all (§10.4 C); no Human decision is "
+                "recorded and no value is defaulted"
+            )
+        if parsed < applicable_moq:
+            raise ReviewPreconditionError(
+                "the Human override quantity must satisfy the existing ApplicableMOQ constraint "
+                "(§10.4 C): the POC does not let an override bypass the MOQ, and the deterministic "
+                "ApplicableMOQ is never modified, defaulted or adjusted"
+            )
+
+        recommended = self.recommendation.recommended_purchase_qty
+        assert recommended is not None  # guarded by has_numeric_result above
+        decision = HumanDecision(
+            decision_kind=DECISION_APPROVE,
+            grain=self.grain,
+            analysis_run=self.analysis_run,
+            deterministic_recommended_value=recommended,
+            approved_value=_exact_fraction(parsed),
+            override_flag=True,
+            override_reason=_INTERNAL_OVERRIDE_REASON,
+            human_reason=reason,
             evidence_references=self._evidence_references(),
             actor_reference=actor,
             decision_timestamp=clock(),
