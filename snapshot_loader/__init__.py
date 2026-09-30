@@ -193,6 +193,12 @@ from .explanation_seam import (
     render_fact_text,
     validate_provider_response,
 )
+from .draft_runtime import (
+    DRAFT_MARKER,
+    DraftError,
+    ProcurementRequestDraft,
+    open_draft,
+)
 from .hitl_review import (
     DECISION_APPROVE,
     DECISION_RECORD_FIELDS,
@@ -581,6 +587,10 @@ __all__ = [
     "COMPLETENESS_COMPLETE",
     "COMPLETENESS_DATA_INCOMPLETE",
     "COMPLETENESS_RECOMMENDATION_NOT_STATED",
+    "DRAFT_MARKER",
+    "DraftError",
+    "ProcurementRequestDraft",
+    "open_draft",
     "DECISION_APPROVE",
     "DECISION_RECORD_FIELDS",
     "DECISION_REJECT",

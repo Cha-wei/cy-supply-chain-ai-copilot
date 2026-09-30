@@ -113,7 +113,7 @@
 `Unrestricted implementation = NOT AUTHORIZED`；`§6` ～ `§9` full closure = NOT CLAIMED；
 `POC success = NOT CLAIMED`。
 
-**Next Gate（current）：** **Draft runtime implementation** —— Human 已通过
+**Next Gate（current）：** **Draft runtime 已实现，等待 Review ／ Acceptance** —— Human 已通过
 [POC Design §10.6](design/poc-design-v0.2.md#draft-runtime-code-start-gate)（Issue #212）作出 **`HD-DRAFT-R1`**
 （Runtime Architecture ＝ **Option A**：existing Python package ＋ deterministic ／ local Draft assembly ＋
 in-process ＋ ephemeral ＋ non-canonical Draft ＋ 消费既有 `ReviewInstance` ／ `AnalysisRun` ／ `HumanDecision`
@@ -126,23 +126,23 @@ ERP write；**ADR = NOT REQUIRED**，理由为该 choice 属 local ／ low blast
 ```text
 Draft Runtime Code Start Gate = PASS（7 PASS ＋ 2 NOT TRIGGERED ＋ 1 NOT REQUIRED；0 blocking gate items）
 Draft Runtime Tranche         = IMPLEMENTATION AUTHORIZED（仅该 scoped tranche）
-Draft runtime                 = NOT STARTED（gate unit 不写 code）
+Draft runtime                 = IMPLEMENTED（§10.6 I，Issue #214）
 ```
 
-scoped tranche ＝ `existing ReviewInstance ／ AnalysisRun → initial ephemeral Draft（quantity = deterministic
-RecommendedPurchaseQty）→ applicable HumanDecision exists ⇒ Draft truthfully reflects approved_value →
-Reject ／ stale ／ new AnalysisRun lifecycle`，严格遵守 `§6.1` D1 ～ D5；`hosted LLM wording = OUT OF SCOPE`；
-Architecture re-entry conditions（persistence ／ DB、Web ／ API ／ workflow engine、network ／ provider egress、
-hosted LLM、RBAC ／ identity ／ data-scope ／ Tool-permission enforcement、cross-process ／ service ／
-multi-client、new long-lived dependency ／ infrastructure、production execution ／ ERP write、Tool protocol ／
-Agent framework）已登记于 `§10.6` E。`§7` ／ `§8` = **NOT TRIGGERED**；`§9.4` **不推进**。
+该 scoped tranche 的 runtime **已实现**（Issue #214；`snapshot_loader/draft_runtime.py`；
+`open_draft` ／ `ProcurementRequestDraft`；current state 见
+[§10.6 I](design/poc-design-v0.2.md#draft-runtime-code-start-gate)）：initial Draft quantity ＝ deterministic
+`RecommendedPurchaseQty` 并显式标记 `DRAFT`；decision 存在后 quantity ＝ 对应 `HumanDecision.approved_value`
+（含 explicit override）；`RecommendationNeedDate` 由 review grain **派生只读**；supplier identity **absent**；
+reject terminal ／ stale non-actionable ／ new `AnalysisRun` ⇒ new instance ＋ new Draft ／ override 不继承。
+`§7` ／ `§8` = **NOT TRIGGERED**；`§9.4` **不推进**；`IMPLEMENTED ≠ VALIDATED ≠ business accepted ≠
+POC SUCCESS`。
 保持：`§6.1 Draft semantic design = DESIGN RESOLVED`；`§6 overall = DESIGN PENDING`；`§7 overall = NOT
 RESOLVED`；`§8` 不 closure；`§9.4 = DESIGN PENDING ／ JIT-BLOCKED`；`Unrestricted implementation = NOT
 AUTHORIZED`；production execution = OUTSIDE POC；source ／ production WRITE = DENIED；`POC success =
 NOT CLAIMED`。
 
-**更早：** **§6 Procurement Request Draft runtime implementation readiness ／ DoR ／ Code Start assessment** ——
-由上述 [§10.6](design/poc-design-v0.2.md#draft-runtime-code-start-gate) 登记关闭（Issue #212）。
+**更早：** **Draft runtime Code Start gate** —— 由上述 [§10.6](design/poc-design-v0.2.md#draft-runtime-code-start-gate) 登记关闭（Issue #212）。
 
 **更早：** **§6 Procurement Request Draft scoped semantics = `DESIGN RESOLVED`** —— Human 于 Issue #210 作出
 **D1 ～ D5** 决定，canonical 登记见 [POC Design §6.1](design/poc-design-v0.2.md#procurement-request-draft-boundary)：

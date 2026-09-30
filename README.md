@@ -120,9 +120,10 @@ Procurement Request Draft         = DESIGN RESOLVED（scoped to Draft generation
                                   deterministic result），LLM 永远仅 wording ／ presentation；Draft = non-canonical ／
                                   ephemeral ／ POC runtime artifact（不 persistence ⇒ 不触发 §8）；
                                   §7 ／ Architecture re-entry = NOT TRIGGERED ／ NOT REQUIRED；
-                                  Draft runtime implementation = NOT STARTED ／ NOT AUTHORIZED）
-Draft runtime tranche             = CODE START GATE PASS / IMPLEMENTATION AUTHORIZED（scoped；
-  （Code Start；Issue #212）          Issue #212；HD-DRAFT-R1 Runtime Architecture = Option A =
+                                  Draft runtime = IMPLEMENTED（§10.6 I，Issue #214）；IMPLEMENTED ≠ VALIDATED）
+Draft runtime tranche             = CODE START GATE PASS / IMPLEMENTATION AUTHORIZED / IMPLEMENTED
+  （Code Start ＋ impl；Issue #212 ／   （scoped；Issue #212 gate，Issue #214 implementation；
+   #214）                              HD-DRAFT-R1 Runtime Architecture = Option A =
                                   existing Python package + deterministic／local Draft assembly +
                                   in-process + ephemeral + non-canonical Draft + 消费既有
                                   ReviewInstance／AnalysisRun／HumanDecision surfaces + no new
@@ -138,7 +139,13 @@ Draft runtime tranche             = CODE START GATE PASS / IMPLEMENTATION AUTHOR
                                   → Reject／stale／new AnalysisRun lifecycle；严格遵守 §6.1 D1～D5；
                                   hosted LLM wording = OUT OF SCOPE（未来引入须重新进入
                                   Architecture／egress gate，不得继承 ADR-002）；§7／§8 =
-                                  NOT TRIGGERED；§9.4 不推进；Draft runtime = NOT STARTED；
+                                  NOT TRIGGERED；§9.4 不推进；runtime surface =
+                                  DRAFT_MARKER ／ DraftError ／ ProcurementRequestDraft ／ open_draft
+                                  （snapshot_loader/draft_runtime.py）；initial Draft quantity =
+                                  deterministic RecommendedPurchaseQty；HumanDecision 存在 ⇒
+                                  approved_value 原样进入 Draft；reject ／ stale ／ new AnalysisRun
+                                  lifecycle 按 §6.1 D1～D5；Draft runtime =
+                                  IMPLEMENTED（§10.6 I，Issue #214）；IMPLEMENTED ≠ VALIDATED；
                                   Unrestricted implementation = NOT AUTHORIZED）
 ```
 
