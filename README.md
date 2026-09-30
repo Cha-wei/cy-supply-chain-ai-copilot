@@ -84,7 +84,7 @@ HD-3 quantity override contract    = DESIGN RESOLVED（design-only；Issue #204�
                                   quantity + deterministic value preserved（不新增 modify kind ／
                                   enum ／ status）；HD-4 stale 不变；Architecture re-entry ／ New ADR ／
                                   §7 ／ §8 trigger = NOT REQUIRED ／ NOT TRIGGERED；
-                                  runtime = NOT STARTED；DESIGN RESOLVED ≠ IMPLEMENTED）
+                                  runtime = IMPLEMENTED（§10.5 G，Issue #208）；DESIGN RESOLVED ≠ IMPLEMENTED）
 Quantity override runtime tranche  = CODE START GATE PASS / IMPLEMENTATION AUTHORIZED / IMPLEMENTED
   （Code Start ＋ impl；Issue #206 ／   （scoped；Issue #206 gate，Issue #208 implementation；
    #208）                              DoR ／ Code Start assessment = Code Start Gate PASS
@@ -102,6 +102,25 @@ Quantity override runtime tranche  = CODE START GATE PASS / IMPLEMENTATION AUTHO
                                   enforcement / ERP-production write；§7 ／ §8 ／ §10 =
                                   NOT TRIGGERED ／ NOT REQUIRED；Unrestricted implementation =
                                   NOT AUTHORIZED；IMPLEMENTED ≠ VALIDATED）
+Procurement Request Draft         = DESIGN RESOLVED（scoped to Draft generation only；design-only；
+  （§6.1；Issue #210，D1 ～ D5）      Issue #210）：初始 quantity = deterministic RecommendedPurchaseQty；
+                                  Human decision 后 = approved_value（approve-as-is ＝ deterministic 值，
+                                  explicit override ＝ Human override 值），reject ⇒ 不形成 approved Draft；
+                                  deterministic 值永不改变且不写回；必须保持 DRAFT ＋
+                                  RecommendedPurchaseQty ≠ ApprovedPurchaseQty ≠ PurchaseOrderQty，
+                                  不得表述为 formal Purchase Request ／ Purchase Order ／ submitted
+                                  record ／ production execution；RecommendationNeedDate 仅只读原样、
+                                  supplier identity 不进入 Draft（Supplier Risk Evidence 仅 Review evidence；
+                                  supplier ranking ／ selection 继续 OUT OF SCOPE）；Draft =
+                                  per-ReviewInstance ／ per-AnalysisRun 的 ephemeral artifact
+                                  （new AnalysisRun ⇒ old Draft stale ／ non-actionable；stale 不得 approve ／
+                                  复活；rejected terminal；approved 绑定 HumanDecision；override 不跨 run
+                                  继承）；structured business values 只来自 deterministic result ＋
+                                  applicable HumanDecision（when one exists；initial Draft 可只基于
+                                  deterministic result），LLM 永远仅 wording ／ presentation；Draft = non-canonical ／
+                                  ephemeral ／ POC runtime artifact（不 persistence ⇒ 不触发 §8）；
+                                  §7 ／ Architecture re-entry = NOT TRIGGERED ／ NOT REQUIRED；
+                                  Draft runtime implementation = NOT STARTED ／ NOT AUTHORIZED）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：

@@ -7522,6 +7522,153 @@ boundary 实现、持久化与身份强制执行**均未解决**；`quantity ove
 [§10.4](#hd-3-quantity-override-contract)；runtime 仍 `NOT STARTED ／ NOT AUTHORIZED`）；
 本 follow-up **不**修改上述第 1 ～ 12 项，**不**构成 business acceptance evidence，也**不**使 `§9.4` 可 closure。
 
+**Current-state Draft design follow-up（Issue #210）：** `§6` 原六行表的 `Draft` 行此前为 `DESIGN PENDING`；
+该 scoped semantic gap 已由 Human Decision **D1 ～ D5** 关闭，canonical 登记见
+[POC Design §6.1](#procurement-request-draft-boundary) —— **`Procurement Request Draft` generation 的
+scoped semantics = `DESIGN RESOLVED`（design-only）**。本 follow-up **不**修改 `§6` 原六行表、**不**修改上述
+第 1 ～ 12 项，**不**使 `§6` overall 离开 `DESIGN PENDING`（完整 state machine、execution boundary **实现**、
+持久化与身份强制执行仍未解决），也**不**构成 implementation evidence。
+本 follow-up **不**修改上述第 1 ～ 12 项，**不**构成 business acceptance evidence，也**不**使 `§9.4` 可 closure。
+
+<a id="procurement-request-draft-boundary"></a>
+
+### 6.1 Procurement Request Draft — scoped semantic design（Issue #210）
+
+**Registration Status：`DESIGN RESOLVED`（scoped to Procurement Request Draft generation only；design-only）**
+**Authority：** Human Decision **D1 ～ D5**（Issue #210，2026-09-30）＋ `§1` In Scope ／ Out of Scope
+（`Procurement Request Draft` = P0 capability scope）＋ `§3.2` ／ `§3.5` ～ `§3.8` ／ `§3.13` ＋ `§5.15` ＋
+`§2.5.12` ／ `§2.5.13` ／ `§2.5.15` ＋ `§2.5.8`（`RecommendedPurchaseQty` 定义）＋ `§10.4`（HD-3 override
+契约）＋ `§6`（Issue #198 ／ #204 ／ #208 的 scoped 结果）。
+**Base：** `main @ 3dfc61f1915ecb831a47c0bf236789ff802216e8`。
+
+本小节只登记 `Procurement Request Draft` 的**语义**；**不**实现 runtime、**不**设计完整 HITL state machine、
+**不**设计 execution boundary 实现。
+
+#### A. Draft 的 quantity 权威（D1 ＝ Option B′）
+
+```text
+Draft 初始生成             → 使用 deterministic RecommendedPurchaseQty
+Human decision 之后：
+  approve-as-is            → Draft quantity = approved_value = deterministic RecommendedPurchaseQty
+  explicit quantity override → Draft quantity = Human-approved override value（§10.4）
+  reject                   → **不**形成 approved Draft
+```
+
+- deterministic `RecommendedPurchaseQty` **永远保持不变**，并继续通过 recommendation 与 `HumanDecision`
+  （`deterministic_recommended_value`）保留；
+- Draft **不得**把 Human-approved quantity 写回 deterministic result（`§6` 第 5 项：override 不写回
+  deterministic result）；
+- **必须**保持：
+
+  ```text
+  DRAFT
+  RecommendedPurchaseQty
+    ≠ ApprovedPurchaseQty
+    ≠ PurchaseOrderQty
+  ```
+
+- Draft **必须明确** 标记 `DRAFT`；**不得**表述为 formal Purchase Request、Purchase Order、submitted record
+  或 production execution（`§3.5` ～ `§3.8` ／ `§5.15`）。
+
+#### B. `RecommendationNeedDate` 与 supplier 边界（D2 ＝ Split Boundary）
+
+- `RecommendationNeedDate` **可以**作为 Draft 的**只读**值，**必须原样**来自当前 recommendation grain：
+  Draft 与 LLM **均不得**修改它（`§2.5.12`：不得用 lead time 偷偷修改采购数量；`§6`：不得修改
+  `RecommendationNeedDate` ／ delivery date）；
+- **supplier identity 不进入** `Procurement Request Draft`；
+- `SupplierRiskEvidenceCard` 只保留为 **Review evidence**，**不**构成 supplier selection；
+- **supplier ranking ／ selection 继续 `OUT OF SCOPE`**（`§2.5.13` ／ `§2.7.14`；`§2.5.15` 的 approval target
+  不含 supplier）。
+
+#### C. Draft lifecycle 与 stale（D3 ＝ Option A′）
+
+```text
+Draft = per-ReviewInstance ／ per-AnalysisRun 的 ephemeral artifact
+new AnalysisRun  → old Draft = stale ／ non-actionable；创建新的 ReviewInstance ＋ Draft
+stale Draft      → 不得 approve、不得复活
+rejected Draft   → terminal ／ non-actionable
+approved Draft   → 绑定对应 HumanDecision
+Human override   → 不跨 AnalysisRun 继承（§10.4 F ／ HD-4 不变）
+```
+
+只登记该 **scoped** Draft lifecycle；**不**扩展为完整 HITL state machine（`§3.12` ／ `§10.4` 边界不变）。
+
+#### D. Generation boundary（D4 ＝ Option B′ ／ Hybrid）
+
+```text
+structured business values
+  = deterministic result
+    ＋ applicable HumanDecision（when one exists）
+
+LLM
+  = wording ／ presentation only
+```
+
+- **initial Draft 可以只基于 deterministic result**：Human decision 尚未存在时，**不要求** `HumanDecision`，
+  也**不**得为了生成 Draft 而虚构一个 decision；
+- Human decision **出现之后**，任何 **decision-derived value**（例如 approved quantity）**只能**来自对应的
+  `HumanDecision`，**不得**由 Draft 或 LLM 自行推导、补齐或猜测；
+- LLM **永远**只负责 **wording ／ presentation**。
+
+LLM **不得**生成、修改或补齐：quantity、supplier selection、`RecommendationNeedDate`、approval state、
+business fact（`§5.6` ／ `§5.7` ／ `§5.12`；`§5.15`：Draft 必须基于已取得的 structured deterministic result）。
+
+**Revisit condition（Architecture ／ egress）：** 本 Decision 只解决 semantic design。若未来 runtime 使用
+**hosted LLM** 生成 Draft wording，**必须**在 implementation 前**重新判断** Architecture ／ egress
+authorization：`ADR-002` 的 hosted egress approval 只覆盖 **AI Explanation**，**不得**被自动继承为 Draft 的
+egress 授权（`ADR-002` 的 scope 与 Revisit Conditions 不变）。
+
+#### E. Draft artifact status（D5 ＝ Option A）
+
+```text
+Procurement Request Draft = non-canonical ＋ ephemeral ＋ POC runtime artifact
+```
+
+它**不是**：canonical enterprise entity、ERP Purchase Request、Purchase Order、persistent business record、
+enterprise truth。其地位与 `ExplanationResult` ／ `HumanDecision` **相同**：不进入 deterministic result，
+也不成为 `ApprovedPurchaseQty` 的**企业事实**（`§2.5.15`）。
+
+- **允许**以 prose 描述 POC 内的 draft ／ approved ／ rejected ／ stale **lifecycle meaning**；
+- 本 design unit **不新增** canonical enum ／ business status（同 `HD-6` 口径）；
+- **不 persistence** ⇒ 当前 scoped design **不触发 §8**（`§10.1 D` 的 §8 blocker 未被触发；一旦任何 unit
+  开始**持久化** `Procurement Request Draft`，该 blocker **立即重新生效**，须先取得相应 Human Approval）。
+
+#### F. Trigger assessment 与 claim boundary
+
+```text
+§7                                   = NOT TRIGGERED
+§8                                   = NOT TRIGGERED（仅因不持久化）
+§9.4                                 = 不推进（仍 DESIGN PENDING ／ JIT-BLOCKED）
+Architecture re-entry                = NOT REQUIRED（本 scoped design）
+POC Draft generation                 = DESIGN RESOLVED（scoped；本小节）
+Draft runtime implementation         = NOT STARTED ／ NOT AUTHORIZED
+§6 overall                           = DESIGN PENDING（原六行表不变：完整 state machine ／
+                                       execution boundary 实现 ／ 持久化 ／ 身份强制执行 均未解决）
+§7 overall                           = NOT RESOLVED
+§8                                   = 不 closure（五行均 DESIGN PENDING）
+§9.4                                 = DESIGN PENDING ／ JIT-BLOCKED
+production execution                 = OUTSIDE POC
+source ／ production WRITE            = DENIED
+rule ／ code-version freshness        = NOT RESOLVED
+business acceptance ／ durable approval evidence ／ identity-permission enforcement
+POC success                          = NOT CLAIMED
+```
+
+- `§7`：本小节不实施 role ／ data-scope ／ Tool-permission **强制执行**，也不引入 secret-bearing integration
+  （Draft 不持有 credential）⇒ **NOT TRIGGERED**；
+- Architecture：本 scoped design 不引入新长期技术选择；若 Draft runtime 引入持久化、hosted egress、外部形态
+  或新长期依赖，按 `§10.1 D` §10 row 与 `§10.4` F 的 re-entry 条件**重新进入**相应 Gate（含上文 D4 的
+  egress revisit condition）；
+- `§9.4`：本小节**不**构成 business acceptance evidence，也**不**使 `§9.4` 可 closure；
+- `Draft generation` 的 **runtime implementation** 仍 `NOT STARTED ／ NOT AUTHORIZED`：本小节只登记语义，
+  实现前须独立通过 applicable DoR ／ Code Start assessment。
+
+#### G. 本小节不修改
+
+`§6` 原六行 `DESIGN PENDING` 表与 Issue #198 design record 的文字、`§10.3` ／ `§10.4` ／ `§10.5` 的已登记
+正文、`§3` ／ `§5` ／ `§7` ／ `§8` ／ `§9` 的已登记语义、`ADR-001` ／ `ADR-002` 的 substantive decision 与
+Revisit Conditions、`FROZEN` baseline、code ／ tests ／ runtime。本小节**不**回写任何历史时点记录。
+
 ---
 
 ## 7. Permission & Security
