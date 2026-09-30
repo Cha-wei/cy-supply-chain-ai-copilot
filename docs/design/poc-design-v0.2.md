@@ -7824,6 +7824,15 @@ JIT gate 已由 Issue #180 关闭、Q3 runtime 已实现并 merge（`§5.20` ～
 （scoped to Q3 concern only，见 §9.3）**；`HITL ／ business acceptance` 未变（`DESIGN PENDING` ／
 `JIT-BLOCKED`，见 `§9.4`）。上一条 Issue #190 follow-up 与 Issue #176 closure 记录保持原文、不回写。
 
+**Current Status follow-up（Issue #216，`HD-HITL-ACCEPT-R1`）：** `HITL ／ business acceptance` **overall 仍为
+`DESIGN PENDING` ／ `JIT-BLOCKED`**；只登记其 **applicable §6 design gate** 的 scope interpretation =
+**`SATISFIED at the scoped POC HITL boundary`**（Review ＋ quantity Modify ＋ Approve ＋ Reject ＋
+Procurement Request Draft ＋ stale ／ re-review ＋ `Human Approval ≠ Production Execution`），
+canonical 登记见 [§9.4](#hitl-business-acceptance)。`applicable §6 prerequisite satisfied ≠ §6 overall
+resolved`，`§9.4 prerequisite ambiguity closed ≠ §9.4 design resolved`；本层 scoped acceptance ／ evidence
+design **尚未开始**、其 substantive closure **尚未授权**。上一条 Issue #192 follow-up 与其前的 closure
+记录保持原文、不回写。
+
 ```text
 §9 两层 design closure
   ≠ implementation evidence 已被 validated
@@ -8199,6 +8208,8 @@ prose；credential 仅以「**process environment only**，执行后**立即清�
 `§9.3` contract items 1 ～ 13、`§9.4`、`ADR-002`、`§5.20` ～ `§5.23` 的历史记录（含 Issue #194 时点的
 `0 ／ NOT RUN`）均**未修改**，historical time-point 事实保持原文。
 
+<a id="hitl-business-acceptance"></a>
+
 #### 9.4 HITL / business acceptance — `DESIGN PENDING` ／ `JIT-BLOCKED`
 
 **为何仍 `DESIGN PENDING`：** 本层的 evidence 对象（Human `Review` ／ `Modify` ／ `Approve` ／
@@ -8218,6 +8229,115 @@ prose；credential 仅以「**process environment only**，执行后**立即清�
 - **trigger boundary：** 在**任何** HITL ／ business acceptance evidence 主张之前，
   必须先完成 §6 design gate 及其适用的 §7 ／ §8 依赖；
 - **不得**由本 closure 提前设计 §6 ／ §7 ／ §8 的实质内容，也**不得**把 §6 ～ §8 标记为已 closure。
+
+**Current-state correction（Issue #216）：** 上方「为何仍 `DESIGN PENDING`」是 **Issue #176 时点的 historical
+premise**，原文保持、不回写；其中关于 evidence object 是否存在的判断在 current `main` 上**已不再成立**：
+
+```text
+Issue #176 时点 premise（historical）：
+  Human Review ／ Modify ／ Approve ／ Reject 与 business acceptance 的 evidence objects 尚不存在
+
+Current main current state：
+  Review ／ quantity Modify ／ Approve ／ Reject ／ Procurement Request Draft
+  runtime surfaces = 已存在
+    Review ／ Approve ／ Reject          → §10.3 J（Issue #202）
+    quantity Modify（HD-3 override）     → §10.4 ／ §10.5 G（Issue #204 ／ #208）
+    Procurement Request Draft            → §6.1 ／ §10.6 I（Issue #210 ／ #214）
+
+因此本层当前仍为 DESIGN PENDING ／ JIT-BLOCKED，
+  **不是**因为这些 runtime objects 不存在，
+  而是因为 scoped acceptance ／ evidence boundary **尚未设计**；
+  applicable §7 ／ §8 dependency 的适用性判定
+  以及 Human-approved acceptance ／ evidence policy
+  仍留给后续独立 design unit。
+```
+
+同一 historical premise 中另一处 current-state 偏差一并登记（同样只做 current-state correction）：
+上方依赖块把 `Secret Handling` 列入 `DESIGN PENDING`；该 concern 的 **hosted P0 AI Explanation minimum**
+已由 **Issue #180** 的 scoped closure 登记为 `DESIGN RESOLVED`（见
+[§7.1](#secret-handling-minimum)），而 `§7 overall = NOT RESOLVED`、`production Secret Management = NOT CLAIMED`
+**不变**，RBAC ／ Data Scope ／ Tool Permission 仍 `DESIGN PENDING`。
+
+本 correction **只**修正 current-state 前提，**不**推进本层 substantive design，**不**修改上方依赖、
+trigger boundary 与 evidence category 文字，**不**改变 `§9.4 = DESIGN PENDING ／ JIT-BLOCKED`，
+也**不**改变 `§6` overall ／ `§7` overall ／ `§8` 的已登记状态。
+
+**Prerequisite-scope registration（Issue #216；Human Decision `HD-HITL-ACCEPT-R1`）：**
+
+**Registration Status：`REGISTERED`（prerequisite-scope interpretation only；本层 Status **不变**）**
+**Authority：** Human Decision **`HD-HITL-ACCEPT-R1 = APPROVED`** ＋ 本小节既有 trigger boundary ＋
+`§6`（Issue #198 record）／ `§6.1`（Issue #210）＋ `§10.3` J（Issue #202）／ `§10.5` G（Issue #208）／
+`§10.6` I（Issue #214）＋ `§1` In Scope ／ Out of Scope（`GSD-4` ／ `GSD-5`）＋ `§3.7` ／ `§3.12`（`VB-29`）
+＋ `§5.15`。
+
+本登记**只关闭一件事**：本小节 trigger boundary 中「必须先完成 §6 design gate」对**最小 POC acceptance**
+而言 **applicable §6 design gate 指什么**。它**不**推进本层 Status，**不**设计本层的 acceptance ／ evidence
+boundary 本身，也**不**构成任何 implementation authorization。
+
+```text
+applicable §6 design gate = SATISFIED at the scoped POC HITL boundary
+```
+
+**1. Applicable §6 boundary（构成该 `SATISFIED` 的最小范围）。**
+
+| 能力 | Canonical authority ／ current state |
+| --- | --- |
+| Review | `§6` 第 3 项（Issue #198 record）；runtime `§10.3` J |
+| quantity Modify（＝ `HD-3` explicit quantity override） | `§6` 第 5 项；`§10.4`（Issue #204）；runtime `§10.5` G |
+| Approve | `§6` 第 2 ／ 4 项（Issue #198 record）；runtime `§10.3` J |
+| Reject | `§6` 第 7 项（Issue #198 record）；runtime `§10.3` J |
+| Procurement Request Draft | `§6.1`（Issue #210，D1 ～ D5）；runtime `§10.6` I |
+| stale ／ re-review | `§6` 第 6 项（`HD-4`）；runtime `§10.3` J ／ `§10.6` I |
+| `Human Approval ≠ Production Execution` | `§3.7` ／ `§3.12`（`VB-29`）；`§5.15` |
+
+上表只**引用**既有已登记语义与既有 runtime record，**不**重新定义其内容；`§6` 的 substantive 语义仍以
+`§6` Issue #198 record 与 `§6.1` 为唯一 authority。
+
+**2. 不构成 minimal POC acceptance prerequisite 的项（及其 disposition）。**
+
+| 项 | Disposition |
+| --- | --- |
+| full HITL state machine ／ 完整 workflow 细节 | **Deferred**（`§1` `GSD-5` classification table） |
+| execution boundary **实现** | **`OUTSIDE POC`**（`§3.12` ／ `VB-29`）；`WRITE = DENIED` 不变 |
+| persistence ／ durable approval history | **future `§8` trigger if introduced**（`§10.1` D §8 row；`§10.6` F） |
+| reviewer identity ／ RBAC enforcement | **future `§7` trigger if introduced**（`§10.1` D §7 row；`§10.6` F） |
+
+「不构成 prerequisite」**不等于**已 closure、**不等于**永久排除：其 disposition 如上表，
+且一旦被引入即按对应章节重新触发（`§8` 的 durable approval evidence、`§7` 的 identity ／ permission
+enforcement）。
+
+**3. Gate interpretation（必须区分，不得混用）。**
+
+```text
+applicable §6 prerequisite satisfied   ≠ §6 overall resolved
+§9.4 prerequisite ambiguity closed     ≠ §9.4 design resolved
+§9.4 still DESIGN PENDING ／ JIT-BLOCKED
+  until its own scoped acceptance ／ evidence design unit
+```
+
+**4. 未变状态（本登记不修改）。**
+
+```text
+§6 overall                  = DESIGN PENDING
+§7 overall                  = NOT RESOLVED
+§8                          = NOT CLOSED
+§9.4                        = DESIGN PENDING ／ JIT-BLOCKED
+Unrestricted implementation = NOT AUTHORIZED
+production execution        = OUTSIDE POC
+source ／ production WRITE   = DENIED
+POC success                 = NOT CLAIMED
+```
+
+**5. 下一步（本登记**不**授权、**不**开始）。** 本层的 scoped acceptance ／ evidence design（evidence
+category、claim discipline、与 `§1` 的 Human-approved acceptance ／ evidence policy 的关系、
+以及 applicable `§7` ／ `§8` 依赖的适用性判定）**尚未开始**，其 substantive closure **尚未授权**。
+本登记**不**创建 success gate，**不**定义 KPI ／ threshold ／ rubric，**不**产生任何 business-value
+evidence，**不**声称 business acceptance 或 `POC SUCCESS`。
+
+**6. 本登记不修改：** 本小节既有的 status ／ dependency ／ trigger boundary 文字、`§6` 原六行
+`DESIGN PENDING` 表与 Issue #198 record、`§6.1` A ～ G 的实质内容、`§10.3` ／ `§10.4` ／ `§10.5` ／ `§10.6`
+的已登记正文与 historical gate states、`§3` ／ `§5` ／ `§7` ／ `§8` 的已登记语义与 Status、
+`ADR-001` ／ `ADR-002`、`FROZEN` baseline；**不**回写任何历史时点记录。
 
 #### 9.5 Status vocabulary ／ claim discipline（必须区分）
 

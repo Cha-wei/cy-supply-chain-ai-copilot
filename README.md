@@ -49,7 +49,10 @@ Q3 full-composition observation = TOOLING IMPLEMENTED / OBSERVED ONCE（§9.3，
 §6 minimal review/decision       = DESIGN RESOLVED（scoped；Issue #198；read-only review projection ＋
   boundary（design-only）          quantity override（M1）＋ Approve ／ Reject ＋ stale contract，
                                   in-process、无 persistence ／ RBAC ／ audit ／ ERP write-back；
-                                  §6 overall（含 Draft ／ 完整 state machine）仍 DESIGN PENDING；
+                                  §6 overall 仍 DESIGN PENDING（Draft scoped semantics =
+                                  DESIGN RESOLVED（§6.1）；Draft runtime = IMPLEMENTED（§10.6 I）；
+                                  remaining overall gap = 完整 workflow ／ state machine、
+                                  execution boundary 实现等）；
                                   不构成 business acceptance evidence）
 Minimal HITL runtime tranche     = CODE START GATE PASS / IMPLEMENTATION AUTHORIZED / IMPLEMENTED
   （reduced；Issue #200 ／ #202）    （scoped；Issue #200 gate，Issue #202 implementation；Option A =
@@ -155,6 +158,16 @@ Draft runtime tranche             = CODE START GATE PASS / IMPLEMENTATION AUTHOR
                                   lifecycle 按 §6.1 D1～D5；Draft runtime =
                                   IMPLEMENTED（§10.6 I，Issue #214）；IMPLEMENTED ≠ VALIDATED；
                                   Unrestricted implementation = NOT AUTHORIZED）
+§9.4 acceptance prerequisite       = APPLICABLE §6 DESIGN GATE SATISFIED at the scoped POC HITL boundary
+  scope（design-only；Issue #216 ／   （Review ＋ quantity Modify ＋ Approve ＋ Reject ＋ Procurement Request
+  HD-HITL-ACCEPT-R1）                 Draft ＋ stale ／ re-review ＋ Human Approval ≠ Production Execution）；
+                                    full HITL state machine = Deferred；execution boundary = OUTSIDE POC；
+                                    persistence ／ durable history = future §8 trigger if introduced；
+                                    identity ／ permission enforcement = future §7 trigger if introduced；
+                                    applicable §6 prerequisite satisfied ≠ §6 overall resolved；
+                                    prerequisite ambiguity closed ≠ §9.4 design resolved ⇒
+                                    §9.4 = DESIGN PENDING ／ JIT-BLOCKED（不变；该 scoped acceptance ／
+                                    evidence design 尚未开始、其 substantive closure 尚未授权）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：
@@ -229,10 +242,14 @@ validator 接受、`answer_kind = MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE`、�
 production readiness 或 `POC validated` 证据（`§5.21` ／ `§5.22` 的 “live API 未验证” ／
 `LIVE_SMOKE_NOT_RUN` 为各自时点的 historical records，保持原文；current state 见 `§5.23`）。
 
-**明确未实现（Out of Scope）**：Web / API / service、Agent Framework / Tool protocol、quantity override /
-Modify 与 Draft generation、完整 HITL state machine、HITL execution boundary 实现、RBAC / identity / secrets、
-persistent Audit / durable approval history、database / persistent business state、real ERP / SRM Adapter /
-source connectivity、production write-back、P1，以及 `§6` ～ `§9` 各项 just-in-time gate。
+**明确未实现 / 当前未纳入已授权实现范围**（本列表**不**承担 scope classification：
+`Out of Scope ≠ P1 ≠ Prohibited ≠ Deferred`，逐项分类以 `§1` `GSD-5` classification table 为准）：
+Web / API / service、Agent Framework / Tool protocol、完整 HITL state machine、
+HITL execution boundary 实现、RBAC / identity / secrets、persistent Audit / durable approval history、
+database / persistent business state、real ERP / SRM Adapter / source connectivity、production write-back、P1，
+以及 `§6` ～ `§9` 各项 just-in-time gate。（已实现项不在此列：`quantity override / Modify` ＝ IMPLEMENTED
+（`§10.5` G）；`Draft generation` scoped semantics ＝ DESIGN RESOLVED（`§6.1`）＋ runtime ＝ IMPLEMENTED
+（`§10.6` I）；`§6 overall` 仍 `DESIGN PENDING`。）
 
 **状态纪律**：`DESIGN RESOLVED` ≠ `IMPLEMENTED` ≠ `TESTED`；`IMPLEMENTED` ≠ `VALIDATED`
 ≠ `POC SUCCESS`。全部验证仅覆盖 **SIMULATED** fixtures，不构成真实企业集成证据。
