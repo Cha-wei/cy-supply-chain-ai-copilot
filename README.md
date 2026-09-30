@@ -242,7 +242,9 @@ validator 接受、`answer_kind = MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE`、�
 production readiness 或 `POC validated` 证据（`§5.21` ／ `§5.22` 的 “live API 未验证” ／
 `LIVE_SMOKE_NOT_RUN` 为各自时点的 historical records，保持原文；current state 见 `§5.23`）。
 
-**明确未实现（Out of Scope）**：Web / API / service、Agent Framework / Tool protocol、完整 HITL state machine、
+**明确未实现 / 当前未纳入已授权实现范围**（本列表**不**承担 scope classification：
+`Out of Scope ≠ P1 ≠ Prohibited ≠ Deferred`，逐项分类以 `§1` `GSD-5` classification table 为准）：
+Web / API / service、Agent Framework / Tool protocol、完整 HITL state machine、
 HITL execution boundary 实现、RBAC / identity / secrets、persistent Audit / durable approval history、
 database / persistent business state、real ERP / SRM Adapter / source connectivity、production write-back、P1，
 以及 `§6` ～ `§9` 各项 just-in-time gate。（已实现项不在此列：`quantity override / Modify` ＝ IMPLEMENTED
