@@ -7438,6 +7438,13 @@ result，**不**成为 `ApprovedPurchaseQty` 的企业事实（`§2.5.15`），�
 > implementation = NOT STARTED ／ NOT AUTHORIZED**。本 follow-up **不**修改上述第 1 ～ 12 项，**不**使 `§6`
 > overall 离开 `DESIGN PENDING`，也**不**构成 implementation evidence。
 
+> **Current-state Gate follow-up（Issue #206）：** 上述 `NOT AUTHORIZED` 状态已由其后独立通过的 DoR ／ Code Start
+> assessment 更新：canonical 登记见 [POC Design §10.5](#quantity-override-code-start-gate)，
+> `Quantity Override Runtime Code Start Gate = PASS` 且 `Quantity Override Runtime Tranche =
+> IMPLEMENTATION AUTHORIZED`（**仅**该 scoped tranche，`Unrestricted implementation` 仍 `NOT AUTHORIZED`）。
+> runtime 仍 `NOT STARTED`：本 follow-up **不**修改上述第 1 ～ 12 项，**不**使 `§6` overall 离开
+> `DESIGN PENDING`，也**不**构成 implementation evidence。
+
 **6. Staleness ／ re-review contract（`HD-4`，strict AnalysisRun binding）。** Approval **必须**绑定完整
 `AnalysisRunContext`；approve 前**必须**做 stale check。只要 review 所绑定的 AnalysisRun 与当前 AnalysisRun
 不一致：current review = **stale**；**Approve 不允许**；必须基于**新 AnalysisRun** 重新生成 recommendation；
@@ -8703,7 +8710,8 @@ grain ／ enum ／ carrier ／ protocol，**不**引入 rule ／ code-version fr
 §9.4                                 = DESIGN PENDING ／ JIT-BLOCKED
 rule ／ code-version freshness        = NOT RESOLVED
 HD-3 semantic contract               = DESIGN RESOLVED（§10.4）
-quantity override ／ Modify runtime   = NOT STARTED ／ NOT AUTHORIZED
+quantity override runtime             = NOT STARTED
+quantity override runtime tranche     = IMPLEMENTATION AUTHORIZED（§10.5，scoped only）
 business acceptance ／ durable approval evidence ／ identity-permission enforcement
 production readiness ／ POC success   = NOT CLAIMED
 ```
@@ -8913,6 +8921,13 @@ quantity override runtime implementation = NOT AUTHORIZED（本小节不授权 c
 本小节**不**授权 runtime implementation：实现前须独立通过 applicable DoR ／ Code Start assessment，并按实际
 technical choice 判断是否需要 Architecture disposition。
 
+> **Current-state Gate follow-up（Issue #206）：** 上述 DoR ／ Code Start assessment 其后已完成并通过：
+> canonical 登记见 [POC Design §10.5](#quantity-override-code-start-gate)，其中
+> `Quantity Override Runtime Code Start Gate = PASS`（7 PASS ＋ 2 NOT TRIGGERED ＋ 1 NOT REQUIRED；0 blocking gate items）且
+> `Quantity Override Runtime Tranche = IMPLEMENTATION AUTHORIZED`（**仅**该 scoped tranche）。§10.4 的
+> **HD-3 业务契约本身未变**；本 follow-up **不**修改本小节 A ～ G 的任何文字，也**不**使 `§6` overall 离开
+> `DESIGN PENDING`。
+
 **G. 本小节不修改：** `§6` 第 1 ～ 4 ／ 6 ～ 12 项（含 `HD-2` ／ `HD-4` ～ `HD-7`）、`§6` 原六行
 `DESIGN PENDING` 表、`§10.1` A ～ F、`§10.2`、`§10.3` A ～ J、`§2` ～ `§5` ／ `§7` ／ `§8` ／ `§9` 的已登记语义、
 `ADR-001` ／ `ADR-002`、`FROZEN` baseline、code ／ tests ／ runtime。本小节**不**回写任何历史时点记录。
@@ -8928,6 +8943,179 @@ rule ／ code-version freshness        = NOT RESOLVED
 business acceptance ／ durable approval evidence ／ identity-permission enforcement
 production readiness ／ POC success   = NOT CLAIMED
 ```
+
+---
+
+<a id="quantity-override-code-start-gate"></a>
+
+### 10.5 Quantity Override Runtime — Code Start Gate（Issue #206）
+
+**Registration Status：`REGISTERED`**
+**Canonical concern：** quantity override runtime 最小 tranche 的 DoR ／ Code Start 结果与 **scoped
+implementation authorization**。
+**Verification base：** current `main @ 258810ba0b690dc23ae97c0ae1e16a7e76120944`。
+**Task：** [Issue #206](https://github.com/Cha-wei/cy-supply-chain-ai-copilot/issues/206)。
+**Authority：** read-only readiness assessment（本小节 A）＋ `§10.4`（HD-3 Option A′，Issue #204）＋ `§6` 第 2 ／ 4 ／
+5 ／ 6 ／ 7 ／ 8 项（`HD-2` ～ `HD-5`）＋ `§10.3` A ～ J（reduced HITL runtime current state）＋
+`§2.5` ／ `§2.5.15` ＋ `§4.3.25` C-5 ＋ `§10.1` A ～ F（IRM-1 two-stage gate 与 CSG 口径）。
+
+**本小节登记一个独立 change unit；它不写 code、不改 tests、不新建 ADR。**
+
+#### A. DoR ／ Code Start assessment result
+
+| Gate item | Result | Authority ／ rationale |
+| --- | --- | --- |
+| Objective | **PASS** | 目标可复述：在既有 in-process review runtime 上让 Human 以 exact decimal 输入对 `RecommendedPurchaseQty` 做显式 override 并据此 approve，deterministic 结果不变 |
+| Scope ／ Out of Scope | **PASS** | 见本小节 B ／ C |
+| Acceptance Criteria | **PASS** | `§10.4` A ～ F 逐条客观可断言（exact 输入、`> 0`、`>= ApplicableMOQ`、fail closed、无隐式修改、方向不限无上限、reason 必填、decision mapping） |
+| Dependencies | **PASS** | 无新依赖（`dependencies = []`）；所需输入全部已存在于既有 runtime（见本小节 D） |
+| Canonical Semantic Completeness | **PASS** | `§10.4` 已关闭 HD-3 六项缺口；本轮**未发现**新的业务语义缺口 |
+| Architecture Authority | **PASS** | `§10.4` F 已登记 `Architecture re-entry = NOT REQUIRED` ／ `New ADR = NOT REQUIRED`，其前提与本 scope 一致 |
+| §7 trigger | **NOT TRIGGERED** | 不实施 role ／ data-scope ／ Tool-permission 强制执行；无 secret-bearing integration；`actor reference` 仍仅为 requirement slot |
+| §8 trigger | **NOT TRIGGERED** | 全部 artifact 保持 ephemeral，不持久化 Human decision ／ approval history |
+| §10 Architecture re-entry | **NOT REQUIRED** | 不引入新长期技术选择；跨越 `§10.4` F 所列 boundary 才 re-entry |
+| Testability | **PASS** | `§9.1` deterministic `unittest` ＋ 既有 SIMULATED chain builder 已可覆盖全部判据 |
+
+```text
+Quantity Override Runtime Code Start Gate = PASS
+
+Gate accounting（10 个 gate item）：
+  7 PASS           —— Objective ／ Scope ／ Out of Scope ／ Acceptance Criteria ／ Dependencies ／
+                      Canonical Semantic Completeness ／ Architecture Authority ／ Testability
+                      （本小节 A 表中 Result 为 **PASS** 的条目）
+  2 NOT TRIGGERED  —— §7 trigger ／ §8 trigger（**不是** PASS；是未触发）
+  1 NOT REQUIRED   —— §10 Architecture re-entry（**不是** PASS；是不需要）
+  0 blocking gate items
+
+technical ／ semantic blockers              = 0
+New Human Decision Required                 = NO
+```
+
+#### B. Scoped implementation authorization
+
+```text
+Quantity Override Runtime Tranche = IMPLEMENTATION AUTHORIZED（仅本小节 C）
+```
+
+只授权：
+
+```text
+existing ReviewInstance
++ explicit Human quantity override
++ approve using the Human override value
+```
+
+边界（不得被后续实现放宽）：
+
+```text
+existing Python package           in-process              ephemeral
+no new dependency                 no persistence          no network ／ egress
+no identity ／ permission enforcement                      no ERP ／ production write
+```
+
+#### C. Scope ／ Out of Scope
+
+**In scope：** 既有 `ReviewInstance` 上的显式 Human quantity override，以及以该 override 值完成 approve
+（最终 decision kind 仍为 `approve`）。
+
+**Out of scope（本 tranche 不得实现）：** `Modify` 的其它对象（`RecommendationNeedDate` ／ delivery date、
+`ApplicableMOQ`、supplier selection、explanation artifact）；`modify` decision kind ／ canonical enum ／ business
+status；任何 float ／ round ／ quantize ／ clamp ／ normalize ／ auto-adjust-to-MOQ；additional maximum cap；
+persistence ／ durable approval history；identity ／ RBAC ／ Data Scope ／ Tool Permission enforcement；
+audit platform；Web ／ API ／ workflow engine；network ／ provider egress；Tool protocol ／ Agent framework；
+ERP write-back；production execution；Draft generation；完整 HITL state machine；P1。
+
+#### D. Implementation readiness（**非** canonical business semantics）
+
+以下只是**实现就绪性指引**，不新增 canonical 语义、不规定内部 field layout：
+
+- **推荐实现形态：** 新增一个**显式 override-approval 入口**（例如 `approve_with_override`；exact name 属
+  implementation detail），而**不**给既有 `approve_as_recommended` 增加 quantity 参数——以保持「as-is 路径永不
+  可携带 quantity」这一既有不变量与既有负例断言；
+- **消费既有 surface：** `recommendation.recommended_purchase_qty`、`recommendation.applicable_moq`、
+  `ReviewInstance.analysis_run`、`ReviewInstance.grain`、`actor reference`、`evidence references`、
+  `review projection reference`。**`ApplicableMOQ` 访问已经存在**（`self.recommendation.applicable_moq`，既有
+  `ExactQuantity`），**不是**新的 authoritative input channel，也**不**构成新 contract；
+- **numeric mapping（允许的实现映射）：**
+
+  ```text
+  exact base-10 decimal string
+    → parse_exact_quantity(...)
+    → ExactQuantity
+    → validate > 0
+    → validate >= existing ApplicableMOQ
+    → exact Fraction approved_value
+  ```
+
+  **不得**出现 float ／ round ／ quantize ／ clamp ／ normalize ／ auto-adjust-to-MOQ；**不**引入新的
+  precision ／ scale 语义（`decimal precision` ／ `fixed scale` ／ `quantity rounding` 仍 `NOT DEFINED`）；
+- **HumanDecision mapping：** 实现必须 **truthful** 满足既有 canonical contract
+
+  ```text
+  decision_kind                   = approve
+  override_flag                   = true
+  approved_value                  = exact Human override value
+  deterministic_recommended_value = original deterministic value
+  Human reason                    = required
+  ```
+
+  **不得**把 `override_reason` ／ `human_reason` 等具体内部 field layout 规定或 canonicalize —— 当前代码中的
+  这些名字属 implementation detail；实现可以在**完整、truthful** 满足上述 contract 的前提下局部调整／复用当前
+  `HumanDecision` representation。**不得**新增 `modify` decision kind ／ canonical enum ／ business status；
+- **fail closed：** 非法 override ⇒ **decision-level ／ invocation-level rejection** ⇒ 不产生 `HumanDecision`
+  record、review instance 保持 review-in-progress（`OPEN`）、deterministic result 不变、修正后**可重试**。
+  覆盖 missing ／ wrong type ／ malformed decimal ／ NaN ／ Infinity ／ zero ／ negative ／ below
+  `ApplicableMOQ`，**不**降级为 `DATA_INCOMPLETE` ／ approve-as-is ／ warning-only ／ deterministic business
+  outcome；
+- **stale ／ terminal behavior：** 复用既有行为**不变** —— 四组件 `AnalysisRun` 比较、不可逆 stale、stale
+  instance 不可复活、approved ／ rejected instance terminal、新 `AnalysisRun` ⇒ 新 review instance、
+  override **不**跨 `AnalysisRun` 继承。**不得**新增 rule ／ code-version freshness。
+
+#### E. Required Test obligations（future coding unit）
+
+以 **contract completeness** 口径登记，**不**是固定 test 数量配额；测试输入一律 `SIMULATED`。
+
+| 组 | 必须证明的行为 |
+| --- | --- |
+| **Legal override** | `override > deterministic` 且 `>= ApplicableMOQ`；`override < deterministic` 但 `>= ApplicableMOQ`；`override == deterministic` 经**显式 override path** ⇒ `override_flag = true`，**不得**静默变成 approve-as-is；`ApplicableMOQ = 0` 且 `override > 0` |
+| **Illegal override** | 全部须产生「无 decision ＋ review 保持 `OPEN` ＋ deterministic 不变 ＋ 可重试」：missing ／ `None`；`int` ／ `float` ／ `list` ／ `dict`；malformed decimal；scientific notation；locale ／ thousands；`NaN` ／ `Infinity`；zero；negative；below MOQ；reason missing ／ blank |
+| **Exact semantics** | **只**用 **finite base-10 decimal** fixtures（例如 `0.1` ／ `10.125` ／ `999999999999999999.0001`）；**不得**用 `1/3` 作为合法 Human override fixture；断言 exact value 保留、无 float 转换、无 round ／ quantize ／ truncate ／ clamp ／ normalization |
+| **Invariants** | deterministic `ProcurementRecommendation` 不变；`RecommendedPurchaseQty` ／ `ApplicableMOQ` ／ `MOQAdjustmentQty` ／ `ShortageQty` 不变；projection 不变 |
+| **State ／ freshness** | 每个 `AnalysisRun` 组件 mismatch 均拒绝 override approval；stale 保持 stale；新 run 需新 review；approved ／ rejected terminal；override 不继承 |
+| **Boundaries** | actor requirement slot 保留；reason required；override flag truthful；**无** `modify` decision kind；zero persistence；zero network ／ egress；zero ERP ／ production write；无 identity ／ permission enforcement；既有 approve-as-is ／ reject regression 全部保持 |
+
+**既有 tests `H25` ／ `H27` 的处理：** 它们当前断言「本 reduced tranche 不存在任何 override 路径」。scope 已
+**合法变更**，future coding unit **必须更新**其断言，但**不得**删除或弱化其意图；新含义须保持：
+
+```text
+approve-as-is path still cannot carry override quantity
+override exists only through the explicit new override entry
+no modify decision kind exists
+```
+
+#### F. Claim boundary ／ 不修改
+
+```text
+Quantity Override Runtime Code Start Gate = PASS（本小节 A）
+Quantity Override Runtime Tranche         = IMPLEMENTATION AUTHORIZED（仅本小节 C）
+quantity override runtime                 = NOT STARTED（本小节不写 code）
+Unrestricted implementation               = NOT AUTHORIZED
+§6 overall                                = DESIGN PENDING（原六行表不变）
+§7 overall                                = NOT RESOLVED
+§8                                        = 不 closure（五行均 DESIGN PENDING）
+§9.4                                      = DESIGN PENDING ／ JIT-BLOCKED
+rule ／ code-version freshness            = NOT RESOLVED
+business acceptance ／ durable approval evidence ／ identity-permission enforcement
+production readiness ／ POC success       = NOT CLAIMED
+```
+
+- 本小节**不**构成 implementation evidence，**不**表示 approval semantics 已验证，也**不**表示 quantity
+  override 已实现；
+- 本小节**不新增** canonical entity ／ field ／ grain ／ enum ／ business rule ／ status，**不新增** runtime
+  protocol ／ carrier ／ serialization contract；
+- 本小节**不修改**：`§6` 原六行表与 Issue #198 record、`§10.1` A ～ F、`§10.2`、`§10.3` A ～ J 的实质内容、
+  `§10.4` A ～ G 的实质内容、`§2` ～ `§5` ／ `§7` ／ `§8` ／ `§9` 的已登记语义、`ADR-001` ／ `ADR-002`、
+  `FROZEN` baseline、code ／ tests ／ runtime。本小节**不**回写任何历史时点记录。
 
 ---
 
