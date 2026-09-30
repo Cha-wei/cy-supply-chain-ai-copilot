@@ -7671,6 +7671,12 @@ POC success                          = NOT CLAIMED
 > 本小节 A ～ G 的**语义**与 D1 ～ D5 **未**改变；本 follow-up **不**修改本小节任何文字，也**不**使 `§6` overall
 > 离开 `DESIGN PENDING`。
 
+> **Current-state implementation follow-up（Issue #214）：** 该 scoped tranche 其后已实现：canonical 登记见
+> [POC Design §10.6 I](#draft-runtime-code-start-gate)，`Draft runtime = IMPLEMENTED`
+> （`snapshot_loader/draft_runtime.py`；`open_draft` ／ `ProcurementRequestDraft`）。本小节 A ～ G 的**语义**与
+> D1 ～ D5 **未被修改**；本 follow-up **不**修改本小节任何文字，也**不**使 `§6` overall 离开
+> `DESIGN PENDING`。
+
 #### G. 本小节不修改
 
 `§6` 原六行 `DESIGN PENDING` 表与 Issue #198 design record 的文字、`§10.3` ／ `§10.4` ／ `§10.5` 的已登记
@@ -9553,7 +9559,7 @@ Architecture Decision。
 ```text
 Draft Runtime Code Start Gate = PASS（本小节 C）
 Draft Runtime Tranche         = IMPLEMENTATION AUTHORIZED（仅本小节 A ／ D 的 scope）
-Draft runtime                 = NOT STARTED（本小节不写 code）
+Draft runtime                 = IMPLEMENTED（本小节 I；Issue #214）
 Unrestricted implementation   = NOT AUTHORIZED
 §6.1 Draft semantic design    = DESIGN RESOLVED（不变）
 §6 overall                    = DESIGN PENDING（原六行表不变：完整 state machine ／
@@ -9577,6 +9583,156 @@ production readiness ／ POC success = NOT CLAIMED
 - 本小节**不修改**：`§6` 原六行表与 Issue #198 record、`§6.1` A ～ G 的实质内容、`§10.1` A ～ F、`§10.2`、
   `§10.3` A ～ J 的实质内容、`§10.4` A ～ G 的实质内容、`§10.5` A ～ G 的实质内容、`§3` ／ `§5` ／ `§7` ／
   `§8` ／ `§9` 的已登记语义、`ADR-001` ／ `ADR-002`、`FROZEN` baseline；**不**回写任何历史时点记录。
+
+> **Current-state implementation follow-up（Issue #214）：** 上述 scoped tranche 其后已实现：canonical 登记见
+> [本小节 I](#draft-runtime-code-start-gate)，`Draft runtime = IMPLEMENTED`。本小节 A ～ H 的 Human Decision、
+> Architecture disposition、re-entry conditions 与 Required Test obligations **未**改变；本 follow-up **不**修改
+> 本小节任何文字。
+
+#### I. Implementation record（Issue #214）
+
+**Registration Status：`IMPLEMENTED`（本小节 A ／ D 的 scoped tranche only；本小节是 current-state runtime 记录）**
+**Task：** [Issue #214](https://github.com/Cha-wei/cy-supply-chain-ai-copilot/issues/214)。
+
+> **Independent Review follow-up（PR #215；同一 Issue #214，**不**新建 Issue ／ PR）：** Independent Review
+> 判定 `CHANGES_REQUESTED`，指出 current-state 实现缺陷，且**不**涉及 `§6.1` D1 ～ D5 substantive
+> semantics、**不**涉及本小节 A ／ C ／ D ／ E 的 Human Decision 与 Architecture disposition、**不**需要新的
+> Human Decision：① decision binding 仅比较 `AnalysisRun` ／ grain ／ `review_projection_reference`，
+> 不足以证明传入的 `HumanDecision` 就是该 `ReviewInstance` 实际记录的 decision（`dataclasses.replace`
+> look-alike 可通过三项比较）；② `is_actionable` 未尊重 underlying `ReviewInstance` 的 terminal decision，
+> 使已 approve ／ reject 的 review 上重新 open 的 Draft 被误报为 actionable；③ public constructor
+> `ProcurementRequestDraft(review=..., decision=...)` 可**绕过**全部 binding 校验直接注入 `HumanDecision`
+> （进而得到 `Draft.quantity = forged HumanDecision.approved_value`）；④ 已记录 decision 的 review 仍可经
+> `open_draft(review)` ／ public constructor **重新**产生一个未绑定 initial Draft，其 quantity 回到
+> **decision 前**的 deterministic `RecommendedPurchaseQty`（例：deterministic 100 ／ Human override 150，
+> 却仍可得到 quantity = 100 的 Draft），与 `§6.1` A 及本小节 D 的
+> 「initial Draft → applicable HumanDecision exists ⇒ Draft truthfully reflects approved_value」冲突
+> （`is_actionable = False` 不能修正 Draft 自身的 quantity ／ state 仍停留在 pre-decision view）。四项已收敛
+> 为下方「严格限定」的 `review.decision is decision`、`is_actionable`、「public construction 不得注入
+> `HumanDecision`」与「public initial-Draft construction 要求 `review.decision is None`」四条约束，并列入 B
+> 的 Required Test evidence（`D24` ～ `D33`）；对应既有三项 identity 比较**保留**为 defense-in-depth，
+> **未**引入 canonical instance ID ／ serializer ／ reload contract ／ factory protocol ／ 新 public runtime
+> carrier ／ persistence ／ durable identity ／ 新依赖 ／ 新 business vocabulary。
+
+**A. 已实现的 Draft surface（current state）**
+
+| 本小节 D 的 in-scope capability | Current state | Runtime surface |
+| --- | --- | --- |
+| initial ephemeral Draft ＋ 显式 `DRAFT` marker | `IMPLEMENTED` | `open_draft` ／ `ProcurementRequestDraft`（`DRAFT_MARKER`） |
+| initial quantity ＝ deterministic `RecommendedPurchaseQty` | `IMPLEMENTED` | `ProcurementRequestDraft.quantity`（decision 存在前） |
+| decision 后 truthful reflect `approved_value` | `IMPLEMENTED` | `ProcurementRequestDraft.with_decision` ／ `.quantity`（decision 存在后；只接受**该 `ReviewInstance` 实际记录的** `HumanDecision`） |
+| `RecommendationNeedDate` 只读原样 | `IMPLEMENTED` | `ProcurementRequestDraft.recommendation_need_date`（由 review grain 派生，**不**存储副本） |
+| supplier identity absent | `IMPLEMENTED` | Draft **无** supplier 字段（模块无 supplier 参数 ／ 属性） |
+| reject ／ stale ／ new-`AnalysisRun` lifecycle | `IMPLEMENTED` | `.draft_state` ／ `.is_actionable` ／ `.has_approved_draft` ／ `.with_decision` |
+| public construction 只能形成 initial Draft | `IMPLEMENTED` | `ProcurementRequestDraft(review=...)` ／ `open_draft`（`decision` 为 `init=False`，**不**是 constructor 参数） |
+| public initial-Draft construction 要求 `review.decision is None` | `IMPLEMENTED` | `ProcurementRequestDraft.__post_init__`（已记录 decision ⇒ `DraftError`，fail closed） |
+| decision-bearing Draft 只能由 validated binding 形成 | `IMPLEMENTED` | `ProcurementRequestDraft.with_decision`（校验后经 private factory `_form_decided_draft`） |
+
+**严格限定（不得被后续实现放宽）：**
+
+- Draft 由 **deterministic local assembly** 产生；**无** hosted LLM、provider、network、egress、credential、
+  新依赖（模块不 import 任何 I/O ／ 网络 ／ provider capability）；
+- quantity **只**来自两个已登记来源：decision 存在前 ＝ `ReviewInstance.recommended_purchase_qty`；
+  decision 存在后 ＝ **该 `ReviewInstance` 实际记录的** `HumanDecision.approved_value`；**不**重新 parse ／
+  recompute、**不**从 override reason 推导、**不**修改 deterministic `RecommendedPurchaseQty` ／
+  `ApplicableMOQ` ／ `MOQAdjustmentQty` ／ `ShortageQty`；
+- decision 绑定要求 **`review.decision is decision`**：只接受**该 `ReviewInstance` 实际记录的**
+  `HumanDecision` 对象本身（即既有 HITL runtime 返回并存储的那一个）；`dataclasses.replace` 等
+  reconstructed ／ field-mutated look-alike（即使 `AnalysisRun` 四组件、grain、
+  `review_projection_reference` **全部一致**）以及**其它 `ReviewInstance`** 的 decision **一律拒绝**、
+  **不**被反映；`AnalysisRun` 四组件、grain、`review_projection_reference` 比较**保留**为
+  defense-in-depth；**不**为此引入 canonical instance ID ／ serializer ／ persistence ／ durable identity
+  （`HumanDecision` 为 ephemeral in-process runtime artifact，无 reload contract，故 in-process identity
+  即为 binding 证据）；
+- `is_actionable` **同时**尊重 underlying `ReviewInstance` 的 terminal decision：review instance 已记录
+  decision（approved ／ rejected）⇒ Draft **不** actionable（适用于 decision **前**已形成的 initial Draft：
+  review 一旦记录 decision，该 Draft 即不再 actionable，**不**论该 Draft 自身是否已绑定 decision）；
+  stale ⇒ **不** actionable（不变）；绑定一个 review **已记录**的 decision **不是**新的 Human decision
+  （故不受 `is_actionable` 限制），而这正是形成 post-decision Draft 的路径；Draft 层**不**重新定义 Human
+  decision lifecycle；
+- **public initial-Draft construction 要求 `review.decision is None`**：`ProcurementRequestDraft(review=...)`
+  与 `open_draft(review)` 是**唯一** public initial-Draft construction path，且在该 review instance 已记录
+  `HumanDecision` 时 **fail closed**（`DraftError`）；**不**得自动产生一个未绑定 initial Draft —— 否则其
+  quantity ／ state 会退回 **decision 前**的 deterministic view（例：deterministic 100 ／ Human override 150，
+  却得到 quantity = 100 的 Draft），与 `§6.1` A 及本小节 D 冲突（`is_actionable = False` **不**能修正 Draft
+  自身的 quantity ／ state）；合法顺序**不变**：review open 时形成 initial Draft → review 记录 decision →
+  `initial.with_decision(review.decision, current_analysis_run)`；原 initial Draft 保持 immutable（其
+  deterministic quantity 是 **decision 前已形成的历史 ephemeral artifact**，允许保留）；**不**得为
+  「decided review → reconstruct post-decision Draft」引入 serializer ／ reload contract ／ factory protocol ／
+  新 public runtime carrier ／ persistence ／ canonical ID；
+- **public Draft construction 不得注入 `HumanDecision`**：唯一 public construction path 为
+  `ProcurementRequestDraft(review=...)` ／ `open_draft`，**只**形成 initial Draft；`decision` 字段为
+  `init=False`（**不**是 constructor 参数，`dataclasses.replace` 亦无法设置），故
+  `ProcurementRequestDraft(review=..., decision=...)` **不**是可表达的调用；decision-bearing Draft
+  **只能**经 validated binding path `ProcurementRequestDraft.with_decision(该 review 实际记录的 decision,
+  current_run)`（先拒绝 stale ／ 已绑定，再经 `_require_identity`，最后由 narrow private factory
+  `_form_decided_draft` 形成**新** immutable Draft）；该约束**不**依赖 security framework，**不**得为
+  「防反射 ／ 防 `object.__setattr__`」引入额外机制、canonical instance ID ／ serializer ／ persistence ／
+  durable identity ／ 新依赖；
+- Draft **immutable**：绑定 decision 产生**新** Draft，原 Draft 不被改写；stale Draft non-actionable、
+  **不得**approve、**不得**revive；rejected Draft **terminal**（`quantity` 为 `None`：**不**形成 approved
+  Draft）；同一 Draft 不得被决定两次；
+- **不新增** canonical entity ／ field ／ grain ／ enum ／ business status；draft-state token 属内部 runtime
+  literal（`DRAFT` 为已登记 marker）；public surface 保持窄（`DRAFT_MARKER` ／ `DraftError` ／
+  `ProcurementRequestDraft` ／ `open_draft`）；
+- **no persistence**、**no network ／ egress**、**no identity ／ permission enforcement**、
+  **no audit platform**、**no Web ／ API ／ workflow engine**、**no ERP ／ production write**、
+  **no Agent framework ／ Tool protocol**；**不**扩大为完整 HITL state machine。
+
+**B. Required Gates evidence（本小节 G obligations）**
+
+- `tests/test_hitl_draft.py` 以 `§10.6` G 的 contract 分组覆盖全部义务（`D1` ～ `D33`）：Initial（quantity ＝
+  deterministic 值、显式 `DRAFT` marker、不要求 ／ 不虚构 `HumanDecision`）、Decision-derived
+  （approve-as-is ⇒ `approved_value`；override ⇒ Human override `approved_value`；等值 override 仍为 override；
+  deterministic recommendation unchanged）、Read-only ／ absence（`RecommendationNeedDate` 派生只读、
+  supplier identity absent、no invented structured values）、Lifecycle（reject terminal ／ non-actionable、
+  stale non-actionable ／ cannot approve ／ cannot revive、四组件 mismatch 逐项、new `AnalysisRun` ⇒ new instance
+  ＋ new Draft、override not inherited、不得决定两次、非对应 decision 被拒）、Recorded-decision binding
+  （`dataclasses.replace` look-alike 在 `AnalysisRun` ／ grain ／ `review_projection_reference` 全部一致时仍被拒、
+  Draft quantity 不变；**同一** run ／ grain ／ equivalent projection 下**另一** `ReviewInstance` 的 decision 被拒，
+  即 binding 为 per-`ReviewInstance` 而非 per-projection）、Terminal actionability（review approve 后
+  decision 前 open 的 initial Draft `is_actionable = False`；reject 同理；`with_decision`(该 review 实际记录的
+  decision) 仍产生对应 immutable post-decision Draft）、Public construction guard（public constructor
+  signature 仅 `review`；`decision=` ／ positional 注入 forged `approved_value` ／ value-identical copy ／
+  另一 `ReviewInstance` decision 均为 `TypeError`，`dataclasses.replace` 亦不可设置；validated binding path
+  的 approve-as-is ／ override ／ reject 语义不变）、Post-decision construction guard（approve-as-is ／
+  explicit override ／ reject 之后 `open_draft(review)` 与 `ProcurementRequestDraft(review=review)` 均
+  `DraftError`，**不**重新产生 deterministic quantity 的未绑定 Draft；decision 前形成的 initial Draft
+  仍可 `with_decision(review.decision, run)`，覆盖 100 → override 150 ⇒ quantity = 150 及 reject ⇒
+  quantity = None）、Claim boundary、Exact semantics、Architecture boundaries（zero persistence ／ network ／
+  provider capability、narrow public surface、既有 HITL ／ override behaviour 不变）；
+- 既有 `tests/test_hitl_review.py`（H ／ R ／ B ／ O 共 67 tests）**全部保持通过**，未修改既有断言；
+- fixtures 复用既有 end-to-end SIMULATED chain builder；全部输入 `SIMULATED`。
+
+**C. Boundary（本小节不做什么）**
+
+本小节**不新增** canonical entity ／ field ／ grain ／ enum ／ business rule ／ status，**不新增** runtime
+protocol ／ carrier ／ serialization contract，**不**实现本小节 E 列出的任何 re-entry condition；**不修改**
+`§6` 原六行表与 Issue #198 record、`§6.1` A ～ G 的实质内容、`§10.1` A ～ F、`§10.2`、`§10.3` ／ `§10.4` ／
+`§10.5` 的已登记正文、`§3` ／ `§5` ／ `§7` ／ `§8` ／ `§9` 的已登记语义、`ADR-001` ／ `ADR-002`、
+`FROZEN` baseline；**不**回写任何历史时点记录。
+
+```text
+Draft Runtime Code Start Gate = PASS（本小节 C：7 PASS ＋ 2 NOT TRIGGERED ＋ 1 NOT REQUIRED；
+                                0 blocking gate items）
+Draft Runtime Tranche         = IMPLEMENTATION AUTHORIZED（本小节 A ／ D 的 scope）
+Draft runtime                 = IMPLEMENTED（本小节 I；Issue #214）
+Unrestricted implementation   = NOT AUTHORIZED
+§6.1 Draft semantic design    = DESIGN RESOLVED（不变）
+§6 overall                    = DESIGN PENDING（原六行表不变：完整 state machine ／
+                                execution boundary 实现 ／ 持久化 ／ 身份强制执行 均未解决）
+§7 overall                    = NOT RESOLVED
+§8                            = 不 closure（五行均 DESIGN PENDING）
+§9.4                          = DESIGN PENDING ／ JIT-BLOCKED
+rule ／ code-version freshness = NOT RESOLVED
+production execution          = OUTSIDE POC
+source ／ production WRITE     = DENIED
+business acceptance ／ durable approval evidence ／ identity-permission enforcement
+production readiness ／ POC success = NOT CLAIMED
+```
+
+`IMPLEMENTED` **不等于** `VALIDATED`，**不等于** business accepted，也**不等于** `POC SUCCESS`；本 tranche 的
+验证证据**仅**为 SIMULATED fixtures 上的 deterministic `unittest` 与 CI。
 
 ## 11. Open Design Backlog
 
