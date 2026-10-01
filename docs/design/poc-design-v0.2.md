@@ -8582,7 +8582,7 @@ NOT RESOLVED` **不变**。本 unit 的登记变更**只**涉及文档（未修�
 | **A-1** | approve-as-is（SC-1 ／ SC-5；O-1 ／ O-4） | `§6` 第 2 ／ 4 项（Issue #198 record）；`§2.5.15`；`§6.1` D1；`§10.3` J ／ `§10.6` I | `test_hitl_review.ApproveAsIsTests`（H6 ～ H9）＋ `HumanDecisionRecordTests`（H17 ／ H18 ／ H23）＋ `test_hitl_draft.DecisionDerivedTests`（D4 ／ D7）＋ `test_hitl_draft.RecordedDecisionBindingTests`（D24 ／ D25） | observed pass | `SIMULATED` deterministic（`§9.1` 口径） | approve 只对既定 grain ＋ 当前 `AnalysisRun` 生效；`approved_value` ＝ deterministic `RecommendedPurchaseQty` 且 lossless 保留；decision kind ＝ approve；decision record 不进入 deterministic result；**Draft binding 只接受该 `ReviewInstance` 实际记录的 `HumanDecision`** —— forged ／ look-alike decision（identity 字段一致而值被改写）**不可** binding；another `ReviewInstance` 的 decision **不可** binding；corresponding `ReviewInstance` 实际记录的 decision 可 truthfully bind（D24 ／ D25；本项只证明 binding 行为，**不**扩张 `§6` HumanDecision 语义） | recommendation ／ approved value 的业务正确性；真实审批授权；真实系统层面的 production execution 已发生或已被阻断 |
 | **A-2** | explicit quantity override（SC-2；O-3） | `§10.4` B ～ E；`§6` 第 5 项；`§10.5` G；`§6.1` D1 | `OverrideApprovalTests`（O1 ～ O6 ／ O8 ／ O10 ／ O11 ／ O15 ／ O16）＋ `test_hitl_draft.DecisionDerivedTests`（D5 ／ D6）＋ `DraftClaimAndExactnessTests`（D19） | observed pass | `SIMULATED` deterministic | exact rational override 值；`> 0` ＋ `>= ApplicableMOQ` ＋ reason 必填被强制（`reason required` 是既有 canonical contract，非本记录新增规则；直接 evidence source：O8）＋ 无 round ／ quantize ／ clamp ／ normalize ／ auto-adjust；deterministic 值与 projection 逐字不变；decision 仍为 approve ＋ `override_flag = true` | override 数量在业务上最优或经业务批准；`ApplicableMOQ` ／ MOQ 政策本身正确；审批权限 |
 | **A-3** | invalid override fail-closed（SC-2 ／ SC-6） | `§10.4` D | `OverrideApprovalTests`（O7 ／ O8 ／ O9 ／ O10 ／ O14） | observed pass | `SIMULATED` deterministic | 非法或缺失输入 decision-level fail closed；无 decision record；review 保持可重试；deterministic 值不变；不可审查 grain 拒绝 override | 非法性边界的业务来源（由 `§10.4` 定义，本证据不重新判定）；上游 ／ UI 校验 |
-| **A-4** | Reject（SC-3；O-3） | `§6` 第 7 项（`HD-5`） | `RejectTests`（H14 ／ H15 ／ H16）＋ `test_hitl_draft.DraftLifecycleTests`（D11）＋ `test_hitl_draft.TerminalActionabilityTests`（D27） | observed pass | `SIMULATED` deterministic | reason 必填；reject 终止该 review instance；**不触发 deterministic recomputation**（直接 evidence source：D11 —— reject 后 deterministic result payload 逐字未变，且确定性值在该 review instance 上仍可达、未被改变）；后续不可 approve；同一 instance 不可重复 approve | reject 理由的业务充分性；后续业务处置 |
+| **A-4** | Reject（SC-3；O-3） | `§6` 第 7 项（`HD-5`） | **Runtime observed evidence：** `RejectTests`（H14 ／ H15 ／ H16）＋ `test_hitl_draft.DraftLifecycleTests`（D11）＋ `test_hitl_draft.TerminalActionabilityTests`（D27）；**Structural implementation evidence：** `snapshot_loader/hitl_review.py::ReviewInstance.reject`（source inspected at executed revision `bd17a1d`） | observed pass | `SIMULATED` deterministic | reason 必填；reject 终止该 review instance；后续不可 approve；同一 instance 不可重复 approve；**两层 evidence 合并**支撑 canonical `Reject 不触发 deterministic recomputation` —— runtime observed：reject 后 deterministic result ／ value 保持不变、deterministic value 仍可达、terminal Draft ／ review behavior 保持正确（D11）；structural：`reject` 直接消费既有 `self.recommended_purchase_qty`（函数签名不含 quantity 参数）、构造 `HumanDecision`，且不调用 deterministic calculator ／ pipeline ／ recomputation 路径（source inspected at executed revision） | reject 理由的业务充分性；后续业务处置；**`D11 alone does not prove absence of an internal recomputation call.`** —— D11 与上述 structural evidence 单独均不完备，须合并支撑该 canonical contract |
 | **A-5** | stale Review（SC-4；O-2） | `§6` 第 6 ／ 8 项（`HD-4`） | `AnalysisRunFreshnessTests`（H10 ／ H11 ／ H12）＋ `IrreversibleStaleConditionTests`（R4 ／ R5） | observed pass | `SIMULATED` deterministic | 4 组件任一不一致 ⇒ stale；stale 不可 approve；stale 不可复活、不回到 review-in-progress；binding 一致本身不阻塞 approval | rule ／ code-version freshness；freshness 判据之外的 upstream 正确性 |
 | **A-6** | new `AnalysisRun` ／ re-review（SC-4；O-2） | `§6` 第 6 项（`HD-4`） | `AnalysisRunFreshnessTests`（H13）＋ `SupplierRiskRebindingTests`（R8 ／ R9）＋ `ExplanationMismatchTests`（B5 ／ B6 ／ B7）＋ `OverrideApprovalTests`（O12 ／ O13）＋ `test_hitl_draft.DraftLifecycleTests`（D13 ／ D14 ／ D15） | observed pass | `SIMULATED` deterministic | 新 `AnalysisRun` ⇒ 新 review instance（review-in-progress 起点）＋ 新 Draft；supplier-risk evidence 重新绑定且 foreign ／ stale 不被消费；explanation 需新 run、旧 artifact 不复活；override 不跨 run 继承 | rule ／ code-version freshness；cross-execution equivalence |
 | **A-7** | initial Draft（SC-1 ／ SC-4；O-4） | `§6.1` D1 ／ D4；`§10.6` G | `InitialDraftTests`（D1 ／ D2 ／ D3）＋ `DraftBoundaryTests`（D23） | observed pass | `SIMULATED` deterministic | initial quantity ＝ deterministic `RecommendedPurchaseQty`；显式 `DRAFT` 标记；不要求且不虚构 `HumanDecision`；合法缺席不发明数量 | 该数量的业务正确性；任何 ERP Purchase Request ／ Purchase Order 语义 |
@@ -8593,6 +8593,34 @@ NOT RESOLVED` **不变**。本 unit 的登记变更**只**涉及文档（未修�
 
 上表 11 行覆盖 Issue #220 编号的 `A-1` ～ `A-11`；`SC-n` ／ `O-n` 只表示与 Issue #218 已登记 subordinate check
 与 upper-level obligation 的对应关系，**不**重新定义其内容。
+
+**`A-4` 的两层 evidence（必须区分）：** canonical contract `Reject 不触发 deterministic recomputation`
+由**两类** evidence **合并**支撑：
+
+```text
+1. runtime observed evidence
+   `DraftLifecycleTests` D11 —— reject 后 deterministic result ／ value 保持不变；
+   deterministic value 仍可达；terminal Draft ／ review behavior 保持正确
+
+2. structural implementation evidence
+   `snapshot_loader/hitl_review.py::ReviewInstance.reject`
+   （source inspected at executed revision bd17a1d7b11e90c3c2fe29cb00746101d25606d1）
+   —— reject 直接消费既有 `self.recommended_purchase_qty`（函数签名不含 quantity 参数）、
+   构造 `HumanDecision`，且不调用 deterministic calculator ／ pipeline ／ recomputation 路径
+```
+
+`D11 alone does not prove absence of an internal recomputation call.`；两类 evidence 单独均不完备，
+须合并后方支撑该 canonical contract。
+
+```text
+source inspected at executed revision
+  ≠ commit-SHA freshness binding
+  ≠ rule-version binding
+  ≠ rule ／ code-version freshness solved
+```
+
+executed revision 在此**只**作为 source inspection ／ execution provenance 记录；上述两类 evidence **均不**构成
+freshness 机制，`rule ／ code-version freshness = NOT RESOLVED` **不变**。
 
 **3. Claim ceiling（本记录建立什么 ／ 不建立什么）。**
 
