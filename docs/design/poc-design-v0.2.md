@@ -7833,6 +7833,14 @@ resolved`，`§9.4 prerequisite ambiguity closed ≠ §9.4 design resolved`；�
 design **尚未开始**、其 substantive closure **尚未授权**。上一条 Issue #192 follow-up 与其前的 closure
 记录保持原文、不回写。
 
+**Current Status follow-up（Issue #218，`HD-HITL-ACCEPT-R2`）：** `HITL ／ business acceptance` 的 **scoped
+acceptance ／ evidence boundary = `DESIGN RESOLVED`（scoped；design-only）** —— canonical 登记见
+[§9.4](#hitl-business-acceptance)。该 scoped closure **只**定义 evidence boundary：它**不**产生 acceptance
+evidence、**不**执行 acceptance、**不**构成 business acceptance ／ business-value evidence ／ `POC SUCCESS`，
+也**不**改变 `§6 overall` ／ `§7 overall` ／ `§8` ／ `§9.3`；`applicable §6 prerequisite satisfied` 与
+`§9.4 prerequisite ambiguity closed` 的既有登记语义不变。上一条 Issue #216 follow-up 与其前的 closure
+记录保持原文、不回写。
+
 ```text
 §9 两层 design closure
   ≠ implementation evidence 已被 validated
@@ -8210,7 +8218,7 @@ prose；credential 仅以「**process environment only**，执行后**立即清�
 
 <a id="hitl-business-acceptance"></a>
 
-#### 9.4 HITL / business acceptance — `DESIGN PENDING` ／ `JIT-BLOCKED`
+#### 9.4 HITL / business acceptance — `DESIGN PENDING` ／ `JIT-BLOCKED`（Issue #176 时点）；scoped acceptance ／ evidence boundary = `DESIGN RESOLVED`（scoped；design-only；Issue #218）
 
 **为何仍 `DESIGN PENDING`：** 本层的 evidence 对象（Human `Review` ／ `Modify` ／ `Approve` ／
 `Reject` 与 business acceptance）**尚不存在**，其设计依赖**尚未 closure** 的章节：
@@ -8338,6 +8346,176 @@ evidence，**不**声称 business acceptance 或 `POC SUCCESS`。
 `DESIGN PENDING` 表与 Issue #198 record、`§6.1` A ～ G 的实质内容、`§10.3` ／ `§10.4` ／ `§10.5` ／ `§10.6`
 的已登记正文与 historical gate states、`§3` ／ `§5` ／ `§7` ／ `§8` 的已登记语义与 Status、
 `ADR-001` ／ `ADR-002`、`FROZEN` baseline；**不**回写任何历史时点记录。
+
+**Scoped acceptance ／ evidence boundary registration（Issue #218；Human Decision `HD-HITL-ACCEPT-R2`）：**
+
+**Registration Status：`DESIGN RESOLVED`（scoped acceptance ／ evidence boundary for minimal POC HITL ／ business acceptance；design-only）**
+**Authority：** Human Decision **`HD-HITL-ACCEPT-R2 = APPROVED`**（`R2-1` ～ `R2-5`；Issue #218）＋ 本小节既有的 evidence obligation 与 trigger boundary（Issue #176 record）＋ **`HD-HITL-ACCEPT-R1`**（Issue #216：`applicable §6 design gate = SATISFIED at the scoped POC HITL boundary`）＋ `§6` Issue #198 record ／ `§6.1`（Issue #210）＋ `§10.3` J（Issue #202）／ `§10.5` G（Issue #208）／ `§10.6` I（Issue #214）＋ `§1` `GSD-3` ／ `GSD-3.1` ～ `GSD-3.5` ／ `GSD-3.7` ＋ `FROZEN` Discovery Brief `§16` ／ `§17` ＋ `§3.7` ／ `§3.8` ／ `§3.10` ／ `§3.12`（`VB-29`）＋ `§5.15` ＋ `§7` status 表 ／ `§7.1` ＋ `§9.1` ／ `§9.2` ／ `§9.5` ／ `§10.1` D。
+
+**本登记关闭什么：** 只关闭「最小 POC HITL ／ business acceptance 的 scoped acceptance ／ evidence boundary 是什么」这一件事。
+它**不**产生任何 acceptance evidence，**不**执行 acceptance，**不**构成 `business acceptance` ／ business-value evidence ／ `POC SUCCESS`，
+**不**构成 implementation authorization，也**不** closure `§6 overall` ／ `§7 overall` ／ `§8`。
+
+> **历史读取边界：** 本小节标题与上方全部 `DESIGN PENDING` ／ `JIT-BLOCKED` 文字（含 Issue #176 premise、Issue #216 correction ／
+> prerequisite-scope registration）均为**该时点记录，原文保留、不回写**；本小节 **current status** 以本登记为准。
+> 本登记**不**修改上方依赖块、trigger boundary、evidence category 文字与 `§6` 原六行表。
+
+**1. 保留的 upper-level evidence obligation（不得替换、改写或降级）。**
+
+本小节既有四类 evidence obligation 继续是本层的 upper-level 义务；本登记只把它们展开为第 2 项的 **subordinate** scenario ／ evidence checks：
+
+| # | Upper-level obligation（既有登记语义） | 本登记的处理 |
+| --- | --- | --- |
+| O-1 | approval 语义正确性（`Human Approval ≠ Production Execution`） | 保留；subordinate check ＝ SC-1 ／ SC-6 |
+| O-2 | 重大变更后的重新审批要求 | 保留；subordinate check ＝ SC-4（stale ／ re-review）＋ SC-1 |
+| O-3 | `Modify` ／ `Reject` 路径 | 保留；subordinate check ＝ SC-2 ／ SC-3 |
+| O-4 | decision trace 完整性与可追溯性 | 保留；subordinate check ＝ SC-5（**仅** single in-process run 范围，见第 6 项） |
+
+`O-1` ～ `O-4` 的 canonical authority **仍**是 Issue #176 record；本登记**不**重复、**不**缩窄、**不**替换其语义。
+
+**2. Subordinate scenario ／ evidence checks（每项登记 canonical oracle ／ authority ＋ proves ＋ does not prove）。**
+
+| Check | Canonical oracle ／ authority | Proves | Does not prove |
+| --- | --- | --- | --- |
+| **SC-1** approval semantics | `§6` 第 2 ／ 4 项（Issue #198 record：approval target grain；approve-as-is ⇒ approved value ＝ deterministic `RecommendedPurchaseQty`）＋ `§3.7` ／ `§3.12`（`VB-29`：`Human Approval ≠ Production Execution`）＋ `§2.5.15` | 在受控 `SIMULATED` 输入上，approve 只对当前 `AnalysisRun` 下既定 grain 生效；`approved_value` ＝ 该 grain 的 deterministic `RecommendedPurchaseQty`；approve 不产生任何 production ／ ERP 副作用 | 该 recommendation ／ approved value 的业务正确性；真实审批授权；真实系统层面的 production execution 已发生或已被阻断 |
+| **SC-2** quantity Modify ／ override | `§10.4`（HD-3 Option A′ ／ B ～ E）＋ `§6` 第 5 项 ＋ `§10.5` G | exact base-10 decimal 输入下 `approved_value` 为 exact rational override 值；`> 0` ＋ `>= ApplicableMOQ` ＋ reason 必填被强制；deterministic `RecommendedPurchaseQty` 逐字未变、不被写回；非法输入 decision-level fail closed（无 decision record、review 保持 review-in-progress、deterministic 不变） | override 数量在业务上最优或经业务批准；`ApplicableMOQ` ／ MOQ 政策本身正确；审批权限 |
+| **SC-3** Reject | `§6` 第 7 项（`HD-5`） | reject 终止该 review instance；reason 必填；不触发 deterministic recomputation；旧 decision 不被改写 | reject 理由的业务充分性；后续业务处置 |
+| **SC-4** stale ／ re-review ＋ Draft lifecycle | `§6` 第 6 项（`HD-4`；4-component `AnalysisRunContext`）＋ `§6` 第 8 项 ＋ `§6.1` D3 | 4 组件任一不一致 ⇒ 该 review 为 stale 且不可 approve ／ 不可复活；新 `AnalysisRun` ⇒ 新 review instance（review-in-progress 起点）＋ 新 Draft；override 不跨 run 继承；rejected Draft terminal ／ stale Draft non-actionable | rule ／ code-version freshness（**未解决**，见第 7 项）；freshness 判据之外的 upstream 正确性 |
+| **SC-5** in-process decision-record completeness | `§6` 第 4 项最小字段集 ＋ `§10.3` J（actor slot 必填且不可为空；decision evidence reference 只承载 identity ／ reference） | 在**单个 in-process run** 内，`HumanDecision` 最小字段齐备、grain ／ `AnalysisRun` 绑定正确、引用可回溯到既有已登记 surface；formed projection ／ decision 不可被 public surface 改写 | **durable approval history** ／ **audit trail** ／ **cross-session traceability** ／ **rule-version traceability**（见第 6 项）；reviewer identity 或权限 |
+| **SC-6** fail-closed ／ no-write ／ non-enforcement boundary | `§3.10`（fail closed）＋ `§3.5` ／ `§3.7`（`WRITE = DENIED`；execution boundary ＝ OUTSIDE POC）＋ `§6` 第 9 项（`HD-7`）＋ `§10.3` J | 缺失 ／ 非法输入与不可用依赖路径 fail closed 且无 write side effect；actor slot 缺失 ／ 为空被拒绝；review projection 不产生 provider egress | `identity verified` 或 `permission enforced` —— `actor present ≠ identity verified ≠ permission enforced`；真实系统层面的写操作防护 |
+
+**3. Minimum acceptance scenario matrix。**
+
+| # | Scenario | Expected outcome ／ 判据（canonical authority） | Check |
+| --- | --- | --- | --- |
+| **A-1** | approve-as-is | `decision kind = approve` ＋ `override_flag = false` ＋ `approved_value` ＝ deterministic `RecommendedPurchaseQty`；Draft binding 只接受该 `ReviewInstance` 实际记录的 `HumanDecision`（`§6` 第 2 ／ 4 项；`§6.1` D1；`§10.3` J ／ `§10.6` I） | SC-1 |
+| **A-2** | explicit quantity override | `approved_value` ＝ exact rational Human override（`> 0`、`>= ApplicableMOQ`、reason 必填）；deterministic 值逐字不变（`§10.4` B ～ E；`§6` 第 5 项） | SC-2 |
+| **A-3** | invalid override fail-closed | decision-level fail closed：无 decision record、review 保持 review-in-progress、deterministic 不变、可重试（`§10.4` D） | SC-2 |
+| **A-4** | Reject | review instance terminal；reason 必填；不重算；旧 decision 不改写（`§6` 第 7 项） | SC-3 |
+| **A-5** | stale Review | 4 组件任一不一致 ⇒ stale；不可 approve；不可复活（`§6` 第 6 ／ 8 项） | SC-4 |
+| **A-6** | new `AnalysisRun` ／ re-review | 新 review instance；supplier-risk evidence 重新绑定；explanation 重新生成或明确 unavailable；override 不继承（`§6` 第 6 项） | SC-4 |
+| **A-7** | initial Draft | quantity ＝ deterministic `RecommendedPurchaseQty`；显式 `DRAFT` 标记；不虚构 `HumanDecision`（`§6.1` D1 ／ D4；`§10.6` G） | SC-1 ／ SC-4 |
+| **A-8** | decision-bearing Draft | Draft 反映对应 `HumanDecision.approved_value`（approve-as-is ⇒ deterministic 值；override ⇒ override 值）；`RecommendationNeedDate` 只读原样；supplier identity absent（`§6.1` D1 ／ D2） | SC-1 ／ SC-2 |
+| **A-9** | rejected ／ stale Draft non-actionability | rejected Draft terminal；stale Draft non-actionable、不得 approve、不得复活（`§6.1` D3） | SC-4 |
+| **A-10** | `Human Approval ≠ Production Execution` | POC 内状态可变为 `APPROVED`，但不产生 ERP write ／ PO ／ production submit；`WRITE = DENIED`（`§3.7` ／ `§3.8` ／ `§3.12`） | SC-1 ／ SC-6 |
+| **A-11** | （negative）illegal transitions | stale → approved ／ review-in-progress；rejected → approved；同一 instance 重复 approve；任何状态 → production execution 均非法（`§6` 第 8 项） | SC-4 |
+
+Expected outcome **只**取自上述 canonical authority；**不得**以 current implementation 行为作为 oracle。
+本矩阵成员集合是本层登记的**最小**集合；实现者不得自行扩张本层语义，增加 scenario 须经独立 change unit。
+矩阵不引入 canonical entity ／ field ／ grain ／ enum ／ business status；矩阵存在**不等于** evidence 已产生。
+全部输入 ／ fixture 继续显式标记 **`SIMULATED`**。
+
+**4. Claim discipline（四项必须区分，不得互相替代）。**
+
+| 术语 | 由谁 ／ 什么建立 | 允许的依据 | 不允许 |
+| --- | --- | --- | --- |
+| HITL behavioral acceptance | `SIMULATED` runtime ／ test evidence（`§9.1` ／ `§9.2` 的 evidence 口径） | 系统在受控合成输入上按本层已登记契约行为（SC-1 ～ SC-6、A-1 ～ A-11） | 业务价值、真实数据正确性、生产可用性、真实客户接受 |
+| business acceptance | **Human-designated POC business reviewer** 的**显式 Human judgement**（`R2-1` Option B） | 该 reviewer 在明确范围内对 POC workflow ／ evidence 作出的 scoped judgement；该 judgement 必须可明确归属于该 reviewer，并明确 **judgement scope** 与 **judgement time**（**evidence-content requirement**；本小节**不**定义 runtime artifact ／ schema ／ persistence） | 由 `SIMULATED` system test 自动推出；**不等于** real-customer acceptance ／ business-value evidence ／ usage ／ adoption evidence ／ production acceptance ／ `POC SUCCESS`；**不得**把 `§6` 第 4 项 `HumanDecision` runtime artifact 解释或复用为 business-acceptance record |
+| business-value evidence | 真实客户 ／ 真实流程 baseline 的测量 | 未来 `FROZEN §16` 业务价值维度的 evidence category 与 measurement prerequisite（见第 8 项） | 现在发明 KPI 数值 ／ threshold ／ baseline ／ adoption ／ usage ／ business-value result（`GSD-3.3` ／ `GSD-3.7`） |
+| `POC SUCCESS` | `GSD-3.5` claim rule 下的综合 evidence claim | 未来 Human-approved acceptance ／ evidence policy 综合 applicable runtime ／ test evidence ＋ applicable business-value evidence ＋ `FROZEN` success dimensions | 由 design closure、implementation、Demo 可运行、单一 test pass 或本层任何登记单独推出；**本 unit 不判断** |
+
+`behavioral acceptance` 与 `business acceptance` 的 evidence **不可互相替代**：前者是系统行为证据，后者是显式 Human 判断。
+
+`business acceptance` 在本小节**只**登记 **evidence-content requirement**：judgement 归属（Human-designated POC
+business reviewer）＋ judgement scope ＋ judgement time。本小节**不**设计该 judgement 的 runtime artifact ／
+schema ／ persistence，**不**新增 canonical entity ／ status；`§6` 第 4 项的 `HumanDecision` 是
+**procurement recommendation quantity decision record**，**不得**被解释或复用为 business-acceptance record，
+其已登记语义**不**因本登记扩张（`§6` 第 12 项 ／ `§10.3` J 不变）。
+
+**5. `§7` applicability（按 `R2-2` 登记；不重新设计 options）。**
+
+```text
+identity / RBAC / permission enforcement = NOT a prerequisite unless introduced
+actor_reference presence ／ blank rejection = 可作为 behavioral evidence（SC-6）
+actor present ≠ identity verified ≠ permission enforced
+```
+
+- **不得**登记 `applicable §7 gate = SATISFIED`；**不得** closure `§7`；`§7 overall = NOT RESOLVED`、`RBAC ／ Data Scope ／ Tool Permission = DESIGN PENDING` 不变。
+- **Trigger condition：** 本 change unit 若引入真实 identity ／ role ／ data-scope ／ permission enforcement，**必须停止**并重新进入 `§7` JIT gate（`§10.1` D `§7` row）。
+
+**6. `§8` applicability（按 `R2-3` 登记；不重新设计 options）。**
+
+```text
+persistence / durable approval history = NOT a prerequisite unless introduced
+single in-process run decision-record completeness = 可作为 behavioral evidence（SC-5）
+```
+
+- 不得声称 **durable approval history** ／ **audit trail** ／ **cross-session traceability** ／ **rule-version traceability**；既有 binding 组件为 `analysis_run_id` ＋ `snapshot_package_identity` ＋ `accepted_content_view_digest` ＋ `analysis_date`，**不**含 rule ／ code version（`§6` 第 6 项）。
+- **Trigger condition：** 若引入 persistence ／ cross-process ／ cross-session durable decision storage ／ audit claim，**必须停止**并重新进入 `§8` JIT gate（`§10.1` D `§8` row）。
+- `§8 = NOT CLOSED`（五行仍 `DESIGN PENDING`）不变。
+
+**7. Rule ／ code-version freshness（按 `R2-4` 保持）。**
+
+```text
+rule ／ code-version freshness = NOT RESOLVED
+```
+
+本登记**不**引入 commit-SHA binding、rule-version binding 或任何新的 freshness mechanism；
+`AnalysisRun` freshness 继续**仅**按既有 canonical 4-component contract（`§6` 第 6 项）；
+本层 acceptance 主张**不得**包含版本级追溯语义。
+
+**8. Business-value boundary（对齐 `§1` `GSD-3.1` ～ `GSD-3.3` ／ `GSD-3.5` ／ `GSD-3.7` 与 `FROZEN` `§16` ／ `§17`）。**
+
+- 本层**只**登记 Layer 3 未来需要的 **evidence category**：`FROZEN §16` 的业务价值维度（减少系统切换 ／ 减少人工汇总 ／ 降低分析时间 ／ 提高异常解释效率 ／ 其他经真实客户确认的改善）。
+- **Measurement prerequisite（登记为要求，不是结果）：** `real customer ／ process baseline = NOT AVAILABLE ／ 尚未在当前项目 evidence 中获得`（`FROZEN §18` Known Unknowns 未确认）。本登记**不**对该 baseline 在现实世界中是否存在作判断，也**不**发明 baseline。
+- **不得**发明：KPI 数值、threshold、baseline、adoption ／ usage result、business-value result、acceptance threshold、scoring ／ rubric、eval framework。
+- `FROZEN §17` 的 failure ／ reassessment conditions 保持为 future stop-or-rethink boundary，**不得**写成已发生事实，也**不得**并入自创 success score；`FROZEN` H3 ／ H4 状态不因本登记改变。
+
+**9. Evidence-production boundary（prose；不新增 status vocabulary）。**
+
+本 design closure **只**定义 evidence boundary。它**不**产生 acceptance evidence、**不**执行 acceptance、
+**不**构成 business acceptance、**不**构成 business-value evidence、**不**构成 `POC SUCCESS`、**不**表示 HITL behavioral acceptance 已取得。
+`SIMULATED` evidence 保持 `SIMULATED`，**不得**被表述为真实客户 ／ 企业事实。`§9.5` 的 claim discipline 继续适用；
+本小节**不**新增 `NOT RUN` ／ `NOT PRODUCED` 等状态词。
+
+**10. Egress ／ write wording（精确，不得笼统扩大）。**
+
+```text
+HITL review ／ HumanDecision ／ Draft surfaces   = 不新增 provider egress
+read-only review projection                     = 本身无 egress
+hosted AI Explanation egress（ADR-002 已批准）    = 保持不变
+production ／ ERP write-back                     = zero
+```
+
+**不得**笼统声称整个 POC「无 egress」，也**不得**把 review projection 无 egress 扩大为平台级结论；
+`ADR-002` 已批准的 hosted AI Explanation egress 与 `§7.1` Secret Handling contract 均不变。
+
+**11. Status snapshot（本登记后的 current status）。**
+
+```text
+§9.4                         = DESIGN RESOLVED（scoped；design-only；本小节）
+§6 overall                   = DESIGN PENDING（不变）
+§6.1 Draft semantic design   = DESIGN RESOLVED（不变）
+§7 overall                   = NOT RESOLVED（不变）
+§8                           = NOT CLOSED（不变；五行仍 DESIGN PENDING）
+§9.3 AI Eval                 = DESIGN PENDING（不变）
+rule ／ code-version freshness = NOT RESOLVED（不变）
+Unrestricted implementation  = NOT AUTHORIZED（不变）
+production execution         = OUTSIDE POC（不变）
+source ／ production WRITE    = DENIED（不变）
+POC success                  = NOT CLAIMED（不变）
+
+§9.4 scoped design closure   ≠ §6 ／ §7 ／ §8 closure
+§9.4 scoped design closure   ≠ acceptance evidence produced
+§9.4 scoped design closure   ≠ business acceptance ／ business-value evidence ／ POC SUCCESS
+```
+
+**12. Closure criteria（本登记的 scoped closure 条件与登记结果）。**
+
+| # | Criterion | 登记结果 |
+| --- | --- | --- |
+| CC-1 | `O-1` ～ `O-4` upper-level evidence obligation 被保留（未替换 ／ 改写 ／ 降级） | 已登记（第 1 项） |
+| CC-2 | subordinate checks（SC-1 ～ SC-6）各自登记 canonical oracle ／ authority ＋ proves ＋ does not prove | 已登记（第 2 项） |
+| CC-3 | minimum scenario matrix 覆盖 A-1 ～ A-11，且 expected outcome 取自 canonical authority | 已登记（第 3 项） |
+| CC-4 | `HITL behavioral acceptance` ／ `business acceptance` ／ `business-value evidence` ／ `POC SUCCESS` 四项 claim discipline 已区分 | 已登记（第 4 项） |
+| CC-5 | `§7` ／ `§8` applicability 按 `R2-2` ／ `R2-3` 登记；未 closure、未声称 `SATISFIED` | 已登记（第 5 ／ 6 项） |
+| CC-6 | business-value boundary 只定义 evidence category ／ measurement prerequisite；无 KPI ／ threshold ／ baseline ／ result | 已登记（第 8 项） |
+| CC-7 | evidence-production boundary 以 prose 表述；未新增状态词 | 已登记（第 9 项） |
+| CC-8 | 未新增 canonical entity ／ field ／ grain ／ enum ／ business status；未授权 implementation；未修改历史时点记录 | 已登记（第 13 项） |
+
+上表是 **design-level** 登记结果，**不是** acceptance evidence，也**不**构成 `VALIDATED` ／ business acceptance ／ `POC SUCCESS`。
+
+**13. 本登记不修改：** 本小节上方全部文字与 Issue #176 ／ #216 记录（原文保留、不回写）、`§6` 原六行表与 Issue #198 record、`§6.1` A ～ G、`§10.1` ／ `§10.3` ／ `§10.4` ／ `§10.5` ／ `§10.6` 已登记正文与 historical gate states、`§3` ／ `§5` ／ `§7` ／ `§8` 的已登记语义与 Status、`§9.1` ／ `§9.2` ／ `§9.3` ／ `§9.5` ／ `§9.6`、`ADR-001` ／ `ADR-002`、`FROZEN` baseline、code ／ tests ／ runtime。本登记**不**新增 canonical entity ／ field ／ grain ／ enum ／ business status，**不**选择 framework ／ harness ／ KPI ／ benchmark ／ LLM judge ／ model ／ provider，**不**授权 implementation ／ tests ／ harness ／ acceptance evidence production。
 
 #### 9.5 Status vocabulary ／ claim discipline（必须区分）
 
