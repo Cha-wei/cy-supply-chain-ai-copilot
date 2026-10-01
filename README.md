@@ -181,10 +181,30 @@ Draft runtime tranche             = CODE START GATE PASS / IMPLEMENTATION AUTHOR
                                     enforced；in-process decision trace ≠ durable audit evidence；
                                     §7 ／ §8 未 closure）；rule ／ code-version freshness =
                                     NOT RESOLVED 不变；§6 overall ／ §7 overall ／ §8 ／ §9.3 不变；
-                                    该 closure 只定义 evidence boundary：不产生 acceptance evidence、
-                                    不执行 acceptance、不构成 business acceptance ／ business-value
-                                    evidence ／ POC SUCCESS；不引入 KPI ／ threshold ／ baseline ／
-                                    adoption result
+                                    该 design closure **当时**只定义 evidence boundary（未产生 evidence；
+                                    实际 evidence production 由 Issue #220 单独授权与登记，见下一行）；
+                                    不引入 KPI ／ threshold ／ baseline ／ adoption result
+§9.4 scoped HITL behavioral           = produced ／ observed（intentional acceptance execution；
+  acceptance evidence                  Issue #220 ／ HD-HITL-ACCEPT-R3）：在实际执行 revision
+  （validation-time-point；Issue #220） bd17a1d7b11e90c3c2fe29cb00746101d25606d1 上刻意执行既有
+                                      `SIMULATED` deterministic tests
+                                      （python -m unittest tests.test_hitl_review tests.test_hitl_draft -v）
+                                      = Ran 100 tests … OK（0 failures ／ 0 errors ／ 0 skipped；
+                                      test_hitl_review 67 ＋ test_hitl_draft 33）；A-1 ～ A-11 的
+                                      evidence mapping（canonical authority ／ existing test identifier ／
+                                      observed result ／ evidence class ／ proves ／ does not prove）与
+                                      observed result 已 canonical 登记于 §9.4；A-10 仅为当前
+                                      repository ／ runtime scope 的 negative ／ structural behavioral
+                                      evidence（不得外推为 production security guarantee ／ real ERP
+                                      write protection ／ enterprise permission enforcement）；
+                                      未新增 test ／ script ／ runtime surface；未新增 canonical entity ／
+                                      enum ／ business status；executed revision 仅作 execution
+                                      provenance metadata（≠ commit-SHA freshness binding ≠
+                                      rule-version binding ≠ cross-execution equivalence guarantee）；
+                                      本记录不构成 business acceptance ／ real-customer acceptance ／
+                                      business-value evidence ／ usage ／ adoption evidence ／
+                                      production acceptance ／ POC SUCCESS；business acceptance 须由
+                                      Human-designated POC business reviewer 显式作出（下一 gate）
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：

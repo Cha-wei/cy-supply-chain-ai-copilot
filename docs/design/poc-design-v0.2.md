@@ -7841,6 +7841,15 @@ evidence、**不**执行 acceptance、**不**构成 business acceptance ／ busi
 `§9.4 prerequisite ambiguity closed` 的既有登记语义不变。上一条 Issue #216 follow-up 与其前的 closure
 记录保持原文、不回写。
 
+**Current Status follow-up（Issue #220，`HD-HITL-ACCEPT-R3`）：** `HITL ／ business acceptance` 的 **scoped
+behavioral acceptance evidence** 已在执行 revision `bd17a1d` 上**刻意执行并 observed conformant**
+（`python -m unittest tests.test_hitl_review tests.test_hitl_draft -v`；`Ran 100 tests … OK`，0 failures ／
+0 errors ／ 0 skipped），canonical 登记见 [§9.4](#hitl-business-acceptance)。该记录**只**建立 `A-1` ～ `A-11` 的
+`SIMULATED` behavioral evidence：**不**构成 business acceptance ／ real-customer acceptance ／ business-value
+evidence ／ usage ／ adoption evidence ／ production acceptance ／ `POC SUCCESS`；`§6 overall` ／ `§7 overall` ／
+`§8` ／ `§9.3` 与 `rule ／ code-version freshness = NOT RESOLVED` 均不变；executed revision 仅为
+execution provenance metadata。上一条 Issue #218 follow-up 与其前的 closure 记录保持原文、不回写。
+
 ```text
 §9 两层 design closure
   ≠ implementation evidence 已被 validated
@@ -8516,6 +8525,114 @@ POC success                  = NOT CLAIMED（不变）
 上表是 **design-level** 登记结果，**不是** acceptance evidence，也**不**构成 `VALIDATED` ／ business acceptance ／ `POC SUCCESS`。
 
 **13. 本登记不修改：** 本小节上方全部文字与 Issue #176 ／ #216 记录（原文保留、不回写）、`§6` 原六行表与 Issue #198 record、`§6.1` A ～ G、`§10.1` ／ `§10.3` ／ `§10.4` ／ `§10.5` ／ `§10.6` 已登记正文与 historical gate states、`§3` ／ `§5` ／ `§7` ／ `§8` 的已登记语义与 Status、`§9.1` ／ `§9.2` ／ `§9.3` ／ `§9.5` ／ `§9.6`、`ADR-001` ／ `ADR-002`、`FROZEN` baseline、code ／ tests ／ runtime。本登记**不**新增 canonical entity ／ field ／ grain ／ enum ／ business status，**不**选择 framework ／ harness ／ KPI ／ benchmark ／ LLM judge ／ model ／ provider，**不**授权 implementation ／ tests ／ harness ／ acceptance evidence production。
+
+**Scoped HITL behavioral acceptance evidence — production ／ validation record（Issue #220；Human Decision `HD-HITL-ACCEPT-R3`）：**
+
+**Registration Status：`REGISTERED`（scoped HITL behavioral acceptance evidence record；validation-time-point record）**
+**Authority：** Human Decision **`HD-HITL-ACCEPT-R3 = APPROVED`**（`R3-1` ～ `R3-6`；Issue #220）＋ 本小节的 Issue #218 scoped acceptance ／ evidence boundary registration（`O-1` ～ `O-4`、`SC-1` ～ `SC-6`、`A-1` ～ `A-11`、claim discipline、`§7` ／ `§8` applicability、rule-version 边界、evidence-production boundary）＋ 既有 runtime ／ test authority（`§10.3` H ／ J、`§10.4` ＋ `§10.5` E ／ G、`§6.1` ＋ `§10.6` G ／ I）＋ `§9.1` ／ `§9.2` ／ `§9.5`。
+
+**Claim（prose；不新增 canonical status vocabulary）：**
+
+```text
+A-1 ～ A-11 scoped SIMULATED behavioral evidence
+was intentionally executed and observed conformant
+at this validation time point.
+```
+
+**1. Intentional acceptance execution（execution provenance metadata；以下为实际执行事实，未补写、未推测）。**
+
+```text
+Executed repository revision = bd17a1d7b11e90c3c2fe29cb00746101d25606d1
+Execution command           = python -m unittest tests.test_hitl_review tests.test_hitl_draft -v
+Environment                 = CPython 3.14.4（local execution environment）
+Evidence classification     = SIMULATED（synthetic fixtures only；no network ／ database ／ LLM ／ secret）
+Observed result             = Ran 100 tests … OK（0 failures ／ 0 errors ／ 0 skipped）
+Observed composition        = tests.test_hitl_review 67 tests ＋ tests.test_hitl_draft 33 tests
+Observed time point         = 本 validation 执行时点（Issue #220）
+```
+
+该执行**是**本 unit 刻意进行的 intentional acceptance execution；它**不是** CI 的自动回归运行，CI 结果见下方
+环境限度说明。
+
+```text
+executed revision
+  ≠ commit-SHA freshness binding
+  ≠ rule-version binding
+  ≠ rule ／ code-version freshness solved
+  ≠ cross-execution equivalence guarantee
+```
+
+executed revision 只作为 **execution provenance metadata** 记录（`R3-4`）；`rule ／ code-version freshness =
+NOT RESOLVED` **不变**。本 unit 的登记变更**只**涉及文档（未修改 code ／ tests ／ runtime），该事实是执行上下文说明，
+**不**构成 freshness 或 cross-execution equivalence 主张。
+
+**Environment limitation（如实记录）：** 本次 intentional execution 在 **CPython 3.14.4**（本机可用解释器）上执行；
+本 repository 的 CI matrix 为 **Python 3.11 ／ 3.12**。executed revision 的 CI（run `36839221368`）为 success，
+但该 CI 结果**不是**本次 intentional acceptance evidence 的组成部分，也**不**替代它
+（`CI green ≠ intentional §9.4 acceptance evidence production`）；本记录不据此声称跨解释器等价性。
+
+**2. A-1 ～ A-11 evidence mapping 与 observed result。**
+
+`Canonical authority` 列是 **oracle**；test identifier 只是 **evidence source ／ 机制**，**不是** oracle。
+多个 `A-n` 允许共享既有 test（本 unit 未新增任何 test）。全部证据均来自 `tests.test_hitl_review` 与
+`tests.test_hitl_draft`，且全部为 `SIMULATED` deterministic 证据。
+
+| # | Scenario（`SC` ／ `O` relationship） | Canonical authority（oracle） | Evidence source（existing test identifier） | Observed result | Evidence class | Proves | Does not prove |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **A-1** | approve-as-is（SC-1 ／ SC-5；O-1 ／ O-4） | `§6` 第 2 ／ 4 项（Issue #198 record）；`§2.5.15`；`§6.1` D1；`§10.3` J ／ `§10.6` I | `test_hitl_review.ApproveAsIsTests`（H6 ～ H9）＋ `HumanDecisionRecordTests`（H17 ／ H18 ／ H23）＋ `test_hitl_draft.DecisionDerivedTests`（D4 ／ D7） | observed pass | `SIMULATED` deterministic（`§9.1` 口径） | approve 只对既定 grain ＋ 当前 `AnalysisRun` 生效；`approved_value` ＝ deterministic `RecommendedPurchaseQty` 且 lossless 保留；decision kind ＝ approve；decision record 不进入 deterministic result | recommendation ／ approved value 的业务正确性；真实审批授权；真实系统层面的 production execution 已发生或已被阻断 |
+| **A-2** | explicit quantity override（SC-2；O-3） | `§10.4` B ～ E；`§6` 第 5 项；`§10.5` G；`§6.1` D1 | `OverrideApprovalTests`（O1 ～ O6 ／ O10 ／ O11 ／ O15 ／ O16）＋ `test_hitl_draft.DecisionDerivedTests`（D5 ／ D6）＋ `DraftClaimAndExactnessTests`（D19） | observed pass | `SIMULATED` deterministic | exact rational override 值；`> 0` ＋ `>= ApplicableMOQ` ＋ reason 必填被强制；无 round ／ quantize ／ clamp ／ normalize ／ auto-adjust；deterministic 值与 projection 逐字不变；decision 仍为 approve ＋ `override_flag = true` | override 数量在业务上最优或经业务批准；`ApplicableMOQ` ／ MOQ 政策本身正确；审批权限 |
+| **A-3** | invalid override fail-closed（SC-2 ／ SC-6） | `§10.4` D | `OverrideApprovalTests`（O7 ／ O8 ／ O9 ／ O10 ／ O14） | observed pass | `SIMULATED` deterministic | 非法或缺失输入 decision-level fail closed；无 decision record；review 保持可重试；deterministic 值不变；不可审查 grain 拒绝 override | 非法性边界的业务来源（由 `§10.4` 定义，本证据不重新判定）；上游 ／ UI 校验 |
+| **A-4** | Reject（SC-3；O-3） | `§6` 第 7 项（`HD-5`） | `RejectTests`（H14 ／ H15 ／ H16）＋ `test_hitl_draft.TerminalActionabilityTests`（D27） | observed pass | `SIMULATED` deterministic | reason 必填；reject 终止该 review instance；不触发 deterministic recomputation；后续不可 approve；同一 instance 不可重复 approve | reject 理由的业务充分性；后续业务处置 |
+| **A-5** | stale Review（SC-4；O-2） | `§6` 第 6 ／ 8 项（`HD-4`） | `AnalysisRunFreshnessTests`（H10 ／ H11 ／ H12）＋ `IrreversibleStaleConditionTests`（R4 ／ R5） | observed pass | `SIMULATED` deterministic | 4 组件任一不一致 ⇒ stale；stale 不可 approve；stale 不可复活、不回到 review-in-progress；binding 一致本身不阻塞 approval | rule ／ code-version freshness；freshness 判据之外的 upstream 正确性 |
+| **A-6** | new `AnalysisRun` ／ re-review（SC-4；O-2） | `§6` 第 6 项（`HD-4`） | `AnalysisRunFreshnessTests`（H13）＋ `SupplierRiskRebindingTests`（R8 ／ R9）＋ `ExplanationMismatchTests`（B5 ／ B6 ／ B7）＋ `OverrideApprovalTests`（O12 ／ O13）＋ `test_hitl_draft.DraftLifecycleTests`（D13 ／ D14 ／ D15） | observed pass | `SIMULATED` deterministic | 新 `AnalysisRun` ⇒ 新 review instance（review-in-progress 起点）＋ 新 Draft；supplier-risk evidence 重新绑定且 foreign ／ stale 不被消费；explanation 需新 run、旧 artifact 不复活；override 不跨 run 继承 | rule ／ code-version freshness；cross-execution equivalence |
+| **A-7** | initial Draft（SC-1 ／ SC-4；O-4） | `§6.1` D1 ／ D4；`§10.6` G | `InitialDraftTests`（D1 ／ D2 ／ D3）＋ `DraftBoundaryTests`（D23） | observed pass | `SIMULATED` deterministic | initial quantity ＝ deterministic `RecommendedPurchaseQty`；显式 `DRAFT` 标记；不要求且不虚构 `HumanDecision`；合法缺席不发明数量 | 该数量的业务正确性；任何 ERP Purchase Request ／ Purchase Order 语义 |
+| **A-8** | decision-bearing Draft（SC-1 ／ SC-2；O-1 ／ O-4） | `§6.1` D1 ／ D2；`§10.6` G | `DecisionDerivedTests`（D4 ～ D7）＋ `ReadOnlyAndAbsenceTests`（D8 ／ D9 ／ D10）＋ `RecordedDecisionBindingTests`（D24 ／ D25）＋ `PublicConstructionGuardTests`（D28 ／ D29）＋ `PostDecisionConstructionTests`（D30 ～ D33）＋ `DraftClaimAndExactnessTests`（D18） | observed pass | `SIMULATED` deterministic | Draft 反映对应 `HumanDecision.approved_value`（approve-as-is ／ explicit override）；`RecommendationNeedDate` 只读原样；supplier identity absent；look-alike ／ 其它 instance 的 decision 不被反映；Draft 不被表述为 PR ／ PO ／ submitted record | 数量的业务正确性；真实采购单据或提交行为 |
+| **A-9** | rejected ／ stale Draft non-actionability（SC-4） | `§6.1` D3 | `DraftLifecycleTests`（D11 ／ D12 ／ D16）＋ `TerminalActionabilityTests`（D26 ／ D27） | observed pass | `SIMULATED` deterministic | rejected Draft terminal；stale Draft non-actionable、不得 approve、不得复活；Draft 不可被 decision 两次 | 业务后续处置；跨会话状态 |
+| **A-10** | `Human Approval ≠ Production Execution`（SC-1 ／ SC-6；O-1） | `§3.7` ／ `§3.8` ／ `§3.12`（`VB-29`）；`§5.15` | `OutOfScopeAssertionTests`（H29 ／ H30 ／ H31 ／ H32）＋ `OverrideApprovalTests`（O16）＋ `test_hitl_draft.DraftBoundaryTests`（D20 ／ D21） | observed pass | `SIMULATED` deterministic —— **negative ／ structural behavioral evidence（当前 repository ／ runtime scope）** | 在当前 runtime scope 内，approve 不产生 production ／ ERP write；无 network ／ egress；无 persistence；不存在 rule ／ code-version freshness 主张 | production system security guarantee；real ERP write protection；enterprise permission enforcement；真实系统层面的写操作防护 |
+| **A-11** | （negative）illegal transitions（SC-4；O-2） | `§6` 第 8 项（`HD-4` ／ `HD-6`） | `AnalysisRunFreshnessTests`（H12）＋ `RejectTests`（H15 ／ H16）＋ `IrreversibleStaleConditionTests`（R5）＋ `OverrideApprovalTests`（O14）＋ `test_hitl_draft.DraftLifecycleTests`（D16） | observed pass | `SIMULATED` deterministic | 已登记的非法转换（stale → approved ／ review-in-progress；rejected → approved；同一 instance 重复 approve；terminal instance 再次 override；Draft 重复 decision）均被拒绝 | 未枚举的其它非法路径；完整 HITL state machine（`§6` overall 仍 `DESIGN PENDING`） |
+
+上表 11 行覆盖 Issue #220 编号的 `A-1` ～ `A-11`；`SC-n` ／ `O-n` 只表示与 Issue #218 已登记 subordinate check
+与 upper-level obligation 的对应关系，**不**重新定义其内容。
+
+**3. Claim ceiling（本记录建立什么 ／ 不建立什么）。**
+
+```text
+Established（本 validation time point）:
+  A-1 ～ A-11 scoped SIMULATED behavioral evidence — intentionally executed and observed conformant
+
+NOT established:
+  business acceptance ／ real-customer acceptance
+  business-value evidence ／ usage ／ adoption evidence
+  production acceptance ／ production readiness
+  POC SUCCESS
+```
+
+本记录的证据类别属 `§9.1` 的 deterministic `SIMULATED` evidence 口径：它**不**构成真实企业数据、真实 source
+字段、真实 integration、permission enforcement 或 business acceptance 的证据；`SIMULATED` 标记全程保留。
+
+**4. `§7` ／ `§8` ／ rule-version boundary（不变）。**
+
+```text
+§7 identity ／ permission enforcement = NOT a prerequisite unless introduced
+   （本 unit 未引入 identity ／ permission enforcement；actor slot 仍只是必填槽位；
+    §7 overall = NOT RESOLVED 不变）
+§8 persistence ／ durable approval history = NOT a prerequisite unless introduced
+   （本 unit 无 runtime persistence、无 durable approval history、无 audit claim；
+    §8 不 closure）
+rule ／ code-version freshness = NOT RESOLVED（不变）
+```
+
+**5. A-10 限度（不得外推）。** A-10 的 observed evidence 是**当前 repository ／ runtime scope** 内的
+negative ／ structural behavioral evidence：它证明在该 scope 内不存在 production ／ ERP write 路径、不存在
+network ／ egress 路径、不存在持久化路径。它**不得**被表述或外推为 production system security guarantee、
+real ERP write protection 或 enterprise permission enforcement，也**不**构成 `§7` ／ `§8` 的 enforcement evidence。
+
+**6. 本记录不修改：** `§9.4` 既有的 `O-1` ～ `O-4` ／ `SC-1` ～ `SC-6` ／ `A-1` ～ `A-11` ／ claim discipline ／
+`§7` ／ `§8` applicability ／ rule-version 边界 ／ evidence-production boundary 文字与 Issue #176 ／ #216 ／ #218
+记录；`§9.1` ／ `§9.2` ／ `§9.3` ／ `§9.5` ／ `§9.6`；`§6` ／ `§6.1` ／ `§10.3` ～ `§10.6` 已登记正文与
+historical gate states；`§3` ／ `§5` ／ `§7` ／ `§8` 已登记语义与 Status；`ADR-001` ／ `ADR-002`；
+`FROZEN` baseline；code ／ tests ／ runtime。本记录**不**新增 canonical entity ／ field ／ grain ／ enum ／
+business status，**不**新增 evidence-result status vocabulary，**不**新增 test ／ script ／ runtime surface。
 
 #### 9.5 Status vocabulary ／ claim discipline（必须区分）
 
