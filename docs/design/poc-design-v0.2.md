@@ -8349,7 +8349,7 @@ evidence，**不**声称 business acceptance 或 `POC SUCCESS`。
 
 **Scoped acceptance ／ evidence boundary registration（Issue #218；Human Decision `HD-HITL-ACCEPT-R2`）：**
 
-**Registration Status：`DESIGN RESOLVED`（scoped to the minimal POC HITL ／ business acceptance **acceptance- and evidence-boundary**；design-only）**
+**Registration Status：`DESIGN RESOLVED`（scoped to the minimal POC HITL ／ business acceptance acceptance- and evidence-boundary；design-only）**
 **Authority：** Human Decision **`HD-HITL-ACCEPT-R2 = APPROVED`**（`R2-1` ～ `R2-5`；Issue #218）＋ 本小节既有的 evidence obligation 与 trigger boundary（Issue #176 record）＋ **`HD-HITL-ACCEPT-R1`**（Issue #216：`applicable §6 design gate = SATISFIED at the scoped POC HITL boundary`）＋ `§6` Issue #198 record ／ `§6.1`（Issue #210）＋ `§10.3` J（Issue #202）／ `§10.5` G（Issue #208）／ `§10.6` I（Issue #214）＋ `§1` `GSD-3` ／ `GSD-3.1` ～ `GSD-3.5` ／ `GSD-3.7` ＋ `FROZEN` Discovery Brief `§16` ／ `§17` ＋ `§3.7` ／ `§3.8` ／ `§3.10` ／ `§3.12`（`VB-29`）＋ `§5.15` ＋ `§7` status 表 ／ `§7.1` ＋ `§9.1` ／ `§9.2` ／ `§9.5` ／ `§10.1` D。
 
 **本登记关闭什么：** 只关闭「最小 POC HITL ／ business acceptance 的 scoped acceptance ／ evidence boundary 是什么」这一件事。
@@ -8505,7 +8505,7 @@ POC success                  = NOT CLAIMED（不变）
 | CC-5 | `§7` ／ `§8` applicability 按 `R2-2` ／ `R2-3` 登记；未 closure、未声称 `SATISFIED` | 已登记（第 5 ／ 6 项） |
 | CC-6 | business-value boundary 只定义 evidence category ／ measurement prerequisite；无 KPI ／ threshold ／ baseline ／ result | 已登记（第 8 项） |
 | CC-7 | evidence-production boundary 以 prose 表述；未新增状态词 | 已登记（第 9 项） |
-| CC-8 | 未新增 canonical entity ／ field ／ grain ／ enum ／ business status；未授权 implementation；未修改历史时点记录 | 已登记（第 12 项） |
+| CC-8 | 未新增 canonical entity ／ field ／ grain ／ enum ／ business status；未授权 implementation；未修改历史时点记录 | 已登记（第 13 项） |
 
 上表是 **design-level** 登记结果，**不是** acceptance evidence，也**不**构成 `VALIDATED` ／ business acceptance ／ `POC SUCCESS`。
 
