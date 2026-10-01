@@ -8349,7 +8349,7 @@ evidence，**不**声称 business acceptance 或 `POC SUCCESS`。
 
 **Scoped acceptance ／ evidence boundary registration（Issue #218；Human Decision `HD-HITL-ACCEPT-R2`）：**
 
-**Registration Status：`DESIGN RESOLVED`（scoped to the minimal POC HITL ／ business acceptance acceptance- and evidence-boundary；design-only）**
+**Registration Status：`DESIGN RESOLVED`（scoped acceptance ／ evidence boundary for minimal POC HITL ／ business acceptance；design-only）**
 **Authority：** Human Decision **`HD-HITL-ACCEPT-R2 = APPROVED`**（`R2-1` ～ `R2-5`；Issue #218）＋ 本小节既有的 evidence obligation 与 trigger boundary（Issue #176 record）＋ **`HD-HITL-ACCEPT-R1`**（Issue #216：`applicable §6 design gate = SATISFIED at the scoped POC HITL boundary`）＋ `§6` Issue #198 record ／ `§6.1`（Issue #210）＋ `§10.3` J（Issue #202）／ `§10.5` G（Issue #208）／ `§10.6` I（Issue #214）＋ `§1` `GSD-3` ／ `GSD-3.1` ～ `GSD-3.5` ／ `GSD-3.7` ＋ `FROZEN` Discovery Brief `§16` ／ `§17` ＋ `§3.7` ／ `§3.8` ／ `§3.10` ／ `§3.12`（`VB-29`）＋ `§5.15` ＋ `§7` status 表 ／ `§7.1` ＋ `§9.1` ／ `§9.2` ／ `§9.5` ／ `§10.1` D。
 
 **本登记关闭什么：** 只关闭「最小 POC HITL ／ business acceptance 的 scoped acceptance ／ evidence boundary 是什么」这一件事。
@@ -8410,11 +8410,17 @@ Expected outcome **只**取自上述 canonical authority；**不得**以 current
 | 术语 | 由谁 ／ 什么建立 | 允许的依据 | 不允许 |
 | --- | --- | --- | --- |
 | HITL behavioral acceptance | `SIMULATED` runtime ／ test evidence（`§9.1` ／ `§9.2` 的 evidence 口径） | 系统在受控合成输入上按本层已登记契约行为（SC-1 ～ SC-6、A-1 ～ A-11） | 业务价值、真实数据正确性、生产可用性、真实客户接受 |
-| business acceptance | **Human-designated POC business reviewer** 的**显式 Human judgement**（`R2-1` Option B） | 该 reviewer 在明确范围内对 POC workflow ／ evidence 作出的 scoped judgement（须记录 actor ／ 范围 ／ 时点，复用 `§6` 第 4 项既有字段槽位） | 由 `SIMULATED` system test 自动推出；**不等于** real-customer acceptance ／ business-value evidence ／ usage ／ adoption evidence ／ production acceptance ／ `POC SUCCESS` |
+| business acceptance | **Human-designated POC business reviewer** 的**显式 Human judgement**（`R2-1` Option B） | 该 reviewer 在明确范围内对 POC workflow ／ evidence 作出的 scoped judgement；该 judgement 必须可明确归属于该 reviewer，并明确 **judgement scope** 与 **judgement time**（**evidence-content requirement**；本小节**不**定义 runtime artifact ／ schema ／ persistence） | 由 `SIMULATED` system test 自动推出；**不等于** real-customer acceptance ／ business-value evidence ／ usage ／ adoption evidence ／ production acceptance ／ `POC SUCCESS`；**不得**把 `§6` 第 4 项 `HumanDecision` runtime artifact 解释或复用为 business-acceptance record |
 | business-value evidence | 真实客户 ／ 真实流程 baseline 的测量 | 未来 `FROZEN §16` 业务价值维度的 evidence category 与 measurement prerequisite（见第 8 项） | 现在发明 KPI 数值 ／ threshold ／ baseline ／ adoption ／ usage ／ business-value result（`GSD-3.3` ／ `GSD-3.7`） |
 | `POC SUCCESS` | `GSD-3.5` claim rule 下的综合 evidence claim | 未来 Human-approved acceptance ／ evidence policy 综合 applicable runtime ／ test evidence ＋ applicable business-value evidence ＋ `FROZEN` success dimensions | 由 design closure、implementation、Demo 可运行、单一 test pass 或本层任何登记单独推出；**本 unit 不判断** |
 
 `behavioral acceptance` 与 `business acceptance` 的 evidence **不可互相替代**：前者是系统行为证据，后者是显式 Human 判断。
+
+`business acceptance` 在本小节**只**登记 **evidence-content requirement**：judgement 归属（Human-designated POC
+business reviewer）＋ judgement scope ＋ judgement time。本小节**不**设计该 judgement 的 runtime artifact ／
+schema ／ persistence，**不**新增 canonical entity ／ status；`§6` 第 4 项的 `HumanDecision` 是
+**procurement recommendation quantity decision record**，**不得**被解释或复用为 business-acceptance record，
+其已登记语义**不**因本登记扩张（`§6` 第 12 项 ／ `§10.3` J 不变）。
 
 **5. `§7` applicability（按 `R2-2` 登记；不重新设计 options）。**
 
@@ -8451,7 +8457,7 @@ rule ／ code-version freshness = NOT RESOLVED
 **8. Business-value boundary（对齐 `§1` `GSD-3.1` ～ `GSD-3.3` ／ `GSD-3.5` ／ `GSD-3.7` 与 `FROZEN` `§16` ／ `§17`）。**
 
 - 本层**只**登记 Layer 3 未来需要的 **evidence category**：`FROZEN §16` 的业务价值维度（减少系统切换 ／ 减少人工汇总 ／ 降低分析时间 ／ 提高异常解释效率 ／ 其他经真实客户确认的改善）。
-- **Measurement prerequisite（登记为要求，不是结果）：** 真实客户 ／ 真实流程 baseline。当前 baseline 状态 ＝ **不存在 ／ 未获得**（`FROZEN §18` Known Unknowns 未确认）。
+- **Measurement prerequisite（登记为要求，不是结果）：** `real customer ／ process baseline = NOT AVAILABLE ／ 尚未在当前项目 evidence 中获得`（`FROZEN §18` Known Unknowns 未确认）。本登记**不**对该 baseline 在现实世界中是否存在作判断，也**不**发明 baseline。
 - **不得**发明：KPI 数值、threshold、baseline、adoption ／ usage result、business-value result、acceptance threshold、scoring ／ rubric、eval framework。
 - `FROZEN §17` 的 failure ／ reassessment conditions 保持为 future stop-or-rethink boundary，**不得**写成已发生事实，也**不得**并入自创 success score；`FROZEN` H3 ／ H4 状态不因本登记改变。
 
