@@ -142,7 +142,7 @@ Draft runtime tranche             = CODE START GATE PASS / IMPLEMENTATION AUTHOR
                                   → Reject／stale／new AnalysisRun lifecycle；严格遵守 §6.1 D1～D5；
                                   hosted LLM wording = OUT OF SCOPE（未来引入须重新进入
                                   Architecture／egress gate，不得继承 ADR-002）；§7／§8 =
-                                  NOT TRIGGERED；§9.4 不推进；runtime surface =
+                                  NOT TRIGGERED；§9.4 当时未推进（其后由 Issue #218 登记为 scoped DESIGN RESOLVED）；runtime surface =
                                   DRAFT_MARKER ／ DraftError ／ ProcurementRequestDraft ／ open_draft
                                   （snapshot_loader/draft_runtime.py）；initial Draft quantity =
                                   deterministic RecommendedPurchaseQty；decision binding =
@@ -165,9 +165,26 @@ Draft runtime tranche             = CODE START GATE PASS / IMPLEMENTATION AUTHOR
                                     persistence ／ durable history = future §8 trigger if introduced；
                                     identity ／ permission enforcement = future §7 trigger if introduced；
                                     applicable §6 prerequisite satisfied ≠ §6 overall resolved；
-                                    prerequisite ambiguity closed ≠ §9.4 design resolved ⇒
-                                    §9.4 = DESIGN PENDING ／ JIT-BLOCKED（不变；该 scoped acceptance ／
-                                    evidence design 尚未开始、其 substantive closure 尚未授权）
+                                    prerequisite ambiguity closed ≠ §9.4 design resolved
+                                    （该时点记录保持原样；§9.4 自身 current status 见下一行）
+§9.4 scoped acceptance ／             = DESIGN RESOLVED（scoped；design-only；Issue #218 ／
+  evidence boundary                   HD-HITL-ACCEPT-R2）：既有四类 upper-level evidence obligation
+  （design-only；Issue #218）           （O-1 ～ O-4）保留，并展开为 SC-1 ～ SC-6 subordinate scenario ／
+                                    evidence checks 与 A-1 ～ A-11 最小 acceptance scenario matrix
+                                    （expected outcome 只取自 canonical authority，不以 current
+                                    implementation 行为为 oracle）；claim discipline 区分 HITL
+                                    behavioral acceptance ／ business acceptance（须由 Human-designated
+                                    POC business reviewer 显式作出）／ business-value evidence（需真实
+                                    baseline，当前只定义 category ／ prerequisite）／ POC SUCCESS
+                                    （GSD-3.5，不在本 unit 判断）；§7 ／ §8 = NOT a prerequisite
+                                    unless introduced（actor present ≠ identity verified ≠ permission
+                                    enforced；in-process decision trace ≠ durable audit evidence；
+                                    §7 ／ §8 未 closure）；rule ／ code-version freshness =
+                                    NOT RESOLVED 不变；§6 overall ／ §7 overall ／ §8 ／ §9.3 不变；
+                                    该 closure 只定义 evidence boundary：不产生 acceptance evidence、
+                                    不执行 acceptance、不构成 business acceptance ／ business-value
+                                    evidence ／ POC SUCCESS；不引入 KPI ／ threshold ／ baseline ／
+                                    adoption result
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：
