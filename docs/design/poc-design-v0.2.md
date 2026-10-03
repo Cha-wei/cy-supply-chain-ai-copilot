@@ -7771,6 +7771,34 @@ Revisit Condition 4）。**ADR-002 正文未被修改**；本小节**不实现**
 credential 不得进入 Git／canonical record／provenance／`mapping_basis`／prompt、failure boundary 等）
 保持不变，本小节只补充其**尚未回答的 runtime secret contract**。
 
+<a id="q3-credential-one-time-exception"></a>
+
+##### HD-Q3-CREDENTIAL-R1 — one-time execution-specific Secret Handling exception（Issue #230）
+
+**Authority：** `HD-Q3-CREDENTIAL-R1 = APPROVED`；Human 对已完成 execution 的 provisioning、cleanup、
+Desktop restart 与 final presence-check facts 的确认。本记录显式登记 **S-5 的一次性例外**，
+不声称该 execution 的 operator provisioning 全程遵循 default memory-only / no-disk S-5。
+
+**唯一适用对象：** §9.7 D.2 已完成的 Q3-C1 / Q3-C2 hosted observations，execution revision
+`00272580adab8cb8d5843a719d261e34047b877d`。仅允许 Codex Desktop **launcher/bootstrap** 为这次 execution
+临时使用 user-local `~/.codex/.env`（`%USERPROFILE%\.codex\.env`）；真实 credential 因此曾临时存在于磁盘。
+该例外**不适用** repository、tracked files、project `.env` 或其他 credential-at-rest location。
+
+**分离 provisioning 与 acquisition：** operator-side provisioning 使用上述暂时获批的 local file；
+provider integration/runtime acquisition 仍仅使用 **process environment**（S-2/S-3）。
+不引入 CLI secret、credential file runtime reader 或第二套 provider acquisition mechanism；
+无 secret 进入 prompt、log、report、Git、canonical value 或 observation output，其余 S-1～S-11 边界保持。
+
+**已完成 cleanup（Human-confirmed execution facts）：** execution 后该 local file 的 `DEEPSEEK_API_KEY`
+entry 已删除，其他配置保留；Codex Desktop 已 restarted；post-restart process-environment existence /
+non-empty check 的最终结果为 **ABSENT**。只登记这些安全事实，不登记任何 secret value 或派生特征。
+
+**Expiry / future boundary：** 例外仅覆盖上述 **already-completed** execution，不授权新的 hosted attempt、
+retry 或后续 provisioning，不建立 general permission for credential-at-rest。未来 hosted execution
+恢复 **default §7.1 S-5**；任何进一步偏离必须由 **new explicit Human Decision** 批准。
+S-5 default contract 不被永久放宽；`§7 overall = NOT RESOLVED`、
+`production Secret Management = NOT CLAIMED` 保持。
+
 ---
 
 ## 8. Audit & Observability
@@ -9086,9 +9114,14 @@ Artifact sources：`snapshot_loader/explanation_q3.py::explain_q3`、`explanatio
 与 unchanged/sanitizer checks。`not expressible` 由该 deterministic assembly/enforcement proof 支撑，
 不改写为 model criterion satisfied；不存在以 `not determined` 充当 passed criterion。
 
-**4. Safety / retained limitations。** 只保留 sanitized observation；credential 仅通过 process environment，
-每次调用后对应 execution-process credential 已清除；之后本地 credential-file 中该项已清除，最终
-process-environment presence check 为 ABSENT（仅存在性检查，无 secret value）。没有 raw body/header/
+**4. Safety / retained limitations。** 只保留 sanitized observation。Operator-side credential provisioning
+采用 `HD-Q3-CREDENTIAL-R1` 批准的 temporary user-local Codex Desktop launcher/bootstrap file：
+`~/.codex/.env`；真实 credential 曾临时存在于磁盘，**不是 default S-5 unchanged 的 execution**。
+唯一 authoritative exception 与 expiry 见 [§7.1 one-time exception](#q3-credential-one-time-exception)。
+Provider integration/runtime acquisition 仍通过 process environment only，无 CLI secret；每次调用后对应
+execution-process credential 已清除。之后 local file entry 已删除、Desktop restarted，post-restart
+process-environment presence check = ABSENT（Human-confirmed；仅存在性检查，无 secret value）。
+该已过期例外不授权 future credential-at-rest 或任何新 attempt。没有 raw body/header/
 credential/environment dump/PowerShell history/arbitrary provider prose 登记；沿用观察措辞：
 `credential leakage not observed in the sanitized tooling output`，不作平台级绝对无泄漏保证。
 C1 的输出章节符号有 display encoding loss，authority 由该 revision fixed mapping 核查；C2 UTF-8
