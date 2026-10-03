@@ -400,8 +400,15 @@ python scripts/deepseek_q3_live_smoke.py --json   # 机器可读（sanitized）�
 ```bash
 # 固定 SIMULATED fixture；最多 1 次 hosted 请求；由 merged explain_q3(...) 驱动完整 composition。
 # 真实 hosted 执行必须由 operator 提供精确 40 位 commit identifier：
-python scripts/q3_full_composition_observation.py --json --commit-sha <merged-main-sha>
+python scripts/q3_full_composition_observation.py --case q3-c1-moq-raised --json --commit-sha <merged-main-sha>
+python scripts/q3_full_composition_observation.py --case q3-c2-moq-non-binding --json --commit-sha <merged-main-sha>
 ```
+
+`--case` 必填，仅允许上述两个 fixed SIMULATED cases：C1 使用 MOQ 100，C2 使用 MOQ 20；
+其余 fixture inputs 相同，五量由既有 deterministic pipeline 推导。实际 relation 在 credential resolution
+之前核验，不匹配时 zero egress。`case_id` 仅为 sanitized operator/evidence metadata，不进入 provider payload，
+不表示 acceptance；无任意数量或 fixture-path CLI。批准 coverage policy 见 POC Design §9.7 D.1。
+本 tooling adaptation 与 offline/CI PASS 不满足 hosted Q3 coverage；final revision-bound refresh 仍为 NOT RUN。
 
 - 与 live smoke 的区别：本 tooling 走 **deterministic pipeline → procurement recommendation → Q3 projection →
   hosted provider → parser → validator → 完整 `explain_q3(...)` composition**（`§9.3` 定义的 observation unit），
