@@ -8807,6 +8807,197 @@ design resolved
 
 ---
 
+<a id="minimum-poc-success-policy"></a>
+
+#### 9.7 Human-approved minimum POC SUCCESS acceptance / evidence policy（Issue #224）
+
+**Registration Status：`REGISTERED`（Human-approved policy；docs-only canonical registration）**
+**Authority：** Issue #224 的 Human-approved `HD-POC-SUCCESS-R1 ～ R5`；`§1` 三层成功边界；
+FROZEN Discovery Brief `§16` ／ `§17`；`§9.1 ～ §9.6` 与已登记 scoped decisions。
+
+本小节是最终 minimum POC SUCCESS acceptance / evidence policy 的 canonical source。
+**登记 policy ≠ 执行 acceptance ≠ evidence refresh ≠ evidence produced ≠ POC SUCCESS。**
+本单元不改 runtime、tests、harness 或历史 time-point records，不授权 evidence execution ／ hosted API。
+
+##### A. Approved decisions 与 claim scope（R1 = Option A）
+
+| Human Decision | Approved option | 本小节登记位置 |
+| --- | --- | --- |
+| HD-POC-SUCCESS-R1 | Option A — current canonical P0 claim scope | A ／ B ／ C |
+| HD-POC-SUCCESS-R2 | Option B — scoped Q3 explanation-case coverage | D |
+| HD-POC-SUCCESS-R3 | Option A — exact merged-main revision-bound refresh | E |
+| HD-POC-SUCCESS-R4 | Option A — real customer / process business-value acceptance | F |
+| HD-POC-SUCCESS-R5 | Option A — conjunctive evidence gate | G ／ H |
+
+最终 claim 仅覆盖 current canonical P0：批准的 deterministic shortage ／ procurement ／ supplier-risk
+results、适用的 approved explanation capability、scoped Human Review ／ quantity Modify（explicit
+quantity override）／ Approve ／ Reject，以及 Procurement Request Draft。缺失 evidence 必须显式登记为 gap，
+**不得**因此静默移除已 canonical 的 P0 obligation。
+
+```text
+approved controlled Tool / composition path correctness
+  ≠ generic autonomous Tool selection validated
+```
+
+Tool correctness 针对批准的 controlled / fixed composition 路径及其调用、binding、failure isolation；
+不得把该证据提升为 generic autonomous Agent ／ Tool selection 已验证。不得新增 production execution、
+ERP ／ source write、enterprise RBAC、durable audit platform 或 generic autonomous Tool-selection claim。
+
+##### B. 三层关系与六维 evidence obligations
+
+Layer 1 定义设计责任；Layer 2 证明按批准设计运行；Layer 3 以真实 baseline 证明明确改善。
+三层不可互相替代，同一维度可跨层。最终 evidence package 必须对下表**全部六维**提供 authority、
+evidence references、适用范围、限制与 G 的判定；当前记录不是六维最终 verdict。
+
+| FROZEN §16 dimension | Layer 1 authority / obligation | Final Layer 2 evidence obligation | Layer 3 relationship / obligation |
+| --- | --- | --- | --- |
+| Data correctness | §3 ／ §4 ／ §5：正确、受控来源；LLM 不生成库存、订单、价格等事实 | 实际使用的数据来源、import ／ validation ／ mapping、accepted evidence 与 provenance 可核查；保留 SIMULATED / real 来源区分，缺失数据不得猜测补齐 | 真实 baseline 与比较数据来源可靠；模拟 import 通过不证明真实客户数据正确 |
+| Calculation correctness | §2 approved deterministic rules；exact quantities；稳定、一致、可复现 | 接受 revision 上 applicable rule ／ boundary ／ regression ／ integration evidence；同输入、规则与明确 context 的结果可复现，reference / binding 连续 | 技术计算通过不单独证明业务收益；真实任务中的规则适用性与结果需有依据 |
+| Tool correctness | §5 approved Tool / Agent responsibility；禁止无意义或越权调用 | 批准 controlled / fixed composition 的正确调用、handoff、AnalysisRun binding、fail-closed 与无越界证据；不宣称自主 Tool selection | 真实流程中的工具使用可支持比较，但调用通过不等于改善 |
+| Explainability | §5：关键风险有数据依据与规则依据；evidence fidelity；无 unsupported fact | 适用 P0 解释不得篡改 deterministic result、隐藏 missing / invalid evidence 或捏造结论；AI 部分依 D；更广适用义务缺口必须显式提出 | 若改善维度涉及异常解释效率，须由真实流程比较支持；Q3 模拟 observation 不证明真实效率 |
+| Safety | §3 ／ §6 ／ §7.1：source WRITE = DENIED；Human Approval ≠ Production Execution；适用 secrets / fail-closed boundary | 适用 no-write、Human decision、stale / re-review、Draft、secret handling evidence；对实际引入的权限／数据／egress concern 满足适用 gate，不将 actor slot 当身份验证 | 业务改善不得抵消安全／数据 blocker；scoped no-write evidence 不升级为 production safety guarantee |
+| Business value | §1 ／ FROZEN §16：至少一种明确改善，不预设数值 | 可比较的 POC task/use evidence，为业务比较提供运行依据；tests / Demo 不独立证明收益 | 必须满足 F：真实 customer/process baseline、至少一种 evidence-backed 改善、适当真实流程业务 authority 的 judgement |
+
+既有 evidence inventory 以 `§9.1 ／ §9.2`、`§5.23`、`§9.3` Issue #196 与 `§9.4` Issue #220 ／ #222
+记录为准，仅引用，不复制历史结果。CI green 不代替 intentional acceptance execution、完整 hosted
+composition observations 或 real business-value evidence；historical evidence 不自动满足 E 的最终刷新。
+
+##### C. Applicable / conditional / deferred boundaries
+
+- **Mandatory：** 六维适用 evidence、D 的 AI coverage、E 的刷新、F 的 Layer 3、G ／ H 的 final gate。
+- **Scoped satisfied：** `§9.4` 的 HD-HITL-ACCEPT-R1 已确认 applicable §6 design gate 在 Review ／ quantity
+  Modify ／ Approve ／ Reject ／ Draft ／ stale / re-review ／ Human Approval ≠ Production Execution 范围满足；
+  Issue #220 behavioral evidence 与 Issue #222 scoped judgement 仍仅支持其已登记范围，最终须按 E 处理。
+- **Conditional：** 引入真实 identity ／ RBAC ／ Data Scope ／ Tool Permission enforcement 或新的 secret-bearing
+  integration 时进入适用 §7 gate；引入 persistence ／ durable approval history ／ cross-session storage ／
+  audit claim 时进入适用 §8 gate；不得把未引入的 enforcement 写成已完成。
+- **Deferred / outside：** 完整 HITL workflow ／ state machine、enterprise permission enforcement、durable audit
+  platform 与生产运营能力不因最小验收自动成为必需；production execution 仍 OUTSIDE POC。
+  defer 不解除当前 safety obligation；真实评估改变 data access ／ egress ／主体或技术边界时须重新判定。
+
+单个 in-process run 的 business decision trace ／ record completeness 可作为 scoped evidence，
+**不等于** persistent approval history、完整 Tool invocation history、cross-session ／ rule-version audit。
+最终 evidence package 的执行、调用、失败与版本依据必须可核查，但本 policy 不创建 runtime audit service。
+`§6 ／ §7 ／ §8 ／ §9.3` overall unresolved **不自动**要求整章 closure；适用 gap 也不得由该原则豁免。
+
+##### D. AI evidence scope（R2 = Option B）
+
+统一且无歧义的标签为 **`POC Design §5.3 Q3 explanation case`**：指“Why is the recommended purchase
+quantity X?” 的采购数量解释案例，**不是季度 Q3**，不是 Q3 observation count，也不是全部 P0 question types。
+采用 materially distinct explanation-case coverage，**不是 statistical model-quality benchmark**。
+
+**执行前 requirement：** Human 必须批准一个 small set 的 materially distinct Q3 explanation cases，
+以及该集合的 coverage 与每例 repetition requirement；记录每例 canonical authority、deterministic relation、
+required evidence、预期解释与其区别。集合与重复要求未获明确批准时，coverage obligation 保持缺口，
+不得由执行者自行选择次数、由历史 n = 1 或重复相同案例视为已满足。具体案例／次数不由本注册单元发明。
+
+**Evidence acceptance：** 每个批准案例均须满足批准的 repetition requirement，并取得 `§9.3` 既有
+per-observation contract 下真实 hosted output → checkable structured selection → current parser / validator
+→ 完整 `explain_q3(...)` → final ExplanationResult / artifact 的 observations。记录逐项 canonical criteria、
+mechanism disposition、mismatch、最终 artifact 与 deterministic result unchanged；完整 composition 的可检查
+证据必须支持适用义务，不得仅凭 HTTP 200 ／ validator accepted ／ tooling exit code 0 判断符合。
+`not determined` ／ `not expressible under the selection contract` 不改写为 model criterion satisfied；
+需要时以 deterministic assembly / enforcement evidence 支撑相应边界，并保留证据类别区别。
+
+**Failure / coverage handling：** 所有执行尝试如实登记，不以挑选成功样本或重跑隐藏失败。已形成 selection
+但被 validator reject 仍是 AI behavior observation，记录 violated criteria；无 model output 或未形成可检查
+selection 按既有 contract 记录 deterministic / integration failure，不能计为符合的 AI behavior evidence。
+违反适用 criterion、未处置 mismatch 或覆盖／重复要求缺口阻止相应维度 PASS；补充执行须保持失败记录，
+按批准 requirement 处理，不能自行降低标准。Replay 不增加 hosted n，也不代替 required hosted observations。
+
+不宣称 provider ranking、aggregate accuracy、production SLO、stability 或 generic AI Eval framework。
+本决定不隐含授权 Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6；若更广 P0 explanation obligation 适用，必须显式登记
+evidence gap ／ follow-up Human decision，不假定 Q3 coverage 已满足、不静默删除该义务。
+`§9.3 AI Eval overall = DESIGN PENDING` 保持；本 policy 不新增该层 overall Eval verdict。
+
+##### E. Freshness（R3 = Option A）
+
+最终 POC acceptance 前必须：
+
+1. 从 GitHub authority 确认接受对象为**精确 40 位 merged-main revision**，记录实际执行 revision；
+   不以 branch name、短 SHA 或 operator-supplied identifier 的合法形状替代真实性核验。
+2. 在该 revision **刻意重跑全部 applicable deterministic / behavioral evidence**，包括适用 integration、
+   HITL / Draft evidence 与必要 structural inspection；保留 command、environment、结果、限制与 oracle references。
+3. 按 D 的批准案例与重复要求**刷新 required hosted AI evidence**，使用同一接受 revision，保留 sanitized
+   per-observation records；历史 smoke ／ n = 1 ／ replay 或 CI 均不自动替代该刷新。
+4. 将 final evidence package / acceptance record 绑定该 exact revision 与 execution environment，保留
+   适用 rule / contract references、AI configuration 与 evidence references；核查证据对象一致。
+5. **不作 cross-version equivalence claim。** 接受对象 revision 变化时，重新按本规则刷新；不得把旧包自动
+   视为覆盖新 main。最终记录须清楚说明接受的是哪个 merged-main revision。
+
+这是**最终验收证据 policy**，不是 runtime rule-version service、durable audit 或生产版本基础设施。
+既有四组件 AnalysisRun stale contract 不变，runtime rule / code-version freshness mechanism 仍未解决；
+本次仅登记 refresh requirement，**尚未执行或满足**。本小节不回写历史 provenance 为 freshness guarantee。
+
+##### F. Layer 3（R4 = Option A）
+
+必须取得 **real customer / real process baseline**，并包含：真实 current-process baseline；可比较的
+POC task/use evidence；evidence attribution 与限制；与当前流程相比至少一种 evidence-backed 明确改善；
+适当 **real-process business authority** 的显式 business judgement。
+改善维度遵循 FROZEN §16（如减少系统切换／人工汇总、降低分析时间、提高异常解释效率）；
+KPI / threshold 数值**只能在真实 baseline 存在之后确定**，未确定所需接受条件不得伪造 PASS。
+
+SIMULATED fixtures、synthetic timing、当前 scoped HITL reviewer judgement、invented KPI ／ ROI ／
+percentage 均不得替代 Layer 3。当前 real customer/process baseline = NOT AVAILABLE，
+business-value evidence = NOT PRODUCED；因此最终 Business Value gate **当前 BLOCKED**。
+可后续准备比较与采集方法，但本单元不生产 evidence、不取得 baseline、不发明改善结果。
+
+##### G. Final conjunctive Human acceptance gate（R5 = Option A）
+
+最终 evidence package 对 B 中每个维度分类为 **`PASS` ／ `BLOCKED` ／ `NOT APPLICABLE`**，
+附明确 authority / rationale、evidence reference、范围及限制。这些仅为本 policy 的**最终证据判定**，
+不是新增 runtime business enum，不替换 CONTRIBUTING 的一般 Gate vocabulary 或 §9.3 per-observation 语义。
+`NOT APPLICABLE` 必须证明该 concern 对批准 claim 不适用，不能用于掩盖 missing evidence 或移除已 canonical
+P0 obligation；Business Value 必须 PASS，不能以 NOT APPLICABLE 绕过。
+
+仅在下列条件**同时成立**时，未来才允许 `POC SUCCESS = CLAIMED`：
+
+- 每个 applicable success dimension 均为 PASS；
+- Business Value 为 PASS；
+- 无 applicable safety / data blocker；
+- E 的 approved freshness policy 已实际满足；
+- H 的 applicable FROZEN §17 stop-or-rethink conditions 已 review 并 disposition；
+- Human 对该 exact-revision evidence package 作出**显式 final acceptance decision**。
+
+**不使用 weighted score，不允许一个维度的通过补偿另一个维度的失败。**
+policy approval ／ scoped HITL judgement ／ CI green 均不等于 final acceptance。
+当前缺失的 evidence 与 unresolved applicable gaps 必须保持可见；本单元不执行此 gate。
+
+##### H. FROZEN §17 stop-or-rethink handling
+
+最终接受前，逐项 review 并记录实际 evidence、applicability 与 Human disposition：
+关键生产／BOM／库存／采购数据无法可靠获取；主数据无法建立稳定关联；现有 MRP / ERP 已高效解决全部
+缺料分析；业务频率极低而投入回报可能不足；引入 Agent 后流程更复杂、步骤更多或人员负担增加。
+保留 FROZEN 原条件语义：已高效解决全部问题时不应重复建设，AI 未改善流程时须重新评估技术方案。
+这些不是已发生事实，也不并入 success score；未处置的适用 stop-or-rethink concern 不得绕过 G。
+
+##### I. Preserved states 与 next gate
+
+```text
+Human-approved minimum POC SUCCESS policy = REGISTERED（本小节；不是 final acceptance）
+POC Design v0.2                           = DRAFT
+§6 overall                               = DESIGN PENDING
+§7 overall                               = NOT RESOLVED
+§8                                       = NOT CLOSED
+§9.3                                     = DESIGN PENDING
+real customer / process baseline          = NOT AVAILABLE
+business-value evidence                  = NOT PRODUCED
+POC SUCCESS                              = NOT CLAIMED
+production execution                     = OUTSIDE POC
+source / production WRITE                = DENIED
+Unrestricted implementation              = NOT AUTHORIZED
+runtime rule / code-version freshness    = NOT RESOLVED
+final revision-bound evidence refresh    = NOT RUN（本单元不执行）
+```
+
+Next gate：在后续明确授权的工作中形成 D 的 Human-approved case / repetition plan、执行 E 的适用刷新、
+取得 F 的真实 baseline 与 business-value evidence、处置适用 gaps 与 §17 concerns，再提交 final evidence
+package 供 Human acceptance。该顺序描述依赖，不新增 execution authorization。
+本单元只登记 R1 ～ R5，不重写 `§1` ／ `§9.3` ／ `§9.4` 等历史 time-point records，
+不修改 FROZEN baseline、既有 runtime contracts 或 §6 ／ §7 ／ §8 ／ §9.3 overall states。
+
+---
+
 ## 10. Architecture Decisions
 
 重大 Architecture Decision **必须**经过：
