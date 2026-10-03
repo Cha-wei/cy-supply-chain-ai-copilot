@@ -94,6 +94,7 @@ class Q3FullCompositionObservationTests(unittest.TestCase):
     def run_tool(
         self, transport: Any | None = None, *, environ: Any = None, **kwargs: Any
     ):
+        kwargs.setdefault("case_id", obs.CASE_C1)
         transport = StubTransport() if transport is None else transport
         record, exit_code = obs.run_observation(
             transport=transport,
@@ -481,7 +482,7 @@ class Q3FullCompositionObservationTests(unittest.TestCase):
                 ), mock.patch(
                     "urllib.request.urlopen", side_effect=AssertionError("no egress in this test")
                 ) as urlopen, contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-                    exit_code = obs.main(argv)
+                    exit_code = obs.main(["--case", obs.CASE_C1, *argv])
 
                 urlopen.assert_not_called()
                 self.assertEqual(exit_code, obs.EXIT_NO_TRUTHFUL_RECORD)
@@ -581,6 +582,160 @@ class Q3FullCompositionObservationTests(unittest.TestCase):
         # The full composition is driven through the merged entry points, not re-assembled.
         self.assertIn("explain_q3(", source)
         self.assertIn("provider_from_environment(", source)
+
+    def test_closed_cli_cases_drive_same_full_composition(self) -> None:
+        for case, quantities, kind in (
+            (obs.CASE_C1, EXPECTED_QUANTITIES, GOOD_SELECTION["answer_kind"]),
+            (obs.CASE_C2, {**EXPECTED_QUANTITIES, "ApplicableMOQ": "20",
+                          "MOQAdjustmentQty": "0", "RecommendedPurchaseQty": "30"},
+             "RECOMMENDATION_EQUALS_SHORTAGE"),
+        ):
+            for as_json in (False, True):
+                with self.subTest(case=case, as_json=as_json):
+                    transport = self.stub({**GOOD_SELECTION, "answer_kind": kind})
+                    original_provider = obs.provider_from_environment
+                    original_explain = obs.explain_q3
+                    def provider(**kwargs):
+                        return original_provider(environ=CREDENTIAL_ENV, transport=kwargs["transport"])
+                    stdout = io.StringIO()
+                    with mock.patch.object(obs, "StdlibHttpTransport", return_value=transport), \
+                         mock.patch.object(obs, "provider_from_environment", side_effect=provider), \
+                         mock.patch.object(obs, "explain_q3", wraps=original_explain) as explain, \
+                         mock.patch.object(obs, "run_first_tranche_pipeline", wraps=obs.run_first_tranche_pipeline) as pipeline, \
+                         contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+                        code = obs.main(["--case", case, "--commit-sha", FIXED_SHA] + (["--json"] if as_json else []))
+                    self.assertEqual(code, 0)
+                    explain.assert_called_once()
+                    pipeline.assert_called_once()
+                    self.assertEqual(len(transport.requests), 1)
+                    output = stdout.getvalue()
+                    self.assertIn(case, output)
+                    self.assert_no_sensitive(output)
+                    self.assertNotIn("case_id", transport.requests[0].body.decode())
+                    self.assertNotIn(case, transport.requests[0].body.decode())
+                    if as_json:
+                        payload = json.loads(output)
+                        self.assertEqual(payload["case_id"], case)
+                        self.assertEqual(payload["projection_quantities"], quantities)
+                        self.assertEqual(payload["final_runtime_outcome"], "EXPLAINED")
+                        self.assertTrue(payload["deterministic_recommendation_unchanged"])
+
+    def test_invalid_cli_surface_is_sanitized_and_zero_egress(self) -> None:
+        invalid = (
+            [], ["--case", PROSE_CANARY], ["--case", "q3-c3"],
+            ["--cas", obs.CASE_C1],
+            *(["--case", obs.CASE_C1, flag, PROSE_CANARY] for flag in
+              ("--moq", "--demand", "--inventory", "--fixture", "--answer-kind", "--provider", "--api-key")),
+        )
+        for argv in invalid:
+            with self.subTest(argv=argv):
+                stdout, stderr = io.StringIO(), io.StringIO()
+                with mock.patch.object(obs, "provider_from_environment") as provider, \
+                     mock.patch.object(obs, "run_deterministic_chain") as chain, \
+                     mock.patch("urllib.request.urlopen") as egress, \
+                     contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    with self.assertRaises(SystemExit) as caught:
+                        obs.main([*argv, "--commit-sha", FIXED_SHA])
+                self.assertEqual(caught.exception.code, 2)
+                provider.assert_not_called()
+                chain.assert_not_called()
+                egress.assert_not_called()
+                self.assertNotIn(PROSE_CANARY, stdout.getvalue() + stderr.getvalue())
+
+    def test_case_guard_precedes_commit_fixture_and_credentials(self) -> None:
+        for case in (None, "", PROSE_CANARY):
+            with mock.patch.object(obs, "run_deterministic_chain") as chain, \
+                 mock.patch.object(obs, "provider_from_environment") as provider:
+                record, code, transport = self.run_tool(case_id=case, commit_sha=PROSE_CANARY)
+            chain.assert_not_called()
+            provider.assert_not_called()
+            self.assertEqual(code, 1)
+            self.assertIsNone(record.case_id)
+            self.assertIn(obs.NOTE_CASE_REQUIRED, record.notes)
+            self.assertEqual(transport.requests, [])
+            self.assertNotIn(PROSE_CANARY, self.serialized(record))
+            self.assertEqual(obs._unsanitized_strings(record), ())
+
+    def test_cross_case_and_boundary_relation_mismatches_are_zero_egress(self) -> None:
+        for case, moq in ((obs.CASE_C1, "20"), (obs.CASE_C2, "100"),
+                          (obs.CASE_C2, "30"), (obs.CASE_C2, "0")):
+            with self.subTest(case=case, moq=moq), \
+                 mock.patch.object(obs, "provider_from_environment") as provider, \
+                 mock.patch.object(obs, "explain_q3") as explain:
+                record, code, transport = self.run_tool(case_id=case, moq=moq)
+                provider.assert_not_called()
+                explain.assert_not_called()
+                self.assertEqual(code, 1)
+                self.assertEqual(transport.requests, [])
+                self.assertEqual(record.case_id, case)
+                self.assertIn(obs.NOTE_CASE_MISMATCH, record.notes)
+                self.assertEqual(record.canonical_criteria, [])
+                self.assertEqual(obs._unsanitized_strings(record), ())
+
+    def test_derived_projection_is_checked_before_credentials(self) -> None:
+        original = obs.build_q3_projection
+        def inconsistent(recommendation):
+            projection = original(recommendation)
+            projection["facts"]["MOQAdjustmentQty"] = {"numerator": 1, "denominator": 1}
+            return projection
+        with mock.patch.object(obs, "build_q3_projection", side_effect=inconsistent), \
+             mock.patch.object(obs, "provider_from_environment") as provider:
+            record, code, transport = self.run_tool(case_id=obs.CASE_C2)
+        provider.assert_not_called()
+        self.assertEqual(code, 1)
+        self.assertEqual(transport.requests, [])
+        self.assertIn(obs.NOTE_CASE_MISMATCH, record.notes)
+
+    def test_both_cases_commit_guard_precedes_fixture_and_credentials(self) -> None:
+        for case in obs.APPROVED_CASE_IDS:
+            for sha in ("UNKNOWN", FIXED_SHA[:7], PROSE_CANARY):
+                with mock.patch.object(obs, "provider_from_environment") as provider, \
+                     mock.patch.object(obs, "run_deterministic_chain") as chain:
+                    record, code, transport = self.run_tool(case_id=case, commit_sha=sha)
+                provider.assert_not_called()
+                chain.assert_not_called()
+                self.assertEqual(code, 1)
+                self.assertEqual(record.case_id, case)
+                self.assertEqual(transport.requests, [])
+                self.assertIn(obs.NOTE_COMMIT_REQUIRED, record.notes)
+                self.assertEqual(obs._unsanitized_strings(record), ())
+
+    def test_case_metadata_has_only_fixed_sanitizer_vocabulary(self) -> None:
+        record, _, _ = self.run_tool()
+        for value in (PROSE_CANARY, "30", obs.MODE_HOSTED, "UNKNOWN"):
+            record.case_id = value
+            self.assertIn(value, obs._unsanitized_strings(record))
+        for case in obs.APPROVED_CASE_IDS:
+            record.case_id = case
+            self.assertEqual(obs._unsanitized_strings(record), ())
+
+    def test_both_cases_preserve_failure_semantics_without_retry(self) -> None:
+        for case in obs.APPROVED_CASE_IDS:
+            good_kind = (GOOD_SELECTION["answer_kind"] if case == obs.CASE_C1
+                         else "RECOMMENDATION_EQUALS_SHORTAGE")
+            for transport, outcome, formed, note in (
+                (self.stub({**GOOD_SELECTION, "answer_kind": good_kind, "uncertainty": ["ShortageQty"]}),
+                 "RESPONSE_UNACCEPTABLE", True, obs.NOTE_OBSERVATION_FORMED),
+                (StubTransport(response=HttpResponse(200, BODY_CANARY.encode())),
+                 "PROVIDER_UNAVAILABLE", False, obs.NOTE_SELECTION_NOT_FORMED),
+                (StubTransport(error=ProviderUnavailable(BODY_CANARY)),
+                 "PROVIDER_UNAVAILABLE", False, obs.NOTE_TRANSPORT_FAILURE),
+                *((StubTransport(response=HttpResponse(status, BODY_CANARY.encode())),
+                   "PROVIDER_UNAVAILABLE", False, obs.NOTE_HTTP_REJECTION)
+                  for status in (401, 403, 429, 500, 503)),
+            ):
+                with self.subTest(case=case, outcome=outcome, note=note):
+                    record, code, transport = self.run_tool(transport, case_id=case)
+                    self.assertEqual(code, 0)
+                    self.assertEqual(record.case_id, case)
+                    self.assertEqual(len(transport.requests), 1)
+                    self.assertEqual(record.final_runtime_outcome, outcome)
+                    self.assertEqual(record.structured_selection_formed, formed)
+                    self.assertIn(note, record.notes)
+                    self.assertTrue(record.deterministic_recommendation_unchanged)
+                    self.assertNotIn(BODY_CANARY, self.serialized(record))
+                    self.assert_no_sensitive(self.serialized(record))
+                    self.assertEqual(obs._unsanitized_strings(record), ())
 
     # --- assertion helpers ------------------------------------------------------------
 

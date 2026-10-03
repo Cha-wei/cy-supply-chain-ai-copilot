@@ -62,8 +62,15 @@ Usage
 
 ::
 
-    python scripts/q3_full_composition_observation.py --commit-sha <merged-main-sha>
-    python scripts/q3_full_composition_observation.py --json --commit-sha <merged-main-sha>
+    python scripts/q3_full_composition_observation.py --case q3-c1-moq-raised --commit-sha <merged-main-sha>
+    python scripts/q3_full_composition_observation.py --case q3-c2-moq-non-binding --json --commit-sha <merged-main-sha>
+
+``--case`` is required: only ``q3-c1-moq-raised`` (MOQ 100) and
+``q3-c2-moq-non-binding`` (MOQ 20). Both use the existing deterministic pipeline;
+C2 derives shortage/base need 30, adjustment 0 and recommendation 30. Actual relations
+are checked before credential resolution. Case IDs are report metadata only, never
+provider payload or acceptance. No arbitrary business-input CLI is available.
+Tooling / offline tests do not satisfy Q3 coverage or final revision-bound refresh.
 
 ``--commit-sha`` must be the **exact 40-hex** merged-main commit the observation is taken on;
 omitting it (or passing ``UNKNOWN``, a short SHA or anything malformed) produces a sanitized
@@ -147,6 +154,28 @@ DEMAND_QUANTITY: str = "130"
 ON_HAND_QUANTITY: str = "100"
 SAFETY_STOCK_QUANTITY: str = "5"
 APPLICABLE_MOQ: str = "100"
+CASE_C1 = "q3-c1-moq-raised"
+CASE_C2 = "q3-c2-moq-non-binding"
+APPROVED_CASE_IDS = (CASE_C1, CASE_C2)
+_FIXED_CASE_MOQ = object()
+
+
+def _case_relation_matches(case_id: str, quantities: Mapping[str, str] | None) -> bool:
+    """Check actual derived facts before credential resolution, not case labels."""
+    try:
+        shortage, base, moq, adjustment, recommended = (
+            Fraction((quantities or {})[name]) for name in Q3_QUANTITY_ORDER
+        )
+    except (KeyError, ValueError, TypeError, ZeroDivisionError):
+        return False
+    if not (shortage == base > 0 and adjustment == recommended - base):
+        return False
+    if case_id == CASE_C1:
+        return moq > base and recommended == moq and adjustment > 0
+    if case_id == CASE_C2:
+        return 0 < moq < base and recommended == base and adjustment == 0
+    return False
+
 
 ROLE_REQUIREMENT: str = "Production Requirement"
 ROLE_BOM: str = "BOM Component"
@@ -236,6 +265,9 @@ NOTE_COMMIT_REQUIRED: str = (
     "request was sent; an omitted, unknown, abbreviated or malformed identifier never opens an "
     "egress path and is never echoed or recorded"
 )
+NOTE_CASE_REQUIRED = "an approved case selector is required; no request was sent"
+NOTE_CASE_MISMATCH = "the derived relation does not match the selected case; no request was sent"
+
 NOTE_TIMESTAMP_INVALID: str = (
     "the supplied observation timestamp is not an ISO-8601 instant, so nothing was sent"
 )
@@ -924,12 +956,14 @@ class ObservationRecord:
     credential_leakage_observation: str
     observation_admissibility: str
     selection: dict[str, object] | None
+    case_id: str | None = None
     canonical_criteria: list[dict[str, str]] = field(default_factory=list)
     mismatch_findings: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return {
+            "case_id": self.case_id,
             "commit_under_test": self.commit_under_test,
             "commit_provenance": self.commit_provenance,
             "observation_timestamp": self.observation_timestamp,
@@ -959,6 +993,7 @@ class ObservationRecord:
 
     def render_text(self) -> str:
         lines = [
+            f"operator case            : {self.case_id or '-'}",
             f"commit under test        : {self.commit_under_test}（{self.commit_provenance}）",
             f"observation timestamp    : {self.observation_timestamp}",
             f"provider / model         : {self.provider} / {self.model}",
@@ -1046,6 +1081,9 @@ def _permitted_strings(record: ObservationRecord) -> set[str]:
             NOTE_COMMIT_PROVENANCE,
             NOTE_COMMIT_REQUIRED,
             NOTE_TIMESTAMP_INVALID,
+            NOTE_CASE_REQUIRED,
+            NOTE_CASE_MISMATCH,
+            *APPROVED_CASE_IDS,
             _UNKNOWN_COMMIT,
             DEEPSEEK_PROVIDER,
             DEEPSEEK_MODEL,
@@ -1089,16 +1127,21 @@ def _permitted_strings(record: ObservationRecord) -> set[str]:
 
 def _unsanitized_strings(record: ObservationRecord) -> tuple[str, ...]:
     permitted = _permitted_strings(record)
-    return tuple(text for text in _string_values(record.to_dict()) if text not in permitted)
+    unsafe = tuple(text for text in _string_values(record.to_dict()) if text not in permitted)
+    # Field-specific enforcement: another permitted report string is still not a case ID.
+    if record.case_id is not None and record.case_id not in APPROVED_CASE_IDS:
+        unsafe += (str(record.case_id),)
+    return unsafe
 
 
 def run_observation(
     *,
+    case_id: str | None = None,
     transport: HttpTransport | None = None,
     environ: Mapping[str, str] | None = None,
     commit_sha: str = _UNKNOWN_COMMIT,
     timestamp: str | None = None,
-    moq: str | None = APPLICABLE_MOQ,
+    moq: str | None | object = _FIXED_CASE_MOQ,
     boundary_root: Path | None = None,
 ) -> tuple[ObservationRecord, int]:
     """Run one attempted observation and return ``(record, exit_code)``.
@@ -1108,13 +1151,15 @@ def run_observation(
     merged :class:`~snapshot_loader.StdlibHttpTransport` and the real process environment.
     """
 
+    approved_case = case_id if isinstance(case_id, str) and case_id in APPROVED_CASE_IDS else None
     generated = _generated_timestamp()
     egress_commit = _egress_commit(commit_sha)
     safe_stamp = generated if timestamp is None else _safe_timestamp(timestamp)
-    if egress_commit is None or safe_stamp is None:
+    if approved_case is None or egress_commit is None or safe_stamp is None:
         # No egress path is opened: an omitted, unknown, abbreviated or malformed commit identifier
         # never reaches the provider, is never echoed and is never recorded.
         record = ObservationRecord(
+            case_id=approved_case,
             commit_under_test=_UNKNOWN_COMMIT,
             commit_provenance=NOTE_COMMIT_PROVENANCE,
             observation_timestamp=generated,
@@ -1138,7 +1183,9 @@ def run_observation(
             observation_admissibility=ADMISSIBILITY_NO_MODEL_OUTPUT,
             selection=None,
             notes=(
-                NOTE_COMMIT_REQUIRED
+                NOTE_CASE_REQUIRED
+                if approved_case is None
+                else NOTE_COMMIT_REQUIRED
                 if egress_commit is None
                 else NOTE_TIMESTAMP_INVALID,
             ),
@@ -1150,11 +1197,14 @@ def run_observation(
     )
     with tempfile.TemporaryDirectory(prefix="q3-observation-") as scratch:
         boundary = boundary_root if boundary_root is not None else Path(scratch)
-        pipeline, import_report = run_deterministic_chain(boundary, moq=moq)
+        selected_moq = moq
+        if moq is _FIXED_CASE_MOQ:
+            selected_moq = APPLICABLE_MOQ if approved_case == CASE_C1 else "20"
+        pipeline, import_report = run_deterministic_chain(boundary, moq=selected_moq)
 
         if pipeline is None:
             record = _no_egress_record(
-                egress_commit, safe_stamp, transport_observation,
+                egress_commit, safe_stamp, transport_observation, case_id=approved_case,
                 notes=(NOTE_FIXTURE_NOT_ACCEPTED,), admissibility=ADMISSIBILITY_NO_MODEL_OUTPUT,
             )
             return record, EXIT_NO_TRUTHFUL_RECORD
@@ -1163,7 +1213,7 @@ def run_observation(
         recommendation = recommendations.for_family(PLANT_ID, MATERIAL_CODE)
         if recommendation is None:
             record = _no_egress_record(
-                egress_commit, safe_stamp, transport_observation,
+                egress_commit, safe_stamp, transport_observation, case_id=approved_case,
                 notes=(NOTE_NO_RECOMMENDATION,), admissibility=ADMISSIBILITY_NO_MODEL_OUTPUT,
             )
             return record, EXIT_RECORD_PRODUCED
@@ -1178,13 +1228,22 @@ def run_observation(
             # Zero egress: the merged runtime would not call a provider for a non-COMPLETE
             # projection, and neither does this tooling.
             record = _no_egress_record(
-                egress_commit, safe_stamp, transport_observation,
+                egress_commit, safe_stamp, transport_observation, case_id=approved_case,
                 notes=(NOTE_PROJECTION_INCOMPLETE,),
                 admissibility=ADMISSIBILITY_NO_MODEL_OUTPUT,
             )
             record.projection_completeness_state = state if isinstance(state, str) else None
             record.projection_quantities = quantities
             return record, EXIT_RECORD_PRODUCED
+
+        if not _case_relation_matches(approved_case, quantities):
+            record = _no_egress_record(
+                egress_commit, safe_stamp, transport_observation, case_id=approved_case,
+                notes=(NOTE_CASE_MISMATCH,), admissibility=ADMISSIBILITY_NO_MODEL_OUTPUT,
+            )
+            record.projection_completeness_state = state
+            record.projection_quantities = quantities
+            return record, EXIT_NO_TRUTHFUL_RECORD
 
         provider = RecordingProvider(
             provider_from_environment(environ=environ, transport=transport_observation)
@@ -1252,6 +1311,7 @@ def run_observation(
         notes = notes + (NOTE_MULTIPLE_REQUESTS,)
 
     record = ObservationRecord(
+        case_id=approved_case,
         commit_under_test=egress_commit,
         commit_provenance=NOTE_COMMIT_PROVENANCE,
         observation_timestamp=safe_stamp,
@@ -1326,12 +1386,14 @@ def _no_egress_record(
     stamp: str,
     transport: RecordingTransport,
     *,
+    case_id: str,
     notes: tuple[str, ...],
     admissibility: str,
 ) -> ObservationRecord:
     """A sanitized record for a branch that must not (and did not) open an egress path."""
 
     return ObservationRecord(
+        case_id=case_id,
         commit_under_test=commit,
         commit_provenance=NOTE_COMMIT_PROVENANCE,
         observation_timestamp=stamp,
@@ -1361,8 +1423,15 @@ def _no_egress_record(
 def main(argv: Sequence[str] | None = None) -> int:
     """The opt-in CLI.  ``0`` = a truthful record was produced; ``1`` = it was not."""
 
-    parser = argparse.ArgumentParser(
+    class SanitizedParser(argparse.ArgumentParser):
+        def error(self, message: str) -> None:
+            # Default argparse errors can echo arbitrary operator input.
+            self.print_usage(sys.stderr)
+            self.exit(2, "invalid operator arguments; approved --case is required\n")
+
+    parser = SanitizedParser(
         prog="q3_full_composition_observation",
+        allow_abbrev=False,
         description=(
             "Manual opt-in Q3 full-composition hosted observation. Sends at most ONE hosted "
             "request with a fixed SIMULATED fixture, drives the merged explain_q3(...) "
@@ -1387,13 +1456,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             "echoed. The tooling does not verify repository membership."
         ),
     )
+    parser.add_argument(
+        "--case", required=True, choices=APPROVED_CASE_IDS,
+        help="fixed SIMULATED operator case; metadata only, not acceptance",
+    )
     arguments = parser.parse_args(argv)
 
     print(
         "manual opt-in observation: at most one hosted request with a fixed SIMULATED fixture",
         file=sys.stderr,
     )
-    record, exit_code = run_observation(commit_sha=arguments.commit_sha)
+    record, exit_code = run_observation(case_id=arguments.case, commit_sha=arguments.commit_sha)
     if arguments.as_json:
         print(json.dumps(record.to_dict(), indent=2, sort_keys=True, ensure_ascii=False))
     else:
