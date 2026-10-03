@@ -122,11 +122,13 @@ policy registration ≠ evidence refresh ≠ final acceptance ≠ POC SUCCESS。
 
 Q3 coverage / repetition / failure plan 已登记（Issue #226）；见 [§9.7 D.1](design/poc-design-v0.2.md#q3-coverage-plan)。
 
-**Next Gate（current）：** 按 §9.7，先判断 approved Q3 cases 的 execution readiness，所需 tooling / evidence 工作另行授权；
-执行 exact merged-main revision-bound applicable evidence refresh，并取得真实 customer/process baseline 与
-business-value evidence，处置 applicable gaps / FROZEN §17 concerns，提交 final package 供 Human acceptance。
-当前 baseline = NOT AVAILABLE，business-value evidence = NOT PRODUCED，POC SUCCESS = NOT CLAIMED；
-§6 / §7 / §8 / §9.3 overall 不机械 closure；本单元未执行上述工作。
+Q3 hosted coverage evidence 已登记（Issue #230；[§9.7 D.2](design/poc-design-v0.2.md#q3-hosted-refresh-evidence)），
+仅针对 exact accepted revision `00272580…`；registration commit 不自动成为 evidence execution revision。
+**Next Gate（current）：** final refresh = IN PROGRESS / NOT COMPLETE；处置剩余 applicable gaps（Windows
+symlink local refresh gap 保留），取得真实 customer/process baseline 与 business-value evidence、适用 judgement /
+FROZEN §17 disposition，再提交 final package 供 Human acceptance。
+当前 baseline = NOT AVAILABLE，Layer 3 = BLOCKED，business-value evidence = NOT PRODUCED，POC SUCCESS = NOT CLAIMED；
+§6 / §7 / §8 / §9.3 overall 不机械 closure。
 
 保持（不变）：
 

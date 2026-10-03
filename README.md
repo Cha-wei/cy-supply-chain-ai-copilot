@@ -7,8 +7,10 @@
 Human-approved minimum POC SUCCESS acceptance / evidence policy 已登记（Issue #224）；
 canonical authority 见 [POC Design §9.7](docs/design/poc-design-v0.2.md#minimum-poc-success-policy)。
 Q3 coverage plan 已登记（Issue #226；[§9.7 D.1](docs/design/poc-design-v0.2.md#q3-coverage-plan)）；
-Next Gate 为 approved cases execution readiness、后续获授权的 revision-bound refresh 与真实 Layer 3 evidence，
-再提交 Human final acceptance；本次未执行，business-value evidence = NOT PRODUCED，POC SUCCESS = NOT CLAIMED。
+两 approved cases 的 exact-revision hosted coverage evidence 已登记（Issue #230；
+[§9.7 D.2](docs/design/poc-design-v0.2.md#q3-hosted-refresh-evidence)；仅接受 revision `00272580…`）。
+Final refresh = IN PROGRESS / NOT COMPLETE；Windows symlink local gap 保留；Next Gate 为剩余 evidence gaps、
+真实 Layer 3 evidence 与 final Human acceptance。Business-value evidence = NOT PRODUCED，POC SUCCESS = NOT CLAIMED。
 
 **Project Foundation + 第一批 deterministic implementation tranche（`POC Design v0.2` §10.1 B）
 的模块实现与 integration 串联。**
@@ -408,7 +410,8 @@ python scripts/q3_full_composition_observation.py --case q3-c2-moq-non-binding -
 其余 fixture inputs 相同，五量由既有 deterministic pipeline 推导。实际 relation 在 credential resolution
 之前核验，不匹配时 zero egress。`case_id` 仅为 sanitized operator/evidence metadata，不进入 provider payload，
 不表示 acceptance；无任意数量或 fixture-path CLI。批准 coverage policy 见 POC Design §9.7 D.1。
-本 tooling adaptation 与 offline/CI PASS 不满足 hosted Q3 coverage；final revision-bound refresh 仍为 NOT RUN。
+本 tooling adaptation 与 offline/CI PASS 不满足 hosted Q3 coverage。后续真实 coverage record 见
+[§9.7 D.2](docs/design/poc-design-v0.2.md#q3-hosted-refresh-evidence)；final refresh = IN PROGRESS / NOT COMPLETE。
 
 - 与 live smoke 的区别：本 tooling 走 **deterministic pipeline → procurement recommendation → Q3 projection →
   hosted provider → parser → validator → 完整 `explain_q3(...)` composition**（`§9.3` 定义的 observation unit），
