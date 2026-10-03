@@ -120,7 +120,9 @@ enforcement ／ durable role）。
 R1 ～ R5）；唯一 authority 见 [POC Design §9.7](design/poc-design-v0.2.md#minimum-poc-success-policy)。
 policy registration ≠ evidence refresh ≠ final acceptance ≠ POC SUCCESS。
 
-**Next Gate（current）：** 按 §9.7，在后续明确授权工作中取得 Human-approved Q3 case / repetition plan、
+Q3 coverage / repetition / failure plan 已登记（Issue #226）；见 [§9.7 D.1](design/poc-design-v0.2.md#q3-coverage-plan)。
+
+**Next Gate（current）：** 按 §9.7，先判断 approved Q3 cases 的 execution readiness，所需 tooling / evidence 工作另行授权；
 执行 exact merged-main revision-bound applicable evidence refresh，并取得真实 customer/process baseline 与
 business-value evidence，处置 applicable gaps / FROZEN §17 concerns，提交 final package 供 Human acceptance。
 当前 baseline = NOT AVAILABLE，business-value evidence = NOT PRODUCED，POC SUCCESS = NOT CLAIMED；
