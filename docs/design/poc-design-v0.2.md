@@ -7850,6 +7850,15 @@ evidence ／ usage ／ adoption evidence ／ production acceptance ／ `POC SUCC
 `§8` ／ `§9.3` 与 `rule ／ code-version freshness = NOT RESOLVED` 均不变；executed revision 仅为
 execution provenance metadata。上一条 Issue #218 follow-up 与其前的 closure 记录保持原文、不回写。
 
+**Current Status follow-up（Issue #222，`HD-HITL-ACCEPT-R4`）：** Human-designated POC business reviewer
+（`Cha`）已于 `2026-10-03 16:39 UTC+08:00` 对 Issue #220 登记的 `A-1` ～ `A-11` scoped `SIMULATED` HITL
+behavioral evidence 作出**显式 scoped business acceptance judgement**；其 judgement 逐字原文与 project-level
+claim boundary 已 canonical 登记见 [§9.4](#hitl-business-acceptance)。该登记**只**记录**已实际发生**的
+judgement：**不**构成 real-customer acceptance ／ business-value evidence ／ usage ／ adoption evidence ／
+production acceptance ／ `POC SUCCESS`；`§6 overall` ／ `§7 overall` ／ `§8` ／ `§9.3` 与
+`rule ／ code-version freshness = NOT RESOLVED` 均不变；后续 Next Gate 见 `§9.4` 第 6 项。上一条 Issue #220
+follow-up 与其前的 closure 记录保持原文、不回写。
+
 ```text
 §9 两层 design closure
   ≠ implementation evidence 已被 validated
@@ -8663,6 +8672,108 @@ behavioral evidence，**不得**被外推为上述任何保证，也**不**构�
 historical gate states；`§3` ／ `§5` ／ `§7` ／ `§8` 已登记语义与 Status；`ADR-001` ／ `ADR-002`；
 `FROZEN` baseline；code ／ tests ／ runtime。本记录**不**新增 canonical entity ／ field ／ grain ／ enum ／
 business status，**不**新增 evidence-result status vocabulary，**不**新增 test ／ script ／ runtime surface。
+
+**Scoped POC business acceptance judgement — Human reviewer record（Issue #222；Human Decision `HD-HITL-ACCEPT-R4`）：**
+
+**Registration Status：`REGISTERED`（docs-level canonical time-point record；本单元只登记**已实际发生**的 scoped Human judgement）**
+**Authority：** Human Decision **`HD-HITL-ACCEPT-R4 = APPROVED`**（reviewer designation ＋ judgement authorization ＋ judgement scope ＋ claim boundary；Issue #222）＋ 本小节的 Issue #218 scoped acceptance ／ evidence boundary registration ＋ [Issue #220 scoped HITL behavioral acceptance evidence record](#hitl-business-acceptance) ＋ `§9.1` ／ `§9.5`。
+
+**1. Reviewer designation ／ attribution（project-governance assignment）。**
+
+```text
+Reviewer attribution = Cha
+Judgement time       = 2026-10-03 16:39 UTC+08:00（北京时间）
+Evidence reference   = §9.4 / Issue #220 / A-1 ～ A-11
+```
+
+该 designation 由 Human（Decision ／ Merge Authority）指定，且**仅**适用于本次 scoped POC business-acceptance judgement：
+
+```text
+≠ runtime identity mechanism
+≠ account ／ login
+≠ RBAC
+≠ permission enforcement
+≠ durable role
+```
+
+本登记**不**引入身份验证 ／ 账号 ／ 角色判定 ／ 数据范围 ／ Tool permission enforcement；`actor present ≠
+identity verified ≠ permission enforced`（本小节第 5 项）不变，`§7 overall = NOT RESOLVED` 不变。
+
+**2. Judgement time。** `2026-10-03 16:39 UTC+08:00（北京时间）`。
+
+**3. Evidence reference（引用，不复制）。** 本 judgement 的对象是本小节中 Issue #220 登记的 `A-1` ～ `A-11`
+scoped `SIMULATED` HITL behavioral evidence（含其 execution facts、evidence mapping、claim ceiling、
+A-10 ／ A-11 限度与 `§7` ／ `§8` ／ rule-version 边界）。
+
+**4. Reviewer judgement（逐字原文）。** 以下是 reviewer 本人的 judgement，**未经改写、润色、缩写、补充或推断**：
+
+```text
+我已阅读当前 `§9.4 / Issue #220` 登记的 A-1 ～ A-11 scoped `SIMULATED` HITL behavioral evidence，以及对应的证据范围、限制和 non-claim boundary。
+我接受这些证据作为当前 POC 中人工审查、数量调整、拒绝、失效后重新审查以及 Procurement Request Draft 行为层面的 business acceptance basis。
+我的接受仅限上述 scoped HITL 行为。现有证据来自受控 `SIMULATED` 场景，不证明真实采购建议或 MOQ 政策在具体企业中的正确性或最优性，也不证明 reviewer identity / permission enforcement、持久审批历史、production / ERP safety、真实客户接受或真实 business value。
+我理解并接受当前 POC 仍存在已披露的限制，包括无持久审批历史、无身份权限强制执行、rule / code-version freshness 尚未解决，以及未证明完整 workflow、自动通知和生产执行能力。这些限制不改变我对本次限定 HITL behavioral evidence 的接受判断，也不表示这些未来能力已经解决。
+Human Approval ≠ Production Execution。
+本 judgement 不构成 real-customer acceptance、business-value evidence、usage / adoption evidence、production acceptance 或 POC SUCCESS。
+确认声明：
+我已阅读并认可上述内容，并将其作为本人对此次 scoped POC HITL evidence 的 judgement。
+```
+
+**5. Project-level claim boundary ／ preserved state（canonical；**非** reviewer 原话）。**
+
+```text
+A Human-designated POC business reviewer has explicitly accepted
+the registered §9.4 / Issue #220 A-1 ～ A-11 scoped SIMULATED
+HITL behavioral evidence as the business-acceptance basis for
+the stated POC HITL behavioral scope.
+```
+
+```text
+business acceptance
+  ≠ real-customer acceptance
+  ≠ business-value evidence
+  ≠ usage ／ adoption evidence
+  ≠ production acceptance
+  ≠ POC SUCCESS
+
+§6 overall                    = DESIGN PENDING
+§7 overall                    = NOT RESOLVED
+§8                            = NOT CLOSED
+§9.3                          = DESIGN PENDING
+rule ／ code-version freshness = NOT RESOLVED
+Unrestricted implementation   = NOT AUTHORIZED
+production execution          = OUTSIDE POC
+source ／ production WRITE     = DENIED
+business-value evidence       = NOT PRODUCED
+POC success                   = NOT CLAIMED
+```
+
+本记录**不**新增 canonical entity ／ field ／ grain ／ enum ／ business status（claim 只以 prose 表述）；
+**不**复用 `§6` 第 4 项 `HumanDecision`；**不**引入 runtime artifact ／ schema ／ persistence ／ durable approval
+history ／ audit trail；**不**产生 business-value evidence，**不**发明真实 customer baseline ／ KPI ／ threshold ／
+score ／ rubric，**不**声称 production readiness 或 `POC SUCCESS`，**不** closure `§7` ／ `§8`，**不**解决或声称解决
+rule ／ code-version freshness。
+
+**6. Next Gate（如实指出；不在本 unit 内设计）。** 本 unit **只**登记已发生的 scoped Human business acceptance
+judgement，**不**设计最终 `POC SUCCESS` gate。依现有 canonical authority，后续仍存在：
+
+```text
+Layer 3 business-value evidence
+  （`real customer ／ process baseline = NOT AVAILABLE ／ 尚未在当前项目 evidence 中获得`）
+Human-approved acceptance ／ evidence policy
+  （用于综合 applicable runtime ／ test evidence ＋ business-value evidence 与 `FROZEN §16` success dimensions，
+    以支撑未来的 `POC SUCCESS` claim；当前不存在）
+其它仍开放的 applicable evidence ／ design boundaries
+  （`§6 overall` ／ `§7 overall` ／ `§8` ／ `§9.3` ／ rule ／ code-version freshness）
+```
+
+若后续 Next Gate 需要 substantive design decision，应登记为**后续独立工作**，不在本 unit 内扩张。
+
+**7. 本记录不修改：** 本小节既有全部文字（`§9.4` 标题与 Issue #176 premise ／ #216 correction 与 registration ／
+#218 scoped acceptance ／ evidence boundary registration ／ #220 scoped HITL behavioral acceptance evidence
+record ／ `O-1` ～ `O-4` ／ `SC-1` ～ `SC-6` ／ `A-1` ～ `A-11` ／ claim discipline ／ `§7` ／ `§8` applicability ／
+rule-version 边界 ／ evidence-production boundary）、`§9.1` ／ `§9.2` ／ `§9.3` ／ `§9.5` ／ `§9.6`、
+`§6` ／ `§6.1` ／ `§10.3` ～ `§10.6` 已登记正文与 historical gate states、`§3` ／ `§5` ／ `§7` ／ `§8` 已登记
+语义与 Status、`ADR-001` ／ `ADR-002`、`FROZEN` baseline；code ／ tests ／ runtime 未改。
 
 #### 9.5 Status vocabulary ／ claim discipline（必须区分）
 

@@ -203,8 +203,25 @@ Draft runtime tranche             = CODE START GATE PASS / IMPLEMENTATION AUTHOR
                                       rule-version binding ≠ cross-execution equivalence guarantee）；
                                       本记录不构成 business acceptance ／ real-customer acceptance ／
                                       business-value evidence ／ usage ／ adoption evidence ／
-                                      production acceptance ／ POC SUCCESS；business acceptance 须由
-                                      Human-designated POC business reviewer 显式作出（下一 gate）
+                                      production acceptance ／ POC SUCCESS；business acceptance 的
+                                      judgement 见下一行
+§9.4 scoped POC business              = 已由 Human-designated reviewer 作出并 canonical 登记
+  acceptance judgement                 （docs-level time-point record；Issue #222 ／
+  （Issue #222 ／ HD-HITL-ACCEPT-R4）   HD-HITL-ACCEPT-R4）：Human 指定 POC business reviewer = Cha
+                                      （仅 project-governance assignment；≠ runtime identity ／
+                                      account ／ RBAC ／ permission enforcement ／ durable role），
+                                       授权其对 Issue #220 登记的 A-1 ～ A-11 scoped `SIMULATED`
+                                       HITL behavioral evidence 作出一次显式 scoped judgement；
+                                       reviewer 于 2026-10-03 16:39 UTC+08:00 作出该 judgement，
+                                       其逐字原文与 project-level claim boundary 已分开登记于 §9.4
+                                       （未改写、润色、缩写、补充或推断）；该 judgement 只接受
+                                       scoped HITL 行为层面的 evidence，明确 ≠ real-customer
+                                       acceptance ≠ business-value evidence ≠ usage ／ adoption
+                                       evidence ≠ production acceptance ≠ POC SUCCESS；
+                                       未新增 runtime artifact ／ schema ／ enum ／ business status ／
+                                       persistence ／ durable approval history ／ audit trail；
+                                       未复用 §6 HumanDecision；§7 ／ §8 未 closure；
+                                       rule ／ code-version freshness = NOT RESOLVED 不变
 ```
 
 **Layer-1 Package Structural Validation（已实现范围，有意保持最小）**：
