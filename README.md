@@ -4,6 +4,11 @@
 
 ## 项目状态
 
+Human-approved minimum POC SUCCESS acceptance / evidence policy 已登记（Issue #224）；
+canonical authority 见 [POC Design §9.7](docs/design/poc-design-v0.2.md#minimum-poc-success-policy)。
+Next Gate 为后续获授权的 Q3 case / repetition plan、revision-bound evidence refresh 与真实 Layer 3 evidence，
+再提交 Human final acceptance；本次未执行，business-value evidence = NOT PRODUCED，POC SUCCESS = NOT CLAIMED。
+
 **Project Foundation + 第一批 deterministic implementation tranche（`POC Design v0.2` §10.1 B）
 的模块实现与 integration 串联。**
 

@@ -116,14 +116,15 @@ business-value evidence ／ usage ／ adoption evidence ／ production acceptanc
 designation 仅为 project-governance assignment（**不**建立 runtime identity ／ account ／ RBAC ／ permission
 enforcement ／ durable role）。
 
-**Next Gate（current）：** **Layer 3 business-value evidence ＋ Human-approved acceptance ／ evidence policy
-（均尚未开始；本 unit 未设计最终 `POC SUCCESS` gate）** —— 依现有 canonical authority，后续仍存在：
-① Layer 3 business-value evidence，需要真实客户 ／ 真实流程 baseline
-（`real customer ／ process baseline = NOT AVAILABLE ／ 尚未在当前项目 evidence 中获得`）；
-② 一个 Human-approved acceptance ／ evidence policy，用于综合 applicable runtime ／ test evidence ＋
-business-value evidence 与 `FROZEN §16` success dimensions，以支撑未来的 `POC SUCCESS` claim（当前不存在）；
-③ 其它仍开放的 applicable evidence ／ design boundaries（`§6 overall` ／ `§7 overall` ／ `§8` ／ `§9.3` ／
-rule ／ code-version freshness）。任何 substantive design decision 属**后续独立工作**，不在本 unit 内扩张。
+**Current policy：** Human-approved minimum POC SUCCESS acceptance / evidence policy 已登记（Issue #224；
+R1 ～ R5）；唯一 authority 见 [POC Design §9.7](design/poc-design-v0.2.md#minimum-poc-success-policy)。
+policy registration ≠ evidence refresh ≠ final acceptance ≠ POC SUCCESS。
+
+**Next Gate（current）：** 按 §9.7，在后续明确授权工作中取得 Human-approved Q3 case / repetition plan、
+执行 exact merged-main revision-bound applicable evidence refresh，并取得真实 customer/process baseline 与
+business-value evidence，处置 applicable gaps / FROZEN §17 concerns，提交 final package 供 Human acceptance。
+当前 baseline = NOT AVAILABLE，business-value evidence = NOT PRODUCED，POC SUCCESS = NOT CLAIMED；
+§6 / §7 / §8 / §9.3 overall 不机械 closure；本单元未执行上述工作。
 
 保持（不变）：
 
