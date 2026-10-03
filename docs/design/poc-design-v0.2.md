@@ -8803,6 +8803,12 @@ rule-version 边界 ／ evidence-production boundary）、`§9.1` ／ `§9.2` �
 `§6` ／ `§6.1` ／ `§10.3` ～ `§10.6` 已登记正文与 historical gate states、`§3` ／ `§5` ／ `§7` ／ `§8` 已登记
 语义与 Status、`ADR-001` ／ `ADR-002`、`FROZEN` baseline；code ／ tests ／ runtime 未改。
 
+**Current-state follow-up（Issue #232）：** Human `HD-HITL-ACCEPT-R5 = APPROVED` 接受
+`00272580adab8cb8d5843a719d261e34047b877d` 上 refreshed A-1～A-11 scoped SIMULATED HITL / Draft evidence。
+Authoritative judgement / revision / limitations 见 [§9.7 D.3](#accepted-revision-layer2-consolidation)。
+Issue #220 / #222 保持 historical earlier-revision evidence / judgement，不回写。
+此 follow-up 不建立 real-customer acceptance、business-value evidence或POC SUCCESS。
+
 #### 9.5 Status vocabulary ／ claim discipline（必须区分）
 
 ```text
@@ -9159,6 +9165,113 @@ Coverage 不建立 AI Eval overall PASS、provider/model quality、accuracy、re
 all P0 explanation validation、production readiness、business value 或 POC SUCCESS。
 Next Gate：处置剩余 applicable final-package gaps（含 symlink evidence 限度），取得 real baseline / Layer 3
 与适用 Human judgements、§17 disposition，再按 G 提交 conjunctive final acceptance；不机械 closure §6/§7/§8。
+
+<a id="accepted-revision-layer2-consolidation"></a>
+
+###### D.3 Accepted-revision technical evidence consolidation / Human dispositions（Issue #232）
+
+**Registration Status：`REGISTERED`（completed scoped Layer-2 technical evidence phase；不是 final acceptance）**
+**Authority：** Human 在本 change unit 明确批准的以下五项 Decisions；既有 D.2、§9.1～§9.4、E～H。
+本登记是 current-state follow-up；D.1 / D.2 / E / I 和 §9.4 的 historical time-point records 保留，不回写。
+
+**1. HD-FINAL-REVISION-R1 = Option A。** Final evidence target / execution / acceptance 对象保持
+exact merged-main revision **`00272580adab8cb8d5843a719d261e34047b877d`**（PR #229）。
+本单元起点 main `e522a4b984cf1b53e7ac87e30d4d0b0f6c20b9e3` 及后续 docs-only registration revisions
+仅为 evidence / decision record **carrier**，不替换该接受对象，不将旧 evidence 自动覆盖新 main。
+**No cross-version equivalence。** 接受对象改变时必须按 E 重新刷新；选择对象不是 final acceptance。
+
+**2. HD-P0-EXPLANATION-SCOPE-R1 = Option B。** Minimum final POC explanation claim 仅覆盖
+implemented / evidenced **Q3 — Why is the recommended purchase quantity X?**。
+Q1 / Q2 / Q4 / Q5 / Q6 继续属于 **canonical P0 Supported Question Baseline**（§5.3），保持 open / unclaimed：
+**not claimed implemented；not claimed validated；not marked NOT APPLICABLE；not satisfied**，
+只是位于本次 **scoped minimum final explanation claim 之外**。本决定不删除、不改写 §5.3，
+不缩减 deterministic P0 obligations，不授权新增 implementation。未来若 G 允许 POC SUCCESS claim，
+措辞必须明确此 scoped minimum 范围，不得暗示全部六种 P0 questions implemented / validated。
+
+**3. HD-SYMLINK-REFRESH-R1 = APPROVED — intentional Linux refresh。**
+[CI #416 / run 37137393510](https://github.com/Cha-wei/cy-supply-chain-ai-copilot/actions/runs/37137393510)
+原 event = push；两个新实际执行的 jobs 的 API `head_sha` 和 checkout logs 均为上述完整 accepted SHA。
+Human 授权的是 intentional acceptance-refresh rerun，以下不是将历史 CI 重新解释为新 evidence。
+
+| Actual execution | Attempt / actual job | OS / interpreter | Job UTC interval（2026-10-03） | Command / overall result |
+| --- | --- | --- | --- | --- |
+| Python 3.11 | 2 / [111264949991](https://github.com/Cha-wei/cy-supply-chain-ai-copilot/actions/runs/37137393510/job/111264949991) | Ubuntu 24.04.5 / CPython 3.11.16 | 18:28:01Z～18:28:15Z | `python -m unittest discover -s tests -v`；1160 tests, OK, 8.590s |
+| Python 3.12 | 3 / [111265098453](https://github.com/Cha-wei/cy-supply-chain-ai-copilot/actions/runs/37137393510/job/111265098453) | Ubuntu 24.04.5 / CPython 3.12.14 | 18:28:49Z～18:29:07Z | same command；1160 tests, OK, 10.311s |
+
+| Target test（tests.test_layer1_acceptance） | Python 3.11 actual log UTC | Python 3.12 actual log UTC | Result |
+| --- | --- | --- | --- |
+| `TrustedBoundaryTests.test_symlinked_package_dir_is_fail_closed` | 18:28:08.2237006Z | 18:28:57.4245080Z | each `ok`；target skips = 0 |
+| `ArtifactReferenceTests.test_symlinked_artifact_is_rejected` | 18:28:08.1566411Z | 18:28:57.3462362Z | each `ok`；target skips = 0 |
+
+两项分别支持 symlink package-directory fail closed 与 symlink artifact rejection。
+**Prior symlink technical evidence gap = CLOSED for these recorded Linux environments and exact accepted revision.**
+Windows historical local run 的 2 skips 仍为真实限制，不声称 Windows equivalence 或 Windows paths 已 refreshed；
+不作 cross-interpreter equivalence。GitHub 要求串行 job rerun，未重跑 jobs 的 carried-forward records 会出现新 ID；
+例如 attempt 3 的 3.11 record `111265099467` 保留 18:28:01Z～18:28:15Z，**不是第三次实际执行**。
+Foundation carried-forward records 也不计为本次新执行。Evidence 以表中 actual execution job / timestamps 为准。
+
+**4. HD-HITL-ACCEPT-R5 = APPROVED。** Human 明确接受 accepted revision 上 refreshed
+§9.4 **A-1～A-11 SIMULATED HITL / Draft behavioral evidence**，用于 scoped minimum POC HITL /
+business-acceptance boundary；D.2 的 intentional rerun = 100 tests OK（Windows / CPython 3.14.4），
+上述 Linux full regression 也覆盖 existing HITL / Draft suite。
+该 judgement 不建立 real-customer acceptance、business-value evidence、usage/adoption、production acceptance
+或 POC SUCCESS。§9.4 Issue #222 / HD-HITL-ACCEPT-R4 仍是 earlier-revision historical judgement，
+不自动迁移或重写为本次 refreshed judgement；本次 approval provenance 为 Human 对 Issue #232 change unit 的明确授权，
+不发明 reviewer identity 或精确 judgement timestamp。
+
+**5. HD-LAYER2-EVIDENCE-R1 = APPROVED。** Human 接受 technical evidence package 对
+approved scoped minimum POC claim 的 **Layer-2 completeness**；所有 evidence boundaries / limitations 继续约束。
+
+| Dimension | Oracle / accepted-revision evidence references | Accepted technical boundary / limitation |
+| --- | --- | --- |
+| Data correctness | §3/§4、§9.1/§9.2；full regression 的 Layer1/Layer2、strict JSON、canonical objects、trusted reuse；pipeline G3/G6；本节 symlink logs | controlled SIMULATED source / content-view / provenance / validation；非真实企业数据正确性、sender真实性或 enterprise integration |
+| Calculation correctness | §2.1～§2.7；calculation suites；pipeline G2/G4/G5 | approved deterministic rules、exact quantities、repeatability / stable serialization；tests 不替代 canonical oracle，不证明业务收益 |
+| Tool correctness | §5、§10.1 B、§9.2；pipeline G1/G3/G7/G9/G10/G11/G12/G13；result-binding / consuming-seam suites与 source inspection | controlled / fixed composition、handoff、isolation、fail-closed；不主张 autonomous Tool selection |
+| Explainability | §5.3 Q3、§9.3、D.1/D.2；68 tests focused offline rerun、C1/C2 hosted observations、D.2 composed artifact proof | Q3 only；不是直接 serialized hosted artifact；not expressible 不改成 model criterion satisfied；不主张 provider/model quality、accuracy或reliability/stability |
+| Safety | §3/§6/§7.1、§9.4；100 tests HITL/Draft rerun、Q3 unchanged/sanitizer checks、D.2 safety records | applicable no-write / HITL / stale / fail-closed / secret handling；actor slot 非身份验证，不主张 production safety、RBAC或durable audit |
+
+§9.2 mapping：pipeline G3 → same accepted package/content view / AnalysisRun；G6 → provenance continuity；
+G4 → repeatability/stable serialization；G7/G9/G10 ＋ G13/source inspection → scoped isolation/composition boundary；
+G11/G15 → non-ACCEPTED/missing-package rejection；G12 ＋ result-binding R1～R6、procurement / supplier seams
+→ foreign/stale/unbound rejection。Stale 仅按 existing binding contract，不宣称 runtime code-version freshness。
+Loader read / test scratch writes 不隐去；G13 alone 不是整个调用链绝对无副作用证明。
+
+**6. Package binding / safety。** Accepted SHA、commands、Windows environment、AI configuration、
+sanitized observation timestamps / criteria、composed proof、C1 display limitation见 D.2；新增 Linux execution见本节。
+Historical #196 不计本次 hosted count；#220/#222 不替代 refreshed judgement。
+§7.1 **HD-Q3-CREDENTIAL-R1** 是唯一 expired one-time exception：temporary user-local Desktop bootstrap
+file provisioning 与 process-environment runtime acquisition 分开；entry removed、Desktop restarted、final ABSENT
+为已登记 Human-confirmed facts。无 general credential-at-rest permission，production Secret Management NOT CLAIMED。
+D.2 未逐字列出 historical 100/68-test focused commands，不猜造这些历史命令；本节 Linux full-suite command/logs
+提供同 SHA 的可核查 suite execution。该记录不授权新 tests/hosted attempts/credential操作。
+
+**7. Remaining final gate / states。** Layer-2 completeness **不是** §9.7 G final conjunctive acceptance，
+不是 Business Value PASS，也不是 POC SUCCESS。整体 final revision-bound refresh 保持
+**IN PROGRESS / NOT COMPLETE**：本登记只确认 scoped technical evidence phase，未宣布完整 final package /
+acceptance 已满足；不以 technical completeness 关闭 Layer 3 或 G。
+
+```text
+Layer-2 technical evidence package      = COMPLETE for approved scoped minimum claim（Human accepted）
+symlink technical evidence gap          = CLOSED（recorded Linux environments / accepted SHA only）
+POC Design v0.2                         = DRAFT
+§6 overall                             = DESIGN PENDING
+§7 overall                             = NOT RESOLVED
+§8                                     = NOT CLOSED
+§9.3 overall                            = DESIGN PENDING
+final revision-bound refresh            = IN PROGRESS / NOT COMPLETE
+real customer/process baseline          = NOT AVAILABLE
+Layer 3                                 = BLOCKED
+business-value evidence                 = NOT PRODUCED
+§17 real-world dispositions             = NOT COMPLETED
+§9.7 G final conjunctive acceptance      = NOT PERFORMED
+POC SUCCESS                             = NOT CLAIMED
+production execution                    = OUTSIDE POC
+source / production WRITE               = DENIED
+```
+
+Next gate：取得 F 的真实 baseline / comparative task evidence / evidence-backed improvement / real-process
+business judgement，逐项完成 H 的 §17 review/disposition，再提交 scoped exact-revision package 供 G Human acceptance。
+不要求机械 closure §6/§7/§8/§9.3；新 runtime/design需求若改变接受对象，返回 E。
 
 ##### E. Freshness（R3 = Option A）
 

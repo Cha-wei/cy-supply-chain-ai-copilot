@@ -264,3 +264,5 @@ authoritative 记录见 [snapshot-import-contract.md](design/specs/data-integrat
 - 本文档**不替代**任何 canonical source，**不构成**新的项目事实或 Decision。
 - 本文档内容为 snapshot；`main` 变化后**应同步更新**，但**不得**据此改写 canonical 文档。
 - 冲突时以 canonical source 为准。
+
+**Current technical evidence follow-up（Issue #232）：** [POC Design §9.7 D.3](design/poc-design-v0.2.md#accepted-revision-layer2-consolidation) 登记 accepted revision `00272580adab8cb8d5843a719d261e34047b877d`、Q3 scoped minimum claim、Linux symlink gap closure、refreshed HITL judgement 与 Human-accepted Layer-2 completeness。后续 docs revisions 仅为载体；Next Gate = real baseline / Layer 3、§17 dispositions、G final Human acceptance。final refresh IN PROGRESS / NOT COMPLETE；POC SUCCESS NOT CLAIMED。此前 snapshot / time-point records 不回写。

@@ -579,3 +579,5 @@ Data Dictionary 自动推导的白名单。
   `provenance_associations` / `observation` / `evidence` / `mapping_basis`。
 - Layer 1 只判断 structural acceptance；field requiredness / logical type / range /
   business applicability / semantic resolution / capability readiness 属 Layer 2 ～ Layer 4。
+
+**Current technical evidence follow-up（Issue #232）：** [POC Design §9.7 D.3](docs/design/poc-design-v0.2.md#accepted-revision-layer2-consolidation) 登记 accepted revision `00272580adab8cb8d5843a719d261e34047b877d`、Q3 scoped minimum claim、Linux symlink gap closure、refreshed HITL judgement 与 Human-accepted Layer-2 completeness。后续 docs revisions 仅为载体；Next Gate = real baseline / Layer 3、§17 dispositions、G final Human acceptance。final refresh IN PROGRESS / NOT COMPLETE；POC SUCCESS NOT CLAIMED。此前 snapshot / time-point records 不回写。
