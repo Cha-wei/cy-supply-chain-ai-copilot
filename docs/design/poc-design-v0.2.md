@@ -8910,6 +8910,108 @@ selection 按既有 contract 记录 deterministic / integration failure，不能
 evidence gap ／ follow-up Human decision，不假定 Q3 coverage 已满足、不静默删除该义务。
 `§9.3 AI Eval overall = DESIGN PENDING` 保持；本 policy 不新增该层 overall Eval verdict。
 
+<a id="q3-coverage-plan"></a>
+
+###### D.1 Human-approved Q3 explanation-case coverage / repetition plan（Issue #226）
+
+**Registration Status：`REGISTERED`（docs-only canonical plan registration；不是 coverage satisfied）**
+**Authority：** Issue #226：`HD-Q3-COVERAGE-R1 = Option A`、`HD-Q3-COVERAGE-R2 = Option 1`、
+`HD-Q3-COVERAGE-R3 = Diagnosed continuation`；`§2.5` ／ `§5.3` ／ `§5.20` 与 `§9.3` 既有 per-observation
+contract；本节 D ／ E ／ G。本记录登记批准计划，不更改 §9.3 contract 或 current closed answer-kind registry。
+
+D 上方及本节 I 的 Issue #224 时点“形成／批准 case / repetition plan”要求保留；该计划现由本记录登记。
+**计划已登记 ≠ tooling ready ≠ hosted evidence produced ≠ revision-bound refresh 已执行。**
+
+**1. Required hosted case set（R1）。** 仅以下两个 materially distinct `POC Design §5.3 Q3 explanation case`
+classes；两例均须有可靠 COMPLETE recommendation，并保留全部五量、数据／规则依据与 Human-decision reminder。
+
+| Case | Canonical relation（§2.5.4 ／ §2.5.8 ／ §2.5.9） | Current closed provider/runtime relation | Explanation obligation |
+| --- | --- | --- | --- |
+| Q3-C1 — MOQ raised | `ShortageQty = BasePurchaseNeed > 0`；`ApplicableMOQ > BasePurchaseNeed`；`RecommendedPurchaseQty = ApplicableMOQ`；`MOQAdjustmentQty = RecommendedPurchaseQty - BasePurchaseNeed > 0` | `MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE` | 分离实际缺口与提高建议量的商业 MOQ 约束；不得将建议量说成实际缺料量 |
+| Q3-C2 — positive MOQ non-binding / recommendation equals shortage | `ShortageQty = BasePurchaseNeed > 0`；`0 < ApplicableMOQ < BasePurchaseNeed`；`RecommendedPurchaseQty = BasePurchaseNeed`；`MOQAdjustmentQty = 0` | `RECOMMENDATION_EQUALS_SHORTAGE` | 正 MOQ 存在但不提高建议量；五量角色保持、明确 adjustment 为零 |
+
+Oracle 是 canonical authority，registry / validator 是 mechanism，不以实现自身作为标准。
+同一批准 explanation relation 与 evidence obligation 下，仅改变数量、identity、日期或 evidence ordering
+仍属同一 case class，不新增 coverage。
+
+**2. Applicable deterministic / boundary obligations（不新增 required hosted cases）。**
+`ApplicableMOQ = BasePurchaseNeed` exact equality；`ApplicableMOQ = 0` explicit zero vs missing；
+missing / invalid MOQ；zero / absent recommendation ／ NORMAL ／ BUFFER_BREACH；provider-not-invoked
+fail-closed paths；不改变解释关系的任意 quantity / identity / date variation，均不增加本计划 required hosted
+case 数。此分类**不豁免**适用义务：final evidence package 仍须包含适用 deterministic / boundary evidence。
+不存在 recommendation 或必要证据不完整时，不得人为补值制造 hosted case。
+
+**3. Repetition（R2）。** 每个 approved case 要求 **`1 conformant full hosted observation`**，
+在 E 规定的同一个 exact accepted merged-main revision 上完成 `§9.3` 的完整 observation unit：
+real hosted output / checkable structured selection → current parser / validator → 完整 `explain_q3(...)`
+→ final ExplanationResult / artifact。两例分别满足，不得用 Q3-C1 的两次观察替代 Q3-C2。
+
+```text
+execution / evidence integrity ≠ statistical quality measurement
+```
+
+失败引起的 additional attempts 是 attempt history，不提高 planned repetition requirement。
+本计划不测 reliability / stability、accuracy percentage、provider/model quality 或 production SLO。
+HTTP 200、validator accepted 或 tooling exit code 0 单独均不足以满足要求。
+
+**4. Diagnosed continuation（R3）。** 全部 attempts 保持可见，不允许 success-only cherry-picking。
+
+| Concern | Evidence semantics / coverage | Continuation requirement |
+| --- | --- | --- |
+| Integration / no-output：transport / API failure、checkable selection 形成前的 parser/integration failure、no model output、provider unreachable | 如实保留 attempt；按 §9.3 分类，不形成可判定 AI behavior observation，不满足 required hosted coverage | 先 diagnosis；accepted revision 不变时，才可在同一 approved case 下授权显式 additional execution；**no automatic retry** |
+| Formed selection 被 validator reject、applicable canonical criterion violation、mechanism/canonical mismatch、unresolved evidence mismatch | 按 §9.3 保留 AI behavior observation / relevant evidence；affected case 不满足 coverage；shape rejection 不凭空改写成已证明 business criterion violation | **停止该 case 追加执行，直到 finding 被显式 disposition**；不得不断重跑直到成功；若 disposition 需要 code / contract change，接受 revision 变化，按 E 重新开始适用 refresh |
+| Disposition 后 later conformant execution | 可满足 required conformant observation，前提是 prior failure 已保留并 disposition，且满足全部 case-level 条件 | later success **不能删除、覆盖或反向改变**之前 failure / violation / mismatch；不能自行降低标准 |
+| Replay | 引用源 observation、标记 replay；不增加 hosted count | 不能替代 required hosted execution |
+
+本注册单元不授权任何 additional execution，不实施 retry。§9.3 的 no output / no checkable selection /
+formed selection 分类保持；formed selection rejection 不能被重分类成 no observation。
+
+**5. Case-level coverage rule。** 只有下列条件同时成立，approved case 才可标记 `coverage satisfied`：
+
+- approved relation、fixture authority 与 evidence obligation 明确；
+- 同一 exact accepted merged-main revision 上存在一条 conformant full hosted composition observation；
+- required quantities、relation、evidence、Human-decision reminder 与 final artifact 可检查；
+- provider path 不改变 deterministic recommendation；
+- 全部 attempts 保留，且无 unresolved rejection、applicable violation、mismatch 或 evidence gap；
+- `not expressible under the selection contract` 有适用 deterministic assembly / enforcement evidence 支撑，
+  不改写成 model satisfaction；`not determined` 不作为 passed criterion。
+
+**6. Whole-Q3 claim ceiling。** 两个 approved cases 均满足上述条件时，最多支持：
+
+```text
+Approved POC Design §5.3 Q3 explanation-case coverage
+satisfied for the exact accepted revision under the recorded execution conditions.
+```
+
+这不建立 AI Eval overall PASS、provider/model quality、reliability/stability、statistical accuracy、
+all P0 explanation validated、production readiness、business-value evidence 或 POC SUCCESS。
+不扩张 Q1 ／ Q2 ／ Q4 ／ Q5 ／ Q6；适用的更广 P0 obligation 缺口继续显式提出，不由本覆盖推定满足。
+G 的 final conjunctive Human acceptance gate 保持，不能用 Q3 coverage 替代其它维度或 Layer 3。
+
+**7. Freshness / historical evidence。** 本计划必须 canonical 登记并固定在 final hosted refresh **之前**。
+所有最终 required hosted observations 按 E 在同一个 exact accepted merged-main revision 执行；
+不作 cross-version equivalence claim。Issue #196 的 historical `n = 1` 可辅助 case design，
+**不计入未来 final revision-bound refresh 名额**，须按本计划在最终接受 revision 重新执行；历史记录不改写。
+
+**8. Preserved states / next gate。**
+
+```text
+Q3 case / repetition / failure plan = REGISTERED（本记录；未声称 coverage satisfied）
+POC Design v0.2                     = DRAFT
+§9.3 overall                        = DESIGN PENDING
+final revision-bound refresh        = NOT RUN
+business-value evidence             = NOT PRODUCED
+Layer 3                             = BLOCKED by real baseline
+POC SUCCESS                         = NOT CLAIMED
+production execution                = OUTSIDE POC
+source / production WRITE           = DENIED
+```
+
+后续先判断 approved cases 的 execution readiness（当前固定 CLI 不直接提供多案例选择），所需 tooling
+adaptation / evidence execution 必须另行授权，再按 E 完成适用刷新；真实 baseline / Layer 3 和 G 的
+final acceptance 仍是独立未满足义务。本 unit 不改 tooling/runtime/tests，不执行 hosted API 或 evidence，
+不引入 generic AI Eval framework、statistical benchmark 或 provider/model ranking，不替代 Layer 3。
+
 ##### E. Freshness（R3 = Option A）
 
 最终 POC acceptance 前必须：

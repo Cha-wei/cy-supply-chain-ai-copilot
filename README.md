@@ -6,7 +6,8 @@
 
 Human-approved minimum POC SUCCESS acceptance / evidence policy 已登记（Issue #224）；
 canonical authority 见 [POC Design §9.7](docs/design/poc-design-v0.2.md#minimum-poc-success-policy)。
-Next Gate 为后续获授权的 Q3 case / repetition plan、revision-bound evidence refresh 与真实 Layer 3 evidence，
+Q3 coverage plan 已登记（Issue #226；[§9.7 D.1](docs/design/poc-design-v0.2.md#q3-coverage-plan)）；
+Next Gate 为 approved cases execution readiness、后续获授权的 revision-bound refresh 与真实 Layer 3 evidence，
 再提交 Human final acceptance；本次未执行，business-value evidence = NOT PRODUCED，POC SUCCESS = NOT CLAIMED。
 
 **Project Foundation + 第一批 deterministic implementation tranche（`POC Design v0.2` §10.1 B）
