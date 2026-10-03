@@ -9012,6 +9012,121 @@ adaptation / evidence execution 必须另行授权，再按 E 完成适用刷新
 final acceptance 仍是独立未满足义务。本 unit 不改 tooling/runtime/tests，不执行 hosted API 或 evidence，
 不引入 generic AI Eval framework、statistical benchmark 或 provider/model ranking，不替代 Layer 3。
 
+<a id="q3-hosted-refresh-evidence"></a>
+
+###### D.2 Accepted-revision Q3 hosted coverage evidence（Issue #230）
+
+**Registration Status：`REGISTERED`（reviewed hosted evidence；docs-only registration）**
+**Authority：** Human `HD-Q3-HOSTED-R1` execution authorization、两例已审查为 conformant 的 execution records、
+本次 Human evidence-registration authorization；§9.3、D ／ D.1 ／ E ／ G；tooling Issue #228 ／ PR #229。
+D.1 的计划登记时点状态与旧 Next Gate、E ／ I 的 policy-registration 时点 `NOT RUN` 记录保留，不回写。
+本 follow-up 是当前 evidence 状态，不重设 coverage policy，也不授权追加 execution。
+
+**1. Revision / conditions。** 两次实际执行均绑定精确 accepted merged-main revision：
+`00272580adab8cb8d5843a719d261e34047b877d`（PR #229 merge commit）；每次 preflight 核验 GitHub current main
+与 local detached HEAD 为该 SHA、working tree clean。环境：Windows NT 10.0.26200.0、CPython 3.14.4、
+fixed repository-owned SIMULATED fixtures；provider/model/endpoint = `deepseek / deepseek-flash /
+https://api.deepseek.com/responses`。同一 accepted revision，C1 → inspect/disposition → C2；每例恰好
+1 hosted attempt、1 conformant full hosted observation；retries = 0，no fallback / provider switching。
+
+```text
+python scripts/q3_full_composition_observation.py --case q3-c1-moq-raised --json --commit-sha 00272580adab8cb8d5843a719d261e34047b877d
+python scripts/q3_full_composition_observation.py --case q3-c2-moq-non-binding --json --commit-sha 00272580adab8cb8d5843a719d261e34047b877d
+```
+
+**2. Sanitized observed results（全部为实际 observation facts）。** Grain 均为
+`SIM-P1 / SIM-M2 / RecommendationNeedDate 2026-10-20`，execution mode = hosted。
+
+| Fact | Q3-C1 | Q3-C2 |
+| --- | --- | --- |
+| case_id（operator/evidence metadata only） | q3-c1-moq-raised | q3-c2-moq-non-binding |
+| observation timestamp（UTC） | 2026-10-03T17:38:53+00:00 | 2026-10-03T17:39:24+00:00 |
+| ShortageQty / BasePurchaseNeed / ApplicableMOQ / MOQAdjustmentQty / RecommendedPurchaseQty | 30 / 30 / 100 / 70 / 100 | 30 / 30 / 20 / 0 / 30 |
+| projection completeness | COMPLETE | COMPLETE |
+| provider invoked / response received / structured selection formed | true / true / true | true / true / true |
+| request count / HTTP / tool exit code | 1 / 200 / 0 | 1 / 200 / 0 |
+| actual answer_kind | MOQ_RAISED_RECOMMENDATION_ABOVE_SHORTAGE | RECOMMENDATION_EQUALS_SHORTAGE |
+| mechanism disposition / final runtime outcome | accepted by the merged validator mechanism / EXPLAINED | accepted by the merged validator mechanism / EXPLAINED |
+| deterministic recommendation unchanged / mismatch findings | true / [] | true / [] |
+
+两例实际 evidence names/order 均为 `ShortageQty, BasePurchaseNeed, ApplicableMOQ, MOQAdjustmentQty,
+RecommendedPurchaseQty`；evidence_is_list = true、unknown names = 0、extra keys = 0；
+uncertainty_is_list = true、entries = 0；human_decision_required = boolean true。
+两例均形成 checkable structured selection，经过 existing parser / validator 与完整 `explain_q3(...)`；
+不以 HTTP 200 ／ exit 0 单独判 conformant。两例分别 reviewed conformant，无 unresolved rejection、
+applicable violation、mismatch 或 **Q3 case-level evidence gap**；这不表示最终 package 的其它 gaps 已解决。
+
+| Canonical criterion（两例各自的 recorded result） | Oracle | Result |
+| --- | --- | --- |
+| evidence fidelity / Q3 role separation | §5.3 Q3；§2.5.9；§5.6 | not expressible under the selection contract |
+| unsupported fact | §5.7；§5.5 | not violated in this observation |
+| deterministic / LLM boundary | §5.12；§2.5.8 | not expressible under the selection contract |
+| human-decision boundary | §5.5 | not violated in this observation |
+| required evidence coverage | §5.3 Q3；§2.5.8 | not violated in this observation |
+| relation correctness | §2.5.5；§2.5.8；§2.5.9 | not violated in this observation |
+
+**3. Composed deterministic/structural artifact proof（不是直接序列化 hosted artifact）。**
+接受 observation 的 proof 由 actual sanitized selection / quantities ＋ exact-revision source 与同 revision
+已刻意执行的 offline/structural evidence 组成；oracle 仍为 canonical design，mechanism 不替代 oracle。
+
+| Component | Checkable proof chain |
+| --- | --- |
+| Answer | actual answer_kind → `explanation_seam.ANSWER_KINDS` immutable registry template → 各例实际五量；C1 区分 shortage 30 与 recommendation 100，C2 显示 MOQ 20 non-binding、adjustment 0 |
+| Evidence | actual registered evidence names/order → actual projection quantities → runtime-rendered `name = value` lines；validator 要求五量完整、无未知或重复名称 |
+| Uncertainty | actual accepted empty selection → validator empty-list constraint → artifact uncertainty = []；不将 COMPLETE facts 标为 uncertain |
+| Human Decision Required | actual boolean true → fixed runtime-owned reminder，明确 recommendation 不是 approved quantity、PO 或审批状态 |
+| Final outcome | actual unchanged provider selection → existing parser/validator → full `explain_q3(...)` → validated response in ExplanationResult / EXPLAINED |
+| Recommendation unchanged | actual before/after recommendation serialization equality = true ＋ read-only projection/composition source and tests |
+
+同 revision cheap refresh 支撑：full regression `python -m unittest discover -s tests -v` =
+1160 tests OK（2 Windows symlink skips）；HITL/Draft intentional rerun = 100 tests OK；
+Q3 tooling/runtime/adapter focused rerun = 68 tests OK，均 CPython 3.14.4、offline/stub。
+Artifact sources：`snapshot_loader/explanation_q3.py::explain_q3`、`explanation_seam.py::validate_provider_response`
+与 `ExplanationResponse.to_dict`；tests `test_q3_7`、`test_q3_20`、`test_q3_21`、tooling two-case full-composition
+与 unchanged/sanitizer checks。`not expressible` 由该 deterministic assembly/enforcement proof 支撑，
+不改写为 model criterion satisfied；不存在以 `not determined` 充当 passed criterion。
+
+**4. Safety / retained limitations。** 只保留 sanitized observation；credential 仅通过 process environment，
+每次调用后对应 execution-process credential 已清除；之后本地 credential-file 中该项已清除，最终
+process-environment presence check 为 ABSENT（仅存在性检查，无 secret value）。没有 raw body/header/
+credential/environment dump/PowerShell history/arbitrary provider prose 登记；沿用观察措辞：
+`credential leakage not observed in the sanitized tooling output`，不作平台级绝对无泄漏保证。
+C1 的输出章节符号有 display encoding loss，authority 由该 revision fixed mapping 核查；C2 UTF-8
+正常显示；未为显示问题重跑 C1，未改写其 observed result。运行前后 repository unchanged。
+Windows symlink creation 不被本机允许：`test_layer1_acceptance.py` 两项 skipped，**该 refresh gap 仍可见**；
+不声明本机 symlink paths refreshed。环境结果不建立 Python 3.11/3.12 cross-interpreter equivalence。
+
+**5. Coverage claim / revision sequencing。** 每个 approved case 已有恰好一条 conformant observation，
+两例按 D.1 case-level rule 登记，最大 whole-Q3 claim 为：
+
+```text
+Approved POC Design §5.3 Q3 explanation-case coverage
+satisfied for the exact accepted revision under the recorded execution conditions.
+```
+
+Issue #196 historical n = 1 不计入本次 refresh；历史 smoke、CI、replay、Issue #220 execution 与
+Issue #222 judgement 均不替代本次 intentional candidate-revision evidence。历史 records 不回写。
+本 docs registration revision 只是载体，**不是 execution revision**，不将这些 observations 自动视为
+覆盖后续 docs commit / new main；接受对象 revision 改变时按 E 重新刷新，不作 cross-version equivalence。
+
+```text
+POC Design v0.2                     = DRAFT
+§9.3 overall                        = DESIGN PENDING
+final revision-bound refresh        = IN PROGRESS / NOT COMPLETE
+Windows symlink local refresh gap   = OPEN（2 skipped paths）
+real customer/process baseline      = NOT AVAILABLE
+Layer 3                             = BLOCKED
+business-value evidence             = NOT PRODUCED
+POC SUCCESS                         = NOT CLAIMED
+production execution                = OUTSIDE POC
+source / production WRITE           = DENIED
+```
+
+Coverage 不建立 AI Eval overall PASS、provider/model quality、accuracy、reliability/stability、
+all P0 explanation validation、production readiness、business value 或 POC SUCCESS。
+Next Gate：处置剩余 applicable final-package gaps（含 symlink evidence 限度），取得 real baseline / Layer 3
+与适用 Human judgements、§17 disposition，再按 G 提交 conjunctive final acceptance；不机械 closure §6/§7/§8。
+
 ##### E. Freshness（R3 = Option A）
 
 最终 POC acceptance 前必须：
