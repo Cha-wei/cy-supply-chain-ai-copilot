@@ -9273,6 +9273,64 @@ Next gate：取得 F 的真实 baseline / comparative task evidence / evidence-b
 business judgement，逐项完成 H 的 §17 review/disposition，再提交 scoped exact-revision package 供 G Human acceptance。
 不要求机械 closure §6/§7/§8/§9.3；新 runtime/design需求若改变接受对象，返回 E。
 
+<a id="portfolio-technical-closure"></a>
+
+###### D.4 Portfolio Technical Closure（Issue #234）
+
+**Authority：HD-PORTFOLIO-CLOSURE-R1 = Option A（Human-approved）。**
+**Project classification：SIMULATED Portfolio POC。Portfolio Technical Closure = COMPLETE。**
+当前项目目标是展示用于 portfolio / job-search 的端到端 supply-chain AI Copilot technical solution，
+不是完成 commissioned real-customer POC engagement。该 current objective / closure boundary 不改写
+FROZEN business baseline，也不重写此前 design / evidence / judgement time-point records。
+
+**Closure basis：** D.3 Human-accepted Layer-2 technical evidence package = COMPLETE，
+exact technical evidence revision 仍为 `00272580adab8cb8d5843a719d261e34047b877d`；
+后续 docs carrier revisions 不替换 execution / acceptance target，不作 cross-version equivalence。
+Deterministic supply-chain core、scoped Q3 AI explanation、scoped HITL / Draft workflow 已 implemented / evidenced；
+applicable technical no-write / fail-closed / secret-handling boundaries 已 evidenced。D.3 的全部限制保持，
+包括 controlled/fixed composition 不等于 autonomous Tool selection，Q3 不等于 provider/model quality或全部 P0解释验证。
+Q1/Q2/Q4/Q5/Q6 保留 §5.3 baseline、open/unclaimed，不标 N/A。
+
+**Allowed portfolio claim：** 本 repository 可描述为 **technically completed SIMULATED portfolio POC,
+with real-world validation explicitly deferred**。Portfolio Technical Closure 与 §9.7 G 的 real-world final
+conjunctive acceptance / existing POC SUCCESS policy 是不同 concern；前者 complete 不使后者 satisfied。
+
+```text
+Portfolio Technical Closure               = COMPLETE
+Layer-2 technical evidence                  = COMPLETE（scoped minimum claim / accepted SHA）
+Layer-3 real-world validation                = DEFERRED（real-world gate remains BLOCKED）
+real customer/process baseline              = NOT AVAILABLE / DEFERRED
+business-value evidence                     = NOT PRODUCED / DEFERRED
+Business value                              = NOT PROVEN
+Real customer validation                    = NOT PERFORMED
+§17 real-world dispositions                 = DEFERRED / NOT COMPLETED
+§9.7 G final acceptance                     = NOT PERFORMED
+final revision-bound refresh                = IN PROGRESS / NOT COMPLETE（existing real-world policy）
+POC SUCCESS                                 = NOT CLAIMED
+Production readiness                        = NOT CLAIMED
+production deployment/integration           = DEFERRED / NOT CLAIMED
+production execution                        = OUTSIDE POC
+source / production WRITE                   = DENIED
+POC Design v0.2                             = DRAFT
+§6 overall                                  = DESIGN PENDING
+§7 overall                                  = NOT RESOLVED
+§8                                          = NOT CLOSED
+§9.3 overall                                = DESIGN PENDING
+```
+
+**Intentional deferral / reason：** genuine customer/process context 是 Layer-3 下一阶段的前置。
+Real baseline、Layer-3 validation、business-value evidence、§17 real-world dispositions、production
+ deployment/integration 不作为本次 portfolio completion 的前置；它们不是已完成、被豁免或 Business Value PASS。
+不得为 portfolio presentation fabricate baseline、KPI、ROI、customer acceptance或production evidence。
+F/G/H 原文与 conjunctive real-world obligations 完整保留，Business Value 不能以 N/A 绕过。
+
+**Current portfolio next work：** Demo / Case Study / interview materials，只能展示已实现 scoped capabilities，
+明确 SIMULATED 输入与上述 claim ceiling；本登记不新增 runtime implementation 或 hosted execution授权。
+**Future reopen：** 如有 authorized real customer/process，恢复 Layer-3 evidence collection preparation framework
+与 §9.7 F/G/H：先授权真实任务、参与角色、数据与执行边界，再取得 baseline/comparable evidence、业务 judgement
+和 §17 dispositions。准备框架未登记为已执行 evidence；本单元不新建框架。若必要变更改变接受对象，返回 E刷新，
+不把 portfolio closure转换为 customer validation / production acceptance / POC SUCCESS。
+
 ##### E. Freshness（R3 = Option A）
 
 最终 POC acceptance 前必须：
