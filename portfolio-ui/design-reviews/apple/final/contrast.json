@@ -1,0 +1,20 @@
+[
+  {
+    "variant": "C1",
+    "equationContrast": 5.340818225844777,
+    "inputBoundaryContrast": 3.393147433509225,
+    "navFocus": "#0066cc"
+  },
+  {
+    "variant": "C2",
+    "equationContrast": 5.02947024402701,
+    "inputBoundaryContrast": 3.393147433509225,
+    "navFocus": "#086bd3"
+  },
+  {
+    "variant": "C3",
+    "equationContrast": 4.833639986433023,
+    "inputBoundaryContrast": 3.375450643063652,
+    "navFocus": "#bedcff"
+  }
+]
