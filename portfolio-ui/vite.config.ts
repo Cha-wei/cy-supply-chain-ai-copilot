@@ -10,6 +10,7 @@ export default defineConfig({
         concepts: "concepts.html",
         apple: "apple.html",
         premium: "premium.html",
+        rich: "rich.html",
       },
     },
   },

@@ -75,3 +75,11 @@ Human已选择C3，当前只交付C3.1。打开 `http://127.0.0.1:4178/premium.h
 1440、1280×800、390和控件/审核弹窗截图在 `design-reviews/c3-1/final/`；设计理由、Impeccable Critique和Audit在 `design-reviews/c3-1/`。40项Playwright测试和build通过。C3.1使用本地system UI字体，不引入Apple字体文件；旧入口保持原样。
 
 截图复现：以4184启动预览，运行 `node capture-premium.mjs final`。状态READY_FOR_REVIEW，STOP FOR HUMAN FINAL VISUAL REVIEW，不实现完整业务交互，不merge main。
+
+## 当前评审：C3.2 Apple Premium Rich（2026-10-05）
+
+Human要求保留C3架构与Premium气质，同时增强C3.1不足的色感与层次。本轮唯一入口：`http://127.0.0.1:4178/rich.html`；`?present=1`为纯画面。控件与弹窗使用同一视觉系统。
+
+最终截图、设计理由、Impeccable Critique和Audit在 `design-reviews/c3-2/`。50项Playwright测试、构建通过；默认桌面完整画面793.92px高。截图复现：先以4184启动预览，再运行 `node capture-rich.mjs final`。
+
+READY_FOR_REVIEW / STOP FOR HUMAN VISUAL REVIEW。无业务规则、Python、API、runtime变化，不执行真实AI或人工决定，不merge main。
