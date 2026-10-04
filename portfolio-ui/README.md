@@ -59,3 +59,11 @@ Human 已否决 v0.1 视觉；v0.1只保留为技术原型。三个全新中文�
 Impeccable Critique（双代理）→ Revision → Audit → Revision已完成。20项Playwright通过；当前READY_FOR_REVIEW，等待Human Design Selection，尚未选择最终方案。
 
 启动本次预览：npm run dev -- --port 4182 --strictPort；停止：在运行该命令的终端按Ctrl+C。浏览地址：http://127.0.0.1:4182/concepts.html?concept=A 。最终截图：design-reviews/final/，设计报告：design-reviews/critique.md 与 audit.md。
+
+## 当前评审：Concept C 整体视觉系统（2026-10-05）
+
+Human 已选 C 信息架构。打开 `http://127.0.0.1:4178/apple.html?variant=C1`，比较 C1明净、C2层叠、C3雅致。`&present=1` 为纯画面模式；工具栏提供控件与状态样本。只做视觉预览，不执行批准或生成草稿。
+
+最终截图在 `design-reviews/apple/final/`；设计理由在 DESIGN.md。Impeccable Critique/Audit及修订记录在 `design-reviews/apple/critique.md`、`audit.md`。32项Playwright测试通过，包含原有20项和本轮12项；build通过。状态READY_FOR_REVIEW，等待Human选择，未合并main。
+
+截图复现：先以4184启动预览，再运行 `node capture-apple.mjs final`；对比度采样使用 `node audit-apple.mjs`。这些验证只证明展示层，不是运行时业务证据。

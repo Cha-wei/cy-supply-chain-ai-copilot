@@ -5,7 +5,11 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
     rollupOptions: {
-      input: { prototype: "index.html", concepts: "concepts.html" },
+      input: {
+        prototype: "index.html",
+        concepts: "concepts.html",
+        apple: "apple.html",
+      },
     },
   },
 });

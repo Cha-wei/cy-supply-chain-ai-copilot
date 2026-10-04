@@ -1,69 +1,57 @@
-# Portfolio Demo UI v0.2 — 三个视觉方向
+# Concept C — holistic Apple-inspired visual systems
 
-状态：READY_FOR_REVIEW / 等待 Human Design Selection。v0.1 为 technical prototype only；其视觉已被 Human REJECTED。未选择最终方向。
+状态：READY_FOR_REVIEW，等待 Human Visual Selection。Human 已选择 Concept C 信息架构；C1/C2/C3 视觉系统尚未选择。v0.1 仅 technical prototype，A/B/C 为历史探索。
 
-This document is non-canonical for business semantics.
-It does not define supply-chain business rules, runtime architecture, production capability, or POC success criteria.
+本文件仅为 portfolio-ui 的非 canonical 视觉规格，不定义业务语义、正式架构或生产能力。用户指定方向优先于 Impeccable concept-seed（ae5ef1b9）的随机建议。
 
-## 本轮边界
+## 同一结构与事实
 
-仅设计探索，用同一 fixture 实现三个可在浏览器观看的高保真视觉稿；不是完整 UI implementation。v0.1 的入口、fixture、交互和测试保留。新增入口 `concepts.html?concept=A|B|C`，可切换方向并打开静态 explanation / evidence / review preview，永不形成 HumanDecision 或批准记录。
+入口 apple.html?variant=C1|C2|C3；加 &present=1 隐藏外部评审工具栏。
 
-用户指定 A / B / C 方向优先于 Impeccable 随机方向建议。已经运行 context 与 concept-seed（seed aaca0575）；不引入额外候选或擅自选择。PRODUCT.md 仅存本轮用户明确给出的工具上下文，不成为业务事实源。
+单一 Workspace 组件：导航 → 采购决策标题 → 左侧采购建议与计算依据 / 右侧 AI解释、人工审核、草稿 → 权责边界。三个方向 DOM 与 fixture 相同，仅材质、字号、间距、圆角、控件、深度不同。
 
-## Concept A — Apple Decision Canvas
+当前缺口30；基础采购需求30；MOQ100；MOQ调整70；建议采购100。展示30+70=100，AI只解释，人工作最终决定。没有真实计算、AI调用、审核记录或草稿生成。保留原技术原型入口，不连接 runtime。
 
-**构图：** 白色无卡片画布，30 + 70 = 100 横向贯穿主区域；下方解释与审核分区，以一根细线分开。
+## C1 — Apple Clean / 明净
 
-**层级：** 数字96px → 中文标题32px → 解释18–20px → 正文14px → 辅助12px。蓝色仅落在100与必要操作。
+连续白色主表面，以细分隔表达两栏，右侧不另起卡片。中性灰画布、几乎无阴影、蓝色操作、平整数量关系带。28px中文标题与18px分区标题；正文14px。控件9px、主表面22px、弹窗22px圆角。
 
-**优势：** 最直接呈现业务矛盾，适合Portfolio Hero、简历截图；弱化工具外壳，让数量关系成为记忆点。
+层级依靠文字重量、对齐和留白；结果与依据并置，AI与人工区域共用同一平面。
 
-**取舍：** 更多证据需展开；信息密度低于C，未来复杂场景需要局部重排。
+优势：最安静，事实清晰，适合长时间阅读。取舍：空间深度最弱，Portfolio截图辨识度较克制。
 
-## Concept B — Spatial Supply Chain
+## C2 — Apple Layered / 层叠
 
-**构图：** 深石墨蓝连续场域；左侧需求/供应与缺口，中间最低起订量节点，右侧唯一的浅色建议平面。连接线仅表达因果顺序，不构成复杂流程图。
+冷中性色画布 → 浅蓝灰工作区 → 内嵌的半透明导航 → 轻抬起的白色决策表面 → 聚焦弹窗。阴影只分配给工作区与决策平面，不逐条包卡。依据关系带下沉，右侧浮起，表达阅读到决定的层次。导航22px backdrop blur，弹窗背景12px blur；正文保持实色。
 
-**层级：** 浅色100结果平面 → 30缺口 → MOQ100策略节点 → 底部解释与人工决定。
+27px中等重量标题，正文14px；控件11px、次级表面18px、主表面26px、弹窗26px圆角。蓝色聚焦主要操作，数字保持64px，与另外两案一致。
 
-**优势：** 能口述“供需缺口→采购策略→建议”，三者关系一眼可见，与A/C的版式明显不同。
+优势：最接近现代 macOS 的材质与空间语言；整体区分明确。取舍：依赖细腻层次，压缩截图或低质量投屏会损失部分材质。
 
-**取舍：** 深色更适合屏幕展示，打印和长时间阅读不如A/C；轻微平面旋转需要审查可读性。
+## C3 — Apple Premium / 雅致
 
-## Concept C — Executive Decision Workspace
+深石墨导航、暖中性画布、连续米白工作区与浅暖灰决策区域。低饱和蓝灰操作，较宽横向内距，30px轻一些的中文标题、15px解释正文；数字450字重。控件7px、次级表面12px、主表面18px、弹窗18px圆角。
 
-**构图：** 暖白证据桌面，左宽右窄；左侧大100与四行只读依据，右侧浅灰连续审核区。无sidebar，无KPI网格。
+层级通过深色导航框架、温润内容平面与从容文字节奏建立，保持企业工作区的信息密度。
 
-**层级：** 建议100 → 左侧计算依据 / 右侧解释 → 人工审核 → 草稿预览。
+优势：画面最具编辑感，适合Portfolio与真实产品叙事。取舍：更像专业桌面软件，明亮轻盈感弱于C1/C2；深色导航不是完整dark mode。
 
-**优势：** 最适合实际决策叙事；无需展开即可理解事实和权责，高信息密度仍可扫描。
+## 系统实现
 
-**取舍：** Hero冲击弱于A，更接近工作台；1280宽时需要特别控制纵向节奏。
+Tailwind CSS v4 负责reset、font theme及shadcn utility基础；局部语义CSS变量统一三个系统的color/spacing/radius/shadow/motion。未采用Card网格。shadcn只提供Button、Tabs、Dialog、Collapsible、Tooltip、Switch、Input、Textarea交互原语，视觉均由本页token重写。
 
-## 共用设计系统与工具
+Noto Sans SC Variable中文 + Manrope Variable数字，自托管；主要数字64px，移动56px；正文14–15px，辅助12–13px，英文SIMULATED11px。图标Lucide，1.65stroke，17px为主。数据使用tabular numerals。
 
-Tailwind v4 @theme 定义字号、颜色、字族、间距基础、圆角与状态；布局采用utility及@apply组合。Noto Sans SC Variable中文与Manrope Variable数字通过npm自托管，不请求在线字体。主要数字72–96px；正文14px；辅助>=12px。
+控件44px高；分段44px命中高度；Switch26px视觉轨道配44px命中区；键盘焦点3px。输入边界独立token满足3:1以上。深色导航使用浅色焦点。弹窗继承所属variant，不回落默认shadcn样式。
 
-shadcn/ui Tabs / Dialog / Button 从官方 new-york-v4 registry 取源，保留Radix键盘与焦点能力，修改导入路径、中文关闭按钮与样式。无默认Card组件。Sources: https://ui.shadcn.com/r/styles/new-york-v4/tabs.json 、dialog.json、button.json；MIT，shadcn。
+## Motion / responsive
 
-所有视觉稿使用完全相同的src/fixture.ts，不改业务规则、不连接Python、没有真实AI请求、审批或采购执行。表面颜色不表达新业务状态。
+同一页面只做一次4px轻微进入，180/220/200ms分别对应C1/C2/C3；按钮150ms微位移和颜色；弹窗0.985scale，disclosure高度过渡。无计数计算假象、bounce或parallax。减少动态偏好直接显示终态、保留文本状态与焦点。
 
-## Motion concept（仅规格，不实现复杂动效）
+桌面两栏比例1.27:1共享，760px以下按同样信息顺序堆叠。1280与1440下完整presentation画面高度分别约780/780/797px；移动需正常纵向滚动，无横向溢出。外部评审工具栏不属于产品画面。
 
-- A：100以180ms淡入强调结论，30与70保持可见；不从0计数以免暗示重新计算。
-- B：关系线按阅读顺序在220ms内展开；结果平面保持静止，不做parallax或弹跳。
-- C：依据展开180ms，焦点留在触发器；未来审核确认使用180ms opacity transition。
-- 三者未来Draft状态转换仅在真正的demo confirmation之后，180ms；当前只有静态preview。
-- reduced motion：直接显示最终状态，保留焦点与文字反馈。
+## Review / delivery
 
-## Process / review
+完成 Concept Design → Impeccable dual-agent Critique → Revision → Impeccable Audit → Revision → final verification。初稿和最终截图、对比度记录及完整评审在design-reviews/apple/。
 
-Impeccable 4.5.0技能已安装，engine 0.1.11 context与concept-seed成功。已读取new-work、craft-floor、critique、audit。
-
-Concept Design：首稿已完成；浏览器1440/1280/390各三方向截图保存在design-reviews/initial/。
-Impeccable Critique：已完成两个独立只读子代理评审，见 design-reviews/critique.md。
-Revision → Impeccable Audit → Revision：已完成，见 design-reviews/audit.md；最终截图与测量位于 design-reviews/final/。
-Human Design Selection：当前下一关；A为建议，不构成Human选型。
-
-当前审阅范围不包括完整系统可用性、业务验证、runtime correctness或真实客户价值。
+推荐C2作为本轮整体Apple材质语言的优先候选；C3是偏Portfolio编辑感的候选。这是设计建议，不是最终选择。STOP FOR HUMAN VISUAL SELECTION，不自动进入完整交互开发。
