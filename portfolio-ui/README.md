@@ -1,4 +1,4 @@
-# Portfolio Demo UI v0.1
+# Portfolio Demo UI — 技术原型与视觉探索
 
 独立、实验性的高保真 presentation prototype。**SIMULATED Portfolio POC**，不是 runtime evidence。所有代码与依赖仅在本目录；不影响 Python package。最终状态目标为 READY_FOR_REVIEW，不自动 merge main。
 
@@ -51,3 +51,11 @@ Human Design Review 后才能决定下一阶段；runtime integration 须独立 
 - NOT CONFIGURED：独立前端 CI；本目录提供可复现本地测试。仓库既有 CI 在 PR 运行。
 - N/A：AI Eval（无 AI / Agent / Prompt / Tool runtime 行为变更）。
 - Human Design Review：待完成；不把自查当作独立审查或 Human acceptance。
+
+## v0.2 视觉探索（当前工作）
+
+Human 已否决 v0.1 视觉；v0.1只保留为技术原型。三个全新中文方向入口为 `/concepts.html?concept=A`（也可B/C），详见 DESIGN.md。仅preview，不是完整交互产品。v0.1入口仍为 `/`，原测试保留。
+
+Impeccable Critique（双代理）→ Revision → Audit → Revision已完成。20项Playwright通过；当前READY_FOR_REVIEW，等待Human Design Selection，尚未选择最终方案。
+
+启动本次预览：npm run dev -- --port 4182 --strictPort；停止：在运行该命令的终端按Ctrl+C。浏览地址：http://127.0.0.1:4182/concepts.html?concept=A 。最终截图：design-reviews/final/，设计报告：design-reviews/critique.md 与 audit.md。
