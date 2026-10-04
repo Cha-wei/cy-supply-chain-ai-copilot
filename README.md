@@ -1,16 +1,19 @@
 # cy-supply-chain-ai-copilot
 
-供应链 AI Copilot 项目（Yunnan CY Group Supply Chain AI Copilot）。
+一个技术阶段已完成的 **SIMULATED Portfolio POC**，用于展示端到端供应链 AI Copilot 方案与工程能力，服务于 portfolio / 求职展示。
 
-## 项目状态
+已实现并有技术证据：受控数据导入与校验、确定性缺料/采购建议/供应商风险计算、**Q3采购数量解释**、Human Review / quantity override / Approve / Reject 与 ephemeral Draft。Layer-2技术证据已完成；不是自主 Tool selection 或全部六类 P0问答验证。
 
-Human-approved minimum POC SUCCESS acceptance / evidence policy 已登记（Issue #224）；
-canonical authority 见 [POC Design §9.7](docs/design/poc-design-v0.2.md#minimum-poc-success-policy)。
-Q3 coverage plan 已登记（Issue #226；[§9.7 D.1](docs/design/poc-design-v0.2.md#q3-coverage-plan)）；
-两 approved cases 的 exact-revision hosted coverage evidence 已登记（Issue #230；
-[§9.7 D.2](docs/design/poc-design-v0.2.md#q3-hosted-refresh-evidence)；仅接受 revision `00272580…`）。
-Final refresh = IN PROGRESS / NOT COMPLETE；Windows symlink local gap 保留；Next Gate 为剩余 evidence gaps、
-真实 Layer 3 evidence 与 final Human acceptance。Business-value evidence = NOT PRODUCED，POC SUCCESS = NOT CLAIMED。
+**Portfolio Technical Closure = COMPLETE。** 真实客户验证未执行，业务价值未证明，生产就绪与 POC SUCCESS 未宣称。真实 baseline、Layer-3验证、§17真实流程处置及生产集成有意 deferred，未来有获授权真实流程时再重启。
+
+### 从哪里开始
+
+- [运行与测试](#运行与测试)：标准库 offline测试，浏览 SIMULATED用例；hosted入口需单独授权，不是默认 demo步骤。
+- [实现与证据边界](docs/design/poc-design-v0.2.md#accepted-revision-layer2-consolidation)：技术 evidence绑定 `00272580adab8cb8d5843a719d261e34047b877d`，docs commits仅为记录载体。
+- [Portfolio closure / future reopen](docs/design/poc-design-v0.2.md#portfolio-technical-closure)：正式定位、限制与未来真实流程路径。
+- [Project Index](docs/project-index.md)：导航及下一步 Demo / Case Study / interview materials。
+
+## 技术实现与范围
 
 **Project Foundation + 第一批 deterministic implementation tranche（`POC Design v0.2` §10.1 B）
 的模块实现与 integration 串联。**

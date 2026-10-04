@@ -103,32 +103,20 @@
 
 ## 6. Current Phase / Next Gate
 
-**当前 Phase：** `POC Design v0.2`（**`DRAFT`**，尚未 `APPROVED` / `FROZEN`）。
+**当前 Phase：** **SIMULATED Portfolio POC — Portfolio Technical Closure = COMPLETE**。
+Canonical authority：[POC Design §9.7 D.4](design/poc-design-v0.2.md#portfolio-technical-closure)
+（HD-PORTFOLIO-CLOSURE-R1，Issue #234）；design document仍 DRAFT。
 
-**当前工作阶段：** **§9.4 scoped POC business acceptance judgement = 已由 Human-designated reviewer 作出并
-canonical 登记** —— Human 于 Issue #222 作出 **`HD-HITL-ACCEPT-R4 = APPROVED`**：指定 POC business reviewer
-（`Cha`）并授权其对 Issue #220 登记的 `A-1` ～ `A-11` scoped `SIMULATED` HITL behavioral evidence 作出一次
-显式 scoped judgement；reviewer 已于 `2026-10-03 16:39 UTC+08:00` 作出该 judgement，其**逐字原文**与
-project-level claim boundary 已登记于
-[POC Design §9.4](design/poc-design-v0.2.md#hitl-business-acceptance)（docs-level canonical time-point record）。
-该 judgement **只**接受上述 scoped HITL 行为层面的 evidence：**不**构成 real-customer acceptance ／
-business-value evidence ／ usage ／ adoption evidence ／ production acceptance ／ `POC SUCCESS`；
-designation 仅为 project-governance assignment（**不**建立 runtime identity ／ account ／ RBAC ／ permission
-enforcement ／ durable role）。
+Layer-2 scoped technical evidence COMPLETE；exact accepted technical SHA为
+`00272580adab8cb8d5843a719d261e34047b877d`。Linux symlink technical gap CLOSED，Windows环境限制保留。
+Q3、deterministic core与scoped HITL/Draft implemented/evidenced；不主张其余P0 question capabilities。
 
-**Current policy：** Human-approved minimum POC SUCCESS acceptance / evidence policy 已登记（Issue #224；
-R1 ～ R5）；唯一 authority 见 [POC Design §9.7](design/poc-design-v0.2.md#minimum-poc-success-policy)。
-policy registration ≠ evidence refresh ≠ final acceptance ≠ POC SUCCESS。
-
-Q3 coverage / repetition / failure plan 已登记（Issue #226）；见 [§9.7 D.1](design/poc-design-v0.2.md#q3-coverage-plan)。
-
-Q3 hosted coverage evidence 已登记（Issue #230；[§9.7 D.2](design/poc-design-v0.2.md#q3-hosted-refresh-evidence)），
-仅针对 exact accepted revision `00272580…`；registration commit 不自动成为 evidence execution revision。
-**Next Gate（current）：** final refresh = IN PROGRESS / NOT COMPLETE；处置剩余 applicable gaps（Windows
-symlink local refresh gap 保留），取得真实 customer/process baseline 与 business-value evidence、适用 judgement /
-FROZEN §17 disposition，再提交 final package 供 Human acceptance。
-当前 baseline = NOT AVAILABLE，Layer 3 = BLOCKED，business-value evidence = NOT PRODUCED，POC SUCCESS = NOT CLAIMED；
-§6 / §7 / §8 / §9.3 overall 不机械 closure。
+**Next portfolio work：** Demo / Case Study / interview materials（展示SIMULATED已实现能力与证据限制）。
+真实 baseline / Layer 3 / business-value evidence / §17 dispositions / production integration有意 deferred，
+不是portfolio completion blocker；真实客户验证NOT PERFORMED，Business value NOT PROVEN，POC SUCCESS NOT CLAIMED。
+**Future reopen：** 有authorized real customer/process后，按[§9.7 F/G/H](design/poc-design-v0.2.md#minimum-poc-success-policy)
+恢复证据采集与Human acceptance；existing real-world final refresh IN PROGRESS / NOT COMPLETE，G NOT PERFORMED。
+此前历史 judgement与policy记录见canonical docs，不将overall unresolved state机械关闭。
 
 保持（不变）：
 
@@ -265,4 +253,4 @@ authoritative 记录见 [snapshot-import-contract.md](design/specs/data-integrat
 - 本文档内容为 snapshot；`main` 变化后**应同步更新**，但**不得**据此改写 canonical 文档。
 - 冲突时以 canonical source 为准。
 
-**Current technical evidence follow-up（Issue #232）：** [POC Design §9.7 D.3](design/poc-design-v0.2.md#accepted-revision-layer2-consolidation) 登记 accepted revision `00272580adab8cb8d5843a719d261e34047b877d`、Q3 scoped minimum claim、Linux symlink gap closure、refreshed HITL judgement 与 Human-accepted Layer-2 completeness。后续 docs revisions 仅为载体；Next Gate = real baseline / Layer 3、§17 dispositions、G final Human acceptance。final refresh IN PROGRESS / NOT COMPLETE；POC SUCCESS NOT CLAIMED。此前 snapshot / time-point records 不回写。
+**Current technical evidence follow-up（Issue #232）：** [POC Design §9.7 D.3](design/poc-design-v0.2.md#accepted-revision-layer2-consolidation) 登记 accepted revision `00272580adab8cb8d5843a719d261e34047b877d`、Q3 scoped minimum claim、Linux symlink gap closure、refreshed HITL judgement 与 Human-accepted Layer-2 completeness。后续 docs revisions 仅为载体；Real-world reopen gate = real baseline / Layer 3、§17 dispositions、G final Human acceptance；current portfolio next work见§6。final refresh IN PROGRESS / NOT COMPLETE；POC SUCCESS NOT CLAIMED。此前 snapshot / time-point records 不回写。
