@@ -9,6 +9,7 @@ export default defineConfig({
         prototype: "index.html",
         concepts: "concepts.html",
         apple: "apple.html",
+        premium: "premium.html",
       },
     },
   },

@@ -67,3 +67,11 @@ Human 已选 C 信息架构。打开 `http://127.0.0.1:4178/apple.html?variant=C
 最终截图在 `design-reviews/apple/final/`；设计理由在 DESIGN.md。Impeccable Critique/Audit及修订记录在 `design-reviews/apple/critique.md`、`audit.md`。32项Playwright测试通过，包含原有20项和本轮12项；build通过。状态READY_FOR_REVIEW，等待Human选择，未合并main。
 
 截图复现：先以4184启动预览，再运行 `node capture-apple.mjs final`；对比度采样使用 `node audit-apple.mjs`。这些验证只证明展示层，不是运行时业务证据。
+
+## 当前评审：C3.1 Apple Premium Light（2026-10-05）
+
+Human已选择C3，当前只交付C3.1。打开 `http://127.0.0.1:4178/premium.html`；`?present=1`为纯画面。工具栏可查看控件与状态样本。
+
+1440、1280×800、390和控件/审核弹窗截图在 `design-reviews/c3-1/final/`；设计理由、Impeccable Critique和Audit在 `design-reviews/c3-1/`。40项Playwright测试和build通过。C3.1使用本地system UI字体，不引入Apple字体文件；旧入口保持原样。
+
+截图复现：以4184启动预览，运行 `node capture-premium.mjs final`。状态READY_FOR_REVIEW，STOP FOR HUMAN FINAL VISUAL REVIEW，不实现完整业务交互，不merge main。
