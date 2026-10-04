@@ -40,3 +40,9 @@ Reduced motion直接呈现终态并保留焦点与文字。首屏高度只针对
 ## Human review question
 
 检查整页是否达到“更轻，但保留Premium”的平衡，以及中文阅读是否比C3自然。此轮不选择其它概念、不开始完整Demo interaction implementation。
+
+## 最终修订记录
+
+中文主标题、分区标题与弹窗标题统一500字重，避免Windows将600映射为Bold造成过重；品牌标记保留更高字重以保持识别。正文仍为15px/1.8，数字与“件”在解释中保持同行。
+
+最终1440×800和1280×800截图均包含完整工作区与footer，默认画面高793.83px；390移动画面采用自然纵向滚动。已完成40项浏览器测试与构建，保持STOP FOR HUMAN FINAL VISUAL REVIEW。
