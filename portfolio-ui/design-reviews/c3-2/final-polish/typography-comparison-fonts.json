@@ -1,0 +1,24 @@
+[
+  {
+    "mode": "system",
+    "fonts": [
+      {
+        "familyName": "Microsoft YaHei UI",
+        "postScriptName": "MicrosoftYaHeiUI",
+        "isCustomFont": false,
+        "glyphCount": 4
+      }
+    ]
+  },
+  {
+    "mode": "noto",
+    "fonts": [
+      {
+        "familyName": "Noto Sans SC Thin",
+        "postScriptName": "Noto-Sans-SC-Thin-Medium",
+        "isCustomFont": true,
+        "glyphCount": 4
+      }
+    ]
+  }
+]

@@ -89,3 +89,7 @@ READY_FOR_REVIEW / STOP FOR HUMAN VISUAL REVIEW。无业务规则、Python、API
 当前视觉以 `design-reviews/c3-2/feedback/` 截图为准，早期 final/ 保留作对比。主按钮改为浅蓝底 #d6e7f7、深蓝文字 #24577f；暖石色 #f0ede5 将采购建议与数量关系组成一个整体，冷珍珠灰 #edf1f2 承载连续决策区。计算依据保持开放，不为每个模块加框。工具栏使用更柔和的石墨灰，正文仍采用 system UI。
 
 手机端说明按语义分为两行，避免孤字；正文不缩小。完整复审记录见 `design-reviews/c3-2/feedback-review.md`。当前仍为待 Human 视觉确认的静态原型。
+
+## C3.2 Final Polish — current freeze review
+
+已批准配色、分区、布局和浅蓝按钮保持。最终精修采用本地OFL授权Noto Sans SC variable统一中文与数字，细化排版、toolbar与表面边缘。当前截图以 `design-reviews/c3-2/final-polish/` 为准；字体对比、许可/成本和材质理由见 `final-polish-rationale.md`，独立Impeccable评审见 `final-polish-review.md`（均在c3-2目录）。此前system-only/no-font-request描述仅适用于历史版本。当前待Human冻结，不表示视觉已正式冻结。

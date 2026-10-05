@@ -42,7 +42,7 @@ test("C3.2 preserves evidence and explanation-only authority", async ({
   await expect(page.locator(".workspace-footer")).toContainText("无 ERP 写入");
   expect(errors).toEqual([]);
 });
-test("C3.2 system typography, frame and reduced motion", async ({ page }) => {
+test("C3.2 licensed typography, frame and reduced motion", async ({ page }) => {
   const fontRequests: string[] = [];
   page.on("request", (r) => {
     if (/\.(woff2?|ttf|otf)(\?|$)/.test(r.url())) fontRequests.push(r.url());
@@ -67,14 +67,47 @@ test("C3.2 system typography, frame and reduced motion", async ({ page }) => {
     if (width >= 1280) expect(m.height).toBeLessThanOrEqual(800);
     expect(m.bodySize).toBeGreaterThanOrEqual(15);
     expect(m.font).toContain("Microsoft YaHei UI");
-    expect(m.font).not.toMatch(/Manrope|Noto/);
+    expect(m.font).toContain("Noto Sans SC Variable");
+    expect(m.font).not.toContain("Manrope");
     expect(m.motion).toBe("none");
     await page.getByRole("button", { name: "AI 在这里做什么" }).click();
     await expect(
       page.locator(".ai-disclosure [data-slot=collapsible-content]"),
     ).toHaveCSS("animation-name", "none");
   }
-  expect(fontRequests).toEqual([]);
+  expect(fontRequests.length).toBeGreaterThan(0);
+  expect(
+    fontRequests.every(
+      (url) =>
+        url.includes("noto-sans-sc") &&
+        new URL(url).origin === "http://127.0.0.1:4178",
+    ),
+  ).toBe(true);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("DOM.enable");
+  await cdp.send("CSS.enable");
+  const document = await cdp.send("DOM.getDocument");
+  for (const selector of [
+    "h1",
+    ".recommendation h2",
+    ".quantity",
+    ".explanation>p",
+  ]) {
+    const node = await cdp.send("DOM.querySelector", {
+      nodeId: document.root.nodeId,
+      selector,
+    });
+    const { fonts } = await cdp.send("CSS.getPlatformFontsForNode", {
+      nodeId: node.nodeId,
+    });
+    expect(fonts.length).toBeGreaterThan(0);
+    expect(
+      fonts.every(
+        (font) => font.isCustomFont && font.familyName.includes("Noto Sans SC"),
+      ),
+    ).toBe(true);
+  }
+  await cdp.detach();
 });
 test("C3.2 controls, material selection and modal keyboard", async ({
   page,
@@ -206,4 +239,20 @@ test("C3.2 tooltip and focus share the material system", async ({ page }) => {
     }));
   expect(focus.style).toBe("solid");
   expect(focus.width).toBeGreaterThanOrEqual(2);
+});
+
+test("C3.2 font failure retains readable facts and bounded layout", async ({
+  page,
+}) => {
+  await page.route(/\.woff2?(\?|$)/, (route) => route.abort());
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto("/rich.html?present=1");
+  await page.evaluate(() => document.fonts.ready);
+  await expect(page.getByRole("heading", { name: "采购决策" })).toBeVisible();
+  await expect(page.locator(".quantity")).toContainText("100");
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  await page.getByRole("button", { name: "预览人工审核", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
 });

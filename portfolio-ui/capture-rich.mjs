@@ -17,9 +17,11 @@ for (const width of [1440, 1280, 390]) {
   await p.goto("http://127.0.0.1:4184/rich.html?present=1");
   await p.evaluate(() => document.fonts.ready);
   await p.waitForTimeout(250);
-  await p
-    .locator(".design-stage")
-    .screenshot({ path: `${out}/C3.2-${width}.png` });
+  if (width >= 1280) await p.screenshot({ path: `${out}/C3.2-${width}.png` });
+  else
+    await p
+      .locator(".design-stage")
+      .screenshot({ path: `${out}/C3.2-${width}.png` });
   const values = await p.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     height: document.querySelector(".design-stage").getBoundingClientRect()
@@ -38,10 +40,34 @@ for (const width of [1440, 1280, 390]) {
   const actualFonts = await c.send("CSS.getPlatformFontsForNode", {
     nodeId: n.nodeId,
   });
+  const renderedRoles = {};
+  for (const selector of [
+    "h1",
+    ".recommendation h2",
+    ".quantity",
+    ".explanation>p",
+    ".brand",
+  ]) {
+    const node = await c.send("DOM.querySelector", {
+      nodeId: d.root.nodeId,
+      selector,
+    });
+    renderedRoles[selector] = (
+      await c.send("CSS.getPlatformFontsForNode", { nodeId: node.nodeId })
+    ).fonts;
+  }
+  const fontBytes = await p.evaluate(() =>
+    performance
+      .getEntriesByType("resource")
+      .filter((r) => /woff2?/.test(r.name))
+      .reduce((total, r) => total + r.encodedBodySize, 0),
+  );
   measurements.push({
     width,
     ...values,
     actualFonts: actualFonts.fonts,
+    renderedRoles,
+    fontBytes,
     fontRequests: fonts,
   });
   if (width === 1440) {

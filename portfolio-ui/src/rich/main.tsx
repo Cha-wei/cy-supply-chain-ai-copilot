@@ -33,6 +33,7 @@ import {
   TooltipTrigger,
 } from "../apple/ui/tooltip";
 
+import "@fontsource-variable/noto-sans-sc";
 import "./styles.css";
 type Variant = "C32";
 const labels = [
