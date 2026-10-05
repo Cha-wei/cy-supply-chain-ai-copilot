@@ -26,3 +26,9 @@ Concept C 信息关系保持：采购建议 → 计算依据 + AI解释 → 人�
 Windows实测Microsoft YaHei UI，无字体文件请求，不分发Apple字体。macOS实机、物理触屏和完整辅助技术验证未执行。
 
 旧探索入口保留供追踪，本轮未重做C1/C2。等待Human视觉验收；不合并main，不自动开始完整Demo交互开发。
+
+## Human feedback revision — 2026-10-05
+
+当前视觉以 `design-reviews/c3-2/feedback/` 截图为准，早期 final/ 保留作对比。主按钮改为浅蓝底 #d6e7f7、深蓝文字 #24577f；暖石色 #f0ede5 将采购建议与数量关系组成一个整体，冷珍珠灰 #edf1f2 承载连续决策区。计算依据保持开放，不为每个模块加框。工具栏使用更柔和的石墨灰，正文仍采用 system UI。
+
+手机端说明按语义分为两行，避免孤字；正文不缩小。完整复审记录见 `design-reviews/c3-2/feedback-review.md`。当前仍为待 Human 视觉确认的静态原型。

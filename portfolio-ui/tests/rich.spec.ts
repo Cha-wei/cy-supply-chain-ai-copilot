@@ -147,9 +147,26 @@ test("C3.2 operators and off-switch keep accessible contrast", async ({
     .first()
     .evaluate((el) => ({
       color: getComputedStyle(el).color,
-      bg: getComputedStyle(el).getPropertyValue("--surface").trim(),
+      bg: getComputedStyle(el.closest(".recommendation-surface")!)
+        .backgroundColor,
     }));
   expect(ratio(operator.color, operator.bg)).toBeGreaterThanOrEqual(4.5);
+  const primary = page.getByRole("button", {
+    name: "预览人工审核",
+    exact: true,
+  });
+  for (const hovered of [false, true]) {
+    if (hovered) await primary.hover();
+    await expect
+      .poll(async () => {
+        const colors = await primary.evaluate((el) => ({
+          color: getComputedStyle(el).color,
+          bg: getComputedStyle(el).backgroundColor,
+        }));
+        return ratio(colors.color, colors.bg);
+      })
+      .toBeGreaterThanOrEqual(4.5);
+  }
   await page.getByRole("button", { name: "控件与状态", exact: true }).click();
   const toggle = await page.getByRole("switch").evaluate((el) => ({
     shadow: getComputedStyle(el).boxShadow,

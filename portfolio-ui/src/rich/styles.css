@@ -722,3 +722,102 @@ body:has(.rich-page) [data-slot="dialog-overlay"] {
   outline-offset: 2px;
   box-shadow: none;
 }
+/* Human feedback: two quiet surfaces, open evidence, lighter primary action. */
+.material[data-variant="C32"] {
+  --canvas: #e8e7e1;
+  --surface: #fdfcf9;
+  --secondary: #edf1f2;
+  --nav: rgba(91, 102, 107, 0.96);
+  --accent: #3975aa;
+  --hover: #306595;
+  --primary-surface: #d6e7f7;
+  --primary-ink: #24577f;
+  --control: #e5ebee;
+  --line: #dce0df;
+}
+.rich-page .recommendation-surface {
+  background: #f0ede5;
+  border-radius: 15px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+.rich-page .recommendation-surface .equation {
+  margin: 14px 0 0;
+  padding: 14px 0 0;
+  border-top: 1px solid #d7d8d2;
+  border-bottom: 0;
+}
+.rich-page .recommendation-surface .equation > div {
+  gap: 4px;
+}
+.rich-page .recommendation .quantity,
+.rich-page .equation > div:last-child strong {
+  color: #34454c;
+}
+.rich-page .evidence-summary {
+  margin-bottom: 14px;
+}
+.rich-page .source {
+  margin-top: 10px;
+}
+.rich-page .evidence-group dl > div {
+  min-height: 32px;
+}
+.rich-page .decision-region {
+  --muted: #5b6b72;
+  background: var(--secondary);
+}
+.rich-page .decision-region .human-review,
+.rich-page .decision-region .draft {
+  border-color: #d2dcdf;
+}
+.material[data-variant="C32"] .system-button.primary {
+  background: var(--primary-surface);
+  color: var(--primary-ink);
+  box-shadow: inset 0 0 0 1px #b8d2e9;
+}
+.material[data-variant="C32"] .system-button.primary:hover {
+  background: #c8dff3;
+}
+.material[data-variant="C32"] .system-button.primary:active {
+  background: #bad5ec;
+}
+.material[data-variant="C32"] .system-button.ghost,
+.material[data-variant="C32"] .ai-disclosure .disclosure {
+  color: #35658e;
+}
+.material[data-variant="C32"] .system-tabs {
+  background: #e3e9ec;
+}
+.material[data-variant="C32"] .system-tabs [data-state="active"] {
+  color: #315b7a;
+}
+.material.system-dialog[data-variant="C32"] {
+  background: rgba(251, 252, 250, 0.98);
+}
+.material.system-dialog[data-variant="C32"] .material-scale span:nth-child(3) {
+  background: #e1e9ed;
+}
+@media (max-width: 760px) {
+  .rich-page .recommendation-surface {
+    padding: 18px;
+    margin-left: -6px;
+    margin-right: -6px;
+  }
+  .rich-page .recommendation .support {
+    max-width: 150px;
+  }
+  .rich-page .recommendation .quantity {
+    font-size: 50px;
+  }
+}
+
+@media (max-width: 760px) {
+  .rich-page .recommendation .support span {
+    display: block;
+  }
+}
+
+.rich-page .recommendation .support {
+  display: block;
+}

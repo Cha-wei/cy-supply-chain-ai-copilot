@@ -149,36 +149,39 @@ function Workspace({ variant }: { variant: Variant }) {
               id="evidence"
               aria-label="采购建议与计算依据"
             >
-              <div className="recommendation">
-                <div>
-                  <h2>采购建议</h2>
-                  <p className="support">
-                    <ShieldCheck />
-                    根据当前供需与采购策略计算
-                  </p>
+              <div className="recommendation-surface">
+                <div className="recommendation">
+                  <div>
+                    <h2>采购建议</h2>
+                    <p className="support">
+                      <ShieldCheck />
+                      <span>根据当前供需</span>
+                      <span>与采购策略计算</span>
+                    </p>
+                  </div>
+                  <div className="quantity">
+                    {f.recommended}
+                    <span>件</span>
+                  </div>
                 </div>
-                <div className="quantity">
-                  {f.recommended}
-                  <span>件</span>
-                </div>
-              </div>
-              <div
-                className="equation"
-                aria-label="当前缺口 30 加 MOQ 调整 70 等于建议采购 100"
-              >
-                <div>
-                  <strong>{f.shortage}</strong>
-                  <span>当前缺口</span>
-                </div>
-                <span className="operator">+</span>
-                <div>
-                  <strong>{f.adjustment}</strong>
-                  <span>MOQ 调整</span>
-                </div>
-                <span className="operator">=</span>
-                <div>
-                  <strong>{f.recommended}</strong>
-                  <span>建议采购</span>
+                <div
+                  className="equation"
+                  aria-label="当前缺口 30 加 MOQ 调整 70 等于建议采购 100"
+                >
+                  <div>
+                    <strong>{f.shortage}</strong>
+                    <span>当前缺口</span>
+                  </div>
+                  <span className="operator">+</span>
+                  <div>
+                    <strong>{f.adjustment}</strong>
+                    <span>MOQ 调整</span>
+                  </div>
+                  <span className="operator">=</span>
+                  <div>
+                    <strong>{f.recommended}</strong>
+                    <span>建议采购</span>
+                  </div>
                 </div>
               </div>
               <div className="section-heading">
