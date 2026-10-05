@@ -6,6 +6,10 @@
 
 **Portfolio Technical Closure = COMPLETE。** 真实客户验证未执行，业务价值未证明，生产就绪与 POC SUCCESS 未宣称。真实 baseline、Layer-3验证、§17真实流程处置及生产集成有意 deferred，未来有获授权真实流程时再重启。
 
+### Portfolio 交互演示
+
+[启动最终 C3.2 Demo 与查看交互边界](portfolio-ui/README.md)：仅 presentation-layer 的建议 → 依据 → 预置解释 → 人工按建议批准 → 临时草稿。未连接 Python / API / AI 服务，不构成新的 runtime 或生产能力。
+
 ### 从哪里开始
 
 - [运行与测试](#运行与测试)：标准库 offline测试，浏览 SIMULATED用例；hosted入口需单独授权，不是默认 demo步骤。
