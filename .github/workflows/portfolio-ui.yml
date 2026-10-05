@@ -1,0 +1,28 @@
+name: Portfolio UI
+on:
+  pull_request:
+    branches: [main]
+    paths: ['portfolio-ui/**', '.github/workflows/portfolio-ui.yml']
+  push:
+    branches: [main]
+    paths: ['portfolio-ui/**', '.github/workflows/portfolio-ui.yml']
+permissions:
+  contents: read
+jobs:
+  presentation-demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: portfolio-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: portfolio-ui/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm test
