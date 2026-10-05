@@ -6,7 +6,7 @@ const browser = await chromium.launch();
 const measurements = [];
 for (const width of [1440, 1280, 390]) {
   const page = await browser.newPage({ viewport: { width, height: 800 } });
-  await page.goto("http://127.0.0.1:4190/");
+  await page.goto("http://127.0.0.1:4190/procurement/M2");
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(250);
   const shot = async (name) => {

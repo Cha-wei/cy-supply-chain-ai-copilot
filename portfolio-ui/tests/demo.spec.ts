@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { initialState, reducer, demoStep } from "../src/state";
-import { scenario } from "../src/fixture";
+import { scenario, recommendationPath } from "../src/fixture";
 
 test("presentation guards cannot invent or repeat Human approval", () => {
   expect(reducer(initialState, { type: "APPROVE" })).toBe(initialState);
@@ -37,7 +37,7 @@ test("Recommendation → Evidence → Explanation → Human approval → Draft",
     if (["fetch", "xhr"].includes(r.resourceType()) || r.method() !== "GET")
       requests.push(r.url());
   });
-  await page.goto("/");
+  await page.goto(recommendationPath);
   const stage = page.locator(".design-stage");
   await expect(stage).toHaveAttribute(
     "data-demo-state",
@@ -104,7 +104,7 @@ test("Recommendation → Evidence → Explanation → Human approval → Draft",
 test("cancel/Escape and keyboard focus never approve implicitly", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto(recommendationPath);
   const review = page.getByRole("button", { name: "进入人工审核" });
   await review.focus();
   await page.keyboard.press("Enter");
@@ -137,7 +137,7 @@ test("cancel/Escape and keyboard focus never approve implicitly", async ({
 test("refresh and explicit reset clear ephemeral approval", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto(recommendationPath);
   for (const action of ["reset", "refresh"]) {
     await page.getByRole("button", { name: "进入人工审核" }).click();
     await page.getByRole("button", { name: "按建议批准 100 件" }).click();
@@ -160,7 +160,7 @@ test("frozen font, responsive frame, reduced motion and dialog boundaries", asyn
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
+  await page.goto(recommendationPath);
   await page.evaluate(() => document.fonts.ready);
   const width = page.viewportSize()!.width;
   expect(
@@ -212,7 +212,7 @@ test("frozen font, responsive frame, reduced motion and dialog boundaries", asyn
 });
 
 test("frozen primary and summary contrast remain legible", async ({ page }) => {
-  await page.goto("/");
+  await page.goto(recommendationPath);
   const luminance = (value: string) => {
     const c = value
       .match(/[\d.]+/g)!
@@ -257,7 +257,7 @@ test("font failure still allows explicit approval and draft", async ({
   page,
 }) => {
   await page.route(/\.woff2?(\?|$)/, (route) => route.abort());
-  await page.goto("/");
+  await page.goto(recommendationPath);
   await page.evaluate(() => document.fonts.ready);
   await page.getByRole("button", { name: "进入人工审核" }).click();
   await page.getByRole("button", { name: "按建议批准 100 件" }).click();

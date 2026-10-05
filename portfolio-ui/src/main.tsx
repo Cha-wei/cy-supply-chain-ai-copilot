@@ -9,7 +9,8 @@ import {
   MessageCircle,
   ShieldCheck,
 } from "lucide-react";
-import { scenario as f } from "./fixture";
+import { scenario as f, recommendationPath } from "./fixture";
+import { EntryPage } from "./entry";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -73,7 +74,7 @@ function Facts({ detailed = false }: { detailed?: boolean }) {
     </dl>
   );
 }
-function Workspace({ variant }: { variant: Variant }) {
+function RecommendationDetail({ variant }: { variant: Variant }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const returnFocus = useRef<HTMLElement | null>(null);
   const reviewButton = useRef<HTMLButtonElement>(null);
@@ -105,11 +106,16 @@ function Workspace({ variant }: { variant: Variant }) {
     >
       <div className="workspace">
         <header className="workspace-nav">
-          <div className="brand">
+          <a
+            className="brand"
+            href="/"
+            aria-label="返回采购决策工作台，重新演示"
+          >
             <span className="brand-mark">CY</span>
             <span>供应链 AI Copilot</span>
-          </div>
+          </a>
           <nav aria-label="工作区导航">
+            <a href="/">工作台</a>
             <a href="#evidence">建议与依据</a>
             <a href="#review">人工审核</a>
           </nav>
@@ -130,7 +136,13 @@ function Workspace({ variant }: { variant: Variant }) {
           <div className="page-heading">
             <div>
               <h1>采购决策</h1>
-              <p>让采购建议有据可循，由人做出决定</p>
+              <p className="material-context">
+                <span>{f.display_name}</span>
+                <span className="material-identity">
+                  物料编码：{f.material_code}
+                </span>
+                <span className="display-label-note">模拟展示名称</span>
+              </p>
             </div>
             <span className="status">
               <span />
@@ -480,9 +492,31 @@ function App() {
   return (
     <TooltipProvider>
       <div className="demo-page material" data-variant="C32">
-        <Workspace variant="C32" />
+        {location.pathname === "/" ? (
+          <EntryPage />
+        ) : location.pathname === recommendationPath ? (
+          <RecommendationDetail variant="C32" />
+        ) : (
+          <section className="design-stage material" data-variant="C32">
+            <div className="workspace">
+              <main>
+                <h1>未找到采购建议</h1>
+                <p>当前演示仅包含一条固定模拟建议。</p>
+                <a className="system-button secondary" href="/">
+                  返回采购决策工作台
+                </a>
+              </main>
+            </div>
+          </section>
+        )}
       </div>
     </TooltipProvider>
   );
 }
+document.title =
+  location.pathname === "/"
+    ? "采购决策工作台 · CY 供应链 AI Copilot"
+    : location.pathname === recommendationPath
+      ? `${f.display_name} · 采购建议详情 · CY`
+      : "未找到采购建议 · CY";
 createRoot(document.getElementById("root")!).render(<App />);

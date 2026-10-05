@@ -10,11 +10,11 @@ npm ci
 npm run dev -- --port 4190 --strictPort
 ```
 
-打开 http://127.0.0.1:4190/ 。只保留单一最终入口，旧A/B/C、C1/C2、C3.1和控件探索页不迁入本分支。
+打开 http://127.0.0.1:4190/ 先进入采购决策工作台，点击「查看建议」进入 `/procurement/M2` 的既有详情页。旧A/B/C、C1/C2、C3.1和控件探索页不迁入本分支。
 
 ## 主路径
 
-1. 采购建议为100件，查看完整依据（缺口30、基础需求30、MOQ100、调整70、建议100）。
+1. 从工作台选择唯一待审核建议；详情中采购建议为100件，查看完整依据（缺口30、基础需求30、MOQ100、调整70、建议100）。
 2. 查看AI解释：明确预置演示、无实时请求、非runtime证据。
 3. 进入人工审核，明确点击「按建议批准100件」。取消、关闭、Escape均不批准。
 4. 页面显示人工已批准；原建议仍为100件。
@@ -53,4 +53,14 @@ C3.2 Apple Premium Rich = FROZEN（Human本轮指令）。从`c10d28a`选择性�
 
 冻结色盘/材质/字体/布局保持；仅增加实际交互所必需的按钮、状态文案、确认与草稿内容，以及180ms草稿轻微显示过渡。字体Noto Sans SC variable（OFL1.1），许可随public/licenses分发；未分发Apple字体。原冻结视觉证据保留在旧分支`codex/c3-2-apple-premium-rich`的`portfolio-ui/design-reviews/c3-2/final-polish/`，不复制旧探索进新实现分支。
 
-STOP FOR HUMAN INTERACTION REVIEW。不得自动扩展下一里程碑或merge main。
+## Workspace Entry v1
+
+Interaction v1已获Human接受，本增量以ccd0bf1为基线。`/`仅负责发现固定模拟任务；`/procurement/M2`保留完整Interaction v1。普通同源链接与pathname精确分发，不新增router/backend；未知ID显示未找到，不能映射成另一个物料。返回工作台、再次通过链接打开详情是新页面演示，不持久保存业务状态；刷新与重置继续清除审批。
+
+`material_code = M2`沿用 `test_hitl_review → test_supplier_risk_input → test_shortage_calculation.DEMAND`。`display_name = 装配连接件`只是明确标注的SIMULATED展示标签，不是新增canonical material_name，不参与身份、provenance或计算。路径中的M2只定位本单一fixture，不宣称全项目recommendation grain唯一标识。
+
+工作台显示1条待审核建议、缺口30、建议100、MOQ调整提示和查看链接；不承载审批/拒绝/完整依据/AI展开，没有新增KPI、图表、sidebar或用户能力。详情仅补物料上下文和返回链接。原冻结色盘与正文布局保持。
+
+`npm test`覆盖30项（三视口），新增身份来源、入口→既有主路径、未知路径与深链刷新。入口截图：`node scripts/capture-entry.mjs`，输出review/entry-v1。
+
+STOP FOR HUMAN ENTRY-PAGE REVIEW。不得自动扩展下一里程碑或merge main。

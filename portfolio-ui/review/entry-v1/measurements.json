@@ -1,0 +1,38 @@
+[
+  {
+    "view": "workspace",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "height": 780
+  },
+  {
+    "view": "detail",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "height": 796.71875
+  },
+  {
+    "view": "workspace",
+    "width": 1280,
+    "scrollWidth": 1280,
+    "height": 780
+  },
+  {
+    "view": "detail",
+    "width": 1280,
+    "scrollWidth": 1280,
+    "height": 796.71875
+  },
+  {
+    "view": "workspace",
+    "width": 390,
+    "scrollWidth": 390,
+    "height": 909.71875
+  },
+  {
+    "view": "detail",
+    "width": 390,
+    "scrollWidth": 390,
+    "height": 1572.0625
+  }
+]
