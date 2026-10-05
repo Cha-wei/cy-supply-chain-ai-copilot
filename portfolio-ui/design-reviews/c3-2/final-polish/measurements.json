@@ -1,0 +1,264 @@
+[
+  {
+    "width": 1440,
+    "scrollWidth": 1440,
+    "height": 796.71875,
+    "font": "\"Noto Sans SC Variable\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+    "body": "15px",
+    "actualFonts": [
+      {
+        "familyName": "Noto Sans SC Thin",
+        "postScriptName": "Noto-Sans-SC-Thin-Medium",
+        "isCustomFont": true,
+        "glyphCount": 4
+      }
+    ],
+    "renderedRoles": {
+      "h1": [
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin-Medium",
+          "isCustomFont": true,
+          "glyphCount": 4
+        }
+      ],
+      ".recommendation h2": [
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin-Medium",
+          "isCustomFont": true,
+          "glyphCount": 4
+        }
+      ],
+      ".quantity": [
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin-Medium",
+          "isCustomFont": true,
+          "glyphCount": 3
+        },
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ],
+      ".explanation>p": [
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin",
+          "isCustomFont": true,
+          "glyphCount": 54
+        }
+      ],
+      ".brand": [
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin-Bold",
+          "isCustomFont": true,
+          "glyphCount": 2
+        },
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin-Medium",
+          "isCustomFont": true,
+          "glyphCount": 14
+        }
+      ]
+    },
+    "fontBytes": 554164,
+    "fontRequests": [
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-latin-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-117-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-116-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-118-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-114-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-115-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-112-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-119-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-109-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-113-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-90-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-latin-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-118-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-115-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-114-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-117-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-116-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-112-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-119-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-109-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-113-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-90-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-111-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-108-wght-normal.woff2"
+    ]
+  },
+  {
+    "width": 1280,
+    "scrollWidth": 1280,
+    "height": 796.71875,
+    "font": "\"Noto Sans SC Variable\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+    "body": "15px",
+    "actualFonts": [
+      {
+        "familyName": "Noto Sans SC Thin",
+        "postScriptName": "Noto-Sans-SC-Thin-Medium",
+        "isCustomFont": true,
+        "glyphCount": 4
+      }
+    ],
+    "renderedRoles": {
+      "h1": [
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin-Medium",
+          "isCustomFont": true,
+          "glyphCount": 4
+        }
+      ],
+      ".recommendation h2": [
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin-Medium",
+          "isCustomFont": true,
+          "glyphCount": 4
+        }
+      ],
+      ".quantity": [
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin-Medium",
+          "isCustomFont": true,
+          "glyphCount": 3
+        },
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ],
+      ".explanation>p": [
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin",
+          "isCustomFont": true,
+          "glyphCount": 54
+        }
+      ],
+      ".brand": [
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin-Bold",
+          "isCustomFont": true,
+          "glyphCount": 2
+        },
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin-Medium",
+          "isCustomFont": true,
+          "glyphCount": 14
+        }
+      ]
+    },
+    "fontBytes": 554164,
+    "fontRequests": [
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-latin-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-117-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-116-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-118-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-114-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-115-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-112-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-119-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-109-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-113-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-90-wght-normal.woff2"
+    ]
+  },
+  {
+    "width": 390,
+    "scrollWidth": 390,
+    "height": 1572.0625,
+    "font": "\"Noto Sans SC Variable\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei UI\", system-ui, sans-serif",
+    "body": "15px",
+    "actualFonts": [
+      {
+        "familyName": "Noto Sans SC Thin",
+        "postScriptName": "Noto-Sans-SC-Thin-Medium",
+        "isCustomFont": true,
+        "glyphCount": 4
+      }
+    ],
+    "renderedRoles": {
+      "h1": [
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin-Medium",
+          "isCustomFont": true,
+          "glyphCount": 4
+        }
+      ],
+      ".recommendation h2": [
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin-Medium",
+          "isCustomFont": true,
+          "glyphCount": 4
+        }
+      ],
+      ".quantity": [
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin-Medium",
+          "isCustomFont": true,
+          "glyphCount": 3
+        },
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ],
+      ".explanation>p": [
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin",
+          "isCustomFont": true,
+          "glyphCount": 52
+        }
+      ],
+      ".brand": [
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin-Bold",
+          "isCustomFont": true,
+          "glyphCount": 2
+        },
+        {
+          "familyName": "Noto Sans SC Thin",
+          "postScriptName": "Noto-Sans-SC-Thin-Medium",
+          "isCustomFont": true,
+          "glyphCount": 14
+        }
+      ]
+    },
+    "fontBytes": 554164,
+    "fontRequests": [
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-latin-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-117-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-116-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-115-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-112-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-119-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-118-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-109-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-114-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-113-wght-normal.woff2",
+      "http://127.0.0.1:4184/node_modules/@fontsource-variable/noto-sans-sc/files/noto-sans-sc-90-wght-normal.woff2"
+    ]
+  }
+]

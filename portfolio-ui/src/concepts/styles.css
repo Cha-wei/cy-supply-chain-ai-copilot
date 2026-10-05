@@ -1,0 +1,969 @@
+@import "tailwindcss";
+@theme {
+  --font-sans: "Noto Sans SC Variable", "PingFang SC", sans-serif;
+  --font-number: "Manrope Variable", sans-serif;
+  --color-background: #ffffff;
+  --color-foreground: #1d2026;
+  --color-muted: #eef0f3;
+  --color-muted-foreground: #636a75;
+  --color-primary: #165dcb;
+  --color-primary-foreground: #ffffff;
+  --color-accent: #e9eff7;
+  --color-accent-foreground: #163453;
+  --color-border: #dce0e6;
+  --color-input: #dce0e6;
+  --color-ring: #165dcb;
+  --color-destructive: #b3261e;
+  --color-ink: #20242a;
+  --color-subtle: #606873;
+  --color-line: #dce1e7;
+  --color-paper: #f7f8fa;
+  --color-night: #202c36;
+  --color-night-muted: #bccbd5;
+  --color-night-line: #52616c;
+  --color-ice: #def0ee;
+  --radius-panel: 16px;
+}
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    @apply m-0 bg-paper text-ink antialiased;
+    font-feature-settings: "palt";
+  }
+  button,
+  a {
+    @apply touch-manipulation;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
+  }
+  h1,
+  h2,
+  h3,
+  p {
+    margin: 0;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  ::selection {
+    background: #c9dcfa;
+    color: #18324e;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-ring);
+    outline-offset: 4px;
+  }
+  body {
+    scrollbar-color: #9ea9b5 #f5f6f8;
+  }
+}
+@layer components {
+  .gallery-bar {
+    @apply flex flex-wrap items-center justify-between gap-4 px-8 py-3 bg-white border-b border-line;
+    min-height: 72px;
+  }
+  .gallery-bar > div:first-child {
+    @apply flex items-center gap-5;
+  }
+  .gallery-bar b {
+    @apply text-sm font-medium;
+  }
+  .gallery-bar b span {
+    @apply text-subtle ml-2;
+  }
+  .gallery-status {
+    @apply text-xs text-subtle;
+  }
+  .concept-switcher {
+    @apply h-11! p-1! rounded-full! bg-muted!;
+  }
+  .concept-switcher [data-slot="tabs-trigger"] {
+    @apply min-h-9 px-5 text-sm rounded-full! gap-2;
+  }
+  .concept-gallery {
+    @apply gap-0!;
+  }
+  .artboard {
+    @apply bg-white;
+    min-height: 728px;
+  }
+  .product-header {
+    @apply flex items-center gap-8 border-b border-line px-12;
+    height: 76px;
+  }
+  .brand {
+    @apply flex items-center gap-4 text-base no-underline;
+  }
+  .brand b {
+    @apply font-medium;
+  }
+  .brandmark {
+    @apply font-number font-extrabold text-2xl tracking-[-.03em];
+  }
+  .brandmark span {
+    @apply text-primary;
+  }
+  .header-context {
+    @apply text-sm text-subtle border-l border-line pl-8;
+  }
+  .simulation {
+    @apply ml-auto text-xs flex items-center gap-2 text-subtle;
+  }
+  .status-dot {
+    @apply inline-block size-1.5 rounded-full bg-current;
+  }
+  .product-footer {
+    @apply flex justify-between items-center flex-wrap gap-3 border-t border-line px-12 py-5 text-xs text-subtle;
+  }
+  .footer-divider {
+    @apply mx-3 text-slate-400;
+  }
+  .concept-caption {
+    @apply px-12 py-7 text-sm text-subtle flex flex-wrap items-baseline gap-x-7 gap-y-3;
+  }
+  .concept-caption b {
+    @apply text-ink font-medium;
+  }
+  .concept-caption > span {
+    @apply text-xs w-full;
+  }
+  .text-action {
+    @apply h-11 px-0 text-sm font-medium bg-transparent! text-primary hover:underline underline-offset-4;
+  }
+  .review-button {
+    @apply h-11 rounded-full px-6 text-sm font-medium shadow-none;
+  }
+  .authority-line {
+    @apply flex flex-wrap items-center gap-2 text-xs text-subtle;
+  }
+  .authority-line > span {
+    @apply mx-1;
+  }
+  .section-heading {
+    @apply flex items-center justify-between gap-3;
+  }
+  .section-heading h2 {
+    @apply text-lg font-medium;
+  }
+  .section-heading > span {
+    @apply text-xs text-subtle;
+  }
+  .review-row {
+    @apply flex items-center justify-between gap-6;
+  }
+  .review-row p {
+    @apply text-sm leading-7 text-subtle;
+  }
+  .review-row p b {
+    @apply text-ink font-medium;
+  }
+  .draft-inline {
+    @apply flex items-center gap-3 border-t border-line pt-5 mt-6 text-subtle;
+  }
+  .draft-inline b {
+    @apply text-sm font-medium text-ink;
+  }
+  .draft-inline b span {
+    @apply text-xs ml-2 text-subtle font-normal;
+  }
+  .draft-inline p {
+    @apply text-xs mt-2;
+  }
+  .draft-end {
+    @apply text-xs ml-auto whitespace-nowrap;
+  }
+  .concept-dialog {
+    @apply p-8 rounded-2xl border-0 shadow-2xl;
+  }
+  .concept-dialog [data-slot="dialog-title"] {
+    @apply text-2xl leading-snug font-medium pr-5;
+  }
+  .concept-dialog [data-slot="dialog-description"] {
+    @apply text-sm leading-7;
+  }
+  .concept-dialog [data-slot="dialog-close"] {
+    @apply size-11 flex items-center justify-center top-2 right-2;
+  }
+  .dialog-facts > div {
+    @apply flex items-center justify-between py-4 border-b border-line;
+  }
+  .dialog-facts dt {
+    @apply text-sm;
+  }
+  .dialog-facts code {
+    @apply block font-sans text-xs text-subtle mt-1;
+  }
+  .dialog-facts dd {
+    @apply text-2xl font-number;
+  }
+  .dialog-facts small {
+    @apply text-xs ml-2 text-subtle;
+  }
+  .dialog-rule {
+    @apply text-3xl font-number py-6 border-y border-line;
+  }
+  /* A: unframed arithmetic is the composition, not a metric inside a card. */
+  .a-main {
+    @apply mx-auto px-16 py-8;
+    max-width: 1440px;
+  }
+  .a-heading {
+    @apply flex items-center justify-between gap-6;
+  }
+  .a-heading h1 {
+    @apply text-[32px] font-medium tracking-[-.03em];
+  }
+  .a-heading p {
+    @apply text-sm text-subtle mt-3;
+  }
+  .scenario-note {
+    @apply text-xs leading-7 text-subtle text-right;
+  }
+  .scenario-note svg {
+    @apply inline mr-1;
+  }
+  .scenario-note > span {
+    @apply text-xs;
+  }
+  .a-equation {
+    @apply flex items-center justify-between gap-8 py-10 px-8;
+  }
+  .equation-item {
+    @apply flex flex-col;
+  }
+  .equation-item > span {
+    @apply text-base font-medium;
+  }
+  .equation-item strong {
+    @apply text-[96px] font-number tracking-[-.04em] leading-[1.2] font-medium mt-1;
+  }
+  .equation-item strong small {
+    @apply text-base font-sans ml-3 tracking-normal font-normal;
+  }
+  .equation-item p {
+    @apply text-sm text-subtle mt-2;
+  }
+  .operator {
+    @apply text-4xl text-slate-400 font-number font-light pt-1;
+  }
+  .adjustment strong {
+    @apply text-subtle;
+  }
+  .total strong,
+  .total > span {
+    @apply text-primary;
+  }
+  .a-rationale {
+    @apply flex items-center justify-between border-t border-b border-line py-1;
+  }
+  .a-bottom {
+    @apply grid grid-cols-[.95fr_1.15fr] gap-16 pt-7;
+  }
+  .a-explain h3 {
+    @apply text-xl leading-relaxed font-medium mt-4;
+  }
+  .a-explain > p {
+    @apply text-sm text-subtle mt-2;
+  }
+  .a-explain > .text-action {
+    @apply mt-2;
+  }
+  .a-review {
+    @apply pl-12 border-l border-line;
+  }
+  .a-review .review-row {
+    @apply mt-6;
+  }
+  /* B: a continuous field and one raised result plane. */
+  .concept-b {
+    @apply bg-night text-white;
+    --color-primary: #def0ee;
+    --color-primary-foreground: #203f47;
+    --color-subtle: #bccbd5;
+    --color-line: #52616c;
+    --color-ring: #a6cdd8;
+  }
+  .concept-b .brandmark span {
+    @apply text-ice;
+  }
+  .concept-b .header-context,
+  .concept-b .simulation,
+  .concept-b .product-footer {
+    @apply text-night-muted;
+  }
+  .b-main {
+    @apply max-w-[1440px] mx-auto px-12 py-8;
+  }
+  .b-heading {
+    @apply flex items-center justify-between gap-8;
+  }
+  .b-heading h1 {
+    @apply text-[32px] font-medium tracking-[-.03em];
+  }
+  .b-heading p {
+    @apply text-sm text-night-muted mt-3;
+  }
+  .b-heading .authority-line {
+    @apply text-night-muted;
+  }
+  .spatial-stage {
+    @apply flex items-center justify-between gap-5 py-8;
+    min-height: 310px;
+  }
+  .spatial-origin {
+    @apply w-[22%] pl-2;
+  }
+  .origin-input {
+    @apply flex gap-3 items-center text-night-muted;
+  }
+  .origin-input b {
+    @apply text-base font-medium text-white;
+  }
+  .origin-input p {
+    @apply text-xs mt-2;
+  }
+  .origin-stem {
+    @apply w-px h-7 bg-night-line ml-2 my-3;
+  }
+  .shortage-node > span {
+    @apply text-sm text-night-muted;
+  }
+  .shortage-node strong {
+    @apply font-number text-7xl leading-tight font-medium block mt-1;
+  }
+  .shortage-node small {
+    @apply font-sans text-sm font-normal ml-3;
+  }
+  .shortage-node p {
+    @apply text-xs text-night-muted mt-2;
+  }
+  .path-bridge {
+    @apply flex items-center relative text-night-muted flex-1;
+    min-width: 45px;
+  }
+  .path-bridge > span {
+    @apply absolute text-xs whitespace-nowrap -top-7 left-0;
+  }
+  .path-bridge > div {
+    @apply h-px bg-night-line flex-1;
+  }
+  .path-bridge svg {
+    @apply -ml-1 shrink-0;
+  }
+  .policy-node {
+    @apply flex flex-col items-center justify-center border border-night-line rounded-full size-44 shrink-0;
+  }
+  .policy-node > span {
+    @apply text-xs text-night-muted;
+  }
+  .policy-node > strong {
+    @apply text-[48px] font-number leading-tight my-1 font-medium;
+  }
+  .policy-adjust {
+    @apply mt-3 text-xs text-night-muted;
+  }
+  .policy-adjust b {
+    @apply text-ice font-medium ml-2;
+  }
+  .result-plane {
+    @apply bg-ice text-night w-[30%] p-7 rounded-2xl shadow-[0_22px_45px_-18px_rgba(0,0,0,0.5)] -rotate-2;
+  }
+  .result-plane .result-label {
+    @apply text-base font-medium;
+  }
+  .result-plane > strong {
+    @apply text-[88px] font-number font-medium tracking-[-.04em] leading-tight block;
+  }
+  .result-plane small {
+    @apply text-base font-sans font-normal ml-3 tracking-normal;
+  }
+  .plane-equation {
+    @apply text-lg font-number;
+  }
+  .plane-equation span {
+    @apply mx-3 text-[#4b6e74];
+  }
+  .result-plane > p {
+    @apply text-xs mt-2 text-[#3f5d64];
+  }
+  .result-plane .text-action {
+    @apply text-[#214e60] mt-2;
+  }
+  .b-lower {
+    @apply grid grid-cols-[.85fr_1.4fr] gap-16 border-t border-night-line pt-7;
+  }
+  .b-lower h2 {
+    @apply text-xl font-medium;
+  }
+  .b-explain > p {
+    @apply text-sm leading-7 text-night-muted mt-3;
+  }
+  .b-explain .text-action {
+    @apply text-ice mt-2;
+  }
+  .b-review .review-row p {
+    @apply text-night-muted mt-2;
+  }
+  .draft-dark {
+    @apply border-night-line text-night-muted mt-5 pt-4;
+  }
+  .draft-dark b {
+    @apply text-white;
+  }
+  .draft-dark b span {
+    @apply text-night-muted;
+  }
+  /* C: editorial working surface; evidence and judgement share a baseline. */
+  .concept-c {
+    @apply bg-[#fbfaf7];
+    --color-primary: #253c52;
+    --color-primary-foreground: #ffffff;
+    --color-paper: #f3f1ec;
+    --color-line: #deded7;
+    --color-subtle: #64675f;
+  }
+  .c-main {
+    @apply max-w-[1440px] mx-auto px-12 py-7;
+  }
+  .c-heading {
+    @apply flex justify-between items-center gap-6 pb-6 border-b border-line;
+  }
+  .c-heading h1 {
+    @apply text-[28px] font-medium tracking-[-.025em];
+  }
+  .c-heading p {
+    @apply text-sm text-subtle mt-2;
+  }
+  .c-state {
+    @apply text-xs text-subtle flex gap-2 items-center;
+  }
+  .executive-grid {
+    @apply grid grid-cols-[1.3fr_1fr] gap-12;
+  }
+  .c-evidence {
+    @apply pt-6 pr-6;
+  }
+  .c-result {
+    @apply flex items-center justify-between gap-6;
+  }
+  .c-result h2 {
+    @apply text-lg font-medium mb-3;
+  }
+  .c-result > strong {
+    @apply text-[88px] leading-none font-number tracking-[-.04em] font-medium;
+  }
+  .c-result small {
+    @apply text-base tracking-normal font-sans font-normal ml-3;
+  }
+  .c-equation {
+    @apply flex items-center justify-between gap-3 text-sm text-subtle border-b border-line mt-6 pb-5;
+  }
+  .c-equation b {
+    @apply text-ink font-number text-xl font-semibold ml-1;
+  }
+  .c-table-heading {
+    @apply flex justify-between items-center mt-6 mb-1;
+  }
+  .c-table-heading h2 {
+    @apply text-lg font-medium;
+  }
+  .c-table-heading > span {
+    @apply text-xs text-subtle;
+  }
+  .c-facts > div {
+    @apply flex justify-between items-center py-3 border-b border-line;
+  }
+  .c-facts dt {
+    @apply text-sm;
+  }
+  .c-facts dt span {
+    @apply text-xs text-subtle ml-4;
+  }
+  .c-facts dd {
+    @apply text-xl font-number font-medium;
+  }
+  .c-facts small {
+    @apply text-xs font-sans ml-2 text-subtle font-normal;
+  }
+  .c-source {
+    @apply flex gap-2 items-center text-xs text-subtle mt-2;
+  }
+  .c-evidence > .text-action {
+    @apply mt-2;
+  }
+  .c-decision {
+    @apply bg-paper px-7 py-6;
+  }
+  .c-decision h3 {
+    @apply text-lg font-medium mt-4;
+  }
+  .c-answer {
+    @apply text-sm leading-7 text-subtle mt-3;
+  }
+  .c-answer b {
+    @apply font-medium text-ink block;
+  }
+  .c-human {
+    @apply mt-4 border-t border-line pt-5;
+  }
+  .c-human > p {
+    @apply text-sm leading-7 text-subtle my-3;
+  }
+  .c-human > .review-button {
+    @apply w-full;
+  }
+  .c-decision .draft-inline {
+    @apply mt-5 pt-4;
+  }
+  .c-decision .draft-end {
+    @apply hidden;
+  }
+  .c-boundary {
+    @apply text-xs text-subtle mt-4;
+  }
+  .concept-c .product-footer {
+    @apply py-4;
+  }
+}
+@media (min-width: 1500px) {
+  .artboard {
+    max-width: 1600px;
+    margin-inline: auto;
+  }
+}
+@media (max-width: 1280px) {
+  .a-main {
+    padding-inline: 48px;
+  }
+  .a-equation {
+    padding-inline: 12px;
+    gap: 24px;
+  }
+  .a-bottom {
+    gap: 36px;
+  }
+  .a-review {
+    padding-left: 32px;
+  }
+  .review-row {
+    gap: 14px;
+  }
+  .review-button {
+    padding-inline: 20px;
+  }
+  .executive-grid {
+    gap: 28px;
+  }
+  .c-evidence {
+    padding-right: 0;
+  }
+  .c-facts dt span {
+    margin-left: 10px;
+  }
+  .b-lower {
+    gap: 40px;
+  }
+  .spatial-stage {
+    gap: 15px;
+  }
+  .policy-node {
+    width: 154px;
+    height: 154px;
+  }
+  .result-plane {
+    padding: 24px;
+  }
+  .b-heading .authority-line {
+    max-width: 240px;
+  }
+  .draft-end {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  .gallery-bar {
+    padding-inline: 20px;
+  }
+  .gallery-status,
+  .header-context {
+    display: none;
+  }
+  .product-header {
+    padding-inline: 24px;
+    gap: 12px;
+  }
+  .a-main,
+  .b-main,
+  .c-main {
+    padding-inline: 24px;
+  }
+  .a-heading {
+    align-items: start;
+  }
+  .scenario-note {
+    display: none;
+  }
+  .a-equation {
+    gap: 12px;
+    padding-inline: 0;
+  }
+  .equation-item strong {
+    font-size: 72px;
+  }
+  .equation-item p {
+    font-size: 12px;
+  }
+  .a-bottom {
+    gap: 24px;
+  }
+  .a-review {
+    padding-left: 24px;
+  }
+  .review-row {
+    flex-wrap: wrap;
+  }
+  .a-bottom .review-row .review-button {
+    width: 100%;
+  }
+  .product-footer {
+    padding-inline: 24px;
+  }
+  .b-heading {
+    align-items: start;
+  }
+  .b-heading .authority-line {
+    display: none;
+  }
+  .spatial-stage {
+    gap: 10px;
+  }
+  .policy-node {
+    width: 124px;
+    height: 124px;
+  }
+  .result-plane {
+    padding: 18px;
+  }
+  .result-plane > strong {
+    font-size: 68px;
+  }
+  .path-bridge > span {
+    font-size: 12px;
+  }
+  .b-lower {
+    gap: 24px;
+  }
+  .c-facts dt span {
+    display: block;
+    margin: 4px 0 0;
+  }
+  .c-decision {
+    padding: 24px 20px;
+  }
+  .executive-grid {
+    gap: 24px;
+  }
+  .c-result {
+    flex-wrap: wrap;
+  }
+  .c-equation {
+    flex-wrap: wrap;
+  }
+  .c-state {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .gallery-bar {
+    justify-content: center;
+    gap: 12px;
+  }
+  .gallery-bar > div:first-child {
+    width: 100%;
+    justify-content: center;
+  }
+  .concept-switcher [data-slot="tabs-trigger"] {
+    padding-inline: 12px;
+    min-height: 44px;
+  }
+  .concept-switcher {
+    height: 52px !important;
+  }
+  .product-header {
+    height: 70px;
+    padding-inline: 20px;
+  }
+  .brand {
+    font-size: 14px;
+    gap: 10px;
+  }
+  .simulation {
+    font-size: 12px;
+  }
+  .brandmark {
+    font-size: 22px;
+  }
+  .a-main,
+  .b-main,
+  .c-main {
+    padding: 28px 20px;
+  }
+  .a-heading h1,
+  .b-heading h1,
+  .c-heading h1 {
+    font-size: 26px;
+  }
+  .a-heading p,
+  .b-heading p {
+    font-size: 14px;
+    line-height: 1.9;
+  }
+  .a-equation {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+    padding-block: 30px;
+  }
+  .equation-item {
+    width: calc(42% - 10px);
+  }
+  .equation-item strong {
+    font-size: 64px;
+  }
+  .equation-item strong small {
+    font-size: 14px;
+    margin-left: 6px;
+  }
+  .equation-item > span {
+    font-size: 14px;
+  }
+  .operator {
+    font-size: 28px;
+  }
+  .a-equation > .operator:nth-of-type(2) {
+    display: none;
+  }
+  .equation-item.total {
+    width: 100%;
+    border-top: 1px solid var(--color-line);
+    padding-top: 20px;
+    margin-top: 8px;
+    align-items: center;
+  }
+  .equation-item.total strong {
+    font-size: 88px;
+  }
+  .a-rationale {
+    align-items: start;
+    flex-direction: column;
+    padding-block: 12px;
+  }
+  .authority-line {
+    font-size: 12px;
+  }
+  .a-bottom,
+  .b-lower,
+  .executive-grid {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .a-review {
+    padding: 24px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--color-line);
+  }
+  .a-review .review-row {
+    margin-top: 16px;
+  }
+  .a-bottom .review-row .review-button {
+    width: auto;
+  }
+  .section-heading h2 {
+    font-size: 18px;
+  }
+  .draft-inline {
+    gap: 8px;
+  }
+  .draft-inline b {
+    font-size: 14px;
+  }
+  .product-footer {
+    padding: 20px;
+    align-items: start;
+    flex-direction: column;
+    line-height: 1.8;
+  }
+  .concept-caption {
+    padding: 24px 20px;
+  }
+  .spatial-stage {
+    flex-wrap: wrap;
+    gap: 24px;
+    justify-content: space-between;
+    padding: 30px 0 40px;
+  }
+  .spatial-origin {
+    width: 44%;
+    padding: 0;
+  }
+  .path-bridge {
+    display: none;
+  }
+  .policy-node {
+    width: 45%;
+    height: 158px;
+    border-radius: 16px;
+  }
+  .result-plane {
+    width: 100%;
+    transform: none;
+    padding: 24px;
+  }
+  .result-plane > strong {
+    font-size: 88px;
+  }
+  .b-lower {
+    padding-top: 24px;
+  }
+  .b-review {
+    border-top: 1px solid var(--color-night-line);
+    padding-top: 24px;
+  }
+  .c-evidence {
+    padding-top: 24px;
+  }
+  .c-result {
+    flex-wrap: nowrap;
+  }
+  .c-result > strong {
+    font-size: 72px;
+  }
+  .c-result .authority-line {
+    max-width: 180px;
+  }
+  .c-decision {
+    padding: 24px;
+    margin-inline: -4px;
+    border-radius: 16px;
+  }
+  .c-facts dt span {
+    display: inline;
+    margin-left: 12px;
+  }
+  .c-equation {
+    gap: 6px;
+    font-size: 12px;
+  }
+  .c-equation b {
+    font-size: 18px;
+  }
+  .concept-dialog {
+    padding: 26px;
+  }
+  .concept-dialog [data-slot="dialog-title"] {
+    font-size: 22px;
+  }
+  .concept-caption > span {
+    line-height: 1.8;
+  }
+}
+/* Only controls transition in this exploration; proposed scene motion is documented. */
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="tabs-trigger"],
+  button {
+    transition: none;
+  }
+}
+/* Critique revision: maintain the arithmetic and actionable target sizes. */
+@layer components {
+  .policy-adjust b {
+    @apply text-xl font-number font-semibold;
+  }
+  .c-main {
+    @apply py-6;
+  }
+  .c-heading {
+    @apply pb-5;
+  }
+  .c-evidence {
+    @apply pt-5;
+  }
+  .c-table-heading {
+    @apply mt-5;
+  }
+  .c-facts > div {
+    @apply py-3;
+  }
+  .c-result > strong {
+    white-space: nowrap;
+  }
+  .c-decision {
+    @apply py-5;
+  }
+  .c-human {
+    @apply mt-3 pt-4;
+  }
+  .c-decision .draft-inline {
+    @apply mt-4 pt-4;
+  }
+}
+@media (max-width: 600px) {
+  .a-equation > .operator:nth-of-type(2) {
+    display: block;
+    width: 100%;
+    text-align: center;
+    height: 28px;
+    padding: 0;
+    line-height: 28px;
+  }
+  .equation-item.total {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+  .result-plane {
+    rotate: 0deg;
+  }
+  .spatial-stage .second {
+    display: flex;
+    flex: none;
+    min-height: 22px;
+    width: 100%;
+    margin-top: 4px;
+    gap: 12px;
+  }
+  .spatial-stage .second > span {
+    position: static;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .c-result {
+    align-items: start;
+  }
+  .c-result > strong {
+    font-size: 64px;
+  }
+  .c-result .authority-line {
+    max-width: 150px;
+  }
+  .c-result small {
+    margin-left: 5px;
+  }
+}
+/* Audit revision: the desktop product canvas fits an 800px presentation frame. */
+@media (min-width: 901px) {
+  .a-equation {
+    padding-block: 32px;
+  }
+  .b-main {
+    padding-block: 24px;
+  }
+}

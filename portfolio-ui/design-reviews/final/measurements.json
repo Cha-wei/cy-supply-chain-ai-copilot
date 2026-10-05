@@ -1,0 +1,227 @@
+[
+  {
+    "concept": "A",
+    "width": 1440,
+    "scroll": 1440,
+    "artHeight": 795.1875,
+    "buttons": [
+      {
+        "text": "查看计算依据 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "查看 AI 解释 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "预览人工审核 ",
+        "height": 44,
+        "radius": "3.35544e+07px"
+      }
+    ],
+    "rotate": null,
+    "minFont": 12
+  },
+  {
+    "concept": "B",
+    "width": 1440,
+    "scroll": 1440,
+    "artHeight": 797,
+    "buttons": [
+      {
+        "text": "查看计算依据 ",
+        "height": 48.579925537109375,
+        "radius": "6px"
+      },
+      {
+        "text": "查看 AI 解释 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "预览人工审核 ",
+        "height": 44,
+        "radius": "3.35544e+07px"
+      }
+    ],
+    "rotate": "-2deg",
+    "minFont": 12
+  },
+  {
+    "concept": "C",
+    "width": 1440,
+    "scroll": 1440,
+    "artHeight": 785,
+    "buttons": [
+      {
+        "text": "查看计算依据 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "查看 AI 解释 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "预览人工审核 ",
+        "height": 44,
+        "radius": "3.35544e+07px"
+      }
+    ],
+    "rotate": null,
+    "minFont": 12
+  },
+  {
+    "concept": "A",
+    "width": 1280,
+    "scroll": 1280,
+    "artHeight": 795.1875,
+    "buttons": [
+      {
+        "text": "查看计算依据 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "查看 AI 解释 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "预览人工审核 ",
+        "height": 44,
+        "radius": "3.35544e+07px"
+      }
+    ],
+    "rotate": null,
+    "minFont": 12
+  },
+  {
+    "concept": "B",
+    "width": 1280,
+    "scroll": 1280,
+    "artHeight": 789,
+    "buttons": [
+      {
+        "text": "查看计算依据 ",
+        "height": 48.579925537109375,
+        "radius": "6px"
+      },
+      {
+        "text": "查看 AI 解释 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "预览人工审核 ",
+        "height": 44,
+        "radius": "3.35544e+07px"
+      }
+    ],
+    "rotate": "-2deg",
+    "minFont": 12
+  },
+  {
+    "concept": "C",
+    "width": 1280,
+    "scroll": 1280,
+    "artHeight": 785,
+    "buttons": [
+      {
+        "text": "查看计算依据 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "查看 AI 解释 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "预览人工审核 ",
+        "height": 44,
+        "radius": "3.35544e+07px"
+      }
+    ],
+    "rotate": null,
+    "minFont": 12
+  },
+  {
+    "concept": "A",
+    "width": 390,
+    "scroll": 390,
+    "artHeight": 1285.046875,
+    "buttons": [
+      {
+        "text": "查看计算依据 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "查看 AI 解释 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "预览人工审核 ",
+        "height": 44,
+        "radius": "3.35544e+07px"
+      }
+    ],
+    "rotate": null,
+    "minFont": 12
+  },
+  {
+    "concept": "B",
+    "width": 390,
+    "scroll": 390,
+    "artHeight": 1438.375,
+    "buttons": [
+      {
+        "text": "查看计算依据 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "查看 AI 解释 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "预览人工审核 ",
+        "height": 44,
+        "radius": "3.35544e+07px"
+      }
+    ],
+    "rotate": "0deg",
+    "minFont": 12
+  },
+  {
+    "concept": "C",
+    "width": 390,
+    "scroll": 390,
+    "artHeight": 1439.96875,
+    "buttons": [
+      {
+        "text": "查看计算依据 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "查看 AI 解释 ",
+        "height": 44,
+        "radius": "6px"
+      },
+      {
+        "text": "预览人工审核 ",
+        "height": 44,
+        "radius": "3.35544e+07px"
+      }
+    ],
+    "rotate": null,
+    "minFont": 12
+  }
+]
