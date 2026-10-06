@@ -7801,6 +7801,20 @@ S-5 default contract 不被永久放宽；`§7 overall = NOT RESOLVED`、
 
 ---
 
+<a id="portfolio-localhost-transport-contract"></a>
+
+### 7.2 Portfolio Demo localhost transport — scoped design registration
+
+**Authority:** Human Decision — ADR-003 Decision Pack，2026-10-06，`APPROVED WITH CLARIFICATIONS`。
+**Scoped design:** `APPROVED`；**implementation / security verification:** `NOT STARTED / NOT RUN`。
+
+§7.1 credential semantics 保持不变。新增 localhost transport contract 的唯一完整定义见
+[ADR-003 D5](../architecture/adr-003-portfolio-demo-local-runtime-integration.md#d5--scoped-localhost-transport--secret-contract)：loopback / allowed Host-Origin boundary、request validation、malformed/stale fail closed、sanitized responses/errors、browser 无 secret/provider raw material、Python provider credential ownership、无未批准 subprocess secret propagation。
+
+这是原 in-process scope 之外的独立、限定 design approval；不关闭 §7 overall，不宣称 authentication / RBAC / production security。未来 implementation 仍须执行 §10.7 登记的验证与独立 Code Start；本登记不授权 coding 或 hosted observation。
+
+---
+
 ## 8. Audit & Observability
 
 > 本章节只建立未来需要覆盖的范围。
@@ -7814,6 +7828,19 @@ S-5 default contract 不被永久放宽；`§7 overall = NOT RESOLVED`、
 | rule version | `DESIGN PENDING` |
 | Human approval | `DESIGN PENDING` |
 | errors / failures | `DESIGN PENDING` |
+
+---
+
+<a id="portfolio-local-runtime-audit-applicability"></a>
+
+### Portfolio Demo cross-process applicability — scoped disposition
+
+**Authority:** Human Decision — ADR-003 Decision Pack，2026-10-06（D6 / binding clarification 7）。
+**§8 applicability review = TRIGGERED；scoped disposition = HUMAN APPROVED。**
+
+新 Browser ↔ Python cross-process shape 触发 §9.4 第 6 项。依 [ADR-003 D6](../architecture/adr-003-portfolio-demo-local-runtime-integration.md#d6--8-scoped-applicability-disposition)，本 slice 的 persistence / durable audit implementation **NOT REQUIRED**：业务对象只在一个 Python server process 内存中，无 cross-session recovery、durable approval history 或 audit claim。此处解决 §9.4 与 §10.1 D / §10.6 F 的 scoped applicability 张力，不删除历史 trigger，不引入 database。
+
+**§8 overall = NOT CLOSED；rule/code-version freshness = NOT RESOLVED。** 任何 persistence / recovery / audit claim 重新进入适用 gate。此 disposition 不证明 runtime 已实现或验证。
 
 ---
 
@@ -10902,6 +10929,37 @@ production readiness ／ POC success = NOT CLAIMED
 `IMPLEMENTED` **不等于** `VALIDATED`，**不等于** business accepted，也**不等于** `POC SUCCESS`；本 tranche 的
 验证证据**仅**为 SIMULATED fixtures 上的 deterministic `unittest` 与 CI。
 
+<a id="portfolio-local-runtime-integration-gate"></a>
+
+### 10.7 Portfolio Demo Local Runtime Integration — design authority / pre-Code-Start registration
+
+**Authority:** Human Decision — ADR-003 Decision Pack，2026-10-06，`APPROVED WITH CLARIFICATIONS`（D1–D8 与十项 binding clarifications）。
+**Architecture:** [ADR-003](../architecture/adr-003-portfolio-demo-local-runtime-integration.md) `ACCEPTED`，仅 architecture/design。
+**Base:** `main @ 78427dc67e9dcc1ca79342fd77e5b4ac9c6f2f48`；accepted presentation reference `5ecb73b05892e111b21db6e406ec879efd56dc08`（PR #245；不表示已 merge）。
+
+本项在实现前独立登记 authority；不修改 §10.1–10.6 的历史 scoped authorization，不把已有 Python runtime / presentation acceptance 当作 connected slice acceptance。ADR-001 clarification 要求的 handoff acquisition、AnalysisRun identity/date 与 caller responsibility 已由本次 Human Decision 独立批准，契约见 ADR-003 D1/D2；**其 coding 仍未获授权**。
+
+| Gate / concern | Current disposition |
+| --- | --- |
+| Architecture re-entry / ADR | REQUIRED；ADR-003 ACCEPTED；architecture/design authority = APPROVED |
+| Composition / AnalysisRun authority | APPROVED，见 ADR-003 D1/D2；不依赖 tests 或 observation-script architecture；material identity 来自 runtime |
+| Session / immutable Review / Draft ordering | APPROVED，见 ADR-003 D3/D4；single Python-memory session，Browser ↔ Python cross-process |
+| §7 scoped localhost design | APPROVED，见 §7.2 / ADR-003 D5；§7.1 不变，implementation verification 未执行 |
+| §8 applicability | TRIGGERED；限定 disposition 已批准，见 §8 scoped record；persistence/audit implementation NOT REQUIRED；overall NOT CLOSED |
+| §9 integration / Q3 evidence-fidelity | REQUIRED for future implementation；本 documentation unit 不执行 runtime validation |
+| Hosted observation through new path | NOT AUTHORIZED；每次需独立 explicit authorization，不继承旧观察授权 |
+| Overall AI Eval / rule-code freshness | 不关闭、不扩张；既有 overall AI Eval DESIGN PENDING / rule-code freshness NOT RESOLVED 保持 |
+| Runtime Integration Code Start | **NOT AUTHORIZED**；下一关为独立 Runtime Integration Code Start decision |
+| Runtime integration implementation / evidence | **NOT STARTED / NOT RUN** |
+
+**Future validation obligations（不是执行授权）：** transport/integration、binding/session/replay、exact quantity transport fidelity、existing Q3 projection/validator evidence-fidelity、secret exposure/fail-closed regression，完整边界见 ADR-003 D7。必须验证真实 Python 的 recommendation / HumanDecision / Draft / stale；不能以 TypeScript 模拟验证替代。整体 AI Eval closure、新质量框架或 hosted campaign 不自动要求；§9.3 的既有 per-observation contract 与 overall 状态不变。
+
+**First-slice boundary：** fixed SIMULATED scenario；initial session 显式创建 first AnalysisRun，只有 explicit new-analysis 操作再创建；same-input 新 run 使用“模拟新分析运行”。Offline fallback DEFERRED / no silent fallback；无新业务语义、API schema 冻结、framework 选型、database、ERP / PO / production write、auth/RBAC claim。
+
+**Next gate:** separate Runtime Integration Code Start decision。ADR-003 architecture/design authority = APPROVED；本记录不得被解释为可开始 runtime coding。
+
+---
+
 ## 11. Open Design Backlog
 
 > 本节登记并**保留**以下条目。**未经 Human Approval 不得关闭**；`VB-14`、`VB-15`、`VB-16`、`VB-17`、`VB-18`、`VB-27`、`VB-28`、`VB-29` 已获得 Human Approval。
@@ -10964,7 +11022,7 @@ production readiness ／ POC success = NOT CLAIMED
 当前**明确尚未决定**（下列是更广泛系统选择；首批 local core／thin CLI／in-memory 的限定选择已由 ADR-001 决定，不构成全项目选型）：
 
 - backend framework
-- frontend framework
+- frontend framework（更广泛系统尚未决定；Portfolio Demo 的 React 保留范围见 ADR-003 / §10.7）
 - Agent framework
 - LangGraph usage
 - database
