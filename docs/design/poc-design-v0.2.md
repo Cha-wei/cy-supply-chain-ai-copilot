@@ -10941,7 +10941,7 @@ production readiness ／ POC success = NOT CLAIMED
 
 | Gate / concern | Current disposition |
 | --- | --- |
-| Architecture re-entry / ADR | REQUIRED；Human decision 已批准，ADR-003 登记；本 registration 待 Human review |
+| Architecture re-entry / ADR | REQUIRED；ADR-003 ACCEPTED；architecture/design authority = APPROVED |
 | Composition / AnalysisRun authority | APPROVED，见 ADR-003 D1/D2；不依赖 tests 或 observation-script architecture；material identity 来自 runtime |
 | Session / immutable Review / Draft ordering | APPROVED，见 ADR-003 D3/D4；single Python-memory session，Browser ↔ Python cross-process |
 | §7 scoped localhost design | APPROVED，见 §7.2 / ADR-003 D5；§7.1 不变，implementation verification 未执行 |
@@ -10949,14 +10949,14 @@ production readiness ／ POC success = NOT CLAIMED
 | §9 integration / Q3 evidence-fidelity | REQUIRED for future implementation；本 documentation unit 不执行 runtime validation |
 | Hosted observation through new path | NOT AUTHORIZED；每次需独立 explicit authorization，不继承旧观察授权 |
 | Overall AI Eval / rule-code freshness | 不关闭、不扩张；既有 overall AI Eval DESIGN PENDING / rule-code freshness NOT RESOLVED 保持 |
-| Runtime Integration Code Start | **NOT AUTHORIZED**；先 Human review，再单独 Code Start / implementation authorization |
+| Runtime Integration Code Start | **NOT AUTHORIZED**；下一关为独立 Runtime Integration Code Start decision |
 | Runtime integration implementation / evidence | **NOT STARTED / NOT RUN** |
 
 **Future validation obligations（不是执行授权）：** transport/integration、binding/session/replay、exact quantity transport fidelity、existing Q3 projection/validator evidence-fidelity、secret exposure/fail-closed regression，完整边界见 ADR-003 D7。必须验证真实 Python 的 recommendation / HumanDecision / Draft / stale；不能以 TypeScript 模拟验证替代。整体 AI Eval closure、新质量框架或 hosted campaign 不自动要求；§9.3 的既有 per-observation contract 与 overall 状态不变。
 
 **First-slice boundary：** fixed SIMULATED scenario；initial session 显式创建 first AnalysisRun，只有 explicit new-analysis 操作再创建；same-input 新 run 使用“模拟新分析运行”。Offline fallback DEFERRED / no silent fallback；无新业务语义、API schema 冻结、framework 选型、database、ERP / PO / production write、auth/RBAC claim。
 
-**Next gate:** Human review of ADR-003 and scoped canonical records → separate Code Start decision。本记录不得被解释为可开始 runtime coding。
+**Next gate:** separate Runtime Integration Code Start decision。ADR-003 architecture/design authority = APPROVED；本记录不得被解释为可开始 runtime coding。
 
 ---
 

@@ -11,7 +11,7 @@
 
 ## Portfolio Demo local runtime integration — architecture/design registration
 
-[ADR-003](architecture/adr-003-portfolio-demo-local-runtime-integration.md) 已登记 Human 的 D1–D8 批准与 binding clarifications；[POC Design §10.7](design/poc-design-v0.2.md#portfolio-local-runtime-integration-gate) 登记 scoped §7 / §8 / validation 与 pre-Code-Start 状态。**Architecture/design only；runtime coding NOT AUTHORIZED**。本次登记等待 Human review；不表示 UI 已连接 runtime、PR #245 已 merge 或 main 已包含该 UI。
+[ADR-003](architecture/adr-003-portfolio-demo-local-runtime-integration.md) 已登记 Human 的 D1–D8 批准与 binding clarifications；[POC Design §10.7](design/poc-design-v0.2.md#portfolio-local-runtime-integration-gate) 登记 scoped §7 / §8 / validation 与 pre-Code-Start 状态。**Architecture/design only；runtime coding NOT AUTHORIZED**。ADR-003 architecture/design authority = APPROVED；下一关为独立 Runtime Integration Code Start decision；不表示 UI 已连接 runtime 或 PR #245 已 merge。
 
 ## 1. Purpose / Authority Boundary
 

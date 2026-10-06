@@ -5,7 +5,7 @@
 **Approval:** 2026-10-06，Human Decision — ADR-003 Decision Pack，`APPROVED WITH CLARIFICATIONS`（D1–D8 ＋ 10 项 binding clarifications）
 **Base:** `main @ 78427dc67e9dcc1ca79342fd77e5b4ac9c6f2f48`
 **UI reference:** accepted presentation head `5ecb73b05892e111b21db6e406ec879efd56dc08`，PR #241 → #242 → #243 → #244 → #245；不是 main 已合并或 runtime-connected 的声明。
-**Implementation:** `NOT AUTHORIZED`；登记后必须停在 Human review，另行 Code Start。
+**Implementation:** `NOT AUTHORIZED`；architecture/design authority = `APPROVED`；下一关为独立 Runtime Integration Code Start decision。
 
 ## Context and decision authority
 
@@ -133,4 +133,4 @@ Quantity transport 不得损失精度、经过 binary float 或增加 rounding/n
 
 ## Next gate
 
-**Architecture/design approval only. Runtime coding NOT AUTHORIZED.** 先审查本 ADR 与 scoped canonical gate registration；Human review 后另行确定 Code Start / implementation authorization。不得把 ACCEPTED ADR、scoped design resolved 或已有 runtime tests 当作新 integration implemented / tested / accepted。
+**Architecture/design authority = APPROVED. Runtime coding NOT AUTHORIZED.** Next gate = separate Runtime Integration Code Start decision。不得把 ACCEPTED ADR、scoped design resolved 或已有 runtime tests 当作新 integration implemented / tested / accepted。
