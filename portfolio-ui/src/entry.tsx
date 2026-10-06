@@ -1,56 +1,51 @@
 import { ArrowRight } from "lucide-react";
 import { scenario, recommendationPath } from "./fixture";
+import { AppShell } from "./shell";
 
-// Task discovery only. No approval, evidence expansion or business state here.
 export function EntryPage() {
   return (
-    <section className="design-stage material entry-page" data-variant="C32">
-      <div className="workspace">
-        <header className="workspace-nav">
-          <div className="brand">
-            <span className="brand-mark">CY</span>
-            <span>供应链 AI Copilot</span>
+    <AppShell>
+      <main className="workspace-entry">
+        <div className="page-heading">
+          <div>
+            <h1>采购决策工作台</h1>
+            <p>查看当前需要人工处理的采购建议</p>
           </div>
-          <div className="nav-end">
-            <span className="simulation">
-              模拟演示 <span>SIMULATED Portfolio POC</span>
-            </span>
+        </div>
+        <dl className="overview-strip" aria-label="当前演示概况">
+          <div>
+            <dt>待处理建议</dt>
+            <dd>1</dd>
           </div>
-        </header>
-        <main>
-          <div className="page-heading">
-            <div>
-              <h1>采购决策工作台</h1>
-              <p>查看当前采购建议，由人工决定下一步。</p>
-            </div>
+          <div>
+            <dt>当前场景</dt>
+            <dd>SIMULATED</dd>
           </div>
-          <section aria-labelledby="pending-title" className="pending-section">
-            <div className="section-heading">
-              <h2 id="pending-title">
-                待审核采购建议 <span className="pending-count">· 1</span>
-              </h2>
-              <span className="role-label">SIMULATED Portfolio POC</span>
-            </div>
-            <article
-              className="recommendation-surface entry-recommendation"
-              aria-label={`${scenario.display_name}采购建议`}
+          <div>
+            <dt>决策方式</dt>
+            <dd>人工审核</dd>
+          </div>
+        </dl>
+        <section className="pending-section" aria-labelledby="pending-title">
+          <div className="section-heading">
+            <h2 id="pending-title">
+              待审核采购建议 <span className="pending-count">· 1</span>
+            </h2>
+          </div>
+          <article aria-label={`${scenario.display_name}采购建议`}>
+            <a
+              className="task-row"
+              href={recommendationPath}
+              aria-label={`查看建议：${scenario.display_name}，${scenario.material_code}，待人工审核`}
             >
-              <div className="entry-material">
-                <div>
-                  <h3>{scenario.display_name}</h3>
-                  <p className="material-context">
-                    <span className="material-identity">
-                      物料编码：{scenario.material_code}
-                    </span>
-                    <span className="display-label-note">模拟展示名称</span>
-                  </p>
-                </div>
-                <span className="status">
-                  <span />
-                  待人工审核
-                </span>
+              <div className="task-identity">
+                <h3>{scenario.display_name}</h3>
+                <p>
+                  <span>物料编码：{scenario.material_code}</span>
+                  <span>模拟展示名称</span>
+                </p>
               </div>
-              <dl className="entry-facts">
+              <dl className="task-quantities">
                 <div>
                   <dt>当前缺口</dt>
                   <dd>
@@ -66,35 +61,24 @@ export function EntryPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt>调整原因</dt>
-                  <dd className="entry-reason">
-                    MOQ
-                    <span>
-                      增加 {scenario.adjustment} 件，满足最低起订量{" "}
-                      {scenario.moq} 件
-                    </span>
-                  </dd>
+                  <dt>MOQ 调整</dt>
+                  <dd>+{scenario.adjustment}</dd>
                 </div>
               </dl>
-              <div className="entry-task-action">
-                <p>查看依据与预置解释，再由人工审核。</p>
-                <a className="system-button primary" href={recommendationPath}>
-                  查看建议 <ArrowRight />
-                </a>
-              </div>
-            </article>
-          </section>
-          <p className="entry-boundary">
-            固定模拟场景 · 无实时 AI 请求 · 不保存业务状态
-          </p>
-        </main>
-        <footer className="workspace-footer">
-          <span>
-            确定性计算 <ArrowRight /> AI 解释 <ArrowRight /> 人工决策
-          </span>
-          <span>presentation-only · 无 ERP 写入 / 采购订单 / 生产执行</span>
-        </footer>
-      </div>
-    </section>
+              <span className="status">
+                <span />
+                待人工审核
+              </span>
+              <span className="task-affordance">
+                查看建议 <ArrowRight aria-hidden="true" />
+              </span>
+            </a>
+          </article>
+        </section>
+        <p className="entry-boundary">
+          固定模拟场景 · 无实时 AI 请求 · 不保存业务状态
+        </p>
+      </main>
+    </AppShell>
   );
 }

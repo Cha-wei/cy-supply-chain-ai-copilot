@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { scenario as f, recommendationPath } from "./fixture";
 import { EntryPage } from "./entry";
+import { AppShell } from "./shell";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -99,280 +100,243 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
     boundary: "SIMULATED · presentation-only",
   };
   return (
-    <section
-      className="design-stage material"
-      data-variant={variant}
-      data-demo-state={demoStep(state)}
+    <AppShell
+      detail
+      demoState={demoStep(state)}
+      onBoundary={(target) => open("boundary", target)}
     >
-      <div className="workspace">
-        <header className="workspace-nav">
-          <a
-            className="brand"
-            href="/"
-            aria-label="返回采购决策工作台，重新演示"
+      <main>
+        <div className="page-heading">
+          <div>
+            <h1>采购决策</h1>
+            <p className="material-context">
+              <span>{f.display_name}</span>
+              <span className="material-identity">
+                物料编码：{f.material_code}
+              </span>
+              <span className="display-label-note">模拟展示名称</span>
+            </p>
+          </div>
+          <span className="status">
+            <span />
+            {approved ? "人工已批准 · 演示" : "待人工审核 · 演示"}
+          </span>
+        </div>
+        <div className="work-columns">
+          <section
+            className="evidence-region"
+            id="evidence"
+            aria-label="采购建议与计算依据"
           >
-            <span className="brand-mark">CY</span>
-            <span>供应链 AI Copilot</span>
-          </a>
-          <nav aria-label="工作区导航">
-            <a href="/">工作台</a>
-            <a href="#evidence">建议与依据</a>
-            <a href="#review">人工审核</a>
-          </nav>
-          <div className="nav-end">
-            <span className="simulation">
-              模拟演示 <span>SIMULATED</span>
-            </span>
-            <Action
-              kind="icon"
-              aria-label="查看展示边界"
-              onClick={(e) => open("boundary", e.currentTarget)}
-            >
-              <Info />
-            </Action>
-          </div>
-        </header>
-        <main>
-          <div className="page-heading">
-            <div>
-              <h1>采购决策</h1>
-              <p className="material-context">
-                <span>{f.display_name}</span>
-                <span className="material-identity">
-                  物料编码：{f.material_code}
-                </span>
-                <span className="display-label-note">模拟展示名称</span>
-              </p>
-            </div>
-            <span className="status">
-              <span />
-              {approved ? "人工已批准 · 演示" : "待人工审核 · 演示"}
-            </span>
-          </div>
-          <div className="work-columns">
-            <section
-              className="evidence-region"
-              id="evidence"
-              aria-label="采购建议与计算依据"
-            >
-              <div className="recommendation-surface">
-                <div className="recommendation">
-                  <div>
-                    <h2>采购建议</h2>
-                    <p className="support">
-                      <ShieldCheck />
-                      <span>根据当前供需</span>
-                      <span>与采购策略计算</span>
-                    </p>
-                  </div>
-                  <div className="quantity">
-                    {f.recommended}
-                    <span>件</span>
-                  </div>
+            <div className="recommendation-surface">
+              <div className="recommendation">
+                <div>
+                  <h2>采购建议</h2>
+                  <p className="support">
+                    <ShieldCheck />
+                    <span>根据当前供需</span>
+                    <span>与采购策略计算</span>
+                  </p>
                 </div>
-                <div
-                  className="equation"
-                  aria-label="当前缺口 30 加 MOQ 调整 70 等于建议采购 100"
-                >
-                  <div>
-                    <strong>{f.shortage}</strong>
-                    <span>当前缺口</span>
-                  </div>
-                  <span className="operator">+</span>
-                  <div>
-                    <strong>{f.adjustment}</strong>
-                    <span>MOQ 调整</span>
-                  </div>
-                  <span className="operator">=</span>
-                  <div>
-                    <strong>{f.recommended}</strong>
-                    <span>建议采购</span>
-                  </div>
+                <div className="quantity">
+                  {f.recommended}
+                  <span>件</span>
                 </div>
               </div>
+              <div
+                className="equation"
+                aria-label="当前缺口 30 加 MOQ 调整 70 等于建议采购 100"
+              >
+                <div>
+                  <strong>{f.shortage}</strong>
+                  <span>当前缺口</span>
+                </div>
+                <span className="operator">+</span>
+                <div>
+                  <strong>{f.adjustment}</strong>
+                  <span>MOQ 调整</span>
+                </div>
+                <span className="operator">=</span>
+                <div>
+                  <strong>{f.recommended}</strong>
+                  <span>建议采购</span>
+                </div>
+              </div>
+            </div>
+            <div className="section-heading">
+              <h2>计算依据</h2>
+              <Action
+                kind="ghost"
+                onClick={(e) => open("evidence", e.currentTarget)}
+              >
+                查看完整依据 <ArrowRight />
+              </Action>
+            </div>
+            <div className="evidence-summary">
+              需求是 <span className="quantity-inline">30 件</span>
+              ，最低起订量是 <span className="quantity-inline">100 件</span>。
+              <br />
+              本次建议因此增加 <span className="quantity-inline">70 件</span>。
+            </div>
+            <div className="evidence-groups">
+              <div className="evidence-group">
+                <h3>需求</h3>
+                <dl>
+                  <div>
+                    <dt>当前缺口</dt>
+                    <dd>
+                      {f.shortage}
+                      <span>件</span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>基础采购需求</dt>
+                    <dd>
+                      {f.base}
+                      <span>件</span>
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+              <div className="evidence-group">
+                <h3>采购策略</h3>
+                <dl>
+                  <div>
+                    <dt>
+                      最低起订量 <span className="inline-english">MOQ</span>
+                    </dt>
+                    <dd>
+                      {f.moq}
+                      <span>件</span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>MOQ 调整</dt>
+                    <dd>
+                      +{f.adjustment}
+                      <span>件</span>
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+            <Collapsible className="source">
+              <CollapsibleTrigger className="disclosure">
+                关于这些数据 <ChevronDown />
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <p>
+                  沿用项目既有 MOQ
+                  模拟场景。这些数值来自既有模拟数据；页面未执行数据导入、校验或采购计算。
+                </p>
+              </CollapsibleContent>
+            </Collapsible>
+            <p className="calculation-note">
+              <ShieldCheck />
+              AI 不参与采购数量计算
+            </p>
+          </section>
+          <section className="decision-region" aria-label="解释与人工决策">
+            <div className="explanation">
               <div className="section-heading">
-                <h2>计算依据</h2>
+                <h2>
+                  <MessageCircle />
+                  AI 解释
+                </h2>
+                <span className="role-label">仅解释</span>
+              </div>
+              <h3>为什么建议采购 100 件？</h3>
+              <p>
+                目前需要补足 <span className="quantity-inline">30 件</span>
+                ，但最低起订量为 <span className="quantity-inline">100 件</span>
+                。因此，建议在基础需求上增加{" "}
+                <span className="quantity-inline">70 件</span>，采购{" "}
+                <span className="quantity-inline">100 件</span>。
+              </p>
+              <p className="prepared-note">
+                预置演示解释 · 无实时 AI 请求 · 非 runtime 证据
+              </p>
+              <div className="ai-disclosure">
                 <Action
                   kind="ghost"
-                  onClick={(e) => open("evidence", e.currentTarget)}
+                  onClick={(e) => open("explanation", e.currentTarget)}
                 >
-                  查看完整依据 <ArrowRight />
+                  查看 AI 解释 <ArrowRight />
                 </Action>
               </div>
-              <div className="evidence-summary">
-                需求是 <span className="quantity-inline">30 件</span>
-                ，最低起订量是 <span className="quantity-inline">100 件</span>。
-                <br />
-                本次建议因此增加 <span className="quantity-inline">70 件</span>
-                。
+            </div>
+            <div className="human-review" id="review">
+              <div className="section-heading">
+                <h2>人工审核</h2>
+                <span className="role-label">
+                  {approved ? "已批准" : "待决定"}
+                </span>
               </div>
-              <div className="evidence-groups">
-                <div className="evidence-group">
-                  <h3>需求</h3>
-                  <dl>
-                    <div>
-                      <dt>当前缺口</dt>
-                      <dd>
-                        {f.shortage}
-                        <span>件</span>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>基础采购需求</dt>
-                      <dd>
-                        {f.base}
-                        <span>件</span>
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
-                <div className="evidence-group">
-                  <h3>采购策略</h3>
-                  <dl>
-                    <div>
-                      <dt>
-                        最低起订量 <span className="inline-english">MOQ</span>
-                      </dt>
-                      <dd>
-                        {f.moq}
-                        <span>件</span>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>MOQ 调整</dt>
-                      <dd>
-                        +{f.adjustment}
-                        <span>件</span>
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
-              </div>
-              <Collapsible className="source">
-                <CollapsibleTrigger className="disclosure">
-                  关于这些数据 <ChevronDown />
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <p>
-                    沿用项目既有 MOQ
-                    模拟场景。这些数值来自既有模拟数据；页面未执行数据导入、校验或采购计算。
-                  </p>
-                </CollapsibleContent>
-              </Collapsible>
-              <p className="calculation-note">
-                <ShieldCheck />
-                AI 不参与采购数量计算
+              <p role="status" aria-live="polite">
+                {approved
+                  ? `人工已按建议批准 ${state.decision!.approvedQuantity} 件，原建议保持不变。`
+                  : "建议供你参考，最终决策由人工完成。"}
               </p>
-            </section>
-            <section className="decision-region" aria-label="解释与人工决策">
-              <div className="explanation">
-                <div className="section-heading">
-                  <h2>
-                    <MessageCircle />
-                    AI 解释
-                  </h2>
-                  <span className="role-label">仅解释</span>
-                </div>
-                <h3>为什么建议采购 100 件？</h3>
-                <p>
-                  目前需要补足 <span className="quantity-inline">30 件</span>
-                  ，但最低起订量为{" "}
-                  <span className="quantity-inline">100 件</span>
-                  。因此，建议在基础需求上增加{" "}
-                  <span className="quantity-inline">70 件</span>，采购{" "}
-                  <span className="quantity-inline">100 件</span>。
-                </p>
-                <p className="prepared-note">
-                  预置演示解释 · 无实时 AI 请求 · 非 runtime 证据
-                </p>
-                <div className="ai-disclosure">
+              <div className="review-actions">
+                {!approved ? (
                   <Action
-                    kind="ghost"
-                    onClick={(e) => open("explanation", e.currentTarget)}
+                    ref={reviewButton}
+                    kind="primary"
+                    onClick={(e) => open("review", e.currentTarget)}
                   >
-                    查看 AI 解释 <ArrowRight />
+                    进入人工审核 <ArrowRight />
                   </Action>
-                </div>
-              </div>
-              <div className="human-review" id="review">
-                <div className="section-heading">
-                  <h2>人工审核</h2>
-                  <span className="role-label">
-                    {approved ? "已批准" : "待决定"}
-                  </span>
-                </div>
-                <p role="status" aria-live="polite">
-                  {approved
-                    ? `人工已按建议批准 ${state.decision!.approvedQuantity} 件，原建议保持不变。`
-                    : "建议供你参考，最终决策由人工完成。"}
-                </p>
-                <div className="review-actions">
-                  {!approved ? (
+                ) : (
+                  <>
                     <Action
-                      ref={reviewButton}
+                      ref={draftButton}
                       kind="primary"
-                      onClick={(e) => open("review", e.currentTarget)}
+                      onClick={(e) => open("draft", e.currentTarget)}
                     >
-                      进入人工审核 <ArrowRight />
+                      查看采购申请草稿 <ArrowRight />
                     </Action>
-                  ) : (
-                    <>
-                      <Action
-                        ref={draftButton}
-                        kind="primary"
-                        onClick={(e) => open("draft", e.currentTarget)}
-                      >
-                        查看采购申请草稿 <ArrowRight />
-                      </Action>
-                      <Action
-                        onClick={() => {
-                          dispatch({ type: "RESET" });
-                          requestAnimationFrame(() =>
-                            reviewButton.current?.focus(),
-                          );
-                        }}
-                      >
-                        重新演示
-                      </Action>
-                    </>
-                  )}
-                </div>
-              </div>
-              <div className={`draft ${approved ? "draft-ready" : ""}`}>
-                <FileText />
-                <div>
-                  <h3>采购申请草稿</h3>
-                  <p>
-                    {approved
-                      ? "DRAFT · 人工批准后可预览"
-                      : "尚未形成 · 等待人工决定"}
-                  </p>
-                </div>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Action kind="icon" aria-label="草稿状态说明">
-                      <Info />
+                    <Action
+                      onClick={() => {
+                        dispatch({ type: "RESET" });
+                        requestAnimationFrame(() =>
+                          reviewButton.current?.focus(),
+                        );
+                      }}
+                    >
+                      重新演示
                     </Action>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    className="material system-tooltip"
-                    data-variant={variant}
-                  >
-                    临时展示状态，不是采购订单；刷新或重置后清除。
-                  </TooltipContent>
-                </Tooltip>
+                  </>
+                )}
               </div>
-              <p className="execution-note">人工批准 ≠ 生产执行</p>
-            </section>
-          </div>
-        </main>
-        <footer className="workspace-footer">
-          <span>
-            确定性计算 <ArrowRight /> AI 解释 <ArrowRight /> 人工决策
-          </span>
-          <span>仅展示原型 · 无 ERP 写入 / 采购订单 / 生产执行</span>
-        </footer>
-      </div>
+            </div>
+            <div className={`draft ${approved ? "draft-ready" : ""}`}>
+              <FileText />
+              <div>
+                <h3>采购申请草稿</h3>
+                <p>
+                  {approved
+                    ? "DRAFT · 人工批准后可预览"
+                    : "尚未形成 · 等待人工决定"}
+                </p>
+              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Action kind="icon" aria-label="草稿状态说明">
+                    <Info />
+                  </Action>
+                </TooltipTrigger>
+                <TooltipContent
+                  className="material system-tooltip"
+                  data-variant={variant}
+                >
+                  临时展示状态，不是采购订单；刷新或重置后清除。
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <p className="execution-note">人工批准 ≠ 生产执行</p>
+          </section>
+        </div>
+      </main>
       <Dialog
         open={state.dialog !== null}
         onOpenChange={(value) => {
@@ -485,7 +449,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
           )}
         </DialogContent>
       </Dialog>
-    </section>
+    </AppShell>
   );
 }
 function App() {
@@ -497,17 +461,15 @@ function App() {
         ) : location.pathname === recommendationPath ? (
           <RecommendationDetail variant="C32" />
         ) : (
-          <section className="design-stage material" data-variant="C32">
-            <div className="workspace">
-              <main>
-                <h1>未找到采购建议</h1>
-                <p>当前演示仅包含一条固定模拟建议。</p>
-                <a className="system-button secondary" href="/">
-                  返回采购决策工作台
-                </a>
-              </main>
-            </div>
-          </section>
+          <AppShell>
+            <main>
+              <h1>未找到采购建议</h1>
+              <p>当前演示仅包含一条固定模拟建议。</p>
+              <a className="system-button secondary" href="/">
+                返回采购决策工作台
+              </a>
+            </main>
+          </AppShell>
         )}
       </div>
     </TooltipProvider>

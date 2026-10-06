@@ -1,6 +1,6 @@
 import { chromium } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
-const out = "review/entry-v1";
+const out = "review/shell-v1-2";
 await mkdir(out, { recursive: true });
 const browser = await chromium.launch();
 const measurements = [];

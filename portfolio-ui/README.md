@@ -64,3 +64,13 @@ Interaction v1已获Human接受，本增量以ccd0bf1为基线。`/`仅负责发
 `npm test`覆盖30项（三视口），新增身份来源、入口→既有主路径、未知路径与深链刷新。入口截图：`node scripts/capture-entry.mjs`，输出review/entry-v1。
 
 STOP FOR HUMAN ENTRY-PAGE REVIEW。不得自动扩展下一里程碑或merge main。
+
+## Workspace Shell v1.2（当前增量）
+
+以已接受的 Entry v1（07d495d）为基线。两页共用96px石墨导航栏与简化上下文栏；唯一模块「采购决策」返回工作台。手机使用紧凑顶栏，无折叠菜单。详情正文、fixture与状态 reducer 保持不变。
+
+入口以一个连续概况条呈现固定模拟事实，桌面任务行116px；整行原生链接支持点击、Enter、清晰焦点与180ms悬停，箭头移动3px。没有新增业务模块。
+
+当前39项Playwright测试通过，覆盖1440×800、1280×800、390及既有Interaction v1路径。截图命令 `node scripts/capture-entry.mjs` 输出 `review/shell-v1-2`；此前 entry-v1 记录为历史交付。
+
+STOP FOR HUMAN WORKSPACE SHELL REVIEW。未进入runtime集成，未merge main。

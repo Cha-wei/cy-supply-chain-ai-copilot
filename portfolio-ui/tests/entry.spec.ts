@@ -39,10 +39,10 @@ test("workspace discovers one task and continues the accepted detail path", asyn
   );
   await expect(page.getByRole("article")).toContainText("模拟展示名称");
   await expect(
-    page.locator(".entry-facts>div").filter({ hasText: "当前缺口" }),
+    page.locator(".task-quantities>div").filter({ hasText: "当前缺口" }),
   ).toContainText("30件");
   await expect(
-    page.locator(".entry-facts>div").filter({ hasText: "建议采购量" }),
+    page.locator(".task-quantities>div").filter({ hasText: "建议采购量" }),
   ).toContainText("100件");
   await expect(page.getByRole("article")).toContainText("MOQ");
   await expect(page.getByRole("article")).toContainText("待人工审核");
