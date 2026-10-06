@@ -45,4 +45,3 @@ await writeFile(
   JSON.stringify(measurements, null, 2),
 );
 await browser.close();
-
