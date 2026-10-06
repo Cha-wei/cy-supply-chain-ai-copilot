@@ -1,0 +1,146 @@
+[
+  {
+    "name": "pending",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "height": 796.71875
+  },
+  {
+    "name": "override-dialog",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "height": 796.71875
+  },
+  {
+    "name": "override-summary",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "height": 1013.015625
+  },
+  {
+    "name": "override-draft",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "height": 1013.015625
+  },
+  {
+    "name": "invalid-override",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "height": 796.71875
+  },
+  {
+    "name": "reject-dialog",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "height": 796.71875
+  },
+  {
+    "name": "reject-summary",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "height": 944.015625
+  },
+  {
+    "name": "approve-summary",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "height": 910.21875
+  },
+  {
+    "name": "pending",
+    "width": 1280,
+    "scrollWidth": 1280,
+    "height": 796.71875
+  },
+  {
+    "name": "override-dialog",
+    "width": 1280,
+    "scrollWidth": 1280,
+    "height": 796.71875
+  },
+  {
+    "name": "override-summary",
+    "width": 1280,
+    "scrollWidth": 1280,
+    "height": 1013.015625
+  },
+  {
+    "name": "override-draft",
+    "width": 1280,
+    "scrollWidth": 1280,
+    "height": 1013.015625
+  },
+  {
+    "name": "invalid-override",
+    "width": 1280,
+    "scrollWidth": 1280,
+    "height": 796.71875
+  },
+  {
+    "name": "reject-dialog",
+    "width": 1280,
+    "scrollWidth": 1280,
+    "height": 796.71875
+  },
+  {
+    "name": "reject-summary",
+    "width": 1280,
+    "scrollWidth": 1280,
+    "height": 944.015625
+  },
+  {
+    "name": "approve-summary",
+    "width": 1280,
+    "scrollWidth": 1280,
+    "height": 910.21875
+  },
+  {
+    "name": "pending",
+    "width": 390,
+    "scrollWidth": 390,
+    "height": 1677.0625
+  },
+  {
+    "name": "override-dialog",
+    "width": 390,
+    "scrollWidth": 390,
+    "height": 1677.0625
+  },
+  {
+    "name": "override-summary",
+    "width": 390,
+    "scrollWidth": 390,
+    "height": 1920.359375
+  },
+  {
+    "name": "override-draft",
+    "width": 390,
+    "scrollWidth": 390,
+    "height": 1920.359375
+  },
+  {
+    "name": "invalid-override",
+    "width": 390,
+    "scrollWidth": 390,
+    "height": 1677.0625
+  },
+  {
+    "name": "reject-dialog",
+    "width": 390,
+    "scrollWidth": 390,
+    "height": 1677.0625
+  },
+  {
+    "name": "reject-summary",
+    "width": 390,
+    "scrollWidth": 390,
+    "height": 1772.359375
+  },
+  {
+    "name": "approve-summary",
+    "width": 390,
+    "scrollWidth": 390,
+    "height": 1817.5625
+  }
+]
