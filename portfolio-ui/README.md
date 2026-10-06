@@ -100,3 +100,7 @@ Final Copy Polish：人工决定摘要只显示系统建议、人工批准、决
 验证：87项Playwright（三视口），包含原63项行为回归；旧单元测试仅适配嵌套review字段与显式reviewId，断言未弱化。截图命令`node scripts/capture-stale.mjs`；记录见`review/stale-v3/validation.md`。
 
 STOP FOR HUMAN STALE / RE-REVIEW REVIEW。不接runtime，不merge main。
+
+## Runtime integration tranche
+
+Human 已授权 ADR-003 下的首轮连接实施（2026-10-06）；当前仅登记执行范围，尚未声称 CONNECTED 或 IMPLEMENTED。真实 hosted AI 与 merge 未获授权。验证完成后在同一 implementation PR 同步结果。
