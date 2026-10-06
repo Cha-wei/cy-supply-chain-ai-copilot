@@ -30,7 +30,7 @@ for (const width of [1440, 1280, 390]) {
   await page.getByRole("button", { name: "查看 AI 解释" }).click();
   if (width === 1440) await shot("explanation");
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "进入人工审核" }).click();
+  await page.getByRole("button", { name: "按建议批准", exact: true }).click();
   if (width === 1440) await shot("review");
   await page.getByRole("button", { name: "按建议批准 100 件" }).click();
   await page.waitForTimeout(250);
@@ -45,3 +45,4 @@ await writeFile(
   JSON.stringify(measurements, null, 2),
 );
 await browser.close();
+
