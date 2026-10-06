@@ -9,7 +9,6 @@ export type DialogName =
   | "reject"
   | "draft"
   | "boundary";
-// Presentation-only record. Override is an approval with a truthful flag, not a canonical enum.
 type Source = Readonly<{ actor: "Human"; sourceRecommendation: string }>;
 export type PresentationDecision = Source &
   (
@@ -22,43 +21,150 @@ export type PresentationDecision = Source &
       }>
     | Readonly<{ kind: "reject"; reason: string }>
   );
+// Demo sentinels only: not real AnalysisRun generation, detection or runtime metadata.
+export const bindingComponents = [
+  "analysis_run_id",
+  "snapshot_package_identity",
+  "accepted_content_view_digest",
+  "analysis_date",
+] as const;
+export type DemoBinding = Readonly<
+  Record<(typeof bindingComponents)[number], string>
+>;
+export const preparedBinding: DemoBinding = Object.freeze({
+  analysis_run_id: "SIMULATED-RUN-1",
+  snapshot_package_identity: "SIMULATED-PACKAGE",
+  accepted_content_view_digest: "SIMULATED-CONTENT-1",
+  analysis_date: "SIMULATED-DATE",
+});
+export function sameBinding(a: DemoBinding, b: DemoBinding) {
+  return bindingComponents.every((key) => a[key] === b[key]);
+}
+export type PresentationReview = Readonly<{
+  id: number;
+  binding: DemoBinding;
+  stale: boolean;
+  decision: PresentationDecision | null;
+  draftViewed: boolean;
+}>;
+function createReview(id: number, binding: DemoBinding): PresentationReview {
+  return Object.freeze({
+    id,
+    binding: Object.freeze({ ...binding }),
+    stale: false,
+    decision: null,
+    draftViewed: false,
+  });
+}
 export type State = Readonly<{
   dialog: DialogName | null;
   evidenceViewed: boolean;
   explanationViewed: boolean;
-  draftViewed: boolean;
-  decision: PresentationDecision | null;
+  review: PresentationReview;
+  // Only the immediately replaced snapshot; no history UI, persistence or audit log.
+  previousReview: PresentationReview | null;
+  currentBinding: DemoBinding;
+  explanationRetired: boolean;
+  simulationSequence: number;
 }>;
 export const initialState: State = Object.freeze({
   dialog: null,
   evidenceViewed: false,
   explanationViewed: false,
-  draftViewed: false,
-  decision: null,
+  review: createReview(1, preparedBinding),
+  previousReview: null,
+  currentBinding: preparedBinding,
+  explanationRetired: false,
+  simulationSequence: 1,
 });
-type Event =
+export type Event =
   | { type: "OPEN"; dialog: DialogName }
   | { type: "CLOSE" }
-  | { type: "APPROVE" }
-  | { type: "OVERRIDE"; quantity: string; reason: string }
-  | { type: "REJECT"; reason: string }
+  | { type: "APPROVE"; reviewId: number }
+  | { type: "OVERRIDE"; reviewId: number; quantity: string; reason: string }
+  | { type: "REJECT"; reviewId: number; reason: string }
+  | { type: "SIMULATE_RUN"; binding: DemoBinding }
+  | { type: "REREVIEW" }
   | { type: "RESET" };
+export function nextDemoBinding(state: State): DemoBinding {
+  return Object.freeze({
+    ...state.currentBinding,
+    analysis_run_id: `SIMULATED-RUN-${state.simulationSequence + 1}`,
+    accepted_content_view_digest: `SIMULATED-CONTENT-${state.simulationSequence + 1}`,
+  });
+}
+export function isStale(state: State) {
+  return (
+    state.review.stale ||
+    !sameBinding(state.review.binding, state.currentBinding)
+  );
+}
+export function explanationAvailable(state: State) {
+  return (
+    !isStale(state) &&
+    !state.explanationRetired &&
+    sameBinding(preparedBinding, state.currentBinding)
+  );
+}
+export function draftAvailable(state: State) {
+  return !isStale(state) && state.review.decision?.kind === "approve";
+}
 const source = {
   actor: "Human" as const,
   sourceRecommendation: scenario.recommended,
 };
+function record(state: State, decision: PresentationDecision): State {
+  return {
+    ...state,
+    dialog: null,
+    review: Object.freeze({
+      ...state.review,
+      decision: Object.freeze(decision),
+    }),
+  };
+}
 export function reducer(state: State, event: Event): State {
+  const review = state.review;
+  if ("reviewId" in event && (event.reviewId !== review.id || isStale(state)))
+    return state;
   switch (event.type) {
+    // Reset restarts the whole disposable demo; it never mutates the old review object.
     case "RESET":
       return initialState;
     case "CLOSE":
       return { ...state, dialog: null };
+    case "SIMULATE_RUN": {
+      const binding = Object.freeze({ ...event.binding });
+      const stale = review.stale || !sameBinding(review.binding, binding);
+      return {
+        ...state,
+        currentBinding: binding,
+        simulationSequence: state.simulationSequence + 1,
+        dialog: null,
+        explanationRetired: state.explanationRetired || stale,
+        review:
+          stale && !review.stale
+            ? Object.freeze({ ...review, stale: true })
+            : review,
+      };
+    }
+    case "REREVIEW":
+      if (!isStale(state)) return state;
+      return {
+        ...state,
+        dialog: null,
+        evidenceViewed: false,
+        explanationViewed: false,
+        previousReview: review,
+        review: createReview(review.id + 1, state.currentBinding),
+      };
     case "OPEN":
-      if (event.dialog === "draft" && state.decision?.kind !== "approve")
+      if (event.dialog === "draft" && !draftAvailable(state)) return state;
+      if (event.dialog === "explanation" && !explanationAvailable(state))
         return state;
       if (
         ["review", "override", "reject"].includes(event.dialog) &&
-        state.decision
+        (review.decision || isStale(state))
       )
         return state;
       return {
@@ -67,62 +173,51 @@ export function reducer(state: State, event: Event): State {
         evidenceViewed: state.evidenceViewed || event.dialog === "evidence",
         explanationViewed:
           state.explanationViewed || event.dialog === "explanation",
-        draftViewed: state.draftViewed || event.dialog === "draft",
+        review:
+          event.dialog === "draft"
+            ? Object.freeze({ ...review, draftViewed: true })
+            : review,
       };
     case "APPROVE":
-      if (state.dialog !== "review" || state.decision) return state;
-      return {
-        ...state,
-        dialog: null,
-        decision: Object.freeze({
-          ...source,
-          kind: "approve",
-          approvedQuantity: scenario.recommended,
-          override: false,
-        }),
-      };
+      if (state.dialog !== "review" || review.decision) return state;
+      return record(state, {
+        ...source,
+        kind: "approve",
+        approvedQuantity: scenario.recommended,
+        override: false,
+      });
     case "OVERRIDE":
       if (
         state.dialog !== "override" ||
-        state.decision ||
+        review.decision ||
         Object.keys(validateOverride(event.quantity, event.reason)).length
       )
         return state;
-      return {
-        ...state,
-        dialog: null,
-        decision: Object.freeze({
-          ...source,
-          kind: "approve",
-          approvedQuantity: event.quantity,
-          override: true,
-          reason: event.reason,
-        }),
-      };
+      return record(state, {
+        ...source,
+        kind: "approve",
+        approvedQuantity: event.quantity,
+        override: true,
+        reason: event.reason,
+      });
     case "REJECT":
       if (
         state.dialog !== "reject" ||
-        state.decision ||
+        review.decision ||
         reasonError(event.reason)
       )
         return state;
-      return {
-        ...state,
-        dialog: null,
-        decision: Object.freeze({
-          ...source,
-          kind: "reject",
-          reason: event.reason,
-        }),
-      };
+      return record(state, { ...source, kind: "reject", reason: event.reason });
   }
 }
 export function demoStep(state: State) {
-  if (state.decision?.kind === "reject") return "REJECTED";
-  if (state.decision?.kind === "approve")
-    return state.draftViewed
+  if (isStale(state)) return "STALE";
+  const { decision, draftViewed } = state.review;
+  if (decision?.kind === "reject") return "REJECTED";
+  if (decision?.kind === "approve")
+    return draftViewed
       ? "DRAFT_READY"
-      : state.decision.override
+      : decision.override
         ? "OVERRIDDEN"
         : "APPROVED";
   if (state.dialog && ["review", "override", "reject"].includes(state.dialog))

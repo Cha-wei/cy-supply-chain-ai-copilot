@@ -1,0 +1,107 @@
+[
+  {
+    "name": "demo-controls",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "reviewId": "1",
+    "state": "RECOMMENDATION_READY"
+  },
+  {
+    "name": "pending-stale",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "reviewId": "1",
+    "state": "STALE"
+  },
+  {
+    "name": "override-stale",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "reviewId": "1",
+    "state": "STALE"
+  },
+  {
+    "name": "new-review",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "reviewId": "2",
+    "state": "RECOMMENDATION_READY"
+  },
+  {
+    "name": "new-draft",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "reviewId": "2",
+    "state": "DRAFT_READY"
+  },
+  {
+    "name": "demo-controls",
+    "width": 1280,
+    "scrollWidth": 1280,
+    "reviewId": "1",
+    "state": "RECOMMENDATION_READY"
+  },
+  {
+    "name": "pending-stale",
+    "width": 1280,
+    "scrollWidth": 1280,
+    "reviewId": "1",
+    "state": "STALE"
+  },
+  {
+    "name": "override-stale",
+    "width": 1280,
+    "scrollWidth": 1280,
+    "reviewId": "1",
+    "state": "STALE"
+  },
+  {
+    "name": "new-review",
+    "width": 1280,
+    "scrollWidth": 1280,
+    "reviewId": "2",
+    "state": "RECOMMENDATION_READY"
+  },
+  {
+    "name": "new-draft",
+    "width": 1280,
+    "scrollWidth": 1280,
+    "reviewId": "2",
+    "state": "DRAFT_READY"
+  },
+  {
+    "name": "demo-controls",
+    "width": 390,
+    "scrollWidth": 390,
+    "reviewId": "1",
+    "state": "RECOMMENDATION_READY"
+  },
+  {
+    "name": "pending-stale",
+    "width": 390,
+    "scrollWidth": 390,
+    "reviewId": "1",
+    "state": "STALE"
+  },
+  {
+    "name": "override-stale",
+    "width": 390,
+    "scrollWidth": 390,
+    "reviewId": "1",
+    "state": "STALE"
+  },
+  {
+    "name": "new-review",
+    "width": 390,
+    "scrollWidth": 390,
+    "reviewId": "2",
+    "state": "RECOMMENDATION_READY"
+  },
+  {
+    "name": "new-draft",
+    "width": 390,
+    "scrollWidth": 390,
+    "reviewId": "2",
+    "state": "DRAFT_READY"
+  }
+]

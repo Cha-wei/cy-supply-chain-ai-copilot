@@ -34,20 +34,31 @@ test("exact override grammar, precision and guards match existing semantics", ()
   for (const quantity of invalid) {
     expect(validateOverride(quantity, "原因").quantity, quantity).toBeTruthy();
     expect(
-      reducer(opened, { type: "OVERRIDE", quantity, reason: "原因" }),
+      reducer(opened, {
+        type: "OVERRIDE",
+        reviewId: 1,
+        quantity,
+        reason: "原因",
+      }),
     ).toBe(opened);
   }
   for (const quantity of [null, undefined, 120, 120.5, [], {}])
     expect(validateOverride(quantity, "原因").quantity).toBeTruthy();
   for (const reason of ["", "  ", "\n\t"]) {
-    expect(reducer(opened, { type: "OVERRIDE", quantity: "120", reason })).toBe(
-      opened,
-    );
+    expect(
+      reducer(opened, {
+        type: "OVERRIDE",
+        reviewId: 1,
+        quantity: "120",
+        reason,
+      }),
+    ).toBe(opened);
     expect(
       reducer(reducer(initialState, { type: "OPEN", dialog: "reject" }), {
         type: "REJECT",
+        reviewId: 1,
         reason,
-      }).decision,
+      }).review.decision,
     ).toBeNull();
   }
   for (const quantity of [
@@ -62,10 +73,11 @@ test("exact override grammar, precision and guards match existing semantics", ()
   ]) {
     const result = reducer(opened, {
       type: "OVERRIDE",
+      reviewId: 1,
       quantity,
       reason: " 人工原文\n保留 ",
     });
-    expect(result.decision).toEqual({
+    expect(result.review.decision).toEqual({
       actor: "Human",
       kind: "approve",
       approvedQuantity: quantity,
@@ -74,50 +86,65 @@ test("exact override grammar, precision and guards match existing semantics", ()
       reason: " 人工原文\n保留 ",
     });
     expect(demoStep(result)).toBe("OVERRIDDEN");
-    expect(reducer(result, { type: "OPEN", dialog: "draft" }).draftViewed).toBe(
-      true,
-    );
+    expect(
+      reducer(result, { type: "OPEN", dialog: "draft" }).review.draftViewed,
+    ).toBe(true);
     for (const dialog of ["review", "override", "reject"] as const)
       expect(reducer(result, { type: "OPEN", dialog })).toBe(result);
     expect(
-      reducer(result, { type: "OVERRIDE", quantity: "150", reason: "重复" }),
+      reducer(result, {
+        type: "OVERRIDE",
+        reviewId: 1,
+        quantity: "150",
+        reason: "重复",
+      }),
     ).toBe(result);
-    expect(reducer(result, { type: "REJECT", reason: "重复" })).toBe(result);
+    expect(
+      reducer(result, { type: "REJECT", reviewId: 1, reason: "重复" }),
+    ).toBe(result);
   }
   expect(scenario.recommended).toBe("100");
   expect(
     reducer(initialState, {
       type: "OVERRIDE",
+      reviewId: 1,
       quantity: "120",
       reason: "原因",
     }),
   ).toBe(initialState);
-  expect(reducer(initialState, { type: "REJECT", reason: "原因" })).toBe(
-    initialState,
-  );
+  expect(
+    reducer(initialState, { type: "REJECT", reviewId: 1, reason: "原因" }),
+  ).toBe(initialState);
 });
 
 test("reject has no approved quantity, blocks Draft and repeated decisions", () => {
   const rejected = reducer(
     reducer(initialState, { type: "OPEN", dialog: "reject" }),
-    { type: "REJECT", reason: "不批准" },
+    { type: "REJECT", reviewId: 1, reason: "不批准" },
   );
-  expect(rejected.decision).toEqual({
+  expect(rejected.review.decision).toEqual({
     kind: "reject",
     actor: "Human",
     sourceRecommendation: "100",
     reason: "不批准",
   });
-  expect(rejected.decision).not.toHaveProperty("approvedQuantity");
+  expect(rejected.review.decision).not.toHaveProperty("approvedQuantity");
   expect(demoStep(rejected)).toBe("REJECTED");
   expect(reducer(rejected, { type: "OPEN", dialog: "draft" })).toBe(rejected);
   for (const dialog of ["review", "override", "reject"] as const)
     expect(reducer(rejected, { type: "OPEN", dialog })).toBe(rejected);
-  expect(reducer(rejected, { type: "APPROVE" })).toBe(rejected);
+  expect(reducer(rejected, { type: "APPROVE", reviewId: 1 })).toBe(rejected);
   expect(
-    reducer(rejected, { type: "OVERRIDE", quantity: "120", reason: "再批准" }),
+    reducer(rejected, {
+      type: "OVERRIDE",
+      reviewId: 1,
+      quantity: "120",
+      reason: "再批准",
+    }),
   ).toBe(rejected);
-  expect(reducer(rejected, { type: "REJECT", reason: "重复" })).toBe(rejected);
+  expect(
+    reducer(rejected, { type: "REJECT", reviewId: 1, reason: "重复" }),
+  ).toBe(rejected);
   expect(reducer(rejected, { type: "RESET" })).toBe(initialState);
 });
 

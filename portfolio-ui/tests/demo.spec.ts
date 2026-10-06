@@ -3,22 +3,24 @@ import { initialState, reducer, demoStep } from "../src/state";
 import { scenario, recommendationPath } from "../src/fixture";
 
 test("presentation guards cannot invent or repeat Human approval", () => {
-  expect(reducer(initialState, { type: "APPROVE" })).toBe(initialState);
+  expect(reducer(initialState, { type: "APPROVE", reviewId: 1 })).toBe(
+    initialState,
+  );
   expect(reducer(initialState, { type: "OPEN", dialog: "draft" })).toBe(
     initialState,
   );
   const review = reducer(initialState, { type: "OPEN", dialog: "review" });
   const cancel = reducer(review, { type: "CLOSE" });
-  expect(cancel.decision).toBeNull();
-  const approved = reducer(review, { type: "APPROVE" });
-  expect(approved.decision).toEqual({
+  expect(cancel.review.decision).toBeNull();
+  const approved = reducer(review, { type: "APPROVE", reviewId: 1 });
+  expect(approved.review.decision).toEqual({
     kind: "approve",
     actor: "Human",
     approvedQuantity: "100",
     sourceRecommendation: "100",
     override: false,
   });
-  expect(reducer(approved, { type: "APPROVE" })).toBe(approved);
+  expect(reducer(approved, { type: "APPROVE", reviewId: 1 })).toBe(approved);
   expect(reducer(approved, { type: "OPEN", dialog: "review" })).toBe(approved);
   expect(scenario.recommended).toBe("100");
   expect(demoStep(reducer(approved, { type: "OPEN", dialog: "draft" }))).toBe(

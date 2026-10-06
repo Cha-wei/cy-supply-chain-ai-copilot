@@ -1,4 +1,4 @@
-# Portfolio Demo — Human Decision Interaction v2
+# Portfolio Demo — Human Decision v3
 
 SIMULATED / presentation-only。React + TypeScript + Vite + Tailwind，shadcn/Radix交互原语。无API、Python bridge、真实AI请求、数据库、身份/权限强制或生产写入。
 
@@ -30,13 +30,13 @@ npm run dev -- --port 4190 --strictPort
 - [POC Design §6.1](../docs/design/poc-design-v0.2.md)：decision-derived Draft与DRAFT/非PO/非生产边界。
 - fixture源自 `tests/test_hitl_review.py::_FIXTURE_FACT_TEXT`，数值仅字符串投影；TypeScript不实现max(shortage,MOQ)或等价规则。
 
-Canonical允许initial Draft；本演示按当前Human任务刻意只开放批准后的Draft，不修改canonical语义。Human Decision v2仅扩展显式Override和Reject；未实现Stale、Re-review、AI unavailable、supplier risk扩展。
+Canonical允许initial Draft；本演示按当前Human任务刻意只开放批准后的Draft，不修改canonical语义。Human Decision v2仅扩展显式Override和Reject；v3仅增加AnalysisRun失配所需的Stale/Re-review与旧解释不可用；未增加一般AI故障处理或supplier risk扩展。
 
 ## UI状态
 
 `RECOMMENDATION_READY / EVIDENCE_VIEWED / EXPLANATION_VIEWED / REVIEW_OPEN / APPROVED / OVERRIDDEN / REJECTED / DRAFT_READY` 只是当前UI演示状态，不是canonical workflow enum。
 
-`src/state.ts`管理临时决定与弹窗。三类决定仅在对应确认窗口有效；已有决定不可重复、修改或拒绝。批准方可查看Draft；Reject的联合类型不存在approvedQuantity。RESET与刷新清空状态，不持久保存。
+`src/state.ts`管理独立的临时review实例与弹窗；决定、绑定、stale标记和草稿阅读状态属于对应review。三类决定仅在对应确认窗口与reviewId有效；已有决定不可重复、修改或拒绝。非stale批准方可查看Draft；Reject的联合类型不存在approvedQuantity。RESET与刷新重启整个演示，不修改旧对象、不持久保存。
 
 `src/decision-input.ts`按 [POC Design §10.4/§10.5](../docs/design/poc-design-v0.2.md) 与 `snapshot_loader/exact_quantity.py` 的既有格式验证Human输入：带可选正负号的完整十进制字符串、>0、>= fixture MOQ、非空原因。拒绝科学计数法、千分位、空白、非数字、缺少整数/小数部分；不做修复、取整或自动提高至MOQ。BigInt缩放整数仅用于精确比较；不重新计算采购建议。批准数量与原因保留输入原文，Draft直接读取决定。即使输入100仍记录显式override；内部kind依然approve加override标识，不引入canonical modify/override枚举。
 
@@ -77,7 +77,7 @@ STOP FOR HUMAN ENTRY-PAGE REVIEW。不得自动扩展下一里程碑或merge mai
 
 STOP FOR HUMAN WORKSPACE SHELL REVIEW。未进入runtime集成，未merge main。
 
-## Human Decision Interaction v2（当前增量）
+## Human Decision Interaction v2（已接受基线）
 
 以e5d5d4c为基线，Shell与工作台不变。详情补充三类决定、Override/Reject弹窗、字段错误与一致的决定摘要。仍仅为当前演示者的浏览器内显式操作，不是认证身份或真实审批记录。
 
@@ -86,3 +86,17 @@ STOP FOR HUMAN WORKSPACE SHELL REVIEW。未进入runtime集成，未merge main�
 STOP FOR HUMAN DECISION REVIEW。不自动实现下阶段功能，不merge main。
 
 Final Copy Polish：人工决定摘要只显示系统建议、人工批准、决定方式与原因，不计算或显示人工差额，以免与确定性MOQ调整70混淆。Override状态为「已修改并批准 · 演示」。状态机、校验和草稿行为保持不变。
+
+## Human Decision v3 — Stale / Re-review（当前增量）
+
+从Human指定的864785e58138d4e2f042d7c2bb50ed94391d44e0新建分支；开工前重新fetch并确认main为78427dc67e9dcc1ca79342fd77e5b4ac9c6f2f48。PR #244保留原状。
+
+在详情右上角「展示边界」→「演示控制」点击「模拟输入数据更新」。这只变更带SIMULATED标记的前端占位绑定，不是真实AnalysisRun生成或检测。比较的四组件严格来自POC Design §6 HD-4 / §10.3：analysis_run_id、snapshot_package_identity、accepted_content_view_digest、analysis_date。rule/code-version freshness仍未解决。
+
+任一失配使当前review永久stale；旧决定只作参考，三条决定入口、旧解释和草稿操作被阻断。已批准草稿显示STALE / NON-ACTIONABLE。点击「重新审核」创建全新review对象与id，旧review作为最近一次只读内存快照保持stale，不继承批准/override/reject/草稿；没有历史列表或持久审计。任何带旧reviewId的确认事件在新审核中被拒绝。
+
+旧解释一旦因失配retired，本次演示内不能恢复，即使绑定恢复或固定数字仍相同。新review允许不依赖AI解释作确定性人工决定；没有生成新解释。固定30/30/100/70/100仅为演示投影，不声称重新计算或跨run等价。
+
+验证：87项Playwright（三视口），包含原63项行为回归；旧单元测试仅适配嵌套review字段与显式reviewId，断言未弱化。截图命令`node scripts/capture-stale.mjs`；记录见`review/stale-v3/validation.md`。
+
+STOP FOR HUMAN STALE / RE-REVIEW REVIEW。不接runtime，不merge main。

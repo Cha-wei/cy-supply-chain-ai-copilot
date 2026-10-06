@@ -2198,3 +2198,59 @@ body:has(.demo-page) [data-slot="dialog-overlay"] {
     width: 100%;
   }
 }
+
+/* Freshness presentation only; existing C3.2 materials and shell stay intact. */
+.demo-page .freshness-note {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #75603b;
+  margin: -6px 0 24px;
+  max-width: 85ch;
+}
+.explanation-unavailable h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.explanation-unavailable h2 svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.6;
+}
+.demo-page .stale-decision-note {
+  margin-top: 18px;
+}
+.demo-page .stale-decision-note h3 {
+  font-size: 14px;
+  font-weight: 500;
+}
+.demo-page .stale-decision-note p {
+  font-size: 12px;
+  line-height: 1.7;
+  margin-top: 4px;
+  color: #75603b;
+}
+.demo-page .stale-summary {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.demo-controls {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.demo-controls h3 {
+  width: 100%;
+  font-size: 16px;
+  font-weight: 500;
+}
+.demo-controls p {
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+.demo-controls .system-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

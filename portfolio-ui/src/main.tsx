@@ -1,5 +1,14 @@
 import { useReducer, useRef } from "react";
-import { initialState, reducer, demoStep, type DialogName } from "./state";
+import {
+  initialState,
+  reducer,
+  demoStep,
+  type DialogName,
+  isStale,
+  draftAvailable,
+  explanationAvailable,
+  nextDemoBinding,
+} from "./state";
 import { createRoot } from "react-dom/client";
 import {
   ArrowRight,
@@ -82,11 +91,15 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
   const reviewButton = useRef<HTMLButtonElement>(null);
   const draftButton = useRef<HTMLButtonElement>(null);
   const resetButton = useRef<HTMLButtonElement>(null);
+  const rereviewButton = useRef<HTMLButtonElement>(null);
   function open(dialog: DialogName, target: HTMLElement) {
     returnFocus.current = target;
     dispatch({ type: "OPEN", dialog });
   }
-  const decision = state.decision;
+  const decision = state.review.decision;
+  const stale = isStale(state);
+  const canDraft = draftAvailable(state);
+  const hasExplanation = explanationAvailable(state);
   const approved = decision?.kind === "approve";
   const decided = decision !== null;
   const decisionLabel =
@@ -119,7 +132,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
       demoState={demoStep(state)}
       onBoundary={(target) => open("boundary", target)}
     >
-      <main>
+      <main data-review-id={state.review.id} data-review-stale={stale}>
         <div className="page-heading">
           <div>
             <h1>采购决策</h1>
@@ -133,11 +146,21 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
           </div>
           <span className="status">
             <span />
-            {decided
-              ? `${approved && decision.override ? decisionLabel : `人工${decisionLabel}`} · 演示`
-              : "待人工审核 · 演示"}
+            {stale
+              ? "审核已失效 · 演示"
+              : decided
+                ? `${approved && decision.override ? decisionLabel : `人工${decisionLabel}`} · 演示`
+                : "待人工审核 · 演示"}
           </span>
         </div>
+        {(stale || state.review.id > 1) && (
+          <p className="freshness-note">
+            {stale
+              ? "已模拟输入数据更新。"
+              : "已创建新的演示审核，上一轮决定与草稿不继承。"}
+            仍展示固定模拟数据，未重新计算；数量相同不代表跨分析上下文等价。
+          </p>
+        )}
         <div className="work-columns">
           <section
             className="evidence-region"
@@ -254,87 +277,138 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
           </section>
           <section className="decision-region" aria-label="解释与人工决策">
             <div className="explanation">
-              <div className="section-heading">
-                <h2>
-                  <MessageCircle />
-                  AI 解释
-                </h2>
-                <span className="role-label">仅解释</span>
-              </div>
-              <h3>为什么建议采购 100 件？</h3>
-              <p>
-                目前需要补足 <span className="quantity-inline">30 件</span>
-                ，但最低起订量为 <span className="quantity-inline">100 件</span>
-                。因此，建议在基础需求上增加{" "}
-                <span className="quantity-inline">70 件</span>，采购{" "}
-                <span className="quantity-inline">100 件</span>。
-              </p>
-              <p className="prepared-note">
-                预置演示解释 · 无实时 AI 请求 · 非 runtime 证据
-              </p>
-              <div className="ai-disclosure">
-                <Action
-                  kind="ghost"
-                  onClick={(e) => open("explanation", e.currentTarget)}
-                >
-                  查看 AI 解释 <ArrowRight />
-                </Action>
-              </div>
+              {hasExplanation ? (
+                <>
+                  <div className="section-heading">
+                    <h2>
+                      <MessageCircle />
+                      AI 解释
+                    </h2>
+                    <span className="role-label">仅解释</span>
+                  </div>
+                  <h3>为什么建议采购 100 件？</h3>
+                  <p>
+                    目前需要补足 <span className="quantity-inline">30 件</span>
+                    ，但最低起订量为{" "}
+                    <span className="quantity-inline">100 件</span>
+                    。因此，建议在基础需求上增加{" "}
+                    <span className="quantity-inline">70 件</span>，采购{" "}
+                    <span className="quantity-inline">100 件</span>。
+                  </p>
+                  <p className="prepared-note">
+                    预置演示解释 · 无实时 AI 请求 · 非 runtime 证据
+                  </p>
+                  <div className="ai-disclosure">
+                    <Action
+                      kind="ghost"
+                      onClick={(e) => open("explanation", e.currentTarget)}
+                    >
+                      查看 AI 解释 <ArrowRight />
+                    </Action>
+                  </div>
+                </>
+              ) : (
+                <div className="explanation-unavailable">
+                  <h2>
+                    <MessageCircle />
+                    AI 解释不可用
+                  </h2>
+                  <p>
+                    旧解释属于上一分析上下文，当前演示未为新的 AnalysisRun
+                    生成新的解释。
+                  </p>
+                  <p className="prepared-note">
+                    没有调用 AI 服务。人工仍可依据确定性事实完成新一轮审核。
+                  </p>
+                </div>
+              )}
             </div>
             <div className="human-review" id="review">
               <div className="section-heading">
-                <h2>{decided ? "人工决定" : "人工审核"}</h2>
+                <h2>
+                  {stale ? "当前审核已失效" : decided ? "人工决定" : "人工审核"}
+                </h2>
                 <span className="role-label">
-                  {decided ? decisionLabel : "待决定"}
+                  {stale ? "需重新审核" : decided ? decisionLabel : "待决定"}
                 </span>
               </div>
               <p role="status" aria-live="polite">
-                {decision?.kind === "reject"
-                  ? "人工已拒绝建议，不形成已批准草稿。"
-                  : approved
-                    ? decision.override
-                      ? `人工已修改并批准 ${decision.approvedQuantity} 件，原建议保持不变。`
-                      : `人工已按建议批准 ${decision.approvedQuantity} 件，原建议保持不变。`
-                    : "建议供你参考，最终决策由人工完成。"}
+                {stale
+                  ? "已模拟输入数据更新，需要基于新的分析上下文重新审核。"
+                  : decision?.kind === "reject"
+                    ? "人工已拒绝建议，不形成已批准草稿。"
+                    : approved
+                      ? decision.override
+                        ? `人工已修改并批准 ${decision.approvedQuantity} 件，原建议保持不变。`
+                        : `人工已按建议批准 ${decision.approvedQuantity} 件，原建议保持不变。`
+                      : "建议供你参考，最终决策由人工完成。"}
               </p>
               {decision && (
-                <dl className="decision-summary">
-                  <div>
-                    <dt>系统建议</dt>
-                    <dd>
-                      {decision.sourceRecommendation}
-                      <span>件</span>
-                    </dd>
-                  </div>
-                  {approved && (
+                <>
+                  {stale && (
+                    <div className="stale-decision-note">
+                      <h3>上一轮人工决定</h3>
+                      <p>已失效，仅供参考；不适用于新的分析上下文。</p>
+                    </div>
+                  )}
+                  <dl
+                    className={`decision-summary ${stale ? "stale-summary" : ""}`}
+                    aria-label={
+                      stale
+                        ? "上一轮人工决定，已失效，仅供参考"
+                        : "人工决定摘要"
+                    }
+                  >
                     <div>
-                      <dt>人工批准</dt>
+                      <dt>系统建议</dt>
                       <dd>
-                        {decision.approvedQuantity}
+                        {decision.sourceRecommendation}
                         <span>件</span>
                       </dd>
                     </div>
-                  )}
-                  <div>
-                    <dt>决定方式</dt>
-                    <dd>
-                      {decision.kind === "reject"
-                        ? "拒绝"
-                        : decision.override
-                          ? "修改数量"
-                          : "按建议批准"}
-                    </dd>
-                  </div>
-                  {"reason" in decision && (
-                    <div className="decision-reason">
-                      <dt>原因</dt>
-                      <dd>{decision.reason}</dd>
+                    {approved && (
+                      <div>
+                        <dt>人工批准</dt>
+                        <dd>
+                          {decision.approvedQuantity}
+                          <span>件</span>
+                        </dd>
+                      </div>
+                    )}
+                    <div>
+                      <dt>决定方式</dt>
+                      <dd>
+                        {decision.kind === "reject"
+                          ? "拒绝"
+                          : decision.override
+                            ? "修改数量"
+                            : "按建议批准"}
+                      </dd>
                     </div>
-                  )}
-                </dl>
+                    {"reason" in decision && (
+                      <div className="decision-reason">
+                        <dt>原因</dt>
+                        <dd>{decision.reason}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </>
               )}
               <div className="review-actions decision-actions">
-                {!decided ? (
+                {stale ? (
+                  <Action
+                    ref={rereviewButton}
+                    kind="primary"
+                    onClick={() => {
+                      dispatch({ type: "REREVIEW" });
+                      requestAnimationFrame(() =>
+                        reviewButton.current?.focus(),
+                      );
+                    }}
+                  >
+                    重新审核 <ArrowRight />
+                  </Action>
+                ) : !decided ? (
                   <>
                     <Action
                       ref={reviewButton}
@@ -359,7 +433,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                   </>
                 ) : (
                   <>
-                    {approved && (
+                    {canDraft && (
                       <Action
                         ref={draftButton}
                         kind="primary"
@@ -383,16 +457,20 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                 )}
               </div>
             </div>
-            <div className={`draft ${approved ? "draft-ready" : ""}`}>
+            <div className={`draft ${canDraft ? "draft-ready" : ""}`}>
               <FileText />
               <div>
                 <h3>采购申请草稿</h3>
                 <p>
-                  {approved
-                    ? "DRAFT · 人工批准后可预览"
-                    : decided
-                      ? "未形成 · 建议已拒绝"
-                      : "尚未形成 · 等待人工决定"}
+                  {stale
+                    ? approved
+                      ? "STALE / NON-ACTIONABLE · 需重新审核"
+                      : "需重新审核 · 尚未形成已批准草稿"
+                    : approved
+                      ? "DRAFT · 人工批准后可预览"
+                      : decided
+                        ? "未形成 · 建议已拒绝"
+                        : "尚未形成 · 等待人工决定"}
                 </p>
               </div>
               <Tooltip>
@@ -405,7 +483,9 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                   className="material system-tooltip"
                   data-variant={variant}
                 >
-                  临时展示状态，不是采购订单；刷新或重置后清除。
+                  {stale
+                    ? "旧草稿不可继续操作，旧批准不适用于新审核。"
+                    : "临时展示状态，不是采购订单；刷新或重置后清除。"}
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -425,7 +505,12 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
           onCloseAutoFocus={(e) => {
             e.preventDefault();
             if (returnFocus.current?.isConnected) returnFocus.current.focus();
-            else (draftButton.current ?? resetButton.current)?.focus();
+            else
+              (
+                rereviewButton.current ??
+                draftButton.current ??
+                resetButton.current
+              )?.focus();
           }}
         >
           <DialogTitle>{state.dialog ? titles[state.dialog] : ""}</DialogTitle>
@@ -440,7 +525,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
               </p>
             </>
           )}
-          {state.dialog === "explanation" && (
+          {state.dialog === "explanation" && hasExplanation && (
             <>
               <p>{f.explanation}</p>
               <Facts />
@@ -469,7 +554,9 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                 </Action>
                 <Action
                   kind="primary"
-                  onClick={() => dispatch({ type: "APPROVE" })}
+                  onClick={() =>
+                    dispatch({ type: "APPROVE", reviewId: state.review.id })
+                  }
                 >
                   按建议批准 {f.recommended} 件
                 </Action>
@@ -484,62 +571,109 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
               onConfirm={(quantity, reason) =>
                 dispatch(
                   state.dialog === "override"
-                    ? { type: "OVERRIDE", quantity, reason }
-                    : { type: "REJECT", reason },
+                    ? {
+                        type: "OVERRIDE",
+                        reviewId: state.review.id,
+                        quantity,
+                        reason,
+                      }
+                    : { type: "REJECT", reviewId: state.review.id, reason },
                 )
               }
             />
           )}
-          {state.dialog === "draft" && state.decision?.kind === "approve" && (
-            <>
-              <dl className="facts draft-facts">
-                <div>
-                  <dt>状态</dt>
-                  <dd>DRAFT</dd>
-                </div>
-                <div>
-                  <dt>人工批准数量</dt>
-                  <dd>
-                    {state.decision.approvedQuantity}
-                    <span>件</span>
-                  </dd>
-                </div>
-                <div>
-                  <dt>来源建议数量</dt>
-                  <dd>
-                    {f.recommended}
-                    <span>件</span>
-                  </dd>
-                </div>
-                <div>
-                  <dt>决定来源</dt>
-                  <dd>人工（Human）</dd>
-                </div>
-                <div>
-                  <dt>ERP 写入</dt>
-                  <dd>否 · NO</dd>
-                </div>
-                <div>
-                  <dt>采购订单（PO）</dt>
-                  <dd>未创建 · NO</dd>
-                </div>
-                <div>
-                  <dt>生产执行</dt>
-                  <dd>否 · NO</dd>
-                </div>
-              </dl>
-              <p>
-                人工批准 ≠
-                生产执行。本草稿仅存在于当前页面内存，不提交、不持久保存，刷新或重置后清除。
-              </p>
-            </>
-          )}
+          {state.dialog === "draft" &&
+            canDraft &&
+            state.review.decision?.kind === "approve" && (
+              <>
+                <dl className="facts draft-facts">
+                  <div>
+                    <dt>状态</dt>
+                    <dd>DRAFT</dd>
+                  </div>
+                  <div>
+                    <dt>人工批准数量</dt>
+                    <dd>
+                      {state.review.decision.approvedQuantity}
+                      <span>件</span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>来源建议数量</dt>
+                    <dd>
+                      {f.recommended}
+                      <span>件</span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>决定来源</dt>
+                    <dd>人工（Human）</dd>
+                  </div>
+                  <div>
+                    <dt>ERP 写入</dt>
+                    <dd>否 · NO</dd>
+                  </div>
+                  <div>
+                    <dt>采购订单（PO）</dt>
+                    <dd>未创建 · NO</dd>
+                  </div>
+                  <div>
+                    <dt>生产执行</dt>
+                    <dd>否 · NO</dd>
+                  </div>
+                </dl>
+                <p>
+                  人工批准 ≠
+                  生产执行。本草稿仅存在于当前页面内存，不提交、不持久保存，刷新或重置后清除。
+                </p>
+              </>
+            )}
           {state.dialog === "boundary" && (
-            <p>
-              沿用项目既有模拟数据。本页面未连接计算、AI 或审批
-              runtime。人工决定仅为当前浏览器中的临时演示状态；未验证身份或权限。不写入
-              ERP，不创建采购订单，不执行生产操作。
-            </p>
+            <>
+              <p>
+                沿用项目既有模拟数据。本页面未连接计算、AI 或审批 runtime。
+                人工决定仅为当前浏览器中的临时演示状态；未验证身份或权限。
+                不写入 ERP，不创建采购订单，不执行生产操作。
+              </p>
+              <div className="demo-controls">
+                <h3>演示控制</h3>
+                <p>
+                  仅模拟既有四组件 AnalysisRun
+                  绑定不一致的失效行为，不表示浏览器检测到了真实数据更新；不生成真实分析运行，不调用
+                  Python、API 或 AI，也不重新计算采购建议。
+                </p>
+                <Action
+                  disabled={stale}
+                  onClick={() => {
+                    returnFocus.current = null;
+                    dispatch({
+                      type: "SIMULATE_RUN",
+                      binding: nextDemoBinding(state),
+                    });
+                  }}
+                >
+                  模拟输入数据更新
+                </Action>
+                {(stale || state.review.id > 1) && (
+                  <Action
+                    onClick={() => {
+                      returnFocus.current = null;
+                      dispatch({ type: "RESET" });
+                      requestAnimationFrame(() =>
+                        reviewButton.current?.focus(),
+                      );
+                    }}
+                  >
+                    重新演示
+                  </Action>
+                )}
+                <p className="prepared-note">
+                  仅比较
+                  analysis_run_id、snapshot_package_identity、accepted_content_view_digest、analysis_date。rule
+                  / code-version freshness 仍未解决。
+                </p>
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
