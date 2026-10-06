@@ -38,7 +38,7 @@ Canonical允许initial Draft；本演示按当前Human任务刻意只开放批�
 
 `src/state.ts`管理临时决定与弹窗。三类决定仅在对应确认窗口有效；已有决定不可重复、修改或拒绝。批准方可查看Draft；Reject的联合类型不存在approvedQuantity。RESET与刷新清空状态，不持久保存。
 
-`src/decision-input.ts`按 [POC Design §10.4/§10.5](../docs/design/poc-design-v0.2.md) 与 `snapshot_loader/exact_quantity.py` 的既有格式验证Human输入：带可选正负号的完整十进制字符串、>0、>= fixture MOQ、非空原因。拒绝科学计数法、千分位、空白、非数字、缺少整数/小数部分；不做修复、取整或自动提高至MOQ。BigInt缩放整数仅用于精确比较和摘要差额；不重新计算采购建议。批准数量与原因保留输入原文，Draft直接读取决定。即使输入100仍记录显式override；内部kind依然approve加override标识，不引入canonical modify/override枚举。
+`src/decision-input.ts`按 [POC Design §10.4/§10.5](../docs/design/poc-design-v0.2.md) 与 `snapshot_loader/exact_quantity.py` 的既有格式验证Human输入：带可选正负号的完整十进制字符串、>0、>= fixture MOQ、非空原因。拒绝科学计数法、千分位、空白、非数字、缺少整数/小数部分；不做修复、取整或自动提高至MOQ。BigInt缩放整数仅用于精确比较；不重新计算采购建议。批准数量与原因保留输入原文，Draft直接读取决定。即使输入100仍记录显式override；内部kind依然approve加override标识，不引入canonical modify/override枚举。
 
 ## 验证
 
@@ -84,3 +84,5 @@ STOP FOR HUMAN WORKSPACE SHELL REVIEW。未进入runtime集成，未merge main�
 构建及63项Playwright验证通过；包括原39项主路径/Shell回归和24项v2三视口验证。截图：`node scripts/capture-decision.mjs`，输出`review/decision-v2`。完整审查记录见该目录validation.md。
 
 STOP FOR HUMAN DECISION REVIEW。不自动实现下阶段功能，不merge main。
+
+Final Copy Polish：人工决定摘要只显示系统建议、人工批准、决定方式与原因，不计算或显示人工差额，以免与确定性MOQ调整70混淆。Override状态为「已修改并批准 · 演示」。状态机、校验和草稿行为保持不变。

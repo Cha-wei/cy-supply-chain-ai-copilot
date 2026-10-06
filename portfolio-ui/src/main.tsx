@@ -13,7 +13,6 @@ import { scenario as f, recommendationPath } from "./fixture";
 import { EntryPage } from "./entry";
 import { AppShell } from "./shell";
 import { DecisionForm } from "./decision-form";
-import { decisionAdjustment } from "./decision-input";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -94,7 +93,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
     decision?.kind === "reject"
       ? "已拒绝"
       : approved && decision.override
-        ? "已调整"
+        ? "已修改并批准"
         : "已批准";
   const titles = {
     evidence: "计算依据",
@@ -134,7 +133,9 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
           </div>
           <span className="status">
             <span />
-            {decided ? `人工${decisionLabel} · 演示` : "待人工审核 · 演示"}
+            {decided
+              ? `${approved && decision.override ? decisionLabel : `人工${decisionLabel}`} · 演示`
+              : "待人工审核 · 演示"}
           </span>
         </div>
         <div className="work-columns">
@@ -310,15 +311,6 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                       <dt>人工批准</dt>
                       <dd>
                         {decision.approvedQuantity}
-                        <span>件</span>
-                      </dd>
-                    </div>
-                  )}
-                  {approved && decision.override && (
-                    <div>
-                      <dt>调整</dt>
-                      <dd>
-                        {decisionAdjustment(decision.approvedQuantity)}
                         <span>件</span>
                       </dd>
                     </div>

@@ -29,3 +29,13 @@
 ## 边界与剩余事项
 
 没有新依赖、Python修改、后台、API、持久化、身份权限、ERP/PO/生产执行。未实现Stale、Re-review、AI unavailable或supplier扩展。技术验证无已知未解决项；Human尚需评审三条决定路径的产品表现。停止在该评审关口。
+
+## Final Copy Polish（2026-10-06）
+
+Human已接受Interaction v2。本次只移除人工摘要「调整」差额行和专用显示计算函数，状态改为「已修改并批准 · 演示」。决定摘要保留系统建议、人工批准、决定方式、原因；不在其他位置展示人工差额。state.ts、输入校验、fixture、CSS、Shell和Draft逻辑未修改。
+
+build PASS；完整Portfolio UI 63项测试PASS（37.4s）。新增精确字段列表、无+20、状态文字、MOQ调整+70不变断言；既有100建议→120批准→120草稿和Reject无草稿继续通过。最终截图在final-copy目录，覆盖1440/1280/390；此前截图为修改前历史记录。
+
+本轮独立Reviewer因用量限制未执行；主执行者已核对限定diff与截图。未声称本轮独立审查通过。现有PR #244保持Draft，不新建Issue/branch/PR，不merge。
+
+Status: READY_FOR_REVIEW — Human Decision v2 Final Polish。远端CI结果见原PR当前提交checks。

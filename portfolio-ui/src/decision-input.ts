@@ -49,18 +49,3 @@ export function validateOverride(
   if (reasonIssue) errors.reason = reasonIssue;
   return errors;
 }
-// Exact display delta only; raw approved input is preserved separately without normalization.
-export function decisionAdjustment(quantity: string): string {
-  const value = parse(quantity),
-    source = parse(scenario.recommended);
-  if (!value || !source) return "";
-  const { a, b, scale } = align(value, source);
-  const delta = a - b;
-  const digits = (delta < 0n ? -delta : delta)
-    .toString()
-    .padStart(scale + 1, "0");
-  const body = scale
-    ? `${digits.slice(0, -scale)}.${digits.slice(-scale)}`
-    : digits;
-  return `${delta > 0n ? "+" : delta < 0n ? "-" : ""}${body}`;
-}

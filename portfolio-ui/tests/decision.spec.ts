@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { reducer, initialState, demoStep } from "../src/state";
-import { decisionAdjustment, validateOverride } from "../src/decision-input";
+import { validateOverride } from "../src/decision-input";
 import { recommendationPath, scenario } from "../src/fixture";
 
 const invalid = [
@@ -84,14 +84,6 @@ test("exact override grammar, precision and guards match existing semantics", ()
     ).toBe(result);
     expect(reducer(result, { type: "REJECT", reason: "重复" })).toBe(result);
   }
-  expect(decisionAdjustment("120")).toBe("+20");
-  expect(decisionAdjustment("100.000000000000000000001")).toBe(
-    "+0.000000000000000000001",
-  );
-  expect(decisionAdjustment("999999999999999999.0001")).toBe(
-    "+999999999999999899.0001",
-  );
-  expect(decisionAdjustment("0100.00")).toBe("0.00");
   expect(scenario.recommended).toBe("100");
   expect(
     reducer(initialState, {
@@ -156,7 +148,19 @@ test("100 → explicit override 120 → Draft 120, source remains 100", async ({
   const summary = page.locator(".decision-summary");
   await expect(summary).toContainText("系统建议100件");
   await expect(summary).toContainText("人工批准120件");
-  await expect(summary).toContainText("调整+20件");
+  await expect(summary.locator("dt")).toHaveText([
+    "系统建议",
+    "人工批准",
+    "决定方式",
+    "原因",
+  ]);
+  await expect(summary).not.toContainText("+20");
+  await expect(page.locator(".page-heading .status")).toHaveText(
+    "已修改并批准 · 演示",
+  );
+  await expect(
+    page.locator(".evidence-group dl > div").filter({ hasText: "MOQ 调整" }),
+  ).toHaveText("MOQ 调整+70件");
   await expect(summary).toContainText("修改数量");
   await expect(summary).toContainText("本次演示选择采购 120 件。");
   const draft = page.getByRole("button", { name: "查看采购申请草稿" });
