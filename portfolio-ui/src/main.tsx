@@ -12,6 +12,8 @@ import {
 import { scenario as f, recommendationPath } from "./fixture";
 import { EntryPage } from "./entry";
 import { AppShell } from "./shell";
+import { DecisionForm } from "./decision-form";
+import { decisionAdjustment } from "./decision-input";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -80,15 +82,26 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
   const returnFocus = useRef<HTMLElement | null>(null);
   const reviewButton = useRef<HTMLButtonElement>(null);
   const draftButton = useRef<HTMLButtonElement>(null);
+  const resetButton = useRef<HTMLButtonElement>(null);
   function open(dialog: DialogName, target: HTMLElement) {
     returnFocus.current = target;
     dispatch({ type: "OPEN", dialog });
   }
-  const approved = state.decision !== null;
+  const decision = state.decision;
+  const approved = decision?.kind === "approve";
+  const decided = decision !== null;
+  const decisionLabel =
+    decision?.kind === "reject"
+      ? "已拒绝"
+      : approved && decision.override
+        ? "已调整"
+        : "已批准";
   const titles = {
     evidence: "计算依据",
     explanation: "AI 解释",
     review: "人工审核",
+    override: "修改采购数量",
+    reject: "拒绝建议",
     draft: "采购申请草稿",
     boundary: "展示边界",
   };
@@ -96,6 +109,8 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
     evidence: "既有模拟数据中的只读事实，页面不重新计算采购数量。",
     explanation: "预置演示解释 · 未发起实时 AI 请求 · 不作为 runtime 证据",
     review: "按建议批准 · 仅当前页面内的演示决定",
+    override: "由你决定批准数量，系统建议保持不变。",
+    reject: "由你明确拒绝本条建议，系统建议保持不变。",
     draft: "DRAFT · 临时展示草稿，不是正式采购申请或采购订单",
     boundary: "SIMULATED · presentation-only",
   };
@@ -119,7 +134,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
           </div>
           <span className="status">
             <span />
-            {approved ? "人工已批准 · 演示" : "待人工审核 · 演示"}
+            {decided ? `人工${decisionLabel} · 演示` : "待人工审核 · 演示"}
           </span>
         </div>
         <div className="work-columns">
@@ -267,35 +282,102 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
             </div>
             <div className="human-review" id="review">
               <div className="section-heading">
-                <h2>人工审核</h2>
+                <h2>{decided ? "人工决定" : "人工审核"}</h2>
                 <span className="role-label">
-                  {approved ? "已批准" : "待决定"}
+                  {decided ? decisionLabel : "待决定"}
                 </span>
               </div>
               <p role="status" aria-live="polite">
-                {approved
-                  ? `人工已按建议批准 ${state.decision!.approvedQuantity} 件，原建议保持不变。`
-                  : "建议供你参考，最终决策由人工完成。"}
+                {decision?.kind === "reject"
+                  ? "人工已拒绝建议，不形成已批准草稿。"
+                  : approved
+                    ? decision.override
+                      ? `人工已修改并批准 ${decision.approvedQuantity} 件，原建议保持不变。`
+                      : `人工已按建议批准 ${decision.approvedQuantity} 件，原建议保持不变。`
+                    : "建议供你参考，最终决策由人工完成。"}
               </p>
-              <div className="review-actions">
-                {!approved ? (
-                  <Action
-                    ref={reviewButton}
-                    kind="primary"
-                    onClick={(e) => open("review", e.currentTarget)}
-                  >
-                    进入人工审核 <ArrowRight />
-                  </Action>
-                ) : (
+              {decision && (
+                <dl className="decision-summary">
+                  <div>
+                    <dt>系统建议</dt>
+                    <dd>
+                      {decision.sourceRecommendation}
+                      <span>件</span>
+                    </dd>
+                  </div>
+                  {approved && (
+                    <div>
+                      <dt>人工批准</dt>
+                      <dd>
+                        {decision.approvedQuantity}
+                        <span>件</span>
+                      </dd>
+                    </div>
+                  )}
+                  {approved && decision.override && (
+                    <div>
+                      <dt>调整</dt>
+                      <dd>
+                        {decisionAdjustment(decision.approvedQuantity)}
+                        <span>件</span>
+                      </dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt>决定方式</dt>
+                    <dd>
+                      {decision.kind === "reject"
+                        ? "拒绝"
+                        : decision.override
+                          ? "修改数量"
+                          : "按建议批准"}
+                    </dd>
+                  </div>
+                  {"reason" in decision && (
+                    <div className="decision-reason">
+                      <dt>原因</dt>
+                      <dd>{decision.reason}</dd>
+                    </div>
+                  )}
+                </dl>
+              )}
+              <div className="review-actions decision-actions">
+                {!decided ? (
                   <>
                     <Action
-                      ref={draftButton}
+                      ref={reviewButton}
                       kind="primary"
-                      onClick={(e) => open("draft", e.currentTarget)}
+                      onClick={(e) => open("review", e.currentTarget)}
                     >
-                      查看采购申请草稿 <ArrowRight />
+                      按建议批准 <ArrowRight />
                     </Action>
+                    <div className="decision-alternatives">
+                      <Action
+                        onClick={(e) => open("override", e.currentTarget)}
+                      >
+                        修改采购数量
+                      </Action>
+                      <Action
+                        kind="ghost"
+                        onClick={(e) => open("reject", e.currentTarget)}
+                      >
+                        拒绝建议
+                      </Action>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {approved && (
+                      <Action
+                        ref={draftButton}
+                        kind="primary"
+                        onClick={(e) => open("draft", e.currentTarget)}
+                      >
+                        查看采购申请草稿 <ArrowRight />
+                      </Action>
+                    )}
                     <Action
+                      ref={resetButton}
                       onClick={() => {
                         dispatch({ type: "RESET" });
                         requestAnimationFrame(() =>
@@ -316,7 +398,9 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                 <p>
                   {approved
                     ? "DRAFT · 人工批准后可预览"
-                    : "尚未形成 · 等待人工决定"}
+                    : decided
+                      ? "未形成 · 建议已拒绝"
+                      : "尚未形成 · 等待人工决定"}
                 </p>
               </div>
               <Tooltip>
@@ -349,7 +433,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
           onCloseAutoFocus={(e) => {
             e.preventDefault();
             if (returnFocus.current?.isConnected) returnFocus.current.focus();
-            else draftButton.current?.focus();
+            else (draftButton.current ?? resetButton.current)?.focus();
           }}
         >
           <DialogTitle>{state.dialog ? titles[state.dialog] : ""}</DialogTitle>
@@ -400,7 +484,21 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
               </div>
             </>
           )}
-          {state.dialog === "draft" && state.decision && (
+          {(state.dialog === "override" || state.dialog === "reject") && (
+            <DecisionForm
+              key={state.dialog}
+              kind={state.dialog}
+              onCancel={() => dispatch({ type: "CLOSE" })}
+              onConfirm={(quantity, reason) =>
+                dispatch(
+                  state.dialog === "override"
+                    ? { type: "OVERRIDE", quantity, reason }
+                    : { type: "REJECT", reason },
+                )
+              }
+            />
+          )}
+          {state.dialog === "draft" && state.decision?.kind === "approve" && (
             <>
               <dl className="facts draft-facts">
                 <div>
@@ -432,6 +530,10 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                 <div>
                   <dt>采购订单（PO）</dt>
                   <dd>未创建 · NO</dd>
+                </div>
+                <div>
+                  <dt>生产执行</dt>
+                  <dd>否 · NO</dd>
                 </div>
               </dl>
               <p>

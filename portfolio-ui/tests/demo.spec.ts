@@ -65,7 +65,7 @@ test("Recommendation → Evidence → Explanation → Human approval → Draft",
   await expect(page.getByRole("dialog")).toContainText("不作为 runtime 证据");
   await expect(page.getByRole("dialog")).toContainText("不计算或修改采购数量");
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "进入人工审核" }).click();
+  await page.getByRole("button", { name: "按建议批准", exact: true }).click();
   await expect(stage).toHaveAttribute("data-demo-state", "REVIEW_OPEN");
   await expect(page.getByRole("dialog")).toContainText("目前尚无人工决定");
   await page.getByRole("button", { name: "按建议批准 100 件" }).click();
@@ -105,7 +105,7 @@ test("cancel/Escape and keyboard focus never approve implicitly", async ({
   page,
 }) => {
   await page.goto(recommendationPath);
-  const review = page.getByRole("button", { name: "进入人工审核" });
+  const review = page.getByRole("button", { name: "按建议批准", exact: true });
   await review.focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -139,7 +139,7 @@ test("refresh and explicit reset clear ephemeral approval", async ({
 }) => {
   await page.goto(recommendationPath);
   for (const action of ["reset", "refresh"]) {
-    await page.getByRole("button", { name: "进入人工审核" }).click();
+    await page.getByRole("button", { name: "按建议批准", exact: true }).click();
     await page.getByRole("button", { name: "按建议批准 100 件" }).click();
     if (action === "reset")
       await page.getByRole("button", { name: "重新演示" }).click();
@@ -193,14 +193,14 @@ test("frozen font, responsive frame, reduced motion and dialog boundaries", asyn
     ).toBe(true);
   }
   await c.detach();
-  for (const name of ["查看完整依据", "查看 AI 解释", "进入人工审核"]) {
+  for (const name of ["查看完整依据", "查看 AI 解释", "按建议批准"]) {
     await page.getByRole("button", { name, exact: true }).click();
     const box = await page.getByRole("dialog").boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(width);
     await page.keyboard.press("Escape");
   }
-  await page.getByRole("button", { name: "进入人工审核" }).click();
+  await page.getByRole("button", { name: "按建议批准", exact: true }).click();
   await page.getByRole("button", { name: "按建议批准 100 件" }).click();
   await expect(page.locator(".draft-ready")).toHaveCSS(
     "animation-name",
@@ -229,7 +229,7 @@ test("frozen primary and summary contrast remain legible", async ({ page }) => {
       y = luminance(b);
     return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
   };
-  const primary = page.getByRole("button", { name: "进入人工审核" });
+  const primary = page.getByRole("button", { name: "按建议批准", exact: true });
   for (const hover of [false, true]) {
     if (hover) await primary.hover();
     await expect
@@ -259,7 +259,7 @@ test("font failure still allows explicit approval and draft", async ({
   await page.route(/\.woff2?(\?|$)/, (route) => route.abort());
   await page.goto(recommendationPath);
   await page.evaluate(() => document.fonts.ready);
-  await page.getByRole("button", { name: "进入人工审核" }).click();
+  await page.getByRole("button", { name: "按建议批准", exact: true }).click();
   await page.getByRole("button", { name: "按建议批准 100 件" }).click();
   await page.getByRole("button", { name: "查看采购申请草稿" }).click();
   await expect(page.getByRole("dialog")).toContainText("DRAFT");

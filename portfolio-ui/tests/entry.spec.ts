@@ -74,7 +74,7 @@ test("workspace discovers one task and continues the accepted detail path", asyn
   await page.getByRole("button", { name: "查看 AI 解释" }).click();
   await expect(page.getByRole("dialog")).toContainText("不作为 runtime 证据");
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "进入人工审核" }).click();
+  await page.getByRole("button", { name: "按建议批准", exact: true }).click();
   await page.getByRole("button", { name: "按建议批准 100 件" }).click();
   await expect(page.locator(".quantity")).toHaveText("100件");
   await page.getByRole("button", { name: "查看采购申请草稿" }).click();
@@ -117,9 +117,9 @@ test("deep-link refresh and unknown IDs cannot change material identity", async 
   await expect(
     page.getByRole("heading", { name: "未找到采购建议" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "进入人工审核" })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole("button", { name: "按建议批准", exact: true }),
+  ).toHaveCount(0);
   await page.getByRole("link", { name: "返回采购决策工作台" }).click();
   await expect(page).toHaveURL("/");
 });
