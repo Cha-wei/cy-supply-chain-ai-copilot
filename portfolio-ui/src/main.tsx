@@ -1,13 +1,10 @@
-import { useReducer, useRef } from "react";
+import { useRef } from "react";
 import {
-  initialState,
-  reducer,
   demoStep,
   type DialogName,
   isStale,
   draftAvailable,
   explanationAvailable,
-  nextDemoBinding,
 } from "./state";
 import { createRoot } from "react-dom/client";
 import {
@@ -18,7 +15,7 @@ import {
   MessageCircle,
   ShieldCheck,
 } from "lucide-react";
-import { scenario as f, recommendationPath } from "./fixture";
+import { RuntimeProvider, useRuntime, useFacts } from "./runtime";
 import { EntryPage } from "./entry";
 import { AppShell } from "./shell";
 import { DecisionForm } from "./decision-form";
@@ -58,9 +55,11 @@ function Action({
   kind = "secondary",
   ...props
 }: React.ComponentProps<typeof Button> & { kind?: string }) {
+  const { busy } = useRuntime();
   return (
     <Button
       {...props}
+      disabled={busy || props.disabled}
       className={`system-button ${kind} ${props.className || ""}`}
     >
       {children}
@@ -68,6 +67,7 @@ function Action({
   );
 }
 function Facts({ detailed = false }: { detailed?: boolean }) {
+  const f = useFacts();
   return (
     <dl className="facts">
       {f.facts.map(([key, value], i) => (
@@ -86,7 +86,8 @@ function Facts({ detailed = false }: { detailed?: boolean }) {
   );
 }
 function RecommendationDetail({ variant }: { variant: Variant }) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const { state, dispatch } = useRuntime();
+  const f = useFacts();
   const returnFocus = useRef<HTMLElement | null>(null);
   const reviewButton = useRef<HTMLButtonElement>(null);
   const draftButton = useRef<HTMLButtonElement>(null);
@@ -119,12 +120,12 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
   };
   const descriptions = {
     evidence: "既有模拟数据中的只读事实，页面不重新计算采购数量。",
-    explanation: "预置演示解释 · 未发起实时 AI 请求 · 不作为 runtime 证据",
-    review: "按建议批准 · 仅当前页面内的演示决定",
+    explanation: "Q3 runtime 解释 · 本轮不调用 hosted AI",
+    review: "按建议批准 · Python 内存中的 SIMULATED 人工决定",
     override: "由你决定批准数量，系统建议保持不变。",
     reject: "由你明确拒绝本条建议，系统建议保持不变。",
     draft: "DRAFT · 临时展示草稿，不是正式采购申请或采购订单",
-    boundary: "SIMULATED · presentation-only",
+    boundary: "SIMULATED · 本地 Python runtime",
   };
   return (
     <AppShell
@@ -153,12 +154,12 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                 : "待人工审核 · 演示"}
           </span>
         </div>
-        {(stale || state.review.id > 1) && (
+        {(stale || state.reReview) && (
           <p className="freshness-note">
             {stale
-              ? "已模拟输入数据更新。"
+              ? "已执行新的分析运行。"
               : "已创建新的演示审核，上一轮决定与草稿不继承。"}
-            仍展示固定模拟数据，未重新计算；数量相同不代表跨分析上下文等价。
+            相同固定输入已通过 Python 重新计算；数量相同不代表跨分析上下文等价。
           </p>
         )}
         <div className="work-columns">
@@ -184,7 +185,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
               </div>
               <div
                 className="equation"
-                aria-label="当前缺口 30 加 MOQ 调整 70 等于建议采购 100"
+                aria-label={`当前缺口 ${f.shortage} 加 MOQ 调整 ${f.adjustment} 等于建议采购 ${f.recommended}`}
               >
                 <div>
                   <strong>{f.shortage}</strong>
@@ -212,10 +213,10 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
               </Action>
             </div>
             <div className="evidence-summary">
-              需求是 <span className="quantity-inline">30 件</span>
-              ，最低起订量是 <span className="quantity-inline">100 件</span>。
+              需求是 <span className="quantity-inline">{f.shortage} 件</span>
+              ，最低起订量是 <span className="quantity-inline">{f.moq} 件</span>。
               <br />
-              本次建议因此增加 <span className="quantity-inline">70 件</span>。
+              本次建议因此增加 <span className="quantity-inline">{f.adjustment} 件</span>。
             </div>
             <div className="evidence-groups">
               <div className="evidence-group">
@@ -266,7 +267,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
               <CollapsibleContent>
                 <p>
                   沿用项目既有 MOQ
-                  模拟场景。这些数值来自既有模拟数据；页面未执行数据导入、校验或采购计算。
+                  模拟场景。Python 已执行受控导入、校验与确定性计算，页面仅展示结果。
                 </p>
               </CollapsibleContent>
             </Collapsible>
@@ -286,18 +287,9 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                     </h2>
                     <span className="role-label">仅解释</span>
                   </div>
-                  <h3>为什么建议采购 100 件？</h3>
-                  <p>
-                    目前需要补足 <span className="quantity-inline">30 件</span>
-                    ，但最低起订量为{" "}
-                    <span className="quantity-inline">100 件</span>
-                    。因此，建议在基础需求上增加{" "}
-                    <span className="quantity-inline">70 件</span>，采购{" "}
-                    <span className="quantity-inline">100 件</span>。
-                  </p>
-                  <p className="prepared-note">
-                    预置演示解释 · 无实时 AI 请求 · 非 runtime 证据
-                  </p>
+                  <h3>为什么建议采购 {f.recommended} 件？</h3>
+                  <p>{f.explanation}</p>
+                  <p className="prepared-note">Q3 runtime 返回的已验证解释 · 非审批权威</p>
                   <div className="ai-disclosure">
                     <Action
                       kind="ghost"
@@ -314,12 +306,12 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                     AI 解释不可用
                   </h2>
                   <p>
-                    旧解释属于上一分析上下文，当前演示未为新的 AnalysisRun
-                    生成新的解释。
+                    当前未提供可用的 Q3 解释。旧解释不会跨分析运行复用。
                   </p>
                   <p className="prepared-note">
-                    没有调用 AI 服务。人工仍可依据确定性事实完成新一轮审核。
+                    未调用 hosted AI。人工仍可依据确定性事实完成审核。
                   </p>
+                  {(!state.review.id || stale) && <Action kind="ghost" onClick={() => dispatch({ type: "EXPLAIN" })}>请求 AI 解释</Action>}
                 </div>
               )}
             </div>
@@ -334,7 +326,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
               </div>
               <p role="status" aria-live="polite">
                 {stale
-                  ? "已模拟输入数据更新，需要基于新的分析上下文重新审核。"
+                  ? "已执行新的分析运行，需要基于当前结果重新审核。"
                   : decision?.kind === "reject"
                     ? "人工已拒绝建议，不形成已批准草稿。"
                     : approved
@@ -385,7 +377,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                             : "按建议批准"}
                       </dd>
                     </div>
-                    {"reason" in decision && (
+                    {decision.reason && (
                       <div className="decision-reason">
                         <dt>原因</dt>
                         <dd>{decision.reason}</dd>
@@ -399,8 +391,8 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                   <Action
                     ref={rereviewButton}
                     kind="primary"
-                    onClick={() => {
-                      dispatch({ type: "REREVIEW" });
+                    onClick={async () => {
+                      await dispatch({ type: "REREVIEW" });
                       requestAnimationFrame(() =>
                         reviewButton.current?.focus(),
                       );
@@ -451,7 +443,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                         );
                       }}
                     >
-                      重新演示
+                      模拟新分析运行
                     </Action>
                   </>
                 )}
@@ -485,7 +477,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                 >
                   {stale
                     ? "旧草稿不可继续操作，旧批准不适用于新审核。"
-                    : "临时展示状态，不是采购订单；刷新或重置后清除。"}
+                    : "Python 内存草稿，不是采购订单；服务重启后丢失。"}
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -521,7 +513,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
             <>
               <Facts detailed />
               <p className="support">
-                确定性系统计算事实；本页面只展示既有 fixture，不执行供应链规则。
+                Python 确定性系统计算事实；浏览器不执行供应链规则。
               </p>
             </>
           )}
@@ -543,7 +535,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
               </p>
               <Facts />
               <p className="support">
-                目前尚无人工决定，草稿尚未形成。确认只记录本次页面演示状态，刷新或重置后清除。
+                目前尚无人工决定。确认将由 Python 记录到当前模拟会话；刷新不会清除，服务重启后丢失。
               </p>
               <p className="support">
                 人工批准 ≠ 生产执行 · 不写入 ERP · 不创建采购订单
@@ -594,7 +586,7 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                   <div>
                     <dt>人工批准数量</dt>
                     <dd>
-                      {state.review.decision.approvedQuantity}
+                      {state.draft?.quantityText}
                       <span>件</span>
                     </dd>
                   </div>
@@ -624,23 +616,21 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                 </dl>
                 <p>
                   人工批准 ≠
-                  生产执行。本草稿仅存在于当前页面内存，不提交、不持久保存，刷新或重置后清除。
+                  生产执行。本草稿仅存在于 Python 会话内存，不提交、不持久保存，服务重启后丢失。
                 </p>
               </>
             )}
           {state.dialog === "boundary" && (
             <>
               <p>
-                沿用项目既有模拟数据。本页面未连接计算、AI 或审批 runtime。
-                人工决定仅为当前浏览器中的临时演示状态；未验证身份或权限。
+                固定 SIMULATED 场景已连接本地 Python 计算、审核与草稿 runtime。
+                人工决定仅存在于 Python 内存；多标签共享会话，未验证身份或权限。
                 不写入 ERP，不创建采购订单，不执行生产操作。
               </p>
               <div className="demo-controls">
                 <h3>演示控制</h3>
                 <p>
-                  仅模拟既有四组件 AnalysisRun
-                  绑定不一致的失效行为，不表示浏览器检测到了真实数据更新；不生成真实分析运行，不调用
-                  Python、API 或 AI，也不重新计算采购建议。
+                  对相同固定输入执行新的 Python 分析运行，不声称输入数据改变。旧审核与草稿失效，需重新审核；不调用 hosted AI。
                 </p>
                 <Action
                   disabled={stale}
@@ -648,25 +638,11 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
                     returnFocus.current = null;
                     dispatch({
                       type: "SIMULATE_RUN",
-                      binding: nextDemoBinding(state),
                     });
                   }}
                 >
-                  模拟输入数据更新
+                  模拟新分析运行
                 </Action>
-                {(stale || state.review.id > 1) && (
-                  <Action
-                    onClick={() => {
-                      returnFocus.current = null;
-                      dispatch({ type: "RESET" });
-                      requestAnimationFrame(() =>
-                        reviewButton.current?.focus(),
-                      );
-                    }}
-                  >
-                    重新演示
-                  </Action>
-                )}
                 <p className="prepared-note">
                   仅比较
                   analysis_run_id、snapshot_package_identity、accepted_content_view_digest、analysis_date。rule
@@ -681,6 +657,8 @@ function RecommendationDetail({ variant }: { variant: Variant }) {
   );
 }
 function App() {
+  const f = useFacts();
+  const recommendationPath = `/procurement/${encodeURIComponent(f.material_code)}`;
   return (
     <TooltipProvider>
       <div className="demo-page material" data-variant="C32">
@@ -703,10 +681,5 @@ function App() {
     </TooltipProvider>
   );
 }
-document.title =
-  location.pathname === "/"
-    ? "采购决策工作台 · CY 供应链 AI Copilot"
-    : location.pathname === recommendationPath
-      ? `${f.display_name} · 采购建议详情 · CY`
-      : "未找到采购建议 · CY";
-createRoot(document.getElementById("root")!).render(<App />);
+document.title = "采购决策 · CY 供应链 AI Copilot";
+createRoot(document.getElementById("root")!).render(<RuntimeProvider><App /></RuntimeProvider>);

@@ -2,14 +2,14 @@ name: Portfolio UI
 on:
   pull_request:
     branches: [main]
-    paths: ['portfolio-ui/**', '.github/workflows/portfolio-ui.yml']
+    paths: ['portfolio-ui/**', 'snapshot_loader/**', 'tests/**', '.github/workflows/portfolio-ui.yml']
   push:
     branches: [main]
-    paths: ['portfolio-ui/**', '.github/workflows/portfolio-ui.yml']
+    paths: ['portfolio-ui/**', 'snapshot_loader/**', 'tests/**', '.github/workflows/portfolio-ui.yml']
 permissions:
   contents: read
 jobs:
-  presentation-demo:
+  connected-demo:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     defaults:
@@ -17,6 +17,9 @@ jobs:
         working-directory: portfolio-ui
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

@@ -10933,6 +10933,8 @@ production readiness ／ POC success = NOT CLAIMED
 
 ### 10.7 Portfolio Demo Local Runtime Integration — design authority / pre-Code-Start registration
 
+> 以下初始登记保留 registration 时点的 pre-Code-Start 状态；后续独立授权与实现状态见本节 follow-up。
+
 **Authority:** Human Decision — ADR-003 Decision Pack，2026-10-06，`APPROVED WITH CLARIFICATIONS`（D1–D8 与十项 binding clarifications）。
 **Architecture:** [ADR-003](../architecture/adr-003-portfolio-demo-local-runtime-integration.md) `ACCEPTED`，仅 architecture/design。
 **Base:** `main @ 78427dc67e9dcc1ca79342fd77e5b4ac9c6f2f48`；accepted presentation reference `5ecb73b05892e111b21db6e406ec879efd56dc08`（PR #245；不表示已 merge）。
@@ -10957,6 +10959,30 @@ production readiness ／ POC success = NOT CLAIMED
 **First-slice boundary：** fixed SIMULATED scenario；initial session 显式创建 first AnalysisRun，只有 explicit new-analysis 操作再创建；same-input 新 run 使用“模拟新分析运行”。Offline fallback DEFERRED / no silent fallback；无新业务语义、API schema 冻结、framework 选型、database、ERP / PO / production write、auth/RBAC claim。
 
 **Next gate:** separate Runtime Integration Code Start decision。ADR-003 architecture/design authority = APPROVED；本记录不得被解释为可开始 runtime coding。
+
+
+<a id="portfolio-runtime-first-slice-followup"></a>
+
+#### First connected tranche — scoped authorization / implementation follow-up（Issue #248 / PR #249）
+
+**Authority:** Human 的后续 “Runtime Integration Code Start Gate” 与 “Implement First Portfolio Demo Runtime Integration Tranche” 任务明确授权该首批 coding；不以 ADR-003 design approval 代替 coding approval。实施基线为 `main @ ba99e47dace3c384ff07530ec8356b1e45f84236`。本 follow-up 只同步此次 tranche，不改 D1–D8、§7.1、§7.2 或 §8 disposition。
+
+**Implemented scope:** React → Python stdlib localhost handler → existing runtime。独立固定 SIMULATED composition 走 loader/handoff/pipeline，SIM-M2 来自 runtime，2026-10-01 由 Python composition 明确提供。单服务进程内存 session、多标签共享、刷新读取；没有浏览器业务恢复或持久化。只有初始化与显式新分析创建 run；同输入新 run 不伪称 input update。
+
+Python 持有实际 ReviewInstance、HumanDecision 和 Draft 对象，先固定可用/不可用 Q3 证据，再打开 Review/initial Draft，决定后绑定实际 decision。精确数量原文传至既有验证，Fraction 双字符串传输；前端不重算业务数量、stale 或 decision。新 run 使旧 Review/Draft 永久 stale，重新审核不继承决定。
+
+**Evidence:** [connected validation](../../portfolio-ui/review/runtime-integration/validation.md) 记录 Python、真实 localhost transport、三个尺寸 Playwright、独立 review 与 CI 结果。测试使用 offline stub 验证既有 Q3 projection/validator；默认入口为 unavailable，不读取 credential 或发 hosted 请求。技术验证不替代 Human acceptance。
+
+| Concern | Scoped current state |
+| --- | --- |
+| Code Start / first tranche | IMPLEMENTATION AUTHORIZED；该 tranche 已实现；不授权 unrestricted implementation |
+| Localhost boundary | 已实现 Host/Origin、严格请求/绑定、replay、bounded concurrency、静态白名单、sanitized errors；无 authentication/RBAC claim |
+| §8 | applicability TRIGGERED / scoped disposition approved；memory-only 下 persistence/durable audit NOT REQUIRED；overall NOT CLOSED |
+| Freshness | rule/code-version freshness NOT RESOLVED |
+| Hosted observation / broader AI Eval | 新路径 hosted observation NOT AUTHORIZED / NOT RUN；overall AI Eval 不 closure |
+| Business / production | SIMULATED technical evidence only；无 ERP / PO / production execution、真实客户验证或生产就绪声明 |
+
+**Next:** Human review of this implementation tranche；不自动 merge，不自动扩展 runtime 范围。
 
 ---
 

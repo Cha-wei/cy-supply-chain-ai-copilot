@@ -8,7 +8,7 @@
 
 ### Portfolio 交互演示
 
-[启动最终 C3.2 Demo 与查看交互边界](portfolio-ui/README.md)：仅 presentation-layer 的建议 → 依据 → 预置解释 → 人工按建议批准 → 临时草稿。未连接 Python / API / AI 服务，不构成新的 runtime 或生产能力。
+[启动 C3.2 本地连接 Demo](portfolio-ui/README.md)：固定 SIMULATED 输入 → 既有 Python 计算 → 可选 Q3（默认 unavailable）→ 人工决定 → 内存 Draft。React 仅展示与提交意图；无 hosted AI、ERP / PO / 生产写入。首次连接 tranche 见 Issue #248 / PR #249；技术验证不代表业务验收。
 
 ### 从哪里开始
 

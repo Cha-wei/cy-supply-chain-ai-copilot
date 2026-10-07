@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { ArrowLeft, ArrowRight, ClipboardList, Info } from "lucide-react";
-import { scenario } from "./fixture";
+import { useFacts } from "./runtime";
 
 export function AppShell({
   children,
@@ -13,6 +13,7 @@ export function AppShell({
   demoState?: string;
   onBoundary?: (target: HTMLElement) => void;
 }) {
+  const scenario = useFacts();
   return (
     <section
       className="design-stage material app-shell"
@@ -40,7 +41,7 @@ export function AppShell({
           <header className="context-bar">
             {detail ? (
               <div className="context-path">
-                <a href="/" aria-label="返回采购决策工作台，重新演示">
+                <a href="/" aria-label="返回采购决策工作台">
                   <ArrowLeft aria-hidden="true" />
                   返回工作台
                 </a>
@@ -69,7 +70,7 @@ export function AppShell({
             <span>
               确定性计算 <ArrowRight /> AI 解释 <ArrowRight /> 人工决策
             </span>
-            <span>presentation-only · 无 ERP 写入 / 采购订单 / 生产执行</span>
+            <span>本地 runtime · 无 ERP 写入 / 采购订单 / 生产执行</span>
           </footer>
         </div>
       </div>
