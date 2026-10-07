@@ -107,7 +107,7 @@
 
 ## 6. Current Phase / Next Gate
 
-**当前 Phase：** **SIMULATED Portfolio POC — Portfolio Technical Closure = COMPLETE**。
+**当前 Phase / next work：** **Portfolio Demo / Case Study / Interview Materials**（SIMULATED Portfolio POC）。
 Canonical authority：[POC Design §9.7 D.4](design/poc-design-v0.2.md#portfolio-technical-closure)
 （HD-PORTFOLIO-CLOSURE-R1，Issue #234）；design document仍 DRAFT。
 
@@ -115,7 +115,15 @@ Layer-2 scoped technical evidence COMPLETE；exact accepted technical SHA为
 `00272580adab8cb8d5843a719d261e34047b877d`。Linux symlink technical gap CLOSED，Windows环境限制保留。
 Q3、deterministic core与scoped HITL/Draft implemented/evidenced；不主张其余P0 question capabilities。
 
-**Next portfolio work：** Demo / Case Study / interview materials（展示SIMULATED已实现能力与证据限制）。
+**Historical Closure + Connected Technical Extension：** historical closure = COMPLETE，仅绑定上述 accepted SHA；
+Human 已独立接受 PR #249 的 connected extension，implementation / evidence revision =
+`2b5fe6205ebd22c062fc5c6ff10a2908f3689e26`。无 cross-version equivalence；current-main full Portfolio
+Technical Closure = NOT CLAIMED。full current-main closure refresh = Human decided not to continue / no rebinding，
+不是 refresh PASS / COMPLETE。canonical decision / preserved boundaries / future reopen gate 见
+[§9.7 D.4 follow-up](design/poc-design-v0.2.md#historical-closure-connected-extension)；scoped technical evidence 见
+[§10.7 follow-up](design/poc-design-v0.2.md#portfolio-runtime-first-slice-followup)。
+
+**Next portfolio work：** Portfolio Demo / Case Study / Interview Materials（遵守 D.4 claim ceiling，区分历史 closure 与 extension）。
 真实 baseline / Layer 3 / business-value evidence / §17 dispositions / production integration有意 deferred，
 不是portfolio completion blocker；真实客户验证NOT PERFORMED，Business value NOT PROVEN，POC SUCCESS NOT CLAIMED。
 **Future reopen：** 有authorized real customer/process后，按[§9.7 F/G/H](design/poc-design-v0.2.md#minimum-poc-success-policy)

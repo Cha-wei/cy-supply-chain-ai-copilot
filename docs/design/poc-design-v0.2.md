@@ -9358,6 +9358,38 @@ F/G/H 原文与 conjunctive real-world obligations 完整保留，Business Value
 和 §17 dispositions。准备框架未登记为已执行 evidence；本单元不新建框架。若必要变更改变接受对象，返回 E刷新，
 不把 portfolio closure转换为 customer validation / production acceptance / POC SUCCESS。
 
+<a id="historical-closure-connected-extension"></a>
+
+###### D.4 current-state follow-up — Historical Closure + Connected Technical Extension（Issue #250）
+
+**Authority：** Human 明确批准本 scope decision，并授权本 documentation-only registration。
+既有 D.3 / D.4 historical acceptance 与 closure records 保留，不回写。
+
+- **Historical Portfolio Technical Closure = COMPLETE**，accepted technical revision 继续仅为
+  `00272580adab8cb8d5843a719d261e34047b877d`。
+- **Connected implementation / evidence revision：** GitHub merged-main
+  `2b5fe6205ebd22c062fc5c6ff10a2908f3689e26`（PR #249）。Human 接受其 First Portfolio Demo Runtime
+  Integration 为独立 **SIMULATED connected technical extension**；不是新的完整 Portfolio Technical Closure。
+  scoped implementation / validation boundary 见 [§10.7 follow-up](#portfolio-runtime-first-slice-followup)。
+- 两个接受范围独立：extension 不继承、不扩大 historical closure 的 revision-bound acceptance；
+  **no cross-version equivalence；current-main full Portfolio Technical Closure = NOT CLAIMED**。
+  本 documentation carrier commit 不成为新的 technical evidence revision 或 cross-version acceptance。
+- **Full current-main closure refresh workstream：Human decided not to continue / no rebinding。**
+  不执行 full closure refresh，不将“停止追求”登记为 refresh PASS / COMPLETE，不因此重新执行 hosted Q3 evidence。
+  §9.7 E/F/G/H policy 与 future obligations 不变；既有 real-world final revision-bound refresh 仍
+  IN PROGRESS / NOT COMPLETE，G final acceptance NOT PERFORMED。
+- **Future reopen：** 若未来需要新的 current-revision full Portfolio Technical Closure claim，必须独立重开
+  closure-refresh gate，按当时 applicable policy 判断并取得 required evidence / Human acceptance，不能自动迁移本记录。
+- **Current next phase：Portfolio Demo / Case Study / Interview Materials。** 继续遵守 D.4 claim ceiling；
+  材料必须区分 historical closure 与后续 connected extension，不把默认 Q3 unavailable 描述为 connected hosted AI validation。
+
+**Preserved boundaries：** SIMULATED technical scope；Business Value = NOT PROVEN；real customer validation
+NOT PERFORMED；Layer 3 = DEFERRED / BLOCKED BY REAL BASELINE；POC SUCCESS = NOT CLAIMED；
+§6 overall = DESIGN PENDING；§7 overall = NOT RESOLVED；§8 overall = NOT CLOSED；rule/code-version freshness
+= NOT RESOLVED；§9.3 / overall AI Eval = DESIGN PENDING；hosted AI through new Demo path = NOT AUTHORIZED /
+NOT RUN；no DB / persistence、auth / RBAC、ERP / PO / production execution；production readiness = NOT CLAIMED。
+本登记不授权新增 runtime、business rule 或 hosted execution。
+
 ##### E. Freshness（R3 = Option A）
 
 最终 POC acceptance 前必须：
@@ -10982,7 +11014,18 @@ Python 持有实际 ReviewInstance、HumanDecision 和 Draft 对象，先固定�
 | Hosted observation / broader AI Eval | 新路径 hosted observation NOT AUTHORIZED / NOT RUN；overall AI Eval 不 closure |
 | Business / production | SIMULATED technical evidence only；无 ERP / PO / production execution、真实客户验证或生产就绪声明 |
 
-**Next:** Human review of this implementation tranche；不自动 merge，不自动扩展 runtime 范围。
+**Human acceptance follow-up（Issue #250）：** Human 已接受 PR #249 merged-main revision
+`2b5fe6205ebd22c062fc5c6ff10a2908f3689e26` 的首批 integration，作为独立 SIMULATED connected technical
+extension。scope decision、historical closure 区分及 future reopen condition 以
+[§9.7 D.4 current-state follow-up](#historical-closure-connected-extension) 为 canonical authority。
+
+**Accepted scoped technical evidence references：** [PR #249](https://github.com/Cha-wei/cy-supply-chain-ai-copilot/pull/249)、
+本 §10.7、[connected runtime validation](../../portfolio-ui/review/runtime-integration/validation.md)、上述 exact
+merged-main 的 [Repository CI](https://github.com/Cha-wei/cy-supply-chain-ai-copilot/actions/runs/37630930606)
+与 [Portfolio UI CI](https://github.com/Cha-wei/cy-supply-chain-ai-copilot/actions/runs/37630930243)。这些是 scoped
+technical integration evidence，不替代 historical accepted revision 的完整 evidence package；本 docs carrier 不是执行 revision。
+
+**Next:** Portfolio Demo / Case Study / Interview Materials；遵守 D.4 claim ceiling，不自动扩展 runtime 范围。
 
 ---
 
