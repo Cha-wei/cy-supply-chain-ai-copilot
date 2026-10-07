@@ -1,9 +1,7 @@
 import { useRef, useState } from "react";
 import { Button } from "./ui/button";
-import { scenario } from "./fixture";
+import { useFacts, useRuntime } from "./runtime";
 import {
-  reasonError,
-  validateOverride,
   type InputErrors,
 } from "./decision-input";
 
@@ -14,24 +12,22 @@ export function DecisionForm({
 }: {
   kind: "override" | "reject";
   onCancel: () => void;
-  onConfirm: (quantity: string, reason: string) => void;
+  onConfirm: (quantity: string, reason: string) => Promise<InputErrors | undefined>;
 }) {
+  const scenario = useFacts();
+  const { busy } = useRuntime();
   const [quantity, setQuantity] = useState("");
   const [reason, setReason] = useState("");
   const [errors, setErrors] = useState<InputErrors>({});
   const quantityField = useRef<HTMLInputElement>(null);
   const reasonField = useRef<HTMLTextAreaElement>(null);
   const override = kind === "override";
-  function confirm() {
-    const next = override
-      ? validateOverride(quantity, reason)
-      : { reason: reasonError(reason) };
-    setErrors(next);
-    if (next.quantity || next.reason) {
+  async function confirm() {
+    const next = await onConfirm(quantity, reason);
+    if (next) {
+      setErrors(next);
       (next.quantity ? quantityField.current : reasonField.current)?.focus();
-      return;
     }
-    onConfirm(quantity, reason);
   }
   return (
     <form
@@ -102,7 +98,7 @@ export function DecisionForm({
         {override
           ? "确认后，草稿采用你批准的数量。"
           : "拒绝后不形成已批准草稿。"}
-        仅记录本次页面演示状态，刷新或重置后清除。
+        Python 记录当前模拟会话；刷新保留，服务重启后丢失。
       </p>
       <p className="support">
         人工批准 ≠ 生产执行 · 不写入 ERP · 不创建采购订单
@@ -118,7 +114,8 @@ export function DecisionForm({
         <Button
           type="button"
           className={`system-button ${override ? "primary" : "destructive"}`}
-          onClick={confirm}
+          disabled={busy}
+          onClick={() => void confirm()}
         >
           {override ? "确认修改并批准" : "确认拒绝"}
         </Button>

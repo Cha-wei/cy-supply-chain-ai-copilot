@@ -1,8 +1,12 @@
 import { ArrowRight } from "lucide-react";
-import { scenario, recommendationPath } from "./fixture";
+import { useFacts, useRuntime } from "./runtime";
 import { AppShell } from "./shell";
 
 export function EntryPage() {
+  const scenario = useFacts();
+  const { state } = useRuntime();
+  const recommendationPath = `/procurement/${encodeURIComponent(scenario.material_code)}`;
+  const status = state.review.stale ? "需重新审核" : state.pendingCount ? "待人工审核" : "已完成人工决定";
   return (
     <AppShell>
       <main className="workspace-entry">
@@ -15,7 +19,7 @@ export function EntryPage() {
         <dl className="overview-strip" aria-label="当前演示概况">
           <div>
             <dt>待处理建议</dt>
-            <dd>1</dd>
+            <dd>{state.pendingCount}</dd>
           </div>
           <div>
             <dt>当前场景</dt>
@@ -29,14 +33,14 @@ export function EntryPage() {
         <section className="pending-section" aria-labelledby="pending-title">
           <div className="section-heading">
             <h2 id="pending-title">
-              待审核采购建议 <span className="pending-count">· 1</span>
+              采购建议 <span className="pending-count">· 1</span>
             </h2>
           </div>
           <article aria-label={`${scenario.display_name}采购建议`}>
             <a
               className="task-row"
               href={recommendationPath}
-              aria-label={`查看建议：${scenario.display_name}，${scenario.material_code}，待人工审核`}
+              aria-label={`查看建议：${scenario.display_name}，${scenario.material_code}，${status}`}
             >
               <div className="task-identity">
                 <h3>{scenario.display_name}</h3>
@@ -67,7 +71,7 @@ export function EntryPage() {
               </dl>
               <span className="status">
                 <span />
-                待人工审核
+                {status}
               </span>
               <span className="task-affordance">
                 查看建议 <ArrowRight aria-hidden="true" />
@@ -76,7 +80,7 @@ export function EntryPage() {
           </article>
         </section>
         <p className="entry-boundary">
-          固定模拟场景 · 无实时 AI 请求 · 不保存业务状态
+          固定模拟场景 · 本地 Python runtime · 无 hosted AI · 仅会话内存
         </p>
       </main>
     </AppShell>

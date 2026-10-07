@@ -1,102 +1,49 @@
-# Portfolio Demo — Human Decision v3
+# Portfolio Demo — Local Runtime Integration
 
-SIMULATED / presentation-only。React + TypeScript + Vite + Tailwind，shadcn/Radix交互原语。无API、Python bridge、真实AI请求、数据库、身份/权限强制或生产写入。
+固定 SIMULATED 场景，C3.2 视觉冻结。React 只展示 Python 结果并提交显式 Human intent；stdlib localhost boundary 编排现有 Python runtime。Issue #248 / PR #249。
 
-## 运行
+## 启动
+
+先单独构建静态资产：
 
 ```powershell
 cd portfolio-ui
 npm ci
-npm run dev -- --port 4190 --strictPort
+npm run build
+cd ..
+python -m snapshot_loader.demo_server --port 4190
 ```
 
-打开 http://127.0.0.1:4190/ 先进入采购决策工作台，点击「查看建议」进入 `/procurement/M2` 的既有详情页。旧A/B/C、C1/C2、C3.1和控件探索页不迁入本分支。
+打开 http://127.0.0.1:4190/ 。Python 不启动 Node、不自动构建；缺少 dist 时拒绝启动。仅绑定 127.0.0.1，浏览器须使用相同 Host/Origin。详情地址 `/procurement/SIM-M2`，身份来自 Python，装配连接件仅为 SIMULATED 展示名称。
 
-## 主路径
+## 主路径与 authority
 
-1. 从工作台选择唯一待审核建议；详情中采购建议为100件，查看完整依据（缺口30、基础需求30、MOQ100、调整70、建议100）。
-2. 查看AI解释：明确预置演示、无实时请求、非runtime证据。
-3. 选择「按建议批准」「修改采购数量」或「拒绝建议」，在对应弹窗中显式确认。取消、关闭、Escape和数量字段中的Enter均不产生决定。
-4. 页面显示人工决定摘要；原建议始终为100件。修改数量必须满足既有精确十进制、正数、MOQ及原因要求。拒绝必须填写原因。
-5. 批准后打开采购申请草稿：按建议批准采用100；修改后采用人工批准数量。拒绝不产生批准数量或已批准草稿。所有草稿保留DRAFT与无ERP/PO/生产执行声明。
-6. 「重新演示」或刷新回到初始状态；没有localStorage/sessionStorage或业务请求。
+工作台 → 建议与计算依据 → 可选 Q3 → 人工审核 → 按建议批准 / 修改数量后批准 / 拒绝 → 批准后查看 Draft。
 
-证据与解释可随时重看；没有把「先读完说明」添加成新的业务审批规则。Human只标识当前演示者的显式操作，不声称认证身份、权限、持久审批或真实runtime HumanDecision。
+- Python 独立 composition 使用固定已批准模拟输入，经现有 loader、handoff、pipeline 推导 30 / 30 / 100 / 70 / 100；不依赖 tests 或 observation script。
+- Python 创建 AnalysisRun，首个场景日期固定为 2026-10-01。刷新、打开页面/审核/草稿不创建新 run。
+- 多标签共享同一 Python 内存会话；刷新读取服务器决定；服务重启丢失会话，浏览器不恢复旧决定或 Draft。
+- “模拟新分析运行”在相同 accepted input 上创建新 run。旧 Review/Draft 永久 stale；重新审核不继承旧决定。
+- Q3 默认明确 unavailable，不读取 provider credentials、不调用 hosted AI。离线测试注入 stub 验证现有 projection/validator。Review 打开后拒绝补写解释证据。
+- Review 创建实际 initial Draft；确认时将实际 HumanDecision 对象绑定至 Draft。Reject 无 approved Draft。固定模拟 actor 不代表认证身份。
+- 数量原始字符串传至 Python 既有精确验证；无 TypeScript 数量规则。Fraction 以 numerator/denominator 字符串传输；非整数以精确分数显示，不进行舍入。原建议始终为 100。
+- 请求失败不回落到 fixture。结果不确定时读取权威状态，不自动重放决定；显式重新连接不恢复浏览器业务对象。
 
-## 语义来源
+## 限定传输
 
-- [POC Design §5.20](../docs/design/poc-design-v0.2.md)：解释只消费既有确定性事实。
-- [POC Design §6](../docs/design/poc-design-v0.2.md)：approve-as-is保持确定性建议不变；决策来自Human。
-- [POC Design §6.1](../docs/design/poc-design-v0.2.md)：decision-derived Draft与DRAFT/非PO/非生产边界。
-- fixture源自 `tests/test_hitl_review.py::_FIXTURE_FACT_TEXT`，数值仅字符串投影；TypeScript不实现max(shortage,MOQ)或等价规则。
-
-Canonical允许initial Draft；本演示按当前Human任务刻意只开放批准后的Draft，不修改canonical语义。Human Decision v2仅扩展显式Override和Reject；v3仅增加AnalysisRun失配所需的Stale/Re-review与旧解释不可用；未增加一般AI故障处理或supplier risk扩展。
-
-## UI状态
-
-`RECOMMENDATION_READY / EVIDENCE_VIEWED / EXPLANATION_VIEWED / REVIEW_OPEN / APPROVED / OVERRIDDEN / REJECTED / DRAFT_READY` 只是当前UI演示状态，不是canonical workflow enum。
-
-`src/state.ts`管理独立的临时review实例与弹窗；决定、绑定、stale标记和草稿阅读状态属于对应review。三类决定仅在对应确认窗口与reviewId有效；已有决定不可重复、修改或拒绝。非stale批准方可查看Draft；Reject的联合类型不存在approvedQuantity。RESET与刷新重启整个演示，不修改旧对象、不持久保存。
-
-`src/decision-input.ts`按 [POC Design §10.4/§10.5](../docs/design/poc-design-v0.2.md) 与 `snapshot_loader/exact_quantity.py` 的既有格式验证Human输入：带可选正负号的完整十进制字符串、>0、>= fixture MOQ、非空原因。拒绝科学计数法、千分位、空白、非数字、缺少整数/小数部分；不做修复、取整或自动提高至MOQ。BigInt缩放整数仅用于精确比较；不重新计算采购建议。批准数量与原因保留输入原文，Draft直接读取决定。即使输入100仍记录显式override；内部kind依然approve加override标识，不引入canonical modify/override枚举。
+仅 `/demo/state` 读取及 `/demo/intent` 有限操作，非通用 API 平台。严格 Host/Origin、字段、绑定、重复 intent 检查；32 KiB body、8 个并发连接、3 秒连接超时、1024 个会话 intent 上限（达到上限 fail closed，需重启演示）。静态资源启动时检查路径/符号链接并快照白名单；无任意文件读取、代理或 provider raw response。
 
 ## 验证
 
 ```powershell
+python -m unittest discover -s tests -q
+cd portfolio-ui
 npm run build
 npm test
 ```
 
-Playwright独立端口4192；桌面1440×800、笔记本1280×800、手机390。覆盖完整路径、非法/重复动作、取消、焦点/Escape、刷新/重置、实际字体、减少动态、overflow和无业务网络/存储。`node scripts/capture.mjs`基于4190预览生成review截图。GitHub独立Portfolio UI workflow运行构建与同一组测试。
+Playwright 在 4193 启动已构建资产的 Python 服务，串行使用一个会话；覆盖 1440×800、1280×800、390×844。测试设置通过显式 new_analysis 操作隔离，不增加 reset API。[验证与历史测试迁移](review/runtime-integration/validation.md)。既有 review 目录及 capture 脚本属于历史 presentation-only 证据，不是当前运行入口。
 
-## 冻结视觉与来源
+## 非声明
 
-C3.2 Apple Premium Rich = FROZEN（Human本轮指令）。从`c10d28a`选择性迁入最终页面、所需原语、字体许可；CSS移除其他variant与展示gallery，仅保留C32及共用基础规则。没有cherry-pick历史探索提交。当前分支从GitHub main `78427dc67e9dcc1ca79342fd77e5b4ac9c6f2f48`新建。
-
-冻结色盘/材质/字体/布局保持；仅增加实际交互所必需的按钮、状态文案、确认与草稿内容，以及180ms草稿轻微显示过渡。字体Noto Sans SC variable（OFL1.1），许可随public/licenses分发；未分发Apple字体。原冻结视觉证据保留在旧分支`codex/c3-2-apple-premium-rich`的`portfolio-ui/design-reviews/c3-2/final-polish/`，不复制旧探索进新实现分支。
-
-## Workspace Entry v1（历史增量）
-
-Interaction v1已获Human接受，本增量以ccd0bf1为基线。`/`仅负责发现固定模拟任务；`/procurement/M2`保留完整Interaction v1。普通同源链接与pathname精确分发，不新增router/backend；未知ID显示未找到，不能映射成另一个物料。返回工作台、再次通过链接打开详情是新页面演示，不持久保存业务状态；刷新与重置继续清除审批。
-
-`material_code = M2`沿用 `test_hitl_review → test_supplier_risk_input → test_shortage_calculation.DEMAND`。`display_name = 装配连接件`只是明确标注的SIMULATED展示标签，不是新增canonical material_name，不参与身份、provenance或计算。路径中的M2只定位本单一fixture，不宣称全项目recommendation grain唯一标识。
-
-工作台显示1条待审核建议、缺口30、建议100、MOQ调整提示和查看链接；不承载审批/拒绝/完整依据/AI展开，没有新增KPI、图表、sidebar或用户能力。详情仅补物料上下文和返回链接。原冻结色盘与正文布局保持。
-
-`npm test`覆盖30项（三视口），新增身份来源、入口→既有主路径、未知路径与深链刷新。入口截图：`node scripts/capture-entry.mjs`，输出review/entry-v1。
-
-STOP FOR HUMAN ENTRY-PAGE REVIEW。不得自动扩展下一里程碑或merge main。
-
-## Workspace Shell v1.2（已接受基线）
-
-以已接受的 Entry v1（07d495d）为基线。两页共用96px石墨导航栏与简化上下文栏；唯一模块「采购决策」返回工作台。手机使用紧凑顶栏，无折叠菜单。详情正文、fixture与状态 reducer 保持不变。
-
-入口以一个连续概况条呈现固定模拟事实，桌面任务行116px；整行原生链接支持点击、Enter、清晰焦点与180ms悬停，箭头移动3px。没有新增业务模块。
-
-当前39项Playwright测试通过，覆盖1440×800、1280×800、390及既有Interaction v1路径。截图命令 `node scripts/capture-entry.mjs` 输出 `review/shell-v1-2`；此前 entry-v1 记录为历史交付。
-
-STOP FOR HUMAN WORKSPACE SHELL REVIEW。未进入runtime集成，未merge main。
-
-## Human Decision Interaction v2（已接受基线）
-
-以e5d5d4c为基线，Shell与工作台不变。详情补充三类决定、Override/Reject弹窗、字段错误与一致的决定摘要。仍仅为当前演示者的浏览器内显式操作，不是认证身份或真实审批记录。
-
-构建及63项Playwright验证通过；包括原39项主路径/Shell回归和24项v2三视口验证。截图：`node scripts/capture-decision.mjs`，输出`review/decision-v2`。完整审查记录见该目录validation.md。
-
-STOP FOR HUMAN DECISION REVIEW。不自动实现下阶段功能，不merge main。
-
-Final Copy Polish：人工决定摘要只显示系统建议、人工批准、决定方式与原因，不计算或显示人工差额，以免与确定性MOQ调整70混淆。Override状态为「已修改并批准 · 演示」。状态机、校验和草稿行为保持不变。
-
-## Human Decision v3 — Stale / Re-review（当前增量）
-
-从Human指定的864785e58138d4e2f042d7c2bb50ed94391d44e0新建分支；开工前重新fetch并确认main为78427dc67e9dcc1ca79342fd77e5b4ac9c6f2f48。PR #244保留原状。
-
-在详情右上角「展示边界」→「演示控制」点击「模拟输入数据更新」。这只变更带SIMULATED标记的前端占位绑定，不是真实AnalysisRun生成或检测。比较的四组件严格来自POC Design §6 HD-4 / §10.3：analysis_run_id、snapshot_package_identity、accepted_content_view_digest、analysis_date。rule/code-version freshness仍未解决。
-
-任一失配使当前review永久stale；旧决定只作参考，三条决定入口、旧解释和草稿操作被阻断。已批准草稿显示STALE / NON-ACTIONABLE。点击「重新审核」创建全新review对象与id，旧review作为最近一次只读内存快照保持stale，不继承批准/override/reject/草稿；没有历史列表或持久审计。任何带旧reviewId的确认事件在新审核中被拒绝。
-
-旧解释一旦因失配retired，本次演示内不能恢复，即使绑定恢复或固定数字仍相同。新review允许不依赖AI解释作确定性人工决定；没有生成新解释。固定30/30/100/70/100仅为演示投影，不声称重新计算或跨run等价。
-
-验证：87项Playwright（三视口），包含原63项行为回归；旧单元测试仅适配嵌套review字段与显式reviewId，断言未弱化。截图命令`node scripts/capture-stale.mjs`；记录见`review/stale-v3/validation.md`。
-
-STOP FOR HUMAN STALE / RE-REVIEW REVIEW。不接runtime，不merge main。
+SIMULATED / localhost / Python-memory-only；无数据库、跨会话恢复、持久审计、登录/RBAC、真实 ERP、采购订单或生产执行。无 hosted observation 授权，无整体 AI Eval closure、客户验证或生产就绪声明。ADR-003 不因本实现被重写；§8 overall NOT CLOSED，rule/code-version freshness NOT RESOLVED。停在 Human review，不 merge。
