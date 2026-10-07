@@ -80,17 +80,23 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(v['draft']['quantity'],exact(Fraction(100)))
         self.assertIs(self.s.draft.decision,self.s.review.decision)
         self.assertTrue(v['canDraft']); self.assertFalse(v['canDecide'])
+        self.assertIsNone(v['review']['decision']['reason'])
         with self.assertRaises(DemoError): self.act('approve')
 
     def test_override_exact_and_deterministic_unchanged(self):
         self.act('open_review')
         value='+000120.000000000000000000000000000000000000001'
-        request=self.command('override',quantity=value,reason='SIMULATED reason')
+        request=self.command('override',quantity=value,reason='模拟备料安排')
         v=self.s.execute(request)
         self.assertEqual(v['draft']['quantity'],exact(Fraction(value)))
         self.assertEqual(v['facts']['recommended'],'100')
         self.assertIn(value,self.s.intents[request['intent']][0])
         self.assertNotIn('raw',self.s.review.decision.to_dict())
+        for view in (v, self.s.snapshot(), self.act('new_analysis')):
+            self.assertEqual(view['review']['decision']['reason'], '模拟备料安排')
+            self.assertNotIn('explicit_human_quantity_override', json.dumps(view))
+            self.assertNotIn('override_reason', json.dumps(view))
+        self.assertTrue(self.s.snapshot()['review']['stale'])
 
     def test_long_integer_and_rational_wire(self):
         self.act('open_review'); number='9'*150

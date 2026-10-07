@@ -189,7 +189,7 @@ class DemoSession:
                 "kind": decision.decision_kind, "override": decision.override_flag,
                 "approvedQuantity": display(decision.approved_value), "approvedExact": exact(decision.approved_value),
                 "sourceRecommendation": display(decision.deterministic_recommended_value),
-                "reason": decision.override_reason if decision.override_flag else decision.human_reason,
+                "reason": decision.human_reason,
             }
             approved = bool(self.draft and self.draft.has_approved_draft(self.run))
             explanation = self.explanation

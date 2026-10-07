@@ -60,6 +60,8 @@ test("AI unavailable is truthful and does not block approve and Draft", async ({
 test("approve state survives refresh and a second tab", async ({ page, context, request }) => {
   await page.goto(detail); await approve(page);
   const a = await snapshot(request);
+  expect(a.review.decision.reason).toBeNull();
+  await expect(page.locator(".decision-reason")).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("button", { name: "查看采购申请草稿" })).toBeVisible();
   const other = await context.newPage(); await other.goto(detail);
@@ -72,13 +74,29 @@ test("override 120 changes only Human decision and Draft", async ({ page, reques
   await page.goto(detail);
   await page.getByRole("button", { name: "修改采购数量", exact: true }).click();
   await page.getByLabel("批准数量").fill("120"); await page.getByLabel("调整原因").fill("模拟备料安排");
+  const responsePromise = page.waitForResponse(r => r.url().endsWith('/demo/intent') && r.request().postDataJSON()?.op === 'override');
   await page.getByRole("button", { name: "确认修改并批准" }).click();
+  const wire = await (await responsePromise).text();
+  expect(wire).not.toContain('explicit_human_quantity_override');
+  expect(wire).not.toContain('override_reason');
+  expect(JSON.parse(wire).review.decision.reason).toBe('模拟备料安排');
+  await expect(page.locator('.decision-reason dd')).toHaveText('模拟备料安排');
   await expect(page.locator(".decision-summary")).toContainText("120");
   await expect(page.locator(".decision-summary")).toContainText("修改数量");
   await expect(page.locator(".decision-summary")).not.toContainText("+20");
   const v = await snapshot(request); expect(v.facts.recommended).toBe("100"); expect(v.draft.quantity.numerator).toBe("120");
   await page.getByRole("button", { name: "查看采购申请草稿" }).click();
   await expect(page.getByRole("dialog")).toContainText("120");
+  await page.reload();
+  await expect(page.locator('.decision-reason dd')).toHaveText('模拟备料安排');
+  expect((await snapshot(request)).review.decision.reason).toBe('模拟备料安排');
+  await newRun(page);
+  await expect(page.getByRole('heading',{name:'当前审核已失效'})).toBeVisible();
+  await expect(page.locator('.decision-reason dd')).toHaveText('模拟备料安排');
+  const stale = await snapshot(request);
+  expect(stale.review.decision.reason).toBe('模拟备料安排');
+  expect(JSON.stringify(stale)).not.toContain('explicit_human_quantity_override');
+  expect(JSON.stringify(stale)).not.toContain('override_reason');
 });
 
 for (const value of ["", "99.999", "0", "-1", " 120", "120 ", "1e3", "1,000", "NaN", "120."]) {
@@ -112,6 +130,9 @@ test("reject reason required and no approved Draft", async ({ page, request }) =
   await expect(page.locator("#reason-error")).toBeVisible();
   await page.getByLabel("拒绝原因").fill("本轮不采购"); await page.getByRole("button", { name: "确认拒绝" }).click();
   await expect(page.locator(".decision-summary")).toContainText("本轮不采购");
+  expect((await snapshot(request)).review.decision.reason).toBe('本轮不采购');
+  await page.reload();
+  await expect(page.locator('.decision-reason dd')).toHaveText('本轮不采购');
   expect((await snapshot(request)).canDraft).toBe(false);
   await expect(page.getByRole("button", { name: "查看采购申请草稿" })).toHaveCount(0);
 });
